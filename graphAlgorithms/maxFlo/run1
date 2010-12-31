@@ -1,0 +1,42 @@
+#!/bin/bash
+
+n=5000
+span=$n
+mss=50
+ec2=10000
+
+reps=10
+
+echo method reps n m mss ec1 ec2 span
+for fanout in 5 10 15 20 25 30 35 40 45 50 ; do
+	m=$(( fanout * n ))
+	ec1=$(( mss * fanout * ec2 ))
+	echo shortPath $reps $n $m $mss $ec1 $ec2 $span
+	maxFloRep shortPath $reps $n $m $mss $ec1 $ec2 $span
+	gprof maxFloRep.exe >run_temp 
+	grep '^\[.*shortPath' <run_temp
+	grep '^\[.*findpath' <run_temp
+done
+
+echo method reps n m mss ec1 ec2 span
+for fanout in 5 10 15 20 25 30 35 40 45 50 ; do
+	m=$(( fanout * n ))
+	ec1=$(( mss * fanout * ec2 ))
+	echo maxCap $reps $n $m $mss $ec1 $ec2 $span
+	maxFloRep maxCap $reps $n $m $mss $ec1 $ec2 $span
+	gprof maxFloRep.exe >run_temp 
+	grep '^\[.*maxCap' <run_temp
+	grep '^\[.*findpath' <run_temp
+done
+
+echo method reps n m mss ec1 ec2 span
+for fanout in 5 10 15 20 25 30 35 40 45 50 ; do
+	m=$(( fanout * n ))
+	ec1=$(( mss * fanout * ec2 ))
+	echo scale $reps $n $m $mss $ec1 $ec2 $span
+	maxFloRep scale $reps $n $m $mss $ec1 $ec2 $span
+	gprof maxFloRep.exe >run_temp 
+	grep '^\[.*scale' <run_temp
+	grep '^\[.*findpath' <run_temp
+done
+

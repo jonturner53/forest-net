@@ -1,0 +1,23 @@
+10 40
+hi there
+(c,a) (d,a) (e,a) (a,b) (a,d) 
+(a,e) 
+(c,b) (e,b) (g,b) (b,a) (b,d) 
+(b,e) 
+(h,c) (c,a) (c,b) (c,e) (c,g) 
+(c,h) 
+(b,d) (e,d) (f,d) (d,a) (h,d) 
+(i,d) (d,c) (d,f) (d,g) (g,d) 
+(d,h) 
+(b,e) (c,e) (g,e) (h,e) (i,e) 
+(e,a) (e,b) (e,d) (e,f) (e,h) 
+(e,i) (e,j) 
+(e,f) (i,f) (j,f) (f,d) (f,i) 
+(d,g) (h,g) (g,b) (g,d) (g,e) 
+(g,i) 
+(d,h) (e,h) (j,h) (h,c) (h,d) 
+(h,e) (h,g) (h,i) (h,j) 
+(f,i) (g,i) (h,i) (i,d) (i,e) 
+(i,f) 
+(h,j) (j,f) (j,h) 
+

@@ -1,0 +1,63 @@
+<html>
+<head>
+<title>Basic Data Structures</title>
+<link type="text/css" rel="stylesheet" href="main.css">
+</head>
+<body bgcolor=#ffffff>
+<h1>Graph Data Structures</i></h1>
+<p>
+This page provides links to source code for several types of graphs
+The data structures are implemented as C++ classes,
+so there is a header file (.h) and source file (.c) for each
+data structure. There is also an associated driver,
+which can be used to do some basic verification of the implementation.
+<p>
+The links at left provide access to all the same files that
+can be accessed through the links below. Once one becomes familiar
+with the various files, these shortcut links provide a more
+convenient way to access the code.
+<ul>
+<li>	<i>Undirected Graph</i>. Generic graph data structure. Vertices
+	and edges are identified by integers [1,n] and [1,m] respectively.
+	Includes methods for traversing graph using doubly linked
+	adjacency lists, generating random graphs,
+	reading a graph from a file and writing one out.
+	<a href="graph.h" target="main">Class definition (.h file)</a>.
+	<a href="graph.c" target="main">Code for operations (.c file)</a>.
+	<a href="dvr/graph_d.c" target="main">Driver</a>.
+	An edge-weighted version is also provided (implemented as a
+	derived class of the unweighted version).
+	<a href="wgraph.h" target="main">Class definition (.h file)</a>.
+	<a href="wgraph.c" target="main">Code for operations (.c file)</a>.
+	<a href="dvr/wgraph_d.c" target="main">Driver</a>.
+<li>	<i>Directed Graph</i>. This version is a derived class of the
+	undirected graph and provides additional methods appropriate for
+	directed graphs.
+	<a href="digraph.h" target="main">Class definition (.h file)</a>.
+	<a href="digraph.c" target="main">Code for operations (.c file)</a>.
+	<a href="dvr/digraph_d.c" target="main">Driver</a>.
+	An edge-weighted version is also provided (implemented as a
+	derived class of the unweighted version).
+	<a href="wdigraph.h" target="main">Class definition (.h file)</a>.
+	<a href="wdigraph.c" target="main">Code for operations (.c file)</a>.
+	<a href="dvr/wdigraph_d.c" target="main">Driver</a>.
+<li>	<i>Flow Graph</i>. This version is used by algorithms that find
+	maximum flows in graphs. It is implemented as a derived class of the
+	directed graph and provides additional methods appropriate for
+	solving flow problems.
+	<a href="flograph.h" target="main">Class definition (.h file)</a>.
+	<a href="flograph.c" target="main">Code for operations (.c file)</a>.
+	<a href="dvr/flograph_d.c" target="main">Driver</a>.
+	An edge-weighted version is also provided (implemented as a
+	derived class of the unweighted version).
+	<a href="wflograph.h" target="main">Class definition (.h file)</a>.
+	<a href="wflograph.c" target="main">Code for operations (.c file)</a>.
+	<a href="dvr/wflograph_d.c" target="main">Driver</a>.
+</ul>
+<hr>
+<p>
+<i><font size=-1 face=verdana>
+<img src="emailSmall.gif">
+</font></i>
+</body>
+</html>

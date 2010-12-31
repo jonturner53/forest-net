@@ -1,0 +1,29 @@
+BIN = ~/bin
+DD = ~/src/include
+LIB = ~/src/libjst.a
+CC = g++
+CFLAGS = -O2 -I ${DD}
+.c.o:
+	${CC} ${CFLAGS} -c $*.c 
+
+lnkTbl.o : ${DD}/stdinc.h ${DD}/misc.h wunet.h lnkTbl.h
+vnetTbl.o : ${DD}/stdinc.h ${DD}/misc.h wunet.h vnetTbl.h
+rteTbl.o : ${DD}/stdinc.h ${DD}/misc.h wunet.h rteTbl.h
+pktStore.o : ${DD}/stdinc.h ${DD}/misc.h wunet.h pktStore.h
+qMgr.o : ${DD}/stdinc.h ${DD}/misc.h wunet.h qMgr.h
+ioProc.o : ${DD}/stdinc.h ${DD}/misc.h wunet.h ioProc.h
+wuRouter.o : ${DD}/stdinc.h ${DD}/misc.h wunet.h wuRouter.h
+wuHost.o : ${DD}/stdinc.h ${DD}/misc.h wunet.h wuHost.h
+
+all:	wuRouter wuHost
+	rm ${BIN}/wuHost ${BIN}/wuRouter
+	ln wuHost wuRouter ${BIN}
+
+${LIB}:	lnkTbl.o vnetTbl.o rteTbl.o pktStore.o qMgr.o ioProc.o
+	ar -ru ${LIB} lnkTbl.o vnetTbl.o rteTbl.o pktStore.o qMgr.o ioProc.o
+
+wuRouter:wuRouter.o ${LIB}
+	${CC} ${CFLAGS} wuRouter.o ${LIB} -o wuRouter
+
+wuHost:	wuHost.o ${LIB}
+	${CC} ${CFLAGS} wuHost.o ${LIB} -o wuHost

@@ -1,0 +1,6 @@
+mv dheap_d.c dheap_d.cpp
+mv fheaps_d.c fheaps_d.cpp
+mv lheaps_d.c lheaps_d.cpp
+mv list_d.c list_d.cpp
+mv llheaps_d.c llheaps_d.cpp
+mv mheap_d.c mheap_d.cpp

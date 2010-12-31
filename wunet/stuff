@@ -1,0 +1,25 @@
+uint32_t hashit(long long int data) {
+// Adapted from http://www.azillionmonkeys.com/qed/hash.html
+	int i; uint32_t hash, tmp;
+
+    hash = 0; //8;
+
+    /* Main loop */
+    for (i = 1;i <= 2; i++) {
+        hash  += (data & 0xffff);
+        tmp    = ((data & 0xffff0000)  >>  5) ^ hash;
+        hash   = (hash << 16) ^ tmp;
+        data  >>= 32;
+        hash  += hash >> 11;
+    }
+
+    /* Force "avalanching" of final 127 bits */
+    hash ^= hash << 3;
+    hash += hash >> 5;
+    hash ^= hash << 4;
+    hash += hash >> 17;
+    hash ^= hash << 25;
+    hash += hash >> 6;
+
+    return hash;
+}

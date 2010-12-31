@@ -1,0 +1,28 @@
+#!/bin/bash
+
+reps=10
+n=500
+seed=1
+maxwt=1000
+
+for p in .05 .1 .2 .4 ; do
+reps=100
+for n in 50 100 150 200 250 ; do
+	echo bwMinCostFlow $reps $n $p
+	bwMinCostFlow2 $reps $n $p $maxwt $seed
+	gprof bwMinCostFlow2.exe >run_temp 
+	grep '^\[.*bwMinCostFlow' <run_temp
+	grep '^\[.*lcap' <run_temp
+	grep '^\[.*findpath' <run_temp
+done
+reps=10
+for n in 300 350 400 450 500 ; do
+	echo bwMinCostFlow $reps $n $p
+	bwMinCostFlow2 $reps $n $p $maxwt $seed
+	gprof bwMinCostFlow2.exe >run_temp 
+	grep '^\[.*bwMinCostFlow' <run_temp
+	grep '^\[.*lcap' <run_temp
+	grep '^\[.*findpath' <run_temp
+done
+done
+

@@ -1,0 +1,93 @@
+method reps n m mss ec1 ec2 span
+shortPath 10 5000 25000 50 2500000 10000 5000
+[4]      0.0    0.00    0.00   10443         augPath::shortPath() [4]
+[6]      0.0    0.00    0.00      10         shortPath(flograph&) [6]
+shortPath 10 5000 50000 50 5000000 10000 5000
+[4]      0.0    0.00    0.00   16739         augPath::shortPath() [4]
+[6]      0.0    0.00    0.00      10         shortPath(flograph&) [6]
+shortPath 10 5000 75000 50 7500000 10000 5000
+[4]      0.0    0.00    0.00   21235         augPath::shortPath() [4]
+[6]      0.0    0.00    0.00      10         shortPath(flograph&) [6]
+shortPath 10 5000 100000 50 10000000 10000 5000
+[4]      0.0    0.00    0.00   27421         augPath::shortPath() [4]
+[6]      0.0    0.00    0.00      10         shortPath(flograph&) [6]
+shortPath 10 5000 125000 50 12500000 10000 5000
+[4]      0.0    0.00    0.00   33084         augPath::shortPath() [4]
+[6]      0.0    0.00    0.00      10         shortPath(flograph&) [6]
+shortPath 10 5000 150000 50 15000000 10000 5000
+[4]      0.0    0.00    0.00   39967         augPath::shortPath() [4]
+[6]      0.0    0.00    0.00      10         shortPath(flograph&) [6]
+shortPath 10 5000 175000 50 17500000 10000 5000
+[4]      0.0    0.00    0.00   46066         augPath::shortPath() [4]
+[6]      0.0    0.00    0.00      10         shortPath(flograph&) [6]
+shortPath 10 5000 200000 50 20000000 10000 5000
+[4]      0.0    0.00    0.00   52512         augPath::shortPath() [4]
+[6]      0.0    0.00    0.00      10         shortPath(flograph&) [6]
+shortPath 10 5000 225000 50 22500000 10000 5000
+[4]      0.0    0.00    0.00   58507         augPath::shortPath() [4]
+[6]      0.0    0.00    0.00      10         shortPath(flograph&) [6]
+shortPath 10 5000 250000 50 25000000 10000 5000
+[4]      0.0    0.00    0.00   62987         augPath::shortPath() [4]
+[6]      0.0    0.00    0.00      10         shortPath(flograph&) [6]
+method reps n m mss ec1 ec2 span
+maxCap 10 5000 25000 50 2500000 10000 5000
+[4]      0.0    0.00    0.00    4349         augPath::maxCapPath() [4]
+[6]      0.0    0.00    0.00      10         maxCap(flograph&) [6]
+maxCap 10 5000 50000 50 5000000 10000 5000
+[4]      0.0    0.00    0.00    7835         augPath::maxCapPath() [4]
+[6]      0.0    0.00    0.00      10         maxCap(flograph&) [6]
+maxCap 10 5000 75000 50 7500000 10000 5000
+[4]      0.0    0.00    0.00   10839         augPath::maxCapPath() [4]
+[6]      0.0    0.00    0.00      10         maxCap(flograph&) [6]
+maxCap 10 5000 100000 50 10000000 10000 5000
+[4]      0.0    0.00    0.00   13307         augPath::maxCapPath() [4]
+[6]      0.0    0.00    0.00      10         maxCap(flograph&) [6]
+maxCap 10 5000 125000 50 12500000 10000 5000
+[4]      0.0    0.00    0.00   16635         augPath::maxCapPath() [4]
+[6]      0.0    0.00    0.00      10         maxCap(flograph&) [6]
+maxCap 10 5000 150000 50 15000000 10000 5000
+[4]      0.0    0.00    0.00   22584         augPath::maxCapPath() [4]
+[6]      0.0    0.00    0.00      10         maxCap(flograph&) [6]
+maxCap 10 5000 175000 50 17500000 10000 5000
+[4]      0.0    0.00    0.00   23680         augPath::maxCapPath() [4]
+[6]      0.0    0.00    0.00      10         maxCap(flograph&) [6]
+maxCap 10 5000 200000 50 20000000 10000 5000
+[4]      0.0    0.00    0.00   26854         augPath::maxCapPath() [4]
+[6]      0.0    0.00    0.00      10         maxCap(flograph&) [6]
+maxCap 10 5000 225000 50 22500000 10000 5000
+[4]      0.0    0.00    0.00   28937         augPath::maxCapPath() [4]
+[6]      0.0    0.00    0.00      10         maxCap(flograph&) [6]
+maxCap 10 5000 250000 50 25000000 10000 5000
+[4]      0.0    0.00    0.00   29936         augPath::maxCapPath() [4]
+[6]      0.0    0.00    0.00      10         maxCap(flograph&) [6]
+method reps n m mss ec1 ec2 span
+scale 10 5000 25000 50 2500000 10000 5000
+[4]      0.0    0.00    0.00    5543         augPath::scalePath() [4]
+[6]      0.0    0.00    0.00      10         scale(flograph&) [6]
+scale 10 5000 50000 50 5000000 10000 5000
+[4]      0.0    0.00    0.00   10063         augPath::scalePath() [4]
+[6]      0.0    0.00    0.00      10         scale(flograph&) [6]
+scale 10 5000 75000 50 7500000 10000 5000
+[4]      0.0    0.00    0.00   13369         augPath::scalePath() [4]
+[6]      0.0    0.00    0.00      10         scale(flograph&) [6]
+scale 10 5000 100000 50 10000000 10000 5000
+[4]      0.0    0.00    0.00   17831         augPath::scalePath() [4]
+[6]      0.0    0.00    0.00      10         scale(flograph&) [6]
+scale 10 5000 125000 50 12500000 10000 5000
+[4]      0.0    0.00    0.00   22402         augPath::scalePath() [4]
+[6]      0.0    0.00    0.00      10         scale(flograph&) [6]
+scale 10 5000 150000 50 15000000 10000 5000
+[4]      0.0    0.00    0.00   28347         augPath::scalePath() [4]
+[6]      0.0    0.00    0.00      10         scale(flograph&) [6]
+scale 10 5000 175000 50 17500000 10000 5000
+[4]      0.0    0.00    0.00   31613         augPath::scalePath() [4]
+[6]      0.0    0.00    0.00      10         scale(flograph&) [6]
+scale 10 5000 200000 50 20000000 10000 5000
+[4]      0.0    0.00    0.00   36784         augPath::scalePath() [4]
+[6]      0.0    0.00    0.00      10         scale(flograph&) [6]
+scale 10 5000 225000 50 22500000 10000 5000
+[4]      0.0    0.00    0.00   42113         augPath::scalePath() [4]
+[6]      0.0    0.00    0.00      10         scale(flograph&) [6]
+scale 10 5000 250000 50 25000000 10000 5000
+[4]      0.0    0.00    0.00   44979         augPath::scalePath() [4]
+[6]      0.0    0.00    0.00      10         scale(flograph&) [6]

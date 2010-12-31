@@ -1,0 +1,282 @@
+Flat profile:
+
+Each sample counts as 0.01 seconds.
+  %   cumulative   self              self     total           
+ time   seconds   seconds    calls   s/call   s/call  name    
+ 21.64      0.87     0.87     3002     0.00     0.00  dinicC::findpath(int)
+ 20.40      1.69     0.82        3     0.27     0.27  dinicC::newphase()
+ 16.17      2.34     0.65        1     0.65     0.65  wgraph::rbigraph(int, double, int)
+ 14.68      2.93     0.59        1     0.59     0.59  floC::getCut()
+ 12.19      3.42     0.49  4504887     0.00     0.00  flograph::join(int, int, int, int)
+  5.22      3.63     0.21        1     0.21     3.07  floC::floC(wgraph&, dlist&, mmode)
+  4.23      3.80     0.17        1     0.17     0.17  wgraph::bldadj()
+  2.99      3.92     0.12        1     0.12     0.12  dlist::dlist(int)
+  2.24      4.01     0.09        1     0.09     0.58  floC::makFlograph()
+  0.25      4.02     0.01                             log
+  0.00      4.02     0.00    26538     0.00     0.00  list::operator()(int)
+  0.00      4.02     0.00    20796     0.00     0.00  list::operator&=(int)
+  0.00      4.02     0.00    13268     0.00     0.00  list::operator<<=(int)
+  0.00      4.02     0.00     9002     0.00     0.00  flograph::addflow(int, int, int)
+  0.00      4.02     0.00     3000     0.00     0.00  dlist::operator&=(int)
+  0.00      4.02     0.00     3000     0.00     0.00  dinicC::augment()
+  0.00      4.02     0.00        5     0.00     0.00  list::list(int)
+  0.00      4.02     0.00        5     0.00     0.00  list::~list()
+  0.00      4.02     0.00        1     0.00     1.69  dinic(flograph&)
+  0.00      4.02     0.00        1     0.00     3.07  floSz(wgraph&, dlist&)
+  0.00      4.02     0.00        1     0.00     0.00  dlist::~dlist()
+  0.00      4.02     0.00        1     0.00     1.69  dinicC::dinicC(flograph&)
+  0.00      4.02     0.00        1     0.00     0.00  wgraph::wgraph(int, int)
+  0.00      4.02     0.00        1     0.00     0.00  wgraph::~wgraph()
+  0.00      4.02     0.00        1     0.00     0.00  flograph::flograph(int, int)
+  0.00      4.02     0.00        1     0.00     0.00  flograph::~flograph()
+
+ %         the percentage of the total running time of the
+time       program used by this function.
+
+cumulative a running sum of the number of seconds accounted
+ seconds   for by this function and those listed above it.
+
+ self      the number of seconds accounted for by this
+seconds    function alone.  This is the major sort for this
+           listing.
+
+calls      the number of times this function was invoked, if
+           this function is profiled, else blank.
+ 
+ self      the average number of milliseconds spent in this
+ms/call    function per call, if this function is profiled,
+	   else blank.
+
+ total     the average number of milliseconds spent in this
+ms/call    function and its descendents per call, if this 
+	   function is profiled, else blank.
+
+name       the name of the function.  This is the minor sort
+           for this listing. The index shows the location of
+	   the function in the gprof listing. If the index is
+	   in parenthesis it shows where it would appear in
+	   the gprof listing if it were to be printed.
+
+		     Call graph (explanation follows)
+
+
+granularity: each sample hit covers 4 byte(s) for 0.25% of 4.02 seconds
+
+index % time    self  children    called     name
+                                                 <spontaneous>
+[1]     99.8    0.00    4.01                 main [1]
+                0.00    3.07       1/1           floSz(wgraph&, dlist&) [2]
+                0.65    0.00       1/1           wgraph::rbigraph(int, double, int) [8]
+                0.17    0.00       1/1           wgraph::bldadj() [12]
+                0.12    0.00       1/1           dlist::dlist(int) [13]
+                0.00    0.00       1/1           wgraph::wgraph(int, int) [27]
+                0.00    0.00       1/1           dlist::~dlist() [26]
+                0.00    0.00       1/1           wgraph::~wgraph() [28]
+-----------------------------------------------
+                0.00    3.07       1/1           main [1]
+[2]     76.4    0.00    3.07       1         floSz(wgraph&, dlist&) [2]
+                0.21    2.86       1/1           floC::floC(wgraph&, dlist&, mmode) [3]
+-----------------------------------------------
+                0.21    2.86       1/1           floSz(wgraph&, dlist&) [2]
+[3]     76.4    0.21    2.86       1         floC::floC(wgraph&, dlist&, mmode) [3]
+                0.00    1.69       1/1           dinic(flograph&) [4]
+                0.59    0.00       1/1           floC::getCut() [9]
+                0.09    0.49       1/1           floC::makFlograph() [10]
+                0.00    0.00    3000/3000        dlist::operator&=(int) [22]
+                0.00    0.00       1/1           flograph::flograph(int, int) [29]
+                0.00    0.00       1/5           list::list(int) [24]
+                0.00    0.00       1/1           flograph::~flograph() [30]
+                0.00    0.00       1/5           list::~list() [25]
+-----------------------------------------------
+                0.00    1.69       1/1           floC::floC(wgraph&, dlist&, mmode) [3]
+[4]     42.0    0.00    1.69       1         dinic(flograph&) [4]
+                0.00    1.69       1/1           dinicC::dinicC(flograph&) [5]
+-----------------------------------------------
+                0.00    1.69       1/1           dinic(flograph&) [4]
+[5]     42.0    0.00    1.69       1         dinicC::dinicC(flograph&) [5]
+                0.87    0.00    3002/3002        dinicC::findpath(int) [6]
+                0.82    0.00       3/3           dinicC::newphase() [7]
+                0.00    0.00    3000/3000        dinicC::augment() [23]
+-----------------------------------------------
+                             2256860             dinicC::findpath(int) [6]
+                0.87    0.00    3002/3002        dinicC::dinicC(flograph&) [5]
+[6]     21.6    0.87    0.00    3002+2256860 dinicC::findpath(int) [6]
+                             2256860             dinicC::findpath(int) [6]
+-----------------------------------------------
+                0.82    0.00       3/3           dinicC::dinicC(flograph&) [5]
+[7]     20.4    0.82    0.00       3         dinicC::newphase() [7]
+                0.00    0.00   14537/26538       list::operator()(int) [18]
+                0.00    0.00   11796/20796       list::operator&=(int) [19]
+                0.00    0.00    7268/13268       list::operator<<=(int) [20]
+                0.00    0.00       3/5           list::list(int) [24]
+                0.00    0.00       3/5           list::~list() [25]
+-----------------------------------------------
+                0.65    0.00       1/1           main [1]
+[8]     16.2    0.65    0.00       1         wgraph::rbigraph(int, double, int) [8]
+-----------------------------------------------
+                0.59    0.00       1/1           floC::floC(wgraph&, dlist&, mmode) [3]
+[9]     14.7    0.59    0.00       1         floC::getCut() [9]
+                0.00    0.00   12001/26538       list::operator()(int) [18]
+                0.00    0.00    9000/20796       list::operator&=(int) [19]
+                0.00    0.00    6000/13268       list::operator<<=(int) [20]
+                0.00    0.00       1/5           list::list(int) [24]
+                0.00    0.00       1/5           list::~list() [25]
+-----------------------------------------------
+                0.09    0.49       1/1           floC::floC(wgraph&, dlist&, mmode) [3]
+[10]    14.4    0.09    0.49       1         floC::makFlograph() [10]
+                0.49    0.00 4504887/4504887     flograph::join(int, int, int, int) [11]
+-----------------------------------------------
+                0.49    0.00 4504887/4504887     floC::makFlograph() [10]
+[11]    12.2    0.49    0.00 4504887         flograph::join(int, int, int, int) [11]
+-----------------------------------------------
+                0.17    0.00       1/1           main [1]
+[12]     4.2    0.17    0.00       1         wgraph::bldadj() [12]
+-----------------------------------------------
+                0.12    0.00       1/1           main [1]
+[13]     3.0    0.12    0.00       1         dlist::dlist(int) [13]
+-----------------------------------------------
+                                                 <spontaneous>
+[14]     0.2    0.01    0.00                 log [14]
+-----------------------------------------------
+                0.00    0.00   12001/26538       floC::getCut() [9]
+                0.00    0.00   14537/26538       dinicC::newphase() [7]
+[18]     0.0    0.00    0.00   26538         list::operator()(int) [18]
+-----------------------------------------------
+                0.00    0.00    9000/20796       floC::getCut() [9]
+                0.00    0.00   11796/20796       dinicC::newphase() [7]
+[19]     0.0    0.00    0.00   20796         list::operator&=(int) [19]
+-----------------------------------------------
+                0.00    0.00    6000/13268       floC::getCut() [9]
+                0.00    0.00    7268/13268       dinicC::newphase() [7]
+[20]     0.0    0.00    0.00   13268         list::operator<<=(int) [20]
+-----------------------------------------------
+                0.00    0.00    9002/9002        dinicC::augment() [23]
+[21]     0.0    0.00    0.00    9002         flograph::addflow(int, int, int) [21]
+-----------------------------------------------
+                0.00    0.00    3000/3000        floC::floC(wgraph&, dlist&, mmode) [3]
+[22]     0.0    0.00    0.00    3000         dlist::operator&=(int) [22]
+-----------------------------------------------
+                0.00    0.00    3000/3000        dinicC::dinicC(flograph&) [5]
+[23]     0.0    0.00    0.00    3000         dinicC::augment() [23]
+                0.00    0.00    9002/9002        flograph::addflow(int, int, int) [21]
+-----------------------------------------------
+                0.00    0.00       1/5           floC::getCut() [9]
+                0.00    0.00       1/5           floC::floC(wgraph&, dlist&, mmode) [3]
+                0.00    0.00       3/5           dinicC::newphase() [7]
+[24]     0.0    0.00    0.00       5         list::list(int) [24]
+-----------------------------------------------
+                0.00    0.00       1/5           floC::getCut() [9]
+                0.00    0.00       1/5           floC::floC(wgraph&, dlist&, mmode) [3]
+                0.00    0.00       3/5           dinicC::newphase() [7]
+[25]     0.0    0.00    0.00       5         list::~list() [25]
+-----------------------------------------------
+                0.00    0.00       1/1           main [1]
+[26]     0.0    0.00    0.00       1         dlist::~dlist() [26]
+-----------------------------------------------
+                0.00    0.00       1/1           main [1]
+[27]     0.0    0.00    0.00       1         wgraph::wgraph(int, int) [27]
+-----------------------------------------------
+                0.00    0.00       1/1           main [1]
+[28]     0.0    0.00    0.00       1         wgraph::~wgraph() [28]
+-----------------------------------------------
+                0.00    0.00       1/1           floC::floC(wgraph&, dlist&, mmode) [3]
+[29]     0.0    0.00    0.00       1         flograph::flograph(int, int) [29]
+-----------------------------------------------
+                0.00    0.00       1/1           floC::floC(wgraph&, dlist&, mmode) [3]
+[30]     0.0    0.00    0.00       1         flograph::~flograph() [30]
+-----------------------------------------------
+
+ This table describes the call tree of the program, and was sorted by
+ the total amount of time spent in each function and its children.
+
+ Each entry in this table consists of several lines.  The line with the
+ index number at the left hand margin lists the current function.
+ The lines above it list the functions that called this function,
+ and the lines below it list the functions this one called.
+ This line lists:
+     index	A unique number given to each element of the table.
+		Index numbers are sorted numerically.
+		The index number is printed next to every function name so
+		it is easier to look up where the function in the table.
+
+     % time	This is the percentage of the `total' time that was spent
+		in this function and its children.  Note that due to
+		different viewpoints, functions excluded by options, etc,
+		these numbers will NOT add up to 100%.
+
+     self	This is the total amount of time spent in this function.
+
+     children	This is the total amount of time propagated into this
+		function by its children.
+
+     called	This is the number of times the function was called.
+		If the function called itself recursively, the number
+		only includes non-recursive calls, and is followed by
+		a `+' and the number of recursive calls.
+
+     name	The name of the current function.  The index number is
+		printed after it.  If the function is a member of a
+		cycle, the cycle number is printed between the
+		function's name and the index number.
+
+
+ For the function's parents, the fields have the following meanings:
+
+     self	This is the amount of time that was propagated directly
+		from the function into this parent.
+
+     children	This is the amount of time that was propagated from
+		the function's children into this parent.
+
+     called	This is the number of times this parent called the
+		function `/' the total number of times the function
+		was called.  Recursive calls to the function are not
+		included in the number after the `/'.
+
+     name	This is the name of the parent.  The parent's index
+		number is printed after it.  If the parent is a
+		member of a cycle, the cycle number is printed between
+		the name and the index number.
+
+ If the parents of the function cannot be determined, the word
+ `<spontaneous>' is printed in the `name' field, and all the other
+ fields are blank.
+
+ For the function's children, the fields have the following meanings:
+
+     self	This is the amount of time that was propagated directly
+		from the child into the function.
+
+     children	This is the amount of time that was propagated from the
+		child's children to the function.
+
+     called	This is the number of times the function called
+		this child `/' the total number of times the child
+		was called.  Recursive calls by the child are not
+		listed in the number after the `/'.
+
+     name	This is the name of the child.  The child's index
+		number is printed after it.  If the child is a
+		member of a cycle, the cycle number is printed
+		between the name and the index number.
+
+ If there are any cycles (circles) in the call graph, there is an
+ entry for the cycle-as-a-whole.  This entry shows who called the
+ cycle (as parents) and the members of the cycle (as children.)
+ The `+' recursive calls entry shows the number of function calls that
+ were internal to the cycle, and the calls entry for each member shows,
+ for that member, how many times it was called from other members of
+ the cycle.
+
+
+Index by function name
+
+   [4] dinic(flograph&)       [20] list::operator<<=(int)  [8] wgraph::rbigraph(int, double, int)
+   [2] floSz(wgraph&, dlist&) [13] dlist::dlist(int)      [27] wgraph::wgraph(int, int)
+  [10] floC::makFlograph()    [26] dlist::~dlist()        [28] wgraph::~wgraph()
+   [9] floC::getCut()         [22] dlist::operator&=(int) [11] flograph::join(int, int, int, int)
+   [3] floC::floC(wgraph&, dlist&, mmode) [23] dinicC::augment() [21] flograph::addflow(int, int, int)
+  [24] list::list(int)         [6] dinicC::findpath(int)  [29] flograph::flograph(int, int)
+  [25] list::~list()           [7] dinicC::newphase()     [30] flograph::~flograph()
+  [19] list::operator&=(int)   [5] dinicC::dinicC(flograph&) [14] log
+  [18] list::operator()(int)  [12] wgraph::bldadj()

@@ -1,0 +1,14 @@
+#!/bin/bash
+
+reps=10000000
+p=.01
+maxwt=1000
+seed=1
+
+for n in 2500 5000 10000 20000 40000 ; do
+for seed in 1 2 3 4 5 6 7 8 9 10 ; do
+	echo n=$n
+	mstUpdate $n $p $maxwt $reps $seed
+	gprof mstUpdate.exe | grep '^\[.*mstUpdate'
+done
+done

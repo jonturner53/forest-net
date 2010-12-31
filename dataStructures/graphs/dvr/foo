@@ -1,0 +1,6 @@
+mv digraph_d.c digraph_d.cpp
+mv flograph_d.c flograph_d.cpp
+mv graph_d.c graph_d.cpp
+mv wdigraph_d.c wdigraph_d.cpp
+mv wflograph_d.c wflograph_d.cpp
+mv wgraph_d.c wgraph_d.cpp

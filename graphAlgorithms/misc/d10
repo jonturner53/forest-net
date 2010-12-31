@@ -1,0 +1,12 @@
+10 25
+(a,h) (a,j) 
+(b,d) (b,f) 
+(c,b) (c,d) (c,f) (c,j) 
+(d,b) 
+(e,a) (e,b) (e,d) (e,f) (e,i) 
+(f,b) (f,e) 
+(g,e) (g,f) 
+(h,a) 
+(i,c) (i,f) (i,g) (i,h) 
+(j,h) (j,i) 
+
