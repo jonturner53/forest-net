@@ -1,0 +1,45 @@
+ 1. convert flowgraph to a derived class of digraph
+ 2. create weighted flograph with edge costs of derived class of flograph
+
+Problem with use of virtual functions. In order for virtual
+functions to be substitute for each other, they have to have
+matching signatures. So, while the class type can differ, the
+argument types must match. This is why the cFrom method is
+not being used as intended.
+
+Possible solutions. Drop the assignment operator and the
+copy constructor. In any case, am increasingly dubious of
+the merits of virtual functions. Makes it much trickier to
+understand dynamic execution. The interconnections among
+classes become much more intertwined, making it harder to
+make changes, since a change can have more widespread
+consequences. Could make cFrom (and mSpace, fSpace) aware
+of all ancestors and have them invoke the ancestors
+explicitly. Assignment operators would repeat the code
+that is now in assign. May want to reconsider IO helpers
+also. Why do these work when cFrom does not? They do have
+matching signatures. Alternative is to make cFrom work by
+putting pointer to source graph in each object. Assignment
+operator would initialize this generic graph pointer and
+cFrom routines would use it. Don't think this works either,
+since would be referencing digraph fields using graph pointer.
+
+Plan. Modify cFrom so it calls ancestor copyFrom's
+explicitly. Create a resize method in the base class
+that clears and reallocates space if need be. The
+assignment operators can then just call resize and
+cFrom. Also, make makeSpace, freeSpace, copyFrom and cFrom
+non-virtual. Drop assign function (most of it moves
+into resize). Start with graph and digraph and test
+this using copy routines. Then move onto other graph
+types.
+
+Consider modifying the join operator so that it inserts
+edges in the right place in adjacency list, rather than
+sorting edges at end. This is slower, but might make sense.
+It does mean that random graph generation is slower,
+but maybe not too bad. For graphs with degree d, we
+take O(md) time instead of O(m). This is bad for dense
+graphs, but for algorithms like network flow with mn log n
+running time, graph generation is small. Biggest impact
+is on faster algorithms like Prim, which is O(m + n log n).

@@ -1,0 +1,38 @@
+Accelerating augmenting path algorithm for bipartite
+graphs.
+
+Note: In common cases, augmenting path is found immediately.
+However, initialization still takes Theta(m) time with
+this implementation. With some additional effort might make
+the running time proportional to the search time. This
+can make common case significantly faster. Of course,
+does not change the worst-case, so Dinic better for bipartite
+case. Also, may not be able to apply improvements to
+general graphs.
+
+Some ideas to enable this. First, maintain a list of
+free vertices. In each search, build tree from a free
+vertex and stop when we reach an even vertex in another
+tree. If we expand current tree as far as possible,
+and still don't have a matching, start new search from
+another tree. When we find a matching, repeat the search
+from the roots of the trees involved in the matching and
+make states of matching edges unreached. Trees built
+in previous rounds are maintained. Keep a separate list
+of leaves for each tree. Perhaps associate this list with
+the root of the tree so we can easily expand from leaves
+of current tree. Could use clist data structure to
+maintain lists of that contain tree roots and leaves
+in the same tree. Tricky issue. When we find augmenting
+path, vertices that were odd before become unreached,
+meaning that trees we built before may have other
+opportunities to grow. That is, not limited to growing
+from leaves.
+
+Another variant. Work with queue as edges as in original
+algorithm. Augment state with a search number identifying
+the most recent search in which the edge was examined.
+This way we can avoid initializing state on each search,
+by comparing each vertices search number with index
+of current search. We can update mEdge when doing augmentation.
+We don't need to do anything with pEdge.

@@ -1,0 +1,50 @@
+<html>
+<head>
+<title>Matching Algorithms</title>
+<link type="text/css" rel="stylesheet" href="main.css">
+</head>
+<body bgcolor=#ffffff>
+<h1>Matching Algorithms</i></h1>
+<p>
+This page provides links to source code that implements algorithms
+for the matching problem.
+There is an associated makefile
+which can be used to compile all the programs.
+The makefile assumes a particular directory structure.
+Specifically, the various groups of algorithms are stored in
+sub-directories with a common parent. The parent of this directory
+is assumed to have a child directory called data_structures,
+where various data_structures can be found.
+<p>
+The links at left provide access to all the same files that
+can be accessed through the links below. Once one becomes familiar
+with the various files, these shortcut links provide a more
+convenient way to access the code.
+<ul>
+<li>	<i>Alternating Path Algorithm for Unweighted Matching in
+	Bipartite Graphs</i>.
+	<a href="altPath.c" target="main">Source</a>.
+<li>	<i>Faster Version of Alternating Path Algorithm for Unweighted
+	Matching in Bipartite Graphs</i>.
+	This version is organized to avoid the per search
+	initialization overhead that can slow down the basic version.
+	<a href="faltPath.c" target="main">Source</a>.
+<li>	<i>Bipartite Matching Algorithms using Flows</i>.
+	Implements two variants, one for max size matchings,
+	one for max weight matcings.
+	<a href="flowMatch.c" target="main">Source</a>.
+<li>    <i>Matching Command</i>. Reads an input
+        graph and computes a maximum matching using a specified algorithm
+        <a href="match.c" target="main">Source</a>.
+<li>    <i>Matching Repeat Command</i>. Generates random
+        graphs and computes a maximum matcing using a specified algorithm.
+        <a href="matchRep.c" target="main">Source</a>.
+
+</ul>
+<p>
+<hr>
+<p>
+<img src="emailSmall.gif">
+</font></i>
+</body>
+</html>

@@ -1,0 +1,39 @@
+item dkst::remove(item i, sset s) {
+// Remove item i from set s. Return the new set.
+// Uses non-standard procedure to simplify updating of dmin, dkey values.
+	assert(1 <= i && i <= n && 1 <= s && s <= n);
+	assert (left(0) == 0 && right(0) == 0 && p(0) == 0);
+
+	// search for i in the tree to determine its key2 value
+	item x = s; keytyp key2i = dmin(x);
+	while (x != i) {
+		assert(x != Null);
+		if (kee1(i) < kee1(x)) x = left(x);
+		else x = right(x);
+		key2i += dmin(x);
+	}
+	key2i += dkey(i);
+
+	item j;
+	if (left(i) == Null) {
+		j = right(i);
+		if (j != Null) { dmin(j) += dmin(i); p(j) = p(i); }
+	} else if (right(i) == Null) {
+		j = left(i); dmin(j) += dmin(i); p(j) = p(i);
+	} else {
+		for (j = left(i); right(j) != Null; j = right(j)) {}
+		p(left(i)) = Null; splay(j);
+		int mcj = dmin(i) + dmin(j);
+		dmin(j) = dmin(i) + min(dmin(j),dmin(right(i)));
+		dkey(j) -= (dmin(j) - mcj);
+		dmin(right(i)) -= (dmin(j) - dmin(i));
+		right(j) = right(i); p(right(j)) = j; p(j) = p(i);
+	}
+	if (p(i) != Null) {
+		     if (i ==  left(p(i)))  left(p(i)) = j;
+		else if (i == right(p(i))) right(p(i)) = j;
+	}
+	p(i) = left(i) = right(i) = Null;
+	dmin(i) = key2i; dkey(i) = 0;
+	return splay(j);
+}

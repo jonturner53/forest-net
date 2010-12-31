@@ -1,0 +1,55 @@
+Things to do
+
+0. Add improvements from LFS. 
+   Separating header processing from pktStore.
+   Explicit connect/disconnect for hosts.
+   Better logging for fHost.
+   Consider use of vectors for table entries
+   Use term "row" in place of "entry"
+   Use terms substrate address, overlay address
+   In general, make things more generic, isolating Forest
+   features as much as possible
+	
+   lnkTbl changes made, not tested
+   ioProc changes made, not tested
+
+1. Add controller node type and add support for control
+   messages from a controller. Implement a controller that
+   provides a command line interface. May also have it
+   generate all the router-specific startup files.
+
+2. Re-work qMgr to implement start-time-fair queueing.
+   Maybe keep current version as well. Might want to
+   separate into a base class that provides basic
+   infrastructure and derived classes that implement
+   different packet schedulers.
+
+4. Should add data structure to keep track of subscriptions.
+   This must become part of comtree table. For each link,
+   need a list of all subscriptions on that link. Add packet type
+   for that can be used to request current list of subscriptions.
+   Also, add flag to subscription request so user can
+   request list of current subscriptions as side effect
+   of sending a subscription packet.
+
+5. Make the implementation multi-threaded. First step is to
+   use this to have a CLI thread that reads command lines
+   and prints output. This will allow us to observe changes
+   to the routing table as execution proceeds, and to add
+   new links and comtrees as needed. Later, might add a thread
+   to implement comtree routing. Alternatively, we might
+   implement system-level control on separate machines,
+   and just have them send in-band control messages on
+   control comtree that routers respond to. On a multicore
+   machine, we could build multi-threaded implementation
+   that divides the virtual links among different cores.
+
+7. Add back support for large numbers of links. A host that
+   can forward 100 Kp/s can handle 2K access links, plus
+   links to other routers.
+
+8. Implement support for multiple linecards.
+
+Notes
+Need to add bandwidth limits to comtrees.
+Should be on per link basis.

@@ -1,0 +1,2 @@
+	enum stype {unreached, odd, even};
+	stype state[G->n+1];

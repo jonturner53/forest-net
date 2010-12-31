@@ -1,0 +1,22 @@
+Things to do - 2/15/10
+
+1. In mst, still need to re-write check, mstUpdate.
+
+3. Generalize spt routines to take a specified source vertex.
+
+10.Finish implementing the scaling algorithm for min cost
+   max flow.
+
+11.Implement Edmonds algorithm for max size matching in
+   general graphs.
+
+12.Consider adding a verify routine to each data structure.
+   It would implement a series of consistency checks on the
+   data structure and could be invoked by any client
+   program using the data structure. Or, we could set a
+   debug flag in the data structure's private area that
+   would trigger a consistency check on each method
+   invocation. Maybe multiple levels.
+
+13.Think about having mst programs return list instead
+   of wgraph.

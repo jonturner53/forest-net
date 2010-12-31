@@ -1,0 +1,47 @@
+<html>
+<head>
+<title>Min Cost Flows</title>
+<link type="text/css" rel="stylesheet" href="main.css">
+</head>
+<body bgcolor=#ffffff>
+<h1>Min Cost Flows</i></h1>
+<p>
+This page provides links to source code that implements algorithms
+for the min cost flow problem.
+There is an associated makefile
+which can be used to compile all the programs.
+The makefile assumes a particular directory structure.
+Specifically, the various groups of algorithms are stored in
+sub-directories with a common parent. The parent of this directory
+is assumed to have a child directory called data_structures,
+where various data_structures can be found.
+<p>
+The links at left provide access to all the same files that
+can be accessed through the links below. Once one becomes familiar
+with the various files, these shortcut links provide a more
+convenient way to access the code.
+<ul>
+<li>	<i>Cycle Reduction Algorithm</i>.
+	<a href="cycRed.c" target="main">Source</a>.
+<li>	<i>Least Cost Augmenting Path Algorithm</i>.
+	<a href="lcap.c" target="main">Source</a>.
+<li>    <i>Min Cost Flow Command</i>. Reads an input
+        graph and computes a min cost flow using a specified algorithm
+        <a href="mcFlo.c" target="main">Source</a>.
+<li>    <i>Min Cost Flow Repeat Command</i>. Generates random
+        graphs and computes a min cost flow using a specified algorithm.
+        <a href="mcFloRep.c" target="main">Source</a>.
+<li>	<i>Min Cost Flow Checker</i>. Reads a flow graph from stdin
+	and checks to see if the defined flow is a minimum cost flow.
+	It prints messages whenever it finds something incorrect.
+	If the flow is correct, there is no output.
+	Usage: check.
+	<a href="check.c" target="main">Source</a>.
+</ul>
+<p>
+<hr>
+<p>
+<img src="emailSmall.gif">
+</font></i>
+</body>
+</html>

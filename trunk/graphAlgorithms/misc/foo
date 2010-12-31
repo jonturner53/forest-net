@@ -1,0 +1,6 @@
+mv bfs.c bfs.cpp
+mv cgraph.c cgraph.cpp
+mv nca.c nca.cpp
+mv rgraph.c rgraph.cpp
+mv test_nca.c test_nca.cpp
+mv toposort.c toposort.cpp

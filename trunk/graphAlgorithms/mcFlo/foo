@@ -1,0 +1,6 @@
+mv check.c check.cpp
+mv cycRed.c cycRed.cpp
+mv lcap.c lcap.cpp
+mv mcFlo.c mcFlo.cpp
+mv mcFloRep.c mcFloRep.cpp
+mv scale.c scale.cpp

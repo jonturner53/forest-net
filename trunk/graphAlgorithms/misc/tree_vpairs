@@ -1,0 +1,15 @@
+12 11
+(a,l) 
+(b,e) (b,c) 
+(c,f) (c,b) 
+(d,g) (d,h) 
+(e,b) 
+(f,g) (f,c) 
+(g,l) (g,f) (g,j) (g,d) (g,i) 
+(h,d) (h,k) 
+(i,g) 
+(j,g) 
+(k,h) 
+(l,a) (l,g) 
+
+(b,f) (c,a) (d,g) (e,j) (f,k) (h,l) (i,c) (i,j) (k,g)
