@@ -1,3 +1,0 @@
-	floVal = 0;
-        for (e = G->first(s); e != G->term(s); e = G->next(s,e))
-		floVal += G->f(s,e);
