@@ -1,9 +1,0 @@
-mv check.c check.cpp
-mv kruskal.c kruskal.cpp
-mv mst.c mst.cpp
-mv mstRep.c mstRep.cpp
-mv mstUpdate.c mstUpdate.cpp
-mv mstUpdate2.c mstUpdate2.cpp
-mv prim.c prim.cpp
-mv primF.c primF.cpp
-mv rrobin.c rrobin.cpp
