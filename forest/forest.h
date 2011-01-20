@@ -114,6 +114,8 @@ public:
 	static int zipCode(fAdr_t);
 	static int localAdr(fAdr_t);
 	static fAdr_t forestAdr(int,int);
+	static fAdr_t forestAdr(char*);
+	static char* forestStr(fAdr_t);
 };
 
 // Effective link packet length for a given forest packet length
@@ -134,6 +136,32 @@ inline int forest::localAdr(fAdr_t adr) { return adr & 0xffff; }
 // Return a forest address with a given zip code and local address
 inline fAdr_t forest::forestAdr(int zip, int local ) {
 	return ((zip & 0xffff) << 16) | (local & 0xffff);
+}
+
+
+fAdr_t forest::forestAdr(char *fas) {
+// Return the forest address for the string pointed to by fas.
+// A string representing a negative number is interpreted as a
+// multicast address. Otherwise, we expect a unicast address
+// with the form zip_code.local_addr.
+	int b1, b0;
+	if (sscanf(ips,"%d.%d", &b1, &b0) == 2 && b1 >= 0)
+		forestAdr(zip,adr);
+	else if (sscanf(ips,"%d", &b1) == 1 && b1 < 0)
+		return b1;
+	else
+		return 0;
+}
+
+char* forest::forestStr(fAdr_t fAdr) {
+// Return a pointer to a character buffer containing a string
+// representing the given forest address.
+// Note that the buffer returned is allocated on the heap
+// and it is the caller's responsbility to delete it after use.
+	char* fas = new char[12];
+	if (mcastAdr(fAdr)) sprintf(fas, "%d", fAdr);
+	else sprintf(fas, "%d.%d", zipCode(fAdr), localAdr(fAdr));
+	return fas;
 }
 
 #endif
