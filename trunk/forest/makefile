@@ -11,7 +11,7 @@ all : fHost fRouter
 
 HFILES = ${IDIR}/stdinc.h ${IDIR}/misc.h ${IDIR}/forest.h ${IDIR}/fRouter.h \
 	 ${IDIR}/ioProc.h ${IDIR}/lnkTbl.h ${IDIR}/comtTbl.h ${IDIR}/rteTbl.h \
-	 ${IDIR}/statsMod.h ${IDIR}/qMgr.h ${IDIR}/pktStore.h
+	 ${IDIR}/statsMod.h ${IDIR}/qMgr.h ${IDIR}/pktStore.h ${IDIR}/Avatar.h
 
 lnkTbl.o :    ${HFILES}
 comtTbl.o :   ${HFILES}
@@ -23,11 +23,12 @@ statsMod.o :  ${HFILES}
 fRouter.o :   ${HFILES}
 fLinecard.o : ${HFILES}
 fHost.o :     ${HFILES}
+fAvatar.o :   ${HFILES}
 
 ${LIBF} : lnkTbl.o comtTbl.o rteTbl.o pktStore.o qMgr.o ioProc.o \
-	header.o statsMod.o
+	header.o statsMod.o Avatar.o
 	ar -ru ${LIBF} lnkTbl.o comtTbl.o rteTbl.o pktStore.o qMgr.o \
-	header.o ioProc.o statsMod.o
+	header.o ioProc.o statsMod.o Avatar.o
 
 fRouter : fRouter.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
@@ -39,6 +40,10 @@ fLinecard : fLinecard.o ${LIBS}
 fHost : fHost.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
 	cp fHost ${HOME}/bin
+
+Avatar : Avatar.o ${LIBS}
+	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
+	cp Avatar ${HOME}/bin
 
 clean :
 	rm -f lnkTbl.o comtTbl.o rteTbl.o pktStore.o qMgr.o ioProc.o \
