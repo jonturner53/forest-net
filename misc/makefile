@@ -1,5 +1,5 @@
-IDIR = ~/src/include
-LDIR = ~/src/lib
+IDIR = ../include
+LDIR = ../lib
 LIB = ${LDIR}/lib-misc.a
 
 CXXFLAGS = -pg

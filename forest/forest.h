@@ -144,11 +144,11 @@ fAdr_t forest::forestAdr(char *fas) {
 // A string representing a negative number is interpreted as a
 // multicast address. Otherwise, we expect a unicast address
 // with the form zip_code.local_addr.
-	int b1, b0;
-	if (sscanf(ips,"%d.%d", &b1, &b0) == 2 && b1 >= 0)
-		forestAdr(zip,adr);
-	else if (sscanf(ips,"%d", &b1) == 1 && b1 < 0)
-		return b1;
+	int zip, local, mcAdr;
+	if (sscanf(fas,"%d.%d", &zip, &local) == 2 && zip >= 0)
+		forestAdr(zip,local);
+	else if (sscanf(fas,"%d", &mcAdr) == 1 && mcAdr < 0)
+		return mcAdr;
 	else
 		return 0;
 }

@@ -26,6 +26,8 @@ public:
 	static bool getNum(istream&, uint32_t&);	
 	static bool getWord(istream&, string&);	// read a word on current line
 	static bool getIpAdr(istream&, ipa_t&);	// read IP address
+	static ipa_t ipAddress(char*); 		// return IP addr for string
+	static char* ipString(ipa_t ipa);	// return str for IP addr
 	static bool verify(istream&, char);	// verify next character
 	static bool skipBlank(istream&);	// skip over blanks, comments
 

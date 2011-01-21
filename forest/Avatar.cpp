@@ -49,17 +49,17 @@ main(int argc, char *argv[]) {
 		fatal("usage: Avatar myIpAdr rtrIpAdr myAdr rtrAdr "
 		      		    "comtree finTime");
 
-	Avatar avatar(myIpAdr,rtrIpAdr, myAdr, rtrAdr, comt);
+	Avatar avatar(myIpAdr,rtrIpAdr,myAdr,rtrAdr, comt);
 	if (!avatar.init()) fatal("Avatar:: initialization failure");
 	avatar.run(1000000*finTime);
 }
 
 
 // Constructor for Avatar, allocates space and initializes private data
-Avatar::Avatar(ipa_t mipa, ipa_t ripa, fa_t ma, fa_t ra, comt_t ct)
+Avatar::Avatar(ipa_t mipa, ipa_t ripa, fAdr_t ma, fAdr_t ra, comt_t ct)
 		: myIpAdr(mipa), rtrIpAdr(ripa), myAdr(ma), rtrAdr(ra),
 		  comt(ct) {
-	nPkts = 10000;
+	int nPkts = 10000;
 	ps = new pktStore(nPkts+1, nPkts+1);
 
 	// initialize socket address structures
@@ -74,17 +74,18 @@ Avatar::Avatar(ipa_t mipa, ipa_t ripa, fa_t ma, fa_t ra, comt_t ct)
 	struct timeval tv;
 	if (gettimeofday(&tv, NULL) < 0)
 		fatal("Avatar::Avatar: gettimeofday failure");
-	srand(tv.tv_usec());
+	srand(tv.tv_usec);
 	x = randint(0,SIZE-1); y = randint(0,SIZE-1);
 	direction = (double) randint(0,359);
 	deltaDir = 0;
 	speed = MEDIUM;
 
 	mcGroups = new dlist(MAXGROUPS);
+	nearAvatars = new hashTbl(MAXNEAR);
 	numNear = 0;
 }
 
-Avatar::~Avatar() { delete mcGroups; delete ps; }
+Avatar::~Avatar() { delete mcGroups; delete nearAvatars; delete ps; }
 
 bool Avatar::init() {
 // Initialize IO. Return true on success, false on failure.
@@ -148,7 +149,7 @@ void Avatar::send(int p) {
 	if (rv == -1) fatal("Avatar::send: failure in sendto");
 }
 
-void Avatar::getTime() {
+int Avatar::getTime() {
 // Return time expressed as a free-running microsecond clock
 	static uint32_t prevTime = 0;
 	static struct timeval prevTimeval = { 0, 0 };
@@ -168,15 +169,15 @@ void Avatar::getTime() {
 	now = prevTime +
 		(nowTimeval.tv_sec == prevTimeval.tv_sec ?
                  nowTimeval.tv_usec - prevTimeval.tv_usec :
-                 nowTimeval.tv_usec + (1000000 - prevTimeval.tv_usec);
-	prevTime = nowTime;
+                 nowTimeval.tv_usec + (1000000 - prevTimeval.tv_usec));
+	prevTime = now;
 	return now;
 }
 
 void Avatar::updateStatus(int now) {
 // Update status of avatar
 	const double PI = 3.141519625;
-	const double r;
+	double r;
 
 	// update position
 	double dist = (speed * UPDATE_PERIOD)/1000;
@@ -193,16 +194,16 @@ void Avatar::updateStatus(int now) {
 	else if (y == SIZE-1)	direction = 180;
 	else {
 		direction += deltaDir;
-		if ((r = randomFrac()) < 0.1) {
-			if (r < .05) deltaDir -= 0.2 * randFrac();
-			else         deltaDir += 0.2 * randFrac();
+		if ((r = randfrac()) < 0.1) {
+			if (r < .05) deltaDir -= 0.2 * randfrac();
+			else         deltaDir += 0.2 * randfrac();
 			deltaDir = min(1.0,deltaDir);
 			deltaDir = max(-1.0,deltaDir);
 		}
 	}
 
 	// update speed
-	if ((r = randFrac()) <= 0.1) {
+	if ((r = randfrac()) <= 0.1) {
 		if (speed == SLOW || speed == FAST) speed = MEDIUM;
 		else if (r < 0.05) 		    speed = SLOW;
 		else 				    speed = FAST;
@@ -221,57 +222,59 @@ void Avatar::updateSubscriptions() {
 
 	int myGroup = groupNum(x,y);
 	dlist *newGroups = new dlist(MAXGROUPS);
-	newGroups += myGroup;
+	(*newGroups) &= myGroup;
 
 	int x1, y1, g;
 	x1 = min(SIZE-1, x+GRANGE);
-	if (!myGroup.mbr(g = groupNum(x1,y)))  newGroups += g;
+	if (!newGroups->mbr(g = groupNum(x1,y)))  (*newGroups) &= g;
 	x1 = max(0, x-GRANGE);
-	if (!myGroup.mbr(g = groupNum(x1,y)))  newGroups += g;
+	if (!newGroups->mbr(g = groupNum(x1,y)))  (*newGroups) &= g;
 
 	y1 = min(SIZE-1, y+GRANGE);
-	if (!myGroup.mbr(g = groupNum(x,y1)))  newGroups += g;
+	if (!newGroups->mbr(g = groupNum(x,y1)))  (*newGroups) &= g;
 	y1 = max(0, y-GRANGE);
-	if (!myGroup.mbr(g = groupNum(x,y1)))  newGroups += g;
+	if (!newGroups->mbr(g = groupNum(x,y1)))  (*newGroups) &= g;
 
 	x1 = min(SIZE-1, x+GRANGE/SQRT2);
 	y1 = min(SIZE-1, y+GRANGE/SQRT2);
-	if (!myGroup.mbr(g = groupNum(x1,y1)))  newGroups += g;
+	if (!newGroups->mbr(g = groupNum(x1,y1)))  (*newGroups) &= g;
 	y1 = min(SIZE-1, y-GRANGE/SQRT2);
-	if (!myGroup.mbr(g = groupNum(x1,y1)))  newGroups += g;
+	if (!newGroups->mbr(g = groupNum(x1,y1)))  (*newGroups) &= g;
 	x1 = min(SIZE-1, x-GRANGE/SQRT2);
-	if (!myGroup.mbr(g = groupNum(x1,y1)))  newGroups += g;
+	if (!newGroups->mbr(g = groupNum(x1,y1)))  (*newGroups) &= g;
 	y1 = min(SIZE-1, y+GRANGE/SQRT2);
-	if (!myGroup.mbr(g = groupNum(x1,y1)))  newGroups += g;
+	if (!newGroups->mbr(g = groupNum(x1,y1)))  (*newGroups) &= g;
 
 	packet p = ps->alloc();
-	int& h = ps->hdr(p);
-	uint32_t pp = ps->payload(p);
+	header& h = ps->hdr(p);
+	uint32_t *pp = ps->payload(p);
 
 	int nsub = 0; int nunsub = 0;
-	g = (*newGroups)(1);
+	g = (*newGroups)[1];
 	while (g != Null) {
 		if (!mcGroups->mbr(g)) 
 			pp[1+nsub++] = htonl(g);
 		g = newGroups->suc(g);
 	}
 
-	g = (*mcGroups)(1);
+	g = (*mcGroups)[1];
 	while (g != Null) {
 		if (!newGroups->mbr(g)) 
 			pp[2+nsub+nunsub++] = htonl(g);
-		g = mcGroups->suc();
+		g = mcGroups->suc(g);
 	}
 
-	if (nsub + nunsub == 0) { ps->free(p); return; }
+	if (nsub + nunsub == 0) { ps->free(p); delete newGroups; return; }
+
+	delete mcGroups; mcGroups = newGroups;
 
 	pp[0] = htonl(nsub);
 	pp[1+nsub] = htonl(nunsub);
 
-	h.ptyp() = SUB_UNSUB; h.flags() = 0;
+	h.ptype() = SUB_UNSUB; h.flags() = 0;
 	h.comtree() = comt;
-	h.sAdr() = myAdr;
-	h.dAdr() = rtrAdr;
+	h.srcAdr() = myAdr;
+	h.dstAdr() = rtrAdr;
 	h.leng() = 4*(8+nsub+nunsub);
 
 	ps->pack(p); send(p); ps->free(p);
@@ -293,13 +296,17 @@ void Avatar::updateNearby(int p) {
 	if (ntohl(pp[0]) != STATUS_REPORT) return;
 	int x1 = ntohl(pp[2]); int y1 = ntohl(pp[3]);
 
-	uint64_t key = (h.sAdr() << 32) | h.sAdr();
+	uint64_t key = h.srcAdr(); key = (key << 32) | h.srcAdr();
 	if (sqrt((x-x1)*(x-x1) + (y-y1)*(y-y1)) <= VISRANGE) {
-		if (nearAvatars.lookup(key) == 0) 
-			nearAvatars.insert(key, h.sAdr());
+		if (nearAvatars->lookup(key) == 0) {
+			nearAvatars->insert(key, h.srcAdr());
+			numNear++;
+		}
 	} else {
-		if (nearAvatars.lookup(key) != 0) 
-			nearAvatars.remove(key);
+		if (nearAvatars->lookup(key) != 0)  {
+			nearAvatars->remove(key);
+			numNear--;
+		}
 	}
 	return;
 }
@@ -308,11 +315,11 @@ void Avatar::sendStatus(int now) {
 // Send a status packet
 	packet p = ps->alloc();
 
-	int& h = ps->hdr(p);
-	h.leng() = 4*(5+8); h.ptyp() = USERDATA; h.flags() = 0;
-	h.comtree() = comt; h.sAdr() = myAdr; h.dAdr() = groupNum(x,y);
+	header& h = ps->hdr(p);
+	h.leng() = 4*(5+8); h.ptype() = USERDATA; h.flags() = 0;
+	h.comtree() = comt; h.srcAdr() = myAdr; h.dstAdr() = groupNum(x,y);
 
-	uint32_t pp = ps->payload(p);
+	uint32_t *pp = ps->payload(p);
 	pp[0] = htonl(STATUS_REPORT);
 	pp[1] = htonl(now);
 	pp[2] = htonl(x);
@@ -324,29 +331,29 @@ void Avatar::sendStatus(int now) {
 	ps->pack(p); send(p); ps->free(p);
 }
 
-void Avatar::connect(int now) {
+void Avatar::connect() {
 // Send initial connect packet
 	packet p = ps->alloc();
 
-	int& h = ps->hdr(p);
-	h.leng() = 4*(5+1); h.ptyp() = CONNECT; h.flags() = 0;
-	h.comtree() = comt; h.sAdr() = myAdr; h.dAdr() = rtrAdr;
+	header& h = ps->hdr(p);
+	h.leng() = 4*(5+1); h.ptype() = CONNECT; h.flags() = 0;
+	h.comtree() = comt; h.srcAdr() = myAdr; h.dstAdr() = rtrAdr;
 
 	ps->pack(p); send(p); ps->free(p);
 }
 
-void Avatar::connect(int now) {
+void Avatar::disconnect() {
 // Send final disconnect packet
 	packet p = ps->alloc();
-	int& h = ps->hdr(p);
+	header& h = ps->hdr(p);
 
-	h.leng() = 4*(5+1); h.ptyp() = DISCONNECT; h.flags() = 0;
-	h.comtree() = comt; h.sAdr() = myAdr; h.dAdr() = rtrAdr;
+	h.leng() = 4*(5+1); h.ptype() = DISCONNECT; h.flags() = 0;
+	h.comtree() = comt; h.srcAdr() = myAdr; h.dstAdr() = rtrAdr;
 
 	ps->pack(p); send(p); ps->free(p);
 }
 
-void Avatar::run(uint32_t finishTime) {
+void Avatar::run(int finishTime) {
 // Run the avatar, stopping after finishTime
 // Operate on a cycle with a period of UPDATE_PERIOD milliseconds,
 // Each cycle, update my current position, direction, speed;

@@ -7,16 +7,17 @@
 #include "forest.h"
 #include "header.h"
 #include "pktStore.h"
+#include "dlist.h"
+#include "hashTbl.h"
 
 class Avatar {
 public:
-		Avatar(ipa_t, ipa_t, fa_t, fa_t, comt_t);
+		Avatar(ipa_t, ipa_t, fAdr_t, fAdr_t, comt_t);
 		~Avatar();
 
 	bool	init();			// open and setup socket
-	int	receive();		// return next input packet
-	void	send(int);		// send packet
-	void	run(bool,uint32_t,uint32_t); // run avatar
+	void	run(int); 		// run avatar
+	const static int STATUS_REPORT = 1;// identifies status report payload
 private:
 	const static int SIZE = 1000000;// xy extent of virtual world
 	const static int GRID = 100000;	// xy extent of one grid square
@@ -36,19 +37,35 @@ private:
 	fAdr_t	rtrAdr;			// forest address of router
 	int	sock;			// socket number
 	sockaddr_in sa, dsa;		// socket address structures
+	comt_t	comt;			// comtree number
 
 	// avatar properties
 	int	x, y;			// position in virtual world
-	int	direction;		// direction avatar is facing in degrees
-	int	speed;			// speed moving in UNITS/sec
+	double	direction;		// direction avatar is facing in degrees
+	double	deltaDir;		// change in direction per period
+	double	speed;			// speed moving in UNITS/sec
 
 	// info on groups and nearby avatars
-	const static int MAXGROUPS = 25; // maximum # of multicast groups
+	const static int MAXGROUPS = (SIZE/GRID)*(SIZE/GRID);
+					// maximum # of multicast groups
 	const static int MAXNEAR = 200;	// max # of nearby avatars
-	hashTbl	mcGroups(MAXGROUPS)	// multicast groups subscribed to
-	hashTbl nearAvatars(MAXNEAR)	// set of visible avatars
+	dlist	*mcGroups;		// multicast groups subscribed to
+	int numNear;			// number of nearby avatars
+	hashTbl *nearAvatars;		// set of visible avatars
 
 	pktStore *ps;			// pointer to packet store
+
+	// private helper methods
+	int	receive();		// return next input packet
+	void	send(int);		// send packet
+	int	getTime();		// get free-running time value (in us)
+	void	updateStatus(int);	// update avatar position, etc
+	int	groupNum(int, int);	// return group num for given position
+	void	updateSubscriptions();	// send multicast subscription packets
+	void	updateNearby(int);	// update set of nearby avatars
+	void	sendStatus(int);	// send status report
+	void	connect();		// send connect packet
+	void	disconnect();		// send disconnect packet
 };
 
 #endif
