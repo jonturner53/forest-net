@@ -171,6 +171,28 @@ bool misc::getIpAdr(istream& is, ipa_t& ipa) {
 	return true;
 }
 
+ipa_t misc::ipAddress(char *ips) {
+// Return the IP address for the string pointed to by ips.
+// Return 0 if string does not represent a valid IP address
+	int b3, b2, b1, b0;
+	if (sscanf(ips,"%d.%d.%d.%d", &b3, &b2, &b1, &b0) != 4)
+		return 0;
+	return  ((b3 & 0xff) << 24) | ((b2 & 0xff) << 16) |
+		((b1 & 0xff) << 8)  | (b0 & 0xff);
+}
+
+char* misc::ipString(ipa_t ipa) {
+// Return a pointer to a character buffer containing a
+// dotted decimal string representing the given IP address.
+// Note that the buffer returned is allocated on the heap
+// and it is the caller's responsbility to delete it after
+// use.
+	char* ips = new char[16];
+	sprintf(ips,"%d.%d.%d.%d", (ipa >> 24) & 0xff, (ipa >> 16) & 0xff, 
+				   (ipa >> 8) & 0xff, ipa & 0xff);
+	return ips;
+}
+
 void misc::genPerm(int n, int p[]) {
 // Create random permutation on integers 1..n and return in p.
         int i, j, k;
