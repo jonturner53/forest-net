@@ -39,7 +39,7 @@ main(int argc, char *argv[]) {
 	ipa_t myIpAdr, rtrIpAdr; fAdr_t myAdr, rtrAdr;
 	int comt, finTime;
 
-	if (argc != 6 ||
+	if (argc != 7 ||
 	    (myIpAdr  = misc::ipAddress(argv[1])) == 0 ||
 	    (rtrIpAdr = misc::ipAddress(argv[2])) == 0 ||
 	    (myAdr  = forest::forestAdr(argv[3])) == 0 ||
@@ -74,7 +74,8 @@ Avatar::Avatar(ipa_t mipa, ipa_t ripa, fAdr_t ma, fAdr_t ra, comt_t ct)
 	struct timeval tv;
 	if (gettimeofday(&tv, NULL) < 0)
 		fatal("Avatar::Avatar: gettimeofday failure");
-	srand(tv.tv_usec);
+	//srand(tv.tv_usec);
+	srand(myAdr);
 	x = randint(0,SIZE-1); y = randint(0,SIZE-1);
 	direction = (double) randint(0,359);
 	deltaDir = 0;
@@ -83,6 +84,7 @@ Avatar::Avatar(ipa_t mipa, ipa_t ripa, fAdr_t ma, fAdr_t ra, comt_t ct)
 	mcGroups = new dlist(MAXGROUPS);
 	nearAvatars = new hashTbl(MAXNEAR);
 	numNear = 0;
+	nextAv = 1;
 }
 
 Avatar::~Avatar() { delete mcGroups; delete nearAvatars; delete ps; }
@@ -170,7 +172,7 @@ int Avatar::getTime() {
 		(nowTimeval.tv_sec == prevTimeval.tv_sec ?
                  nowTimeval.tv_usec - prevTimeval.tv_usec :
                  nowTimeval.tv_usec + (1000000 - prevTimeval.tv_usec));
-	prevTime = now;
+	prevTime = now; prevTimeval = nowTimeval;
 	return now;
 }
 
@@ -194,6 +196,7 @@ void Avatar::updateStatus(int now) {
 	else if (y == SIZE-1)	direction = 180;
 	else {
 		direction += deltaDir;
+		if (direction < 0) direction += 360;
 		if ((r = randfrac()) < 0.1) {
 			if (r < .05) deltaDir -= 0.2 * randfrac();
 			else         deltaDir += 0.2 * randfrac();
@@ -253,14 +256,14 @@ void Avatar::updateSubscriptions() {
 	g = (*newGroups)[1];
 	while (g != Null) {
 		if (!mcGroups->mbr(g)) 
-			pp[1+nsub++] = htonl(g);
+			pp[1+nsub++] = htonl(-g);
 		g = newGroups->suc(g);
 	}
 
 	g = (*mcGroups)[1];
 	while (g != Null) {
 		if (!newGroups->mbr(g)) 
-			pp[2+nsub+nunsub++] = htonl(g);
+			pp[2+nsub+nunsub++] = htonl(-g);
 		g = mcGroups->suc(g);
 	}
 
@@ -295,12 +298,15 @@ void Avatar::updateNearby(int p) {
 	uint32_t *pp = ps->payload(p);
 	if (ntohl(pp[0]) != STATUS_REPORT) return;
 	int x1 = ntohl(pp[2]); int y1 = ntohl(pp[3]);
+	double dx = x - x1; double dy = y - y1;
 
 	uint64_t key = h.srcAdr(); key = (key << 32) | h.srcAdr();
-	if (sqrt((x-x1)*(x-x1) + (y-y1)*(y-y1)) <= VISRANGE) {
+	if (sqrt(dx*dx + dy*dy) <= VISRANGE) {
 		if (nearAvatars->lookup(key) == 0) {
-			nearAvatars->insert(key, h.srcAdr());
-			numNear++;
+			if (nextAv <= MAXNEAR) {
+				nearAvatars->insert(key, nextAv++);
+				numNear++;
+			}
 		}
 	} else {
 		if (nearAvatars->lookup(key) != 0)  {
@@ -317,7 +323,7 @@ void Avatar::sendStatus(int now) {
 
 	header& h = ps->hdr(p);
 	h.leng() = 4*(5+8); h.ptype() = USERDATA; h.flags() = 0;
-	h.comtree() = comt; h.srcAdr() = myAdr; h.dstAdr() = groupNum(x,y);
+	h.comtree() = comt; h.srcAdr() = myAdr; h.dstAdr() = -groupNum(x,y);
 
 	uint32_t *pp = ps->payload(p);
 	pp[0] = htonl(STATUS_REPORT);
@@ -372,7 +378,6 @@ void Avatar::run(int finishTime) {
 
 	while (now <= finishTime) {
 		now = getTime();
-
 		updateStatus(now);
 		updateSubscriptions();
 		while ((p = receive()) != Null) {

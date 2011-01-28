@@ -22,8 +22,8 @@ main(int argc, char *argv[]) {
 	ipa_t myIpAdr, rtrIpAdr; fAdr_t myAdr, rtrAdr;
 	int comt, finTime;
 
-	if (argc != 6 ||
-	    (myIpAdr  = misc::ipAddress(argv[1])) == 0 ||
+	if (argc != 7 ||
+  	    (myIpAdr  = misc::ipAddress(argv[1])) == 0 ||
 	    (rtrIpAdr = misc::ipAddress(argv[2])) == 0 ||
 	    (myAdr  = forest::forestAdr(argv[3])) == 0 ||
 	    (rtrAdr = forest::forestAdr(argv[4])) == 0 ||
@@ -112,7 +112,7 @@ int Monitor::receive() {
 }
 
 void Monitor::send(int p) {
-// Send packet on specified link and recycle storage.
+// Send packet on specified link.
 	dsa.sin_addr.s_addr = htonl(rtrIpAdr);
 	dsa.sin_port = htons(FOREST_PORT);
 	header& h = ps->hdr(p);
@@ -142,7 +142,7 @@ int Monitor::getTime() {
 		(nowTimeval.tv_sec == prevTimeval.tv_sec ?
                  nowTimeval.tv_usec - prevTimeval.tv_usec :
                  nowTimeval.tv_usec + (1000000 - prevTimeval.tv_usec));
-	prevTime = now;
+	prevTime = now; prevTimeval = nowTimeval;
 	return now;
 }
 
@@ -158,13 +158,13 @@ void Monitor::subscribeAll() {
 	uint32_t *pp = ps->payload(p);
 
 	int nsub = 0;
-	for (int x = 0; x < SIZE/GRID; x++) {
-		for (int y = 0; y < SIZE/GRID; y++) {
+	for (int x = 0; x < SIZE; x += GRID) {
+		for (int y = 0; y < SIZE; y += GRID) {
 			if (nsub > 350) fatal("too many subscriptions");
-			pp[++nsub] = htonl(groupNum(x,y));
+			pp[++nsub] = htonl(-groupNum(x,y));
 		}
 	}
-	pp[0] = nsub; pp[nsub+1] = 0;
+	pp[0] = htonl(nsub); pp[nsub+1] = 0;
 
 	h.leng() = 4*(8+nsub); h.ptype() = SUB_UNSUB; h.flags() = 0;
 	h.comtree() = comt; h.srcAdr() = myAdr; h.dstAdr() = rtrAdr;
@@ -189,11 +189,16 @@ void Monitor::updateStatus(int p) {
 	if (ntohl(pp[0]) != STATUS_REPORT) return;
 
 	uint64_t key = h.srcAdr(); key = (key << 32) | h.srcAdr();
-	int avNum = watchedAvatars->lookup(key) == 0;
+	int avNum = watchedAvatars->lookup(key);
+//cout << "a " << h.srcAdr() << " " << nextAvatar << " " << avNum << "\n";
 	if (avNum == 0) {
+//cout << "c " << h.srcAdr() << " " << nextAvatar << " " << avNum << "\n";
 		watchedAvatars->insert(key, nextAvatar);
+//cout << "b " << h.srcAdr() << " " << nextAvatar << " " << avNum << "\n";
 		avNum = nextAvatar++;
 	}
+//cout << "d " << h.srcAdr() << " " << nextAvatar << " " << avNum << "\n";
+
 
 	avData[avNum].adr = h.srcAdr();
 	avData[avNum].ts = ntohl(pp[1]);
@@ -228,13 +233,14 @@ void Monitor::disconnect() {
 	ps->pack(p); send(p); ps->free(p);
 }
 
-void Monitor::printStatus() {
+void Monitor::printStatus(int now) {
 	for (int i = 1; i < nextAvatar; i++) {
 		struct avatarData *ad = & avData[i];
 		char *adrStr = forest::forestStr(ad->adr);
-		printf("%s: %10d %8d %8d %8d %8d %4d\n",
-			adrStr, ad->ts, ad->x, ad->y,
+		printf("%10d %s %10d %8d %8d %4d %8d %4d\n",
+			now, adrStr, ad->ts, ad->x, ad->y,
 			ad->dir, ad->speed, ad->numNear);
+		delete adrStr;
 	}
 }
 
@@ -252,24 +258,25 @@ void Monitor::run(int finishTime) {
 
 	uint32_t now;    	// free-running microsecond time
 	uint32_t nextTime;	// time of next operational cycle
-	uint32_t printTime;	// last time status was printed
+	uint32_t printTime;	// next time to print status
 
-	now = nextTime = printTime = 0;
+	now = nextTime = 0; printTime = 1000*UPDATE_PERIOD;
 
 	while (now <= finishTime) {
 		now = getTime();
 
+//cout << "x " << now << endl;
 		while ((p = receive()) != Null) {
 			updateStatus(p);
 			ps->free(p);
 		}
-		if (now > printTime + 1000000) {
-			printStatus(); printTime = now;
+		if (now > printTime) {
+			printStatus(now); printTime += 1000*UPDATE_PERIOD;
 		}
 
 		nextTime += 1000*UPDATE_PERIOD;
 		useconds_t delay = nextTime - getTime();
-		usleep(delay);
+		if (delay <= 1000*UPDATE_PERIOD) usleep(delay);
 	}
 
 	disconnect(); 		// send final disconnect packet
