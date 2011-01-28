@@ -139,21 +139,21 @@ inline fAdr_t forest::forestAdr(int zip, int local ) {
 }
 
 
-fAdr_t forest::forestAdr(char *fas) {
+inline fAdr_t forest::forestAdr(char *fas) {
 // Return the forest address for the string pointed to by fas.
 // A string representing a negative number is interpreted as a
 // multicast address. Otherwise, we expect a unicast address
 // with the form zip_code.local_addr.
 	int zip, local, mcAdr;
 	if (sscanf(fas,"%d.%d", &zip, &local) == 2 && zip >= 0)
-		forestAdr(zip,local);
+		return forestAdr(zip,local);
 	else if (sscanf(fas,"%d", &mcAdr) == 1 && mcAdr < 0)
 		return mcAdr;
 	else
 		return 0;
 }
 
-char* forest::forestStr(fAdr_t fAdr) {
+inline char* forest::forestStr(fAdr_t fAdr) {
 // Return a pointer to a character buffer containing a string
 // representing the given forest address.
 // Note that the buffer returned is allocated on the heap

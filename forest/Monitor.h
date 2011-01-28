@@ -9,7 +9,7 @@
 #include "pktStore.h"
 #include "dlist.h"
 #include "hashTbl.h"
-#include "avatar.h"
+#include "Avatar.h"
 
 class Monitor {
 public:
@@ -21,7 +21,7 @@ public:
 	const static int STATUS_REPORT = 1;// identifies status report payload
 private:
 	const static int SIZE = 1000000;// xy extent of virtual world
-	const static int GRID = 100000;	// xy extent of one grid square
+	const static int GRID = 200000;	// xy extent of one grid square
 
 	const static int UPDATE_PERIOD = 50;	// # ms between status updates
 	const static int MAX_AVATARS = 1000;	// max # of avatars to monitor
@@ -59,7 +59,7 @@ private:
 	void	subscribeAll();		// subscribe to multicast connections
 	void	connect();		// send connect packet
 	void	disconnect();		// send disconnect packet
-	void	printStatus();		// print periodic log
+	void	printStatus(int);		// print periodic log
 };
 
 #endif

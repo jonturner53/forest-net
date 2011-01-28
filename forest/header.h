@@ -1,7 +1,7 @@
 // Header file for header class
 
-#ifndef HEADER_H
-#define HEADER_H
+#ifndef FHEADER_H
+#define FHEADER_H
 
 #include "forest.h"
 

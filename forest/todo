@@ -1,17 +1,13 @@
 Things to do
 
-0. Add improvements from LFS. 
-   Separating header processing from pktStore.
-   Explicit connect/disconnect for hosts.
-   Better logging for fHost.
-   Consider use of vectors for table entries
-   Use term "row" in place of "entry"
-   Use terms substrate address, overlay address
-   In general, make things more generic, isolating Forest
-   features as much as possible
-	
-   lnkTbl changes made, not tested
-   ioProc changes made, not tested
+0. Modify Monitor to optionally set up a socket that a
+   remote GUI can connect to; on receiving a connection
+   packet with the right magic number in the first word,
+   start forwarding reports. Use raw format for conciseness.
+   Pack multiple reports into a single packet.
+
+   Make version of ShowWorld that connects to a remmote
+   Monitor and displays data using received packets.
 
 1. Add controller node type and add support for control
    messages from a controller. Implement a controller that

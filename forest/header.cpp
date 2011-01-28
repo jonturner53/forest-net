@@ -83,7 +83,7 @@ void header::print(ostream& os, buffer_t& b) {
         else if (ptype() == DISCONNECT) os << "disconnect";
         else if (ptype() == RTE_REPLY)  os << "rteRep    ";
         else                            os << "--------- ";
-        os << "flags=" << int(flags());
+        os << " flags=" << int(flags());
         os << " comt=" << setw(3) << comtree();
         os << " sadr="; forest::putForestAdr(os, srcAdr());
         os << " dadr="; forest::putForestAdr(os, dstAdr());

@@ -3,11 +3,11 @@ IDIR = ../include
 LDIR = ../lib
 LIBS = ${LDIR}/libForest.a ${LDIR}/lib-misc.a ${LDIR}/lib-ds.a
 LIBF = ${LDIR}/libForest.a
-CXXFLAGS = -pg
+CXXFLAGS = -O2
 .cpp.o:
 	${CXX} ${CXXFLAGS} -I ${IDIR} -c $<
 
-all : fHost fRouter
+all : fHost fRouter Avatar Monitor
 
 HFILES = ${IDIR}/stdinc.h ${IDIR}/misc.h ${IDIR}/forest.h ${IDIR}/fRouter.h \
 	 ${IDIR}/ioProc.h ${IDIR}/lnkTbl.h ${IDIR}/comtTbl.h ${IDIR}/rteTbl.h \
@@ -27,10 +27,11 @@ fHost.o :     ${HFILES}
 Avatar.o :   ${HFILES}
 Monitor.o :   ${HFILES}
 
-${LIBF} : lnkTbl.o comtTbl.o rteTbl.o pktStore.o qMgr.o ioProc.o \
+${LIBF} : forest.o lnkTbl.o comtTbl.o rteTbl.o pktStore.o qMgr.o ioProc.o \
 	header.o statsMod.o Avatar.o Monitor.o
-	ar -ru ${LIBF} lnkTbl.o comtTbl.o rteTbl.o pktStore.o qMgr.o \
+	ar -ru ${LIBF} forest.o lnkTbl.o comtTbl.o rteTbl.o pktStore.o qMgr.o \
 	header.o ioProc.o statsMod.o Avatar.o Monitor.o
+	ranlib ${LIBF}
 
 fRouter : fRouter.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
