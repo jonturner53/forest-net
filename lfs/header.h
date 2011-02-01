@@ -4,7 +4,6 @@
 #define HEADER_H
 
 #include "lfs.h"
-#include "list.h"
 
 class header {
 public:
@@ -55,7 +54,7 @@ private:
 	int	sPort;			// source port # of tunnel packet
 	int	iob;			// number of bytes in buffer
 
-	int	rateCalc(uint32_t);
+	int     rateCalc(uint32_t);
 };
 
 // Header field access methods - note, can be assigned to

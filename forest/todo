@@ -1,12 +1,11 @@
 Things to do
 
-0. Modify Monitor to optionally set up a socket that a
-   remote GUI can connect to; on receiving a connection
-   packet with the right magic number in the first word,
-   start forwarding reports. Use raw format for conciseness.
+0. Modify Monitor to listen for connections from a remote
+   GUI on its socket. Forward packets to the remote GUI.
+   Use raw format for conciseness.
    Pack multiple reports into a single packet.
 
-   Make version of ShowWorld that connects to a remmote
+   Make version of ShowWorld that connects to a remote
    Monitor and displays data using received packets.
 
 1. Add controller node type and add support for control

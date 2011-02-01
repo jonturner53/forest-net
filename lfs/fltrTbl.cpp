@@ -1,7 +1,7 @@
 #include "fltrTbl.h"
 
-fltrTbl::fltrTbl(int maxte1, ipa_t myAdr1, lnkTbl *lt1, qMgr *qm1)
-		 : maxte(maxte1), myAdr(myAdr1), lt(lt1), qm(qm1) {
+fltrTbl::fltrTbl(int maxte1, ipa_t myAdr1, lnkTbl *lt1)
+		 : maxte(maxte1), myAdr(myAdr1), lt(lt1) {
 // Constructor for fltrTbl, allocates space and initializes table.
 	tbl = new tblEntry[maxte+1];
 	ht = new hashTbl(maxte);
@@ -21,7 +21,10 @@ int fltrTbl::addEntry(ipa_t src, ipa_t dst) {
 // Return the index of the table entry or Null on failure.
 	if (ht->lookup(hashkey(src,dst)) != Null) return Null;
 	if (free == Null) return Null;
-	int te = free; free = tbl[free].lnk;
+// temporary hack;
+//	int te = free; free = tbl[free].lnk;
+int te = 1; while (te <= maxte && tbl[te].src != 0) te++;
+if (te > maxte) return Null;
 	if (!ht->insert(hashkey(src,dst),te)) {
 		free = te; return Null;
 	}
@@ -35,7 +38,9 @@ bool fltrTbl::removeEntry(int te) {
 // Return true on success, false on failure.
 	if (te == Null) return false;
 	ht->remove(hashkey(tbl[te].src,tbl[te].dst));
-	tbl[te].src = 0; tbl[te].lnk = free; free = te;
+	tbl[te].src = 0;
+// temporary hack
+//	tbl[te].lnk = free; free = te;
 	return true;
 }
 
@@ -93,6 +98,7 @@ return true; // ignore prespecified filters
 
 void fltrTbl::putFltr(ostream& os, int fte) {
 // Print entry fte
+	os << fte << ": ";
 	os << tbl[fte].inlnk << " ";
 	os << ((tbl[fte].src >> 24) & 0xFF) << "."
 	   << ((tbl[fte].src >> 16) & 0xFF) << "."

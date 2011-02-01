@@ -1,8 +1,8 @@
 #include "statsMod.h"
 
 // Constructor for statsMod, allocates space.
-statsMod::statsMod(int maxStats1, lnkTbl *lt1, qMgr *qm1, int* avail1)
-		   : maxStats(maxStats1), lt(lt1), qm(qm1), avail(avail1) {
+statsMod::statsMod(int maxStats1, lnkTbl *lt1, int* avail1)
+		   : maxStats(maxStats1), lt(lt1), avail(avail1) {
 	stat = new statItem[maxStats+1];
 	n = 0;
 };
@@ -19,10 +19,8 @@ void statsMod::record(uint32_t now) {
 		switch(s->typ) {
 			case inPkt:  val = lt->iPktCnt(s->lnk); break;
 			case outPkt: val = lt->oPktCnt(s->lnk); break;
-			case qPkt:   val = qm->qlenPkts(s->lnk,s->qnum); break;
 			case inByt:  val = lt->iBytCnt(s->lnk); break;
 			case outByt: val = lt->oBytCnt(s->lnk); break;
-			case qByt:   val = qm->qlenBytes(s->lnk,s->qnum); break;
 			case abw:    val = avail[s->lnk]; break;
 			default: break;
 		}
@@ -46,15 +44,13 @@ bool statsMod::getStat(istream& is) {
 // outPkt L	number of packets sent on output link L
 //  inByt L	number of bytes received on input link L
 // outByt L	number of bytes sent on output link L
-//   qPkt L Q	number of packets in queue Q on output link L
-//   qByt L Q	number of bytes in queue Q on output link L
 //    abw L  	available bandwidth on link L for lfs (in Kb/s)
 //
 // In the queue length statistics, if the
 // given queue number is zero, then the total number of packets (bytes)
 // queued for the given link (over all queues) is reported.
 //
-	int lnk, qnum, lcIn, lcOut;
+	int lnk, lcIn, lcOut;
 	cntrTyp typ; string typStr, fname;
 	char buf[32];
 
@@ -65,22 +61,18 @@ bool statsMod::getStat(istream& is) {
         else if (typStr == "outPkt") typ = outPkt;
         else if (typStr ==  "inByt") typ = inByt;
         else if (typStr == "outByt") typ = outByt;
-        else if (typStr ==   "qPkt") typ = qPkt;
-        else if (typStr ==   "qByt") typ = qByt;
         else if (typStr ==    "abw") typ = abw;
         else return false;
 
 	
 	if (!misc::getNum(is,lnk)) return false;
-	if ((typ == qPkt || typ == qByt) && !misc::getNum(is,qnum))
-		return false;
 	misc::cflush(is,'\n');
 
 	if (n >= maxStats) return false;
 	n++;
 
 	statItem* s = &stat[n];
-	s->typ = typ; s->lnk = lnk; s->qnum = qnum;
+	s->typ = typ; s->lnk = lnk;
 
 	return true;
 }
@@ -118,14 +110,6 @@ void statsMod::putStat(ostream& os, int i) const {
 		break;
 	case outByt:
 		os << "outByt " << setw(2) << s->lnk << endl;
-		break;
-	case   qPkt:
-		os << "  qPkt " << setw(2) << s->lnk
-		   << " " << setw(2) << s->qnum << endl;
-		break;
-	case   qByt:
-		os << "  qByt " << setw(2) << s->lnk
-		   << " " << setw(2) << s->qnum << endl;
 		break;
 	case abw:
 		os << "   abw " << setw(2) << s->lnk << endl;

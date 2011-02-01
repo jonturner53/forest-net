@@ -10,7 +10,7 @@ void header::unpack(buffer_t& b) {
 	hleng() = (x >> 24) & 0xf;
 	leng() = x & 0xffff;
 	x = ntohl(b[2]);
-	proto() = (x >> 15) & 0xff;
+	proto() = (x >> 16) & 0xff;
 	srcAdr() = ntohl(b[3]);
 	dstAdr() = ntohl(b[4]);
 	if (hleng() != 7) return;
@@ -24,17 +24,14 @@ void header::unpack(buffer_t& b) {
 	lfsOp() = (x >> 14) & 0x3;
 	lfsFlags() = (x >> 8) & 0x3f;
 
-	// packed rates represent multiples of 1 Kb/s
-	// normalized floating point with 4 bit mantissa
-	// with implicit fifth bit; 4 bit exponent
-	// gives range from 16 Kb/s to just over 1 Gb/s.
-	x |= 0x100; // add in implicit fifth bit of mantissa
-	lfsRrate() = ((x >> 4) & 0x1f) << (x & 0xf);
-	x = ntohl(b[6]);
-	lfsTrace() = x & 0xffffff;
-	x >>= 24; // get arate field
-	x |= 0x100;
-	lfsArate() = ((x >> 4) & 0x1f) << (x & 0xf);
+        // packed rates represent multiples of 1 Kb/s
+        x = (x & 0xff) | 0x100; // add in implicit fifth bit of mantissa
+        lfsRrate() = ((x >> 4) & 0x1f) << (x & 0xf);
+        x = ntohl(b[6]);
+        lfsTrace() = x & 0xffffff;
+        x >>= 24; // get arate field
+        x |= 0x100;
+        lfsArate() = ((x >> 4) & 0x1f) << (x & 0xf);
 
 	// ignore transport level fields
 }
@@ -59,10 +56,7 @@ int header::rateCalc(uint32_t x) {
         } else {
                 x = (1 << 8) | (i-3);
         }
-        x &= 0xff; // trim off high bit of mantissa which is always 1
-
-        x |= 0x100; // put back high bit of mantissa
-        return ((x >> 4) & 0x1f) << (x & 0xf);
+        return x & 0xff; // trim off high bit of mantissa which is always 1
 }
 
 void header::pack(buffer_t& b) {
@@ -79,11 +73,11 @@ void header::pack(buffer_t& b) {
 
 	// pack LFS option fields
 	uint32_t rrate = rateCalc(lfsRrate());
-	uint32_t arate = rateCalc(lfsArate());
+        uint32_t arate = rateCalc(lfsArate());
 
 	b[5] = htonl( 	(LFS_OPTION << 24) | (8 << 16) |
 	    		((lfsOp() & 0x3) << 14) |
-	    		((lfsFlags() & 0x3f) << 8) | rrate
+	    		((lfsFlags() & 0x3f) << 8) | (rrate & 0xff)
 		);
 	b[6] = htonl((arate << 24) | (lfsTrace() & 0xffffff));
 }
@@ -132,7 +126,6 @@ bool header::getPacket(istream& is, buffer_t& b) {
 		lfsArate() = arate; lfsTrace() = trace;
 	}
 
-	proto() = 17;
 	pack(b); uint32_t x;
 	for (int i = 0; i < (lng-(4*hlng))/4; i++) {
 		if (misc::getNum(is,x)) b[hlng+i] = htonl(x);

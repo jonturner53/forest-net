@@ -19,6 +19,7 @@ public:
 	bool	init();			// open and setup socket
 	void	run(int); 		// run avatar
 	const static int STATUS_REPORT = 1;// identifies status report payload
+	const static int MAGIC_NUM = 13752;// identifies remote "connect" pkt
 private:
 	const static int SIZE = 1000000;// xy extent of virtual world
 	const static int GRID = 200000;	// xy extent of one grid square
@@ -34,6 +35,14 @@ private:
 	int	sock;			// socket number
 	sockaddr_in sa, dsa;		// socket address structures
 	comt_t	comt;			// comtree number
+
+	const static int GUI_CONNECT = 1234567; // magic number for GUI connect
+	const static int GUI_DISCONNECT = 7654321; // magic number for disconnect
+	ipa_t	guiIP;			// IP of remote GUI
+	ipp_t	guiPort;		// port# of remote GUI
+	const static int MAX_REPORTS = 40; // max # of reports per status pkt
+	int	statPkt;		// packet number of status packet
+	int	repCnt;			// number of reports in status packet
 
 	// avatar properties
 	struct avatarData {

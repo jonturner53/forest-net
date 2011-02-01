@@ -1,19 +1,17 @@
 // Header file for ioProc class, which supports io processing.
+// This is vestigial version. Only retained for interface table.
 
 #ifndef IOPROC_H
 #define IOPROC_H
 
 #include "lfs.h"
 #include "lnkTbl.h"
-#include "pktStore.h"
 
 class ioProc {
 public:
-		ioProc(lnkTbl*, pktStore*);
+		ioProc(lnkTbl*);
 		~ioProc();
 
-	packet	receive();		// return next input packet
-	void	send(packet,int);	// send packet
 	bool 	valid(int) const;	// check for valid interface
 	bool	addEntry(int,ipa_t,int,int); // add interface table entry
 	void	removeEntry(int); 	// remove interface table entry
@@ -45,7 +43,6 @@ private:
 	} ift[MAXINT+1];		// ift[i]=data for interface i
 
 	lnkTbl *lt;			// pointer to link table
-	pktStore *ps;			// pointer to packet store
 
 	// helper methods
 	int	getEntry(istream&);		// read ift entry

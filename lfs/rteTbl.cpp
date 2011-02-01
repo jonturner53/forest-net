@@ -1,7 +1,7 @@
 #include "rteTbl.h"
 
-rteTbl::rteTbl(int nte1, ipa_t myAdr1, lnkTbl* lt1, qMgr* qm1)
-		: nte(nte1), myAdr(myAdr1), lt(lt1), qm(qm1) {
+rteTbl::rteTbl(int nte1, ipa_t myAdr1, lnkTbl* lt1)
+		: nte(nte1), myAdr(myAdr1), lt(lt1) {
 // Constructor for rteTbl, allocates space and initializes table.
 // Nte1 is the number of routing table entries.
 	int i;

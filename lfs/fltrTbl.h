@@ -11,11 +11,11 @@
 #define FLTRTBL_H
 
 #include "lfs.h"
-#include "qMgr.h"
+#include "lnkTbl.h"
 
 class fltrTbl {
 public:
-		fltrTbl(int, ipa_t, lnkTbl*, qMgr*);
+		fltrTbl(int, ipa_t, lnkTbl*);
 		~fltrTbl();
 
 	int	lookup(ipa_t,ipa_t);		// return entry for src/dst
@@ -31,6 +31,7 @@ public:
 	int&	qnum(int);		// return q number
 	int&	rate(int);		// return allocated rate
 	int&	inLink(int);		// return input link for the filter
+	int&	fpf(int);		// return fastpath filter
 
 	bool 	getFltr(istream&);		// read table entry from input
 	friend	bool operator>>(istream&, fltrTbl&); // read in table
@@ -45,12 +46,12 @@ private:
 		int qn;			// queue number
 		int rate;		// allocated rate (firm)
 		int inlnk;		// input link
+		int fpfn;		// fastpath filter number
 	} *tbl;				// tbl[i] contains data for table entry
 	int free;			// start of free list
 
 	ipa_t	myAdr;			// IP address of this router (in overlay)
 	lnkTbl	*lt;			// pointer to link table
-	qMgr	*qm;			// pointer to queue manager
 	hashTbl	*ht;			// pointer to hash table for fast lookup
 
 	// helper functions
@@ -67,6 +68,16 @@ inline int& fltrTbl::link(int fte) {
 	if (valid(fte)) return tbl[fte].lnk;
 }
 
+// return the source address field
+inline ipa_t fltrTbl::src(int fte) const {
+	if (valid(fte)) return tbl[fte].src;
+}
+
+// return the destination address field
+inline ipa_t fltrTbl::dst(int fte) const {
+	if (valid(fte)) return tbl[fte].src;
+}
+
 // return the queue number for the entry
 inline int& fltrTbl::qnum(int fte) {
 	if (valid(fte)) return tbl[fte].qn;
@@ -80,6 +91,11 @@ inline int& fltrTbl::rate(int fte) {
 // return the input link for the filter
 inline int& fltrTbl::inLink(int fte) {
 	if (valid(fte)) return tbl[fte].inlnk;
+}
+
+// return the fastpath filter number
+inline int& fltrTbl::fpf(int fte) {
+	if (valid(fte)) return tbl[fte].fpfn;
 }
 
 // Compute key for hash lookup
