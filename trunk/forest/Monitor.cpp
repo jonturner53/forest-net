@@ -2,13 +2,14 @@
 //      Monitor myIpAdr rtrIpAdr myAdr rtrAdr comt finTime
 //
 // Monitor is a program that monitors a virtual world, tracking
-// the motion of the avatars within it. This version just logs
-// results to a file once per second for debugging purposes.
-// The final version will connect to a remote GUI and relay
-// updates for display.
+// the motion of the avatars within it. The moitored data are
+// written to stdout in human-readable form. If the monitor
+// receives a "connection packet" from a remote GUI, it also
+// forwards a copy of the data to the remote GUI. These are
+// in binary form with 40 reports per packet.
 //
 // Command line arguments include the ip address of the
-// Montir's machine, its router's IP address, the forest
+// Monitor's machine, its router's IP address, the forest
 // address of the monitor, the forest address of the router,
 // the comtree to be used in the packet and the number of
 // seconds to run before terminating.
@@ -108,6 +109,17 @@ int Monitor::receive() {
         h.tunSrcIp() = ntohl(ssa.sin_addr.s_addr);
         h.tunSrcPort() = ntohs(ssa.sin_port);
 
+	// look for packets from remote GUI
+	if (ntohl(b[0]) == GUI_CONNECT && guiIP == 0) {
+		guiIP = h.tunSrcIp(); guiPort = h.tunSrcPort();
+		statPkt = ps->alloc(); repCnt = 0;
+		ps->free(p); return Null;
+	} else if (ntohl(b[0]) == GUI_DISCONNECT) {
+		guiIP = 0;
+		ps->free(statPkt);
+		ps->free(p); return Null;
+	}
+
         return p;
 }
 
@@ -184,21 +196,14 @@ void Monitor::updateStatus(int p) {
 
 	ps->unpack(p);
 	header& h = ps->hdr(p);
-
 	uint32_t *pp = ps->payload(p);
-	if (ntohl(pp[0]) != STATUS_REPORT) return;
 
 	uint64_t key = h.srcAdr(); key = (key << 32) | h.srcAdr();
 	int avNum = watchedAvatars->lookup(key);
-//cout << "a " << h.srcAdr() << " " << nextAvatar << " " << avNum << "\n";
 	if (avNum == 0) {
-//cout << "c " << h.srcAdr() << " " << nextAvatar << " " << avNum << "\n";
 		watchedAvatars->insert(key, nextAvatar);
-//cout << "b " << h.srcAdr() << " " << nextAvatar << " " << avNum << "\n";
 		avNum = nextAvatar++;
 	}
-//cout << "d " << h.srcAdr() << " " << nextAvatar << " " << avNum << "\n";
-
 
 	avData[avNum].adr = h.srcAdr();
 	avData[avNum].ts = ntohl(pp[1]);
@@ -207,6 +212,31 @@ void Monitor::updateStatus(int p) {
 	avData[avNum].dir = ntohl(pp[4]);
 	avData[avNum].speed = ntohl(pp[5]);
 	avData[avNum].numNear = ntohl(pp[6]);
+
+	if (guiIP == 0) return;
+
+	// if no room in statusPkt buffer for another report,
+	// send current buffer
+	uint32_t *spb = &(ps->buffer(statPkt)[0]);
+	if (repCnt + 1 > MAX_REPORTS) {
+		sockaddr_in sa;
+		sa.sin_addr.s_addr = htonl(guiIP);
+		sa.sin_port = htons(guiPort);
+		int rv = sendto(sock,(void *) spb,
+			 	sizeof(avatarData)*(repCnt),
+				0, (struct sockaddr *) &sa, sizeof(sa));
+		if (rv == -1) fatal("Monitor::send: failure in updateStatus");
+		repCnt = 0;
+	}
+	// add new report to the buffer
+	spb[7*repCnt] = htonl(avData[avNum].adr);
+	spb[7*repCnt+1] = htonl(avData[avNum].ts);
+	spb[7*repCnt+2] = htonl(avData[avNum].x);
+	spb[7*repCnt+3] = htonl(avData[avNum].y);
+	spb[7*repCnt+4] = htonl(avData[avNum].dir);
+	spb[7*repCnt+5] = htonl(avData[avNum].speed);
+	spb[7*repCnt+6] = htonl(avData[avNum].numNear);
+	repCnt++;
 
 	return;
 }
@@ -265,7 +295,6 @@ void Monitor::run(int finishTime) {
 	while (now <= finishTime) {
 		now = getTime();
 
-//cout << "x " << now << endl;
 		while ((p = receive()) != Null) {
 			updateStatus(p);
 			ps->free(p);

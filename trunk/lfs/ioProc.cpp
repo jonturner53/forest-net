@@ -1,7 +1,7 @@
 #include "ioProc.h"
 
 // Constructor for ioProc, allocates space and initializes private data
-ioProc::ioProc(lnkTbl *lt1, pktStore *ps1) : lt(lt1), ps(ps1) {
+ioProc::ioProc(lnkTbl *lt1) : lt(lt1) {
 	nRdy = 0; maxSockNum = -1;
 	sockets = new fd_set;
 	for (int i = 0; i <= MAXINT; i++) ift[i].ipa = 0;
@@ -43,95 +43,6 @@ int ioProc::lookup(ipa_t ipa) {
 	for (int i = 1; i <= MAXINT; i++)
 		if (ift[i].ipa == ipa) return i;
 	return 0;
-}
-
-packet ioProc::receive() { 
-// Return next waiting packet or Null if there is none. 
-	if (nRdy == 0) { // if no ready interface check for new arrivals
-		FD_ZERO(sockets);
-		for (int i = 1; i <= MAXINT; i++) {
-			if (valid(i)) {	
-				FD_SET(ift[i].sock,sockets);
-			}
-		}
-		struct timeval zero; zero.tv_sec = zero.tv_usec = 0;
-		int cnt = 0;
-		do {
-			nRdy = select(maxSockNum+1,sockets,
-			       (fd_set *)NULL, (fd_set *)NULL, &zero);
-		} while (nRdy < 0 && cnt++ < 10);
-		if (cnt > 5) {
-			cerr << "ioProc::receive: select failed "
-			     << cnt-1 << " times\n";
-		}
-		if (nRdy < 0) {
-			fatal("ioProc::receive: select failed");
-		}
-		if (nRdy == 0) return Null;
-		cIf = 0;
-	}
-	while (1) { // find next ready interface
-		cIf++;
-		if (cIf > MAXINT) return Null; // should never reach here
-		if (valid(cIf) && FD_ISSET(ift[cIf].sock,sockets)) {
-			nRdy--; break;
-		}
-	}
-	// Now, read the packet from the interface
-	int nbytes;	  	// number of bytes in received packet
-	sockaddr_in ssa;  	// socket address of sender
-	socklen_t ssaLen;       // length of sender's socket address structure
-	int lnk;	  	// # of link on which packet received
-	ipa_t sIpAdr; ipp_t sPort; // IP address and port number of sender
-
-	packet p = ps->alloc();
-	if (p == 0) return 0;
-	header& h = ps->hdr(p);
-	buffer_t& b = ps->buffer(p);
-	ssaLen = sizeof(ssa); 
-
-	nbytes = recvfrom(ift[cIf].sock, (void *) &b[0], 1500, 0,
-	 	 	  (struct sockaddr *) &ssa, &ssaLen);
-	if (nbytes < 0) fatal("ioProc::receive: error in recvfrom call");
-
-	sIpAdr = ntohl(ssa.sin_addr.s_addr);
-	sPort = ntohs(ssa.sin_port);
-
-	ps->unpack(p);
-	if (!ps->hdrErrCheck(p) || 
-	    (lnk = lt->lookup(cIf,sIpAdr,sPort,h.srcAdr())) == 0) {
-		ps->free(p); return 0;
-	}
-	h.ioBytes() = nbytes;
-	h.inLink() = lnk;
-	h.srcIp() = sIpAdr;
-	h.srcPort() = sPort;
-	lt->postIcnt(lnk,nbytes);
-	return p;
-}
-
-void ioProc::send(packet p, int lnk) {
-// Send packet on specified link and recycle storage.
-
-	dsa.sin_addr.s_addr = htonl(lt->peerIpAdr(lnk));
-	dsa.sin_port = htons(lt->peerPort(lnk));
-
-	if (dsa.sin_port != 0) {
-		int rv, lim = 0;
-		header& h = ps->hdr(p);
-		do {
-			rv = sendto(ift[lt->interface(lnk)].sock,
-				(void *) &(ps->buffer(p))[0], h.leng(),0,
-			    	(struct sockaddr *) &dsa, sizeof(dsa));
-		} while (rv == -1 && errno == EAGAIN && lim++ < 10);
-		if (rv == -1) {
-			cerr << "ioProc:: send: failure in sendto (errno="
-			     << errno << ")\n";
-			exit(1);
-		}
-		lt->postOcnt(lnk,h.leng());
-	}
-	ps->free(p);
 }
 
 bool ioProc::addEntry(int ifnum, ipa_t ipa, int brate, int prate) {

@@ -1,6 +1,6 @@
 BIN = ${HOME}/bin
-IDIR = ~/src/include
-LDIR = ~/src/lib
+IDIR = ../include
+LDIR = ../lib
 LIBS = ${LDIR}/libLfs.a ${LDIR}/lib-misc.a ${LDIR}/lib-ds.a
 LIBF = ${LDIR}/libLfs.a
 CXXFLAGS = -O2

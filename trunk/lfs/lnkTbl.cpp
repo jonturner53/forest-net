@@ -29,9 +29,7 @@ bool lnkTbl::addEntry(int lnk, int intf, ipa_t pipa, ipa_t plfs, ntyp_t pTyp) {
 bool lnkTbl::removeEntry(int lnk) {
 // Remove the table entry for lnk. Return true on success, false on failure.
 	if (!valid(lnk)) return false;
-	uint32_t x = (ld[lnk].pTyp != ROUTER ?
-			ld[lnk].padr : ipAdr(ld[lnk].intf));
-	ht->remove(hashkey(ld[lnk].pipa,x));
+	ht->remove(hashkey(ld[lnk].pipa,ld[lnk].padr));
 	disable(lnk);  // mark entry as invalid
 }
 
@@ -43,26 +41,6 @@ bool lnkTbl::checkEntry(int te) {
 		return false;
 	return true;
 }
-
-/*
-bool lnkTbl::peerIpAdr(int lnk, ipa_t pipa) {
-// Set peer's IP address. This requires changing hash table.
-	lnkdata x = ld[lnk];
-	if (!removeEntry(lnk)) return false;
-	if (!ht->insert(hashkey(x.intf,pipa,x.pipp),lnk)) return false;
-	x.pipa = pipa; ld[lnk] = x;
-	return true;
-}
-
-bool lnkTbl::peerPort(int lnk, ipp_t pipp) {
-// Set peer's IP port number. This requires changing hash table.
-	lnkdata x = ld[lnk];
-	if (!removeEntry(lnk)) return false;
-	if (!ht->insert(hashkey(x.intf,x.pipa,pipp),lnk)) return false;
-	x.pipp = pipp; ld[lnk] = x;
-	return true;
-}
-*/
 
 int lnkTbl::getEntry(istream& is) {
 // Read an entry from is and store it in the link table.

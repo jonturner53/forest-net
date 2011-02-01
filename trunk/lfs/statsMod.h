@@ -7,11 +7,10 @@
 
 #include "lfs.h"
 #include "lnkTbl.h"
-#include "qMgr.h"
 
 class statsMod {
 public:
-		statsMod(int,lnkTbl*,qMgr*,int*);
+		statsMod(int,lnkTbl*,int*);
 		~statsMod();
 
 	void	record(uint32_t);	// record statistics to files
@@ -33,13 +32,11 @@ protected:
 
 	struct statItem {
 	int	lnk;			// link number for stat
-	int	qnum;			// for queue length stats
 	cntrTyp	typ;			// type of counter for this stat
 	} *stat;			// stat[i] is statistic number i
 	ofstream fs;			// file stream for statistics
 
 	lnkTbl	*lt;			// pointer to link table
-	qMgr	*qm;			// pointer to queue manager
 	int	*avail;			// available bandwidth vector
 };
 

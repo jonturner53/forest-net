@@ -56,8 +56,8 @@ enum ntyp_t {
 enum lfsOp_t { Control=0, FirmReq=1, SoftReq=2, Release=3 };
 enum lfsCtl_t { Connect=1, Disconnect=2 };
 
-typedef uint8_t flags_t;
-const flags_t REPORT = 0x01;		// request status report
+typedef uint8_t lfs_flags_t;
+const lfs_flags_t REPORT = 0x01;		// request status report
 
 // implementation parameters
 const short int MAXLNK = 31;

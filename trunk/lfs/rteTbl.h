@@ -15,11 +15,10 @@
 #include "lfs.h"
 #include "lmp.h"
 #include "fltrTbl.h"
-#include "qMgr.h"
 
 class rteTbl {
 public:
-		rteTbl(int,ipa_t,lnkTbl*,qMgr*);
+		rteTbl(int,ipa_t,lnkTbl*);
 		~rteTbl();
 
 	int	lookup(ipa_t); 			// lookup entry
@@ -29,6 +28,7 @@ public:
 	ipa_t	prefix(int) const;		// return prefix for this entry
 	int	prefLeng(int) const;		// return prefix length
 	int& 	link(int,int);			// return reference to link
+	int& 	fpf(int);			// return reference to fastpath filter
 
 	// modify table
 	int	addEntry(ipa_t,int); 		// add new entry
@@ -50,13 +50,13 @@ private:
 	struct rtEntry {
 	ipa_t	pfx;			// prefix
 	int	pfxlng;			// prefix length
+	int	fpfn;			// fastpath filter used for this route
 	int	nh[maxNhops+1];		// list of next hops
 	};
 
 	rtEntry *tbl;			// vector of table entries
 	lmp  *lmpt;			// longest matching pfx data structure
 	lnkTbl*	lt;			// pointer to link table
-	qMgr*	qm;			// pointer to queue manager
 
 	int free;			// first unused entry
 };
@@ -79,6 +79,12 @@ inline int rteTbl::prefLeng(int te) const {
 inline int& rteTbl::link(int te, int i) {
 	assert(valid(te) && 1 <= i && i <= maxNhops);
 	return tbl[te].nh[i];
+}
+
+// Return reference to fastpath filter number for entry
+inline int& rteTbl::fpf(int te) {
+	assert(valid(te));
+	return tbl[te].fpfn;
 }
 
 #endif
