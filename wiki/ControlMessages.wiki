@@ -1,8 +1,5 @@
 #summary Description of control message formats and semantics.
 
-Forest is an overlay network designed to support large real-time distributed applications.
-This report documents the control packets used in Forest networks.
-
 Every Forest packet contains a packet type field in its packet header.
 This is an eight bit field and the various packet types each have
 an associated type code.
@@ -51,9 +48,9 @@ these codes by their names rather than their type codes.
 ||  NEG_REPLY || Generic negative reply packet. ||
 
 
-
-
 Control packets in Forest all take the form of a simple request/response interaction.
+The _request/response_ flag in the flag field is used to distinguish
+request packets from responses.
 In most cases, the response is simply a positive or negative acknowledgment,
 indicating that the requested action was completed successfully, or that
 it failed for some reason. 
@@ -62,12 +59,8 @@ Every request packet contains a sequence number in the first word of the payload
 This value is returned as the first word of every response, giving requestors a simple
 way of matching responses to earlier requests.
 Control packets are idempotent; that is, one can perform the action specified in
-a control packet several times and the result will be the same as it would be if it were
-done once. This means that requestors can repeat a control packet as often as
-needed to get a response.
-The body of the control packets consists of a set of (attribute code, value) pairs.
-Both the attribute code and the value are encoded as 32 bit integers.
-These pairs appear in the payload immediately following the sequence number.
+a control packet several times and the result will be the same as it would be if it were done once. This means that requestors can repeat a control packet as often as needed to get a response.
+The body of the control packets consists of a set of (attribute code, value) pairs. Both the attribute code and the value are encoded as 32 bit integers. These pairs appear in the payload immediately following the sequence number.
 The pairs may appear in any order, and some attributes are optional.
 The payload is required to consist only of these pairs.
 Positive reply packets may contain additional information in the form of
@@ -78,5 +71,7 @@ payload of the packet (after the sequence number), providing further
 information about the failure.
 
 Details of the attributes used with various control messages are provided in the next table.
+
+fill in later
 
 [Overview Back to Overview]
