@@ -6,4 +6,4 @@ Forest is an overlay network for real-time, distributed applications, such as on
 
 == Links ==
 
-  * [http://code.google.com/p/forest-net/wiki/ControlMessages Control Messages]
+  * [ControlMessages Control Messages]
