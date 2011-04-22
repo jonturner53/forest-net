@@ -11,6 +11,51 @@ The numerical values of these type codes can be found in the
 source code file forest.h, although programs generally refer to
 these codes by their names rather than their type codes.
 
+
+|| type code || Description ||
+|| USER_DATA ||  Ordinary user data packet. ||
+|| SUB_UNSUB ||  Subscribe/unsubscribe to one or more multicast groups. ||
+|| CONNECT ||  Establish link between a client and the Forest overlay. ||
+|| DISCONNECT || Drop a link between a client and the Forest overlay.||
+||           ||Packets used by clients to configure comtrees. ||
+|| CLIENT_ADD\_COMTREE || Client request to add a new comtree. ||
+|| CLIENT_DROP\_COMTREE || Client request to drop a comtree. ||
+|| CLIENT_GET\_COMTREE || Client request to retrieve comtree attributes. ||
+|| ||
+|| CLIENT_MOD\_COMTREE || Client request to modify comtree attributes. ||
+|| CLIENT_MOD\_LEAF\_RATE || Client request to modify rates for a particular comtree leaf. ||
+|| CLIENT_AUTOSIZE\_COMTREE || Client request to adjust internal link rates to match leaf rates. ||
+|| CLIENT_JOIN\_COMTREE || Client request to join an existing comtree. ||
+|| CLIENT_LEAVE\_COMTREE || Client request to leave an existing comtree. ||
+|| \end{tabular}||
+|| ||
+|| \begin{tabular}{| p{5 cm} | p{9 cm} |}||
+|| \multicolumn{2}{|l|}{ Control packets used by internal components of a Forest network. }||
+||  RTE_REPLY || Reply to request for route to a unicast address. ||
+||  ADD_IFACE || Add a new interface to a router. ||
+||  DROP_IFACE || Remove an interface from a router. ||
+||  GET_IFACE || Retrieve information relating to a router interface. ||
+||  MOD_IFACE || Modify attributes of a router interface. ||
+||  ADD_LINK || Add a link to a router. ||
+||  DROP_LINK || Remove a link from a router. ||
+||  GET_LINK ||Retrieve information relating to a router link. ||
+||  MOD_LINK || Modify attributes of a link at a router. 			||
+||  ADD_COMTREE || Add a comtree to a router's local configuration. ||
+||  DROP_COMTREE || Remove a comtree from a router's local configuration. ||
+||  ADD_COMTREE\_LINK || Add a link to a comtree at a router. ||
+||  DROP_COMTREE\_LINK || Remove a link from a comtree at a router. ||
+||  GET_COMTREE || Retrive comtree configuration information at a router. ||
+||  MOD_COMTREE || Modify comtree attributes at a router. ||
+||  ADD_ROUTE || Add a route to a router's local configuration. ||
+||  DROP_ROUTE ||Remove a route from a router's local configuration. ||
+||  ADD_ROUTE\_LINK || Add a link to a multicast route at a router. ||
+||  DROP_ROUTE\_LINK ||Remove a link from a multicast route at a router. ||
+||  GET_ROUTE || Retrieve a route. ||
+||  MOD_ROUTE ||Modify a route. ||
+||  POS_REPLY ||Generic positive reply packet. ||
+||  NEG_REPLY ||Generic negative reply packet. ||
+
+
 \begin{tabular}{| p{6cm} | p{8cm} |}
 \hline
 type code & Description \\
