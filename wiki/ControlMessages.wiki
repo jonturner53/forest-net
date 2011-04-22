@@ -1,0 +1,98 @@
+#Description of control message formats and semantics.
+
+Forest is an overlay network designed to support large real-time distributed applications.
+This report documents the control packets used in Forest networks.
+
+Every Forest packet contains a packet type field in its packet header.
+This is an eight bit field and the various packet types each have
+an associated type code.
+The table below lists all the packet types and their type code names.
+The numerical values of these type codes can be found in the
+source code file forest.h, although programs generally refer to
+these codes by their names rather than their type codes.
+
+\begin{tabular}{| p{6cm} | p{8cm} |}
+\hline
+type code & Description \\
+\hline
+USER\_DATA & 	Ordinary user data packet. \\
+SUB\_UNSUB & 	Subscribe/unsubscribe to one or more multicast groups. \\
+\hline
+CONNECT & 		Establish link between a client and the Forest overlay. \\
+DISCONNECT &	Drop a link between a client and the Forest overlay.\\
+\hline
+\multicolumn{2}{|l|}{ Packets used by clients to configure comtrees. }\\
+\hline
+CLIENT\_ADD\_COMTREE &			Client request to add a new comtree. \\
+CLIENT\_DROP\_COMTREE &			Client request to drop a comtree. \\
+CLIENT\_GET\_COMTREE &			Client request to retrieve comtree attributes. \\
+
+CLIENT\_MOD\_COMTREE &			Client request to modify comtree attributes. \\
+CLIENT\_MOD\_LEAF\_RATE &		Client request to modify rates for a particular comtree leaf. \\
+CLIENT\_AUTOSIZE\_COMTREE &	Client request to adjust internal link rates to match leaf rates. \\
+CLIENT\_JOIN\_COMTREE &			Client request to join an existing comtree. \\
+CLIENT\_LEAVE\_COMTREE &		Client request to leave an existing comtree. \\
+\hline
+\end{tabular}
+
+\begin{tabular}{| p{5 cm} | p{9 cm} |}
+\hline
+\multicolumn{2}{|l|}{ Control packets used by internal components of a Forest network. }\\
+\hline
+	RTE\_REPLY & 					Reply to request for route to a unicast address. \\
+\hline
+	ADD\_IFACE & 					Add a new interface to a router. \\
+	DROP\_IFACE & 					Remove an interface from a router. \\
+	GET\_IFACE & 					Retrieve information relating to a router interface. \\
+	MOD\_IFACE & 					Modify attributes of a router interface. \\
+\hline
+	ADD\_LINK & 					Add a link to a router. \\
+	DROP\_LINK & 					Remove a link from a router. \\
+	GET\_LINK &						Retrieve information relating to a router link. \\
+	MOD\_LINK & 					Modify attributes of a link at a router. \\					
+\hline
+	ADD\_COMTREE & 				Add a comtree to a router's local configuration. \\
+	DROP\_COMTREE & 				Remove a comtree from a router's local configuration. \\
+	ADD\_COMTREE\_LINK & 			Add a link to a comtree at a router. \\
+	DROP\_COMTREE\_LINK & 		Remove a link from a comtree at a router. \\
+	GET\_COMTREE & 				Retrive comtree configuration information at a router. \\
+	MOD\_COMTREE & 				Modify comtree attributes at a router. \\
+\hline
+	ADD\_ROUTE & 					Add a route to a router's local configuration. \\
+	DROP\_ROUTE &					Remove a route from a router's local configuration. \\
+	ADD\_ROUTE\_LINK & 			Add a link to a multicast route at a router. \\
+	DROP\_ROUTE\_LINK &			Remove a link from a multicast route at a router. \\
+	GET\_ROUTE & 					Retrieve a route. \\
+	MOD\_ROUTE &					Modify a route. \\
+\hline
+	POS\_REPLY &					Generic positive reply packet. \\
+	NEG\_REPLY &					Generic negative reply packet. \\
+\hline
+
+\end{tabular}
+
+Control packets in Forest all take the form of a simple request/response interaction.
+In most cases, the response is simply a positive or negative acknowledgment,
+indicating that the requested action was completed successfully, or that
+it failed for some reason. 
+
+Every request packet contains a sequence number in the first word of the payload.
+This value is returned as the first word of every response, giving requestors a simple
+way of matching responses to earlier requests.
+Control packets are idempotent; that is, one can perform the action specified in
+a control packet several times and the result will be the same as it would be if it were
+done once. This means that requestors can repeat a control packet as often as
+needed to get a response.
+The body of the control packets consists of a set of (attribute code, value) pairs.
+Both the attribute code and the value are encoded as 32 bit integers.
+These pairs appear in the payload immediately following the sequence number.
+The pairs may appear in any order, and some attributes are optional.
+The payload is required to consist only of these pairs.
+Positive reply packets may contain additional information in the form of
+(attribute code, value) pairs. The values returned will depend on the type
+of the original request.
+In the case of failures, a text string is returned in the
+payload of the packet (after the sequence number), providing further 
+information about the failure.
+
+Details of the attributes used with various control messages are provided in the next table.
