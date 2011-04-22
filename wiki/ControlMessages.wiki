@@ -18,19 +18,15 @@ these codes by their names rather than their type codes.
 || CONNECT ||  Establish link between a client and the Forest overlay. ||
 || DISCONNECT || Drop a link between a client and the Forest overlay.||
 ||           ||Packets used by clients to configure comtrees. ||
-|| CLIENT_ADD\_COMTREE || Client request to add a new comtree. ||
-|| CLIENT_DROP\_COMTREE || Client request to drop a comtree. ||
-|| CLIENT_GET\_COMTREE || Client request to retrieve comtree attributes. ||
-|| ||
-|| CLIENT_MOD\_COMTREE || Client request to modify comtree attributes. ||
-|| CLIENT_MOD\_LEAF\_RATE || Client request to modify rates for a particular comtree leaf. ||
-|| CLIENT_AUTOSIZE\_COMTREE || Client request to adjust internal link rates to match leaf rates. ||
-|| CLIENT_JOIN\_COMTREE || Client request to join an existing comtree. ||
-|| CLIENT_LEAVE\_COMTREE || Client request to leave an existing comtree. ||
-|| \end{tabular}||
-|| ||
-|| \begin{tabular}{| p{5 cm} | p{9 cm} |}||
-|| \multicolumn{2}{|l|}{ Control packets used by internal components of a Forest network. }||
+|| CLIENT_ADD_COMTREE || Client request to add a new comtree. ||
+|| CLIENT_DROP_COMTREE || Client request to drop a comtree. ||
+|| CLIENT_GET_COMTREE || Client request to retrieve comtree attributes. ||
+
+|| CLIENT_MOD_COMTREE || Client request to modify comtree attributes. ||
+|| CLIENT_MOD_LEAF\_RATE || Client request to modify rates for a particular comtree leaf. ||
+|| CLIENT_AUTOSIZE_COMTREE || Client request to adjust internal link rates to match leaf rates. ||
+|| CLIENT_JOIN_COMTREE || Client request to join an existing comtree. ||
+|| CLIENT_LEAVE_COMTREE || Client request to leave an existing comtree. ||
 ||  RTE_REPLY || Reply to request for route to a unicast address. ||
 ||  ADD_IFACE || Add a new interface to a router. ||
 ||  DROP_IFACE || Remove an interface from a router. ||
@@ -48,73 +44,15 @@ these codes by their names rather than their type codes.
 ||  MOD_COMTREE || Modify comtree attributes at a router. ||
 ||  ADD_ROUTE || Add a route to a router's local configuration. ||
 ||  DROP_ROUTE ||Remove a route from a router's local configuration. ||
-||  ADD_ROUTE\_LINK || Add a link to a multicast route at a router. ||
-||  DROP_ROUTE\_LINK ||Remove a link from a multicast route at a router. ||
+||  ADD_ROUTE_LINK || Add a link to a multicast route at a router. ||
+||  DROP_ROUTE_LINK ||Remove a link from a multicast route at a router. ||
 ||  GET_ROUTE || Retrieve a route. ||
-||  MOD_ROUTE ||Modify a route. ||
-||  POS_REPLY ||Generic positive reply packet. ||
-||  NEG_REPLY ||Generic negative reply packet. ||
+||  MOD_ROUTE || Modify a route. ||
+||  POS_REPLY || Generic positive reply packet. ||
+||  NEG_REPLY || Generic negative reply packet. ||
 
 
-\begin{tabular}{| p{6cm} | p{8cm} |}
-\hline
-type code & Description \\
-\hline
-USER\_DATA & 	Ordinary user data packet. \\
-SUB\_UNSUB & 	Subscribe/unsubscribe to one or more multicast groups. \\
-\hline
-CONNECT & 		Establish link between a client and the Forest overlay. \\
-DISCONNECT &	Drop a link between a client and the Forest overlay.\\
-\hline
-\multicolumn{2}{|l|}{ Packets used by clients to configure comtrees. }\\
-\hline
-CLIENT\_ADD\_COMTREE &			Client request to add a new comtree. \\
-CLIENT\_DROP\_COMTREE &			Client request to drop a comtree. \\
-CLIENT\_GET\_COMTREE &			Client request to retrieve comtree attributes. \\
 
-CLIENT\_MOD\_COMTREE &			Client request to modify comtree attributes. \\
-CLIENT\_MOD\_LEAF\_RATE &		Client request to modify rates for a particular comtree leaf. \\
-CLIENT\_AUTOSIZE\_COMTREE &	Client request to adjust internal link rates to match leaf rates. \\
-CLIENT\_JOIN\_COMTREE &			Client request to join an existing comtree. \\
-CLIENT\_LEAVE\_COMTREE &		Client request to leave an existing comtree. \\
-\hline
-\end{tabular}
-
-\begin{tabular}{| p{5 cm} | p{9 cm} |}
-\hline
-\multicolumn{2}{|l|}{ Control packets used by internal components of a Forest network. }\\
-\hline
-	RTE\_REPLY & 					Reply to request for route to a unicast address. \\
-\hline
-	ADD\_IFACE & 					Add a new interface to a router. \\
-	DROP\_IFACE & 					Remove an interface from a router. \\
-	GET\_IFACE & 					Retrieve information relating to a router interface. \\
-	MOD\_IFACE & 					Modify attributes of a router interface. \\
-\hline
-	ADD\_LINK & 					Add a link to a router. \\
-	DROP\_LINK & 					Remove a link from a router. \\
-	GET\_LINK &						Retrieve information relating to a router link. \\
-	MOD\_LINK & 					Modify attributes of a link at a router. \\					
-\hline
-	ADD\_COMTREE & 				Add a comtree to a router's local configuration. \\
-	DROP\_COMTREE & 				Remove a comtree from a router's local configuration. \\
-	ADD\_COMTREE\_LINK & 			Add a link to a comtree at a router. \\
-	DROP\_COMTREE\_LINK & 		Remove a link from a comtree at a router. \\
-	GET\_COMTREE & 				Retrive comtree configuration information at a router. \\
-	MOD\_COMTREE & 				Modify comtree attributes at a router. \\
-\hline
-	ADD\_ROUTE & 					Add a route to a router's local configuration. \\
-	DROP\_ROUTE &					Remove a route from a router's local configuration. \\
-	ADD\_ROUTE\_LINK & 			Add a link to a multicast route at a router. \\
-	DROP\_ROUTE\_LINK &			Remove a link from a multicast route at a router. \\
-	GET\_ROUTE & 					Retrieve a route. \\
-	MOD\_ROUTE &					Modify a route. \\
-\hline
-	POS\_REPLY &					Generic positive reply packet. \\
-	NEG\_REPLY &					Generic negative reply packet. \\
-\hline
-
-\end{tabular}
 
 Control packets in Forest all take the form of a simple request/response interaction.
 In most cases, the response is simply a positive or negative acknowledgment,
