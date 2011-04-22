@@ -1,4 +1,4 @@
-#Description of control message formats and semantics.
+#summary Description of control message formats and semantics.
 
 Forest is an overlay network designed to support large real-time distributed applications.
 This report documents the control packets used in Forest networks.
@@ -21,9 +21,8 @@ these codes by their names rather than their type codes.
 || CLIENT_ADD_COMTREE || Client request to add a new comtree. ||
 || CLIENT_DROP_COMTREE || Client request to drop a comtree. ||
 || CLIENT_GET_COMTREE || Client request to retrieve comtree attributes. ||
-
 || CLIENT_MOD_COMTREE || Client request to modify comtree attributes. ||
-|| CLIENT_MOD_LEAF\_RATE || Client request to modify rates for a particular comtree leaf. ||
+|| CLIENT_MOD_LEAF_RATE || Client request to modify rates for a particular comtree leaf. ||
 || CLIENT_AUTOSIZE_COMTREE || Client request to adjust internal link rates to match leaf rates. ||
 || CLIENT_JOIN_COMTREE || Client request to join an existing comtree. ||
 || CLIENT_LEAVE_COMTREE || Client request to leave an existing comtree. ||
@@ -38,8 +37,8 @@ these codes by their names rather than their type codes.
 ||  MOD_LINK || Modify attributes of a link at a router. 			||
 ||  ADD_COMTREE || Add a comtree to a router's local configuration. ||
 ||  DROP_COMTREE || Remove a comtree from a router's local configuration. ||
-||  ADD_COMTREE\_LINK || Add a link to a comtree at a router. ||
-||  DROP_COMTREE\_LINK || Remove a link from a comtree at a router. ||
+||  ADD_COMTREE_LINK || Add a link to a comtree at a router. ||
+||  DROP_COMTREE_LINK || Remove a link from a comtree at a router. ||
 ||  GET_COMTREE || Retrive comtree configuration information at a router. ||
 ||  MOD_COMTREE || Modify comtree attributes at a router. ||
 ||  ADD_ROUTE || Add a route to a router's local configuration. ||
