@@ -1,6 +1,5 @@
-# Overview Forest Project
 
-= Introduction =
+= Introduction to Forest =
 
 _Forest_ is an overlay network designed for applications that involve a large number of distributed components whose real-time status is of interest to a dynamically changing subset of the other components. The primary motivating application for Forest is that of large-scale virtual worlds, but this application shares common characteristics with a variety of others, including many in the emerging class of distributed cyber-physical systems. These applications all require high quality real-time communication services that can guarantee timely data delivery among a large set of distributed components. The core primitive in Forest is a tree-structured channel, called a _comtree_ that supports both unicast and multicast packet delivery. Applications use comtrees as private networks, that are logically isolated and can be dynamically provisioned to meet application requirements. Application endpoints subscribe to multicast groups within their comtree using a lightweight signaling mechanism that enables endpoints to join/leave multicast groups many times per second. This enables each component to obtain reports from many different sources and to rapidly switch among sources.
 
@@ -11,7 +10,7 @@ The central requirement that these applications share is the need for real-time 
 
 Our approach to addressing this requirement is the _comtree_. A comtree can be viewed as a private network with provisioned capacity. Each comtree is structured as a tree, which allows it to efficiently support both unicast and multicast communication, and to be efficiently provisioned for non-stop data delivery. Multicast allows data to be delivered efficiently to an arbitrary number of recipients and frees senders of the need to maintain communication state for multiple receivers. The comtree supports a very lightweight subscription mechanism, allowing endpoints to rapidly join and leave multicast groups, as their need for information changes. Forest leverages and adapts a number of well-established concepts and mechanisms from the networking literature. The merit of the Forest architecture rests not on the novelty of the specific elements, but in the way these elements are combined to address the needs of our target application class.
 
-= Comtrees in Forest =
+== Comtrees in Forest ==
 
 The central primitive supported by Forest is the comtree. While the network’s links will typically form a general graph, each comtree uses a subset of the links that forms a tree. Each application session using Forest is assigned its own comtree and all communication for the session takes place within it. Comtrees support both unicast and multicast packet forwarding and operate as independent logical networks. Comtrees are isolated from one another and they can be separately provisioned, ensuring that excessive traffic within one comtree cannot disrupt the flow of packets within another.
 
