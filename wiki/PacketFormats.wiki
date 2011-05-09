@@ -6,11 +6,8 @@ Forest is designed to operate as an overlay network,
 so Forest packets are typically carried within UDP packets.
 Forest packets have a fixed format which is described below.
 
-  * _Version number_. This is the first four bits of the first
-  word and is currently equal to 1.
- 
-  * _Packet Length_. This is specified in bytes and is a 12 bit field.
-  The maximum allowed value is 1450.
+  * _Version number_. This is the first four bits of the first word and is currently equal to 1. 
+  * _Packet Length_. This is specified in bytes and is a 12 bit field. The maximum allowed value is 1450.
 
   * _Packet Type_. This is an 8 bit field. The specific packet types are listed below.
 
