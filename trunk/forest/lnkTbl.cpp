@@ -6,6 +6,9 @@ lnkTbl::lnkTbl(int nlnk1) : nlnk(nlnk1) {
 	ld = new lnkdata[nlnk+1];
 	ht = new hashTbl(nlnk);
 
+	iPkt = 0; oPkt = 0; iByt = 0; oByt = 0;
+	irPkt = 0; orPkt = 0; icPkt = 0; ocPkt = 0;
+
 	// Null peer address identifies unused entry
 	for (int i = 1; i <= nlnk; i++) { disable(i); }
 };

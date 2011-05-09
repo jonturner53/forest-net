@@ -1,3 +1,5 @@
+/** \file fRouter.cpp */
+
 // usage:
 //	fRouter fAdr ifTbl lnkTbl comtTbl rteTbl stats finTime [ numData ]
 //
@@ -144,27 +146,26 @@ bool fRouter::pktCheck(int p, int ctte) {
 	int inL = h.inLink();
 	if (inL == Null) return false;
 
-	// extra checks for packets form untrusted peers
+	// extra checks for packets from untrusted peers
 	if (lt->peerTyp(inL) < TRUSTED) {
 		// check for spoofed source address
 		if (lt->peerAdr(inL) != h.srcAdr()) return false;
 		// and that destination restrictions are respected
-		if (lt->peerDest(inL) != 0 && h.ptype() < USER_SIG &&
-	    	    h.dstAdr() != lt->peerDest(inL))
+		if (lt->peerDest(inL) != 0 && 
+		    h.dstAdr() != lt->peerDest(inL) && h.dstAdr() != myAdr)
 			return false;
 		// don't let untrusted peers send network signal packets
 		if (h.ptype() >= NET_SIG) return false;
-		// and user signalling packets must be addressed to the router
-		if (h.ptype() >= USER_SIG && h.dstAdr() != myAdr) return false;
+		// and user signalling packets must be sent on comtrees 1-99
+		if (h.ptype() >= CLIENT_SIG && h.comtree() > 100) return false;
 	}
 	// check for invalid comtrees
 	if (!ctt->valid(ctte) || !ctt->inComt(ctte,inL)) return false;
 	return true;
 }
 
-int fRouter::subUnsub(int p, int ctte) {
+void fRouter::subUnsub(int p, int ctte) {
 // Perform subscription processing on p.
-// Return 1 if  p is discarded, else 0.
 // Ctte is the comtree table entry for the packet.
 // First payload word contains add/drop counts;
 // these must sum to at most 350 and must match packet length
@@ -176,7 +177,7 @@ int fRouter::subUnsub(int p, int ctte) {
 	int inlnk = h.inLink();
 	// ignore subscriptions from the parent or core neighbors
 	if (inlnk == ctt->plink(ctte) || ctt->isClink(ctte,inlnk)) {
-		ps->free(p); return 1;
+		ps->free(p); return;
 	}
 	int comt = h.comtree();
 	bool propagate = false;
@@ -185,7 +186,7 @@ int fRouter::subUnsub(int p, int ctte) {
 	// add subscriptions
 	int addcnt = ntohl(pp[0]);
 	if (addcnt < 0 || addcnt > 350 || (addcnt + 8)*4 > h.leng()) {
-		ps->free(p); return 1;
+		ps->free(p); return;
 	}
 	for (int i = 1; i <= addcnt; i++) {
 		addr = ntohl(pp[i]);
@@ -203,7 +204,7 @@ int fRouter::subUnsub(int p, int ctte) {
 	int dropcnt = ntohl(pp[addcnt+1]);
 	if (dropcnt < 0 || addcnt + dropcnt > 350 ||
 	    (addcnt + dropcnt + 8)*4 > h.leng() ) {
-		ps->free(p); return 1;
+		ps->free(p); return;
 	}
 	for (int i = addcnt + 2; i <= addcnt + dropcnt + 1; i++) {
 		addr = ntohl(pp[i]);
@@ -222,13 +223,13 @@ int fRouter::subUnsub(int p, int ctte) {
 	if (propagate && !ctt->coreFlag(ctte) && ctt->plink(ctte) != Null) {
 		ps->payErrUpdate(p);
 		if (qm->enq(p,ctt->plink(ctte),ctt->qnum(ctte),now)) {
-			return 0;
+			return;
 		}
 	}
-	ps->free(p); return 1;
+	ps->free(p); return;
 }
 
-int fRouter::multiSend(int p, int ctte, int rte) {
+void fRouter::multiSend(int p, int ctte, int rte) {
 // Send multiple copies of a packet.
 // Ctte and rte are the comtree and routing table entries
 // respectively. Ctte is assumed to be defined, rte may not be.
@@ -255,61 +256,292 @@ int fRouter::multiSend(int p, int ctte, int rte) {
 			lnkvec[n++] = ctt->plink(ctte);
 	}
 
-	if (n == 0) { ps->free(p); return 1; }
+	if (n == 0) { ps->free(p); return; }
 
 	int lnk; int inlnk = h.inLink();
-	int dc = 0; int p1 = p;
+	int p1 = p;
 	for (int i = 0; i < n-1; i++) { // process first n-1 copies
 		lnk = lnkvec[i];
 		if (lnk == inlnk) continue;
 		if (qm->enq(p1,lnk,qn,now)) p1 = ps->clone(p);
-		else dc++;
 	}
 	// process last copy
 	lnk = lnkvec[n-1];
 	if (lnk != inlnk) {
-		if (qm->enq(p1,lnk,qn,now)) return dc;
-		dc++;
+		if (qm->enq(p1,lnk,qn,now)) return;
 	}
 	ps->free(p1);
-	return dc;
+	return;
 }
 
-int fRouter::handleCtlPkt(int p, int ctte) {
-// Handle all control packets addressed to the router.
-// Assumes packet has passed all basic checks.
-// Return 0 if the packet should be forwarded, else 1.
+/** Send packet back to sender.
+ *  Set REQ_REPLY flag, flip address fields and put it in the right queue.
+ */
+void fRouter::returnToSender(packet p, int paylen) {
+	header& h = ps->hdr(p);
+	h.leng() = HDR_LENG + paylen + 4;
+
+	fAdr_t temp = h.dstAdr(); h.dstAdr() = h.srcAdr(); h.srcAdr() = temp;
+	ps->pack(p);
+
+	int qn = ctt->qnum(ctt->lookup(h.comtree()));
+	if (!qm->enq(p,h.inLink(),qn,now)) ps->free(p);
+}
+
+/** Send an error reply to a control packet.
+ *  Reply packet re-uses the request packet p and its buffer.
+ *  The string *s is included in the reply packet.
+ */
+void fRouter::errReply(packet p, CtlPkt& cp, char *s) {
+	cp.rrType = NEG_REPLY; cp.errMsg = s;
+	returnToSender(p,4*cp.pack());
+}
+
+/** Handle all control packets addressed to the router.
+ *  with the exception of SUB_UNSUB and RTE_REPLY which
+ *  are handled "inline".
+ *  Assumes packet has passed all basic checks.
+ *  Return 0 if the packet should be forwarded, else 1.
+ *
+ *  Still need to add error checking for modify messages.
+ *  This requires extensions to ioProc and lnkTbl to
+ *  track available bandwidth.
+ */
+void fRouter::handleCtlPkt(int p) {
+	int ctte, rte;
 	header& h = ps->hdr(p);
 	int inL = h.inLink();
-	if (h.ptype() == CONNECT) {
-		if (lt->peerTyp(inL) < TRUSTED && lt->peerPort(inL) == 0)
-			lt->peerPort(inL) = h.tunSrcPort();
-	} else if (h.ptype() == DISCONNECT) {
-		if (lt->peerTyp(inL) < TRUSTED &&
-		    lt->peerPort(inL) == h.tunSrcPort())
-			lt->peerPort(inL) = 0;
-	} else if (h.ptype() == SUB_UNSUB) {
-		return subUnsub(p,ctte);
-	} else if (h.ptype() == RTE_REPLY) {
-		int rte = rt->lookup(h.comtree(), h.dstAdr());
-		if (h.flags() & RTE_REQ && rte != Null) sendRteReply(p,ctte);
-		int adr = ntohl(ps->payload(p)[0]);
-		if (forest::ucastAdr(adr) &&
-		    rt->lookup(h.comtree(),adr) == Null) {
-			rt->addEntry(h.comtree(),adr,h.inLink(),0); 
-		}
-		if (rte == Null) {
-			// send to neighboring routers in comtree
-			h.flags() = RTE_REQ;
-			ps->pack(p); ps->hdrErrUpdate(p);
-			return multiSend(p,ctte,rte);
-		}
-		if (rte != Null && lt->peerTyp(rt->link(rte)) == ROUTER &&
-		    qm->enq(p,rt->link(rte),ctt->qnum(ctte),now))
-			return 0;
+	buffer_t& b = ps->buffer(p);
+	CtlPkt cp(ps->payload(p));
+
+	int len = (h.leng() - 24)/4;
+	if (!cp.unpack(len)) {
+		cerr << "misformatted control packet";
+		cp.print(cerr);
+		errReply(p,cp,"misformatted control packet");
+		return;
 	}
-	// discard if control reaches here
-	ps->free(p); return 1;
+
+	if (h.ptype() == CONNECT) {
+		if (lt->peerPort(inL) == 0)
+			lt->peerPort(inL) = h.tunSrcPort();
+		ps->free(p); return;
+	}
+	if (h.ptype() == DISCONNECT) {
+		if (lt->peerPort(inL) == h.tunSrcPort())
+			lt->peerPort(inL) = 0;
+		ps->free(p); return;
+	}
+	if (h.ptype() != NET_SIG || h.comtree < 100 || h.comtree > 999) {
+		// reject signalling packets on comtrees outside 100-999 range
+		ps->free(p); return;
+	}
+		
+	// Prepare positive reply packet for use where appropriate
+	CtlPkt cp1(ps->payload(p));
+	cp1.cpType = cp.cpType; cp1.rrType = POS_REPLY; cp1.seqNum = cp.seqNum;
+
+	switch (cp.cpType) {
+	// Configuring logical interfaces
+	case ADD_IFACE:
+		if (iop->addEntry(cp.iface, cp.localIP,
+		     		   cp.maxBitRate, cp.maxPktRate)) {
+			returnToSender(p,4*cp1.pack());
+		} else {
+			errReply(p,cp1,"add iface: cannot add interface");
+		}
+		break;
+        case DROP_IFACE:
+		iop->removeEntry(cp.iface);
+		returnToSender(p,4*cp1.pack());
+		break;
+        case GET_IFACE:
+		if (iop->valid(cp.iface)) {
+			cp1.iface = cp.iface;
+			cp1.localIP = iop->ipAdr(cp1.iface);
+			cp1.maxBitRate = iop->maxBitRate(cp1.iface);
+			cp1.maxPktRate = iop->maxPktRate(cp1.iface);
+			returnToSender(p,4*cp1.pack());
+		} else errReply(p,cp1,"get iface: invalid interface");
+		break;
+        case MOD_IFACE:
+		if (iop->valid(cp.iface)) {
+			int br = iop->maxBitRate(cp.iface);
+			int pr = iop->maxPktRate(cp.iface);
+			if (cp.maxBitRate != 0)
+				iop->setMaxBitRate(cp.iface, cp.maxBitRate);
+			if (cp.maxPktRate != 0)
+				iop->setMaxPktRate(cp.iface, cp.maxPktRate);
+			if (iop->checkEntry(cp.iface)) {
+				returnToSender(p,4*cp1.pack());
+			} else { // undo changes
+				iop->setMaxBitRate(cp.iface, br);
+				iop->setMaxPktRate(cp.iface, pr);
+				errReply(p,cp1,"mod iface: invalid rate");
+			}
+		} else errReply(p,cp1,"mod iface: invalid interface");
+		break;
+        case ADD_LINK:
+		switch (cp.peerType) 
+		if (lt->addEntry(cp.link, cp.iface, (ntyp_t) cp.peerType,
+		    cp.peerIP, cp.peerAdr))
+			returnToSender(p,4*cp1.pack());
+		else errReply(p,cp1,"add link: cannot add link");
+		break;
+        case DROP_LINK:
+		if (lt->removeEntry(cp.iface))
+			returnToSender(p,4*cp1.pack());
+		else errReply(p,cp1,"drop link: cannot drop link");
+        case GET_LINK:
+		if (lt->valid(cp.link)) {
+			cp1.link = cp.link;
+			cp1.iface = lt->interface(cp.link);
+			cp1.peerType = lt->peerTyp(cp.link);
+			cp1.peerIP = lt->peerIpAdr(cp.link);
+			cp1.peerPort = lt->peerPort(cp.link);
+			cp1.peerDest = lt->peerDest(cp.link);
+			cp1.bitRate = lt->bitRate(cp.link);
+			cp1.pktRate = lt->pktRate(cp.link);
+			returnToSender(p,4*cp1.pack());
+		} else errReply(p,cp1,"get link: invalid link number");
+		break;
+        case MOD_LINK:
+		if (lt->valid(cp.link)) {
+			cp1.link = cp.link;
+			if (cp.peerType != 0) {
+				if (cp.peerType != CLIENT &&
+				    cp.peerType != SERVER &&
+				    cp.peerType != ROUTER &&
+				    cp.peerType != CONTROLLER) {
+					errReply(p,cp1,"mod link:bad peerType");
+					return;
+				}
+				lt->peerTyp(cp.link) = (ntyp_t) cp.peerType;
+			}
+			if (cp.peerPort != 0) {
+				if (cp.peerPort > 65535) {
+					errReply(p,cp1,"mod link:bad peerPort");
+					return;
+				}
+				lt->peerPort(cp.link) = cp.peerPort;
+			}
+			if (cp.peerDest != 0) {
+				if (!unicast(cp.peerDest)) {
+					errReply(p,cp1,"mod link:bad peerDest");
+					return;
+				}
+				lt->peerDest(cp.link) = cp.peerDest;
+			}
+			if (cp.bitRate != 0)
+				lt->bitRate(cp.link) = cp.bitRate;
+			if (cp.pktRate != 0)
+				lt->pktRate(cp.link) = cp.pktRate;
+			returnToSender(p,4*cp1.pack());
+		} else errReply(p,cp1,"get link: invalid link number");
+		break;
+        case ADD_COMTREE:
+		if (ctt->addEntry(cp.comtree) != Null)
+			returnToSender(p,4*cp1.pack());
+		else errReply(p,cp1,"add comtree: cannot add comtree");
+		break;
+        case DROP_COMTREE:
+		ctte = ctt->lookup(cp.comtree);
+		if (ctte != Null && ctt->removeEntry(ctte) != Null)
+			returnToSender(p,4*cp1.pack());
+		else
+			errReply(p,cp1,"drop comtree: cannot drop comtree");
+		break;
+        case GET_COMTREE:
+		ctte = ctt->lookup(cp.comtree);
+		if (ctte == Null) {
+			errReply(p,cp1,"get comtree: invalid comtree");
+		} else {
+			CtlPkt cp1(ps->payload(p));
+			cp1.cpType = cp.cpType;
+			cp1.rrType = cp.rrType;
+			cp1.seqNum = cp.seqNum;
+			cp1.comtree = cp.comtree;
+			cp1.coreFlag = (ctt->coreFlag(ctte) ? 1 : -1);
+			cp1.parentLink = ctt->plink(ctte);
+			if (cp1.parentLink == 0) cp1.parentLink = -1;
+			cp1.queue = ctt->qnum(ctte);
+			returnToSender(p,4*cp1.pack());
+		}
+		break;
+        case MOD_COMTREE:
+		ctte = ctt->lookup(cp.comtree);
+		if (ctte != Null) {
+			if (cp.coreFlag != 0)
+				ctt->coreFlag(ctte) = cp.coreFlag;
+			if (cp.parentLink != 0)
+				ctt->plink(ctte) = cp.parentLink;
+			if (cp.queue != 0)
+				ctt->qnum(ctte) = cp.queue;
+			returnToSender(p,4*cp1.pack());
+		} else errReply(p,cp1,"modify comtree: invalid comtree");
+		break;
+
+        case ADD_ROUTE:
+		if (rt->addEntry(cp.comtree,cp.destAdr,cp.link,cp.queue)
+		    != Null) {
+			returnToSender(p,4*cp1.pack());
+		} else errReply(p,cp1,"add route: cannot add route");
+		break;
+        case DROP_ROUTE:
+		rte = rt->lookup(cp.comtree, cp.destAdr);
+		if (rte != Null) {
+			rt->removeEntry(rte);
+			returnToSender(p,4*cp1.pack());
+		} else errReply(p,cp1,"drop route: invalid route");
+		break;
+        case GET_ROUTE:
+		rte = rt->lookup(cp.comtree, cp.destAdr);
+		if (rte != Null) {
+			cp1.comtree = cp.comtree;
+			cp1.destAdr = cp.destAdr;
+			cp1.link = rt->link(rte);
+			cp1.queue = rt->qnum(rte);
+			returnToSender(p,4*cp1.pack());
+		} else errReply(p,cp1,"get route: invalid route");
+		break;
+        case MOD_ROUTE:
+		rte = rt->lookup(cp.comtree, cp.destAdr);
+		if (rte != Null) {
+			if (cp.link != 0)
+				rt->setLink(rte,cp.link);
+			if (cp.queue != 0)
+				rt->qnum(rte) = cp.queue;
+			returnToSender(p,4*cp1.pack());
+		} else errReply(p,cp1,"mod route: invalid route");
+		break;
+	default:
+		cerr << "unrecognized control packet " << h.ptype();
+		ps->free(p);
+		break;
+	}
+	return;
+}
+
+void fRouter::handleRteReply(int p, int ctte) {
+// Handle route reply packet p.
+	header& h = ps->hdr(p);
+	int rte = rt->lookup(h.comtree(), h.dstAdr());
+	if ((h.flags() & RTE_REQ) && rte != Null) sendRteReply(p,ctte);
+	int adr = ntohl(ps->payload(p)[0]);
+	if (forest::ucastAdr(adr) &&
+	    rt->lookup(h.comtree(),adr) == Null) {
+		rt->addEntry(h.comtree(),adr,h.inLink(),0); 
+	}
+	if (rte == Null) {
+		// send to neighboring routers in comtree
+		h.flags() = RTE_REQ;
+		ps->pack(p); ps->hdrErrUpdate(p);
+		multiSend(p,ctte,rte);
+		return;
+	}
+	if (rte != Null && lt->peerTyp(rt->link(rte)) == ROUTER &&
+	    qm->enq(p,rt->link(rte),ctt->qnum(ctte),now))
+		return;
 }
 
 void fRouter::sendRteReply(int p, int ctte) {
@@ -328,14 +560,10 @@ void fRouter::sendRteReply(int p, int ctte) {
 	qm->enq(p1,h.inLink(),ctt->qnum(ctte),now);
 }
 
-int fRouter::forward(int p, int ctte) {
+void fRouter::forward(int p, int ctte) {
 // Lookup routing entry and forward packet accordingly.
-// If packet (or any copies) of packet are discarded, return the
-// number of discards. If no discards, return 0
+// P is assumed to be a CLIENT_DATA packet.
 	header& h = ps->hdr(p);
-
-	if (h.ptype() != USERDATA) { ps->free(p); return 1; }
-
 	int rte = rt->lookup(h.comtree(),h.dstAdr());
 
 	// reply to route request if we have valid entry
@@ -351,13 +579,13 @@ int fRouter::forward(int p, int ctte) {
 			int qn = rt->qnum(rte);
 			if (qn == 0) qn = ctt->qnum(ctte);
 			int lnk = rt->link(rte);
-			if (lnk != h.inLink() &&
-			    qm->enq(p,lnk,qn,now))
-				return 0;
-			ps->free(p); return 1;
+			if (lnk != h.inLink() && qm->enq(p,lnk,qn,now))
+				return;
+			ps->free(p); return;
 		}
 		// multicast data packet
-		return multiSend(p,ctte,rte);
+		multiSend(p,ctte,rte);
+		return;
 	}
 	// no valid route
 	if (forest::ucastAdr(h.dstAdr())) {
@@ -365,7 +593,8 @@ int fRouter::forward(int p, int ctte) {
 		h.flags() = RTE_REQ;
 		ps->pack(p); ps->hdrErrUpdate(p);
 	}
-	return multiSend(p,ctte,rte);
+	multiSend(p,ctte,rte);
+	return;
 }
 
 void fRouter::run(uint32_t finishTime, int numData) {
@@ -378,13 +607,14 @@ void fRouter::run(uint32_t finishTime, int numData) {
 // Note, that high input rates can cause output processing to fall behind.
 // Input rates must be limited to ensure correct operation.
 	// record of first packet receptions, transmissions for debugging
-	const int MAXEVENTS = 200;
+	const int MAXEVENTS = 500;
 	struct { int sendFlag; uint32_t time; int link, pkt;} events[MAXEVENTS];
 	int evCnt = 0;
-	int nRcvd = 0; int nSent = 0; 	// counts of received and sent packets
-	int discards = 0;		// count of number discards
 	int statsTime = 0;		// time statistics were last processed
 	bool didNothing;
+	int controlCount = 20;		// used to limit overhead of control
+					// packet processing
+	queue<int> ctlQ;		// queue for control packets
 
 	struct timeval ct, pt; // current and previous time values
 	if (gettimeofday(&ct, NULL) < 0)
@@ -396,25 +626,28 @@ void fRouter::run(uint32_t finishTime, int numData) {
 		int p = iop->receive();
 		if (p != Null) {
 			didNothing = false;
-			nRcvd++;
-			ps->unpack(p); header& h = ps->hdr(p);
+			header& h = ps->hdr(p);
 			if (evCnt < MAXEVENTS &&
-			    (h.ptype() != USERDATA || numData > 0)) {
+			    (h.ptype() != CLIENT_DATA || numData > 0)) {
 				int p1 = ps->clone(p);
 				events[evCnt].sendFlag = 0;
 				events[evCnt].link = h.inLink();
 				events[evCnt].time = now;
 				events[evCnt].pkt = p1;
 				evCnt++;
-				if (h.ptype() == USERDATA) numData--;
+				if (h.ptype() == CLIENT_DATA) numData--;
 			}
 			int ctte = ctt->lookup(h.comtree());
 			if (!pktCheck(p,ctte)) {
-				ps->free(p); discards++;
-			} else if (h.ptype() >= USER_SIG) {
-				discards += handleCtlPkt(p,ctte);
+				ps->free(p);
+			} else if (h.ptype() == CLIENT_DATA) {
+				forward(p,ctte);
+			} else if (h.ptype() == SUB_UNSUB) {
+				subUnsub(p,ctte);
+			} else if (h.ptype() == RTE_REPLY) {
+				handleRteReply(p,ctte);
 			} else {
-				discards += forward(p,ctte);
+				ctlQ.push(p);
 			}
 		}
 
@@ -424,17 +657,25 @@ void fRouter::run(uint32_t finishTime, int numData) {
 			didNothing = false;
 			p = qm->deq(lnk); header& h = ps->hdr(p);
 			if (evCnt < MAXEVENTS &&
-			    (h.ptype() != USERDATA || numData > 0)) {
+			    (h.ptype() != CLIENT_DATA || numData > 0)) {
 				int p2 = ps->clone(p);
 				events[evCnt].sendFlag = 1;
 				events[evCnt].link = lnk;
 				events[evCnt].time = now;
 				events[evCnt].pkt = p2;
 				evCnt++;
-				if (h.ptype() == USERDATA) numData--;
+				if (h.ptype() == CLIENT_DATA) numData--;
 			}
 			iop->send(p,lnk);
-			nSent++;
+		}
+
+		// control packet processing
+		if (!ctlQ.empty() && (didNothing || --controlCount <= 0)) {
+			handleCtlPkt(ctlQ.front());
+			ctlQ.pop();
+			didNothing = false;
+			controlCount = 20; // do one control packet for
+					   // every 20 iterations when busy
 		}
 
 		// update statistics every 300 ms
@@ -478,6 +719,10 @@ void fRouter::run(uint32_t finishTime, int numData) {
 		h.print(cout,ps->buffer(p));
 	}
 	cout << endl;
-	cout << nRcvd << " packets received, " << nSent << " packets sent, " 
-	     << discards << " packets discarded\n";
+	cout << lt->iPktCnt(0) << " packets received, "
+	     <<	lt->oPktCnt(0) << " packets sent\n";
+	cout << lt->iPktCnt(-1) << " from routers,    "
+	     << lt->oPktCnt(-1) << " to routers\n";
+	cout << lt->iPktCnt(-2) << " from clients,    "
+	     << lt->oPktCnt(-2) << " to clients\n";
 }

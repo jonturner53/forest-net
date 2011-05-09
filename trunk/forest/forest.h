@@ -66,24 +66,33 @@ enum ntyp_t {
 // by a list of multicast addresses for groups that the
 // sender wants to be removed from.
 //
+// 
 
 enum ptyp_t {
 	UNDEF_PKT=0,
 	// user packet types
-	USERDATA=1,
-	USER_SIG=10,
+	CLIENT_DATA=1,
+	SUB_UNSUB=2,
+
+	CLIENT_SIG=10,
+
 	CONNECT=11,
 	DISCONNECT=12,
-	SUB_UNSUB=13,
-	// control packet types
+
+	// internal control packet types
 	NET_SIG=100,
 	RTE_REPLY=101,
+
 	// router internal types
 	RTR_CTL=200,
 	VOQSTATUS=201
 };
 
 const int HDR_LENG = 20;
+
+const uint32_t BUF_SIZ = 1600;
+const uint8_t MAXREFCNT = 255;
+typedef uint32_t buffer_t[BUF_SIZ/sizeof(uint32_t)];
 
 typedef int32_t fAdr_t;			// negative values are multicast
 typedef uint32_t comt_t;
@@ -98,15 +107,11 @@ const int MAXBITRATE = 1000000;		// 1 Gb/s
 const int MINPKTRATE = 50; 		// 50 p/s
 const int MAXPKTRATE = 800000;		// 800 Kp/s
 
-const uint32_t BUF_SIZ = 1600;
-const uint8_t MAXREFCNT = 255;
-typedef uint32_t buffer_t[BUF_SIZ/sizeof(uint32_t)];
-
 class forest {
 public:
 	// io helper functions
 	static bool getForestAdr(istream&, fAdr_t&);// read forest address
-	static void putForestAdr(ostream&, fAdr_t&);// write forest address
+	static void putForestAdr(ostream&, fAdr_t);// write forest address
 
 	static int truPktLeng(int);
 	static bool ucastAdr(fAdr_t);
@@ -122,7 +127,9 @@ public:
 inline int forest::truPktLeng(int x) { return 70+x; }
 
 // Return true if given address is a valid unicast address, else false.
-inline bool forest::ucastAdr(fAdr_t adr) { return adr > (1 << 16); }
+inline bool forest::ucastAdr(fAdr_t adr) {
+	return zipCode(adr) > 0 && localAdr(adr) > 0;
+}
 
 // Return true if given address is a valid multicast address, else false.
 inline bool forest::mcastAdr(fAdr_t adr) { return adr < 0; }

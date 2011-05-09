@@ -2,6 +2,7 @@
 #define STDINC_H
 
 #include <iostream>
+#include <stdint.h>
 #include <fstream>
 #include <iomanip>
 #include <cstdlib>
@@ -9,6 +10,20 @@
 #include <string>
 #include <cmath>
 #include <cassert>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <netdb.h>
+#include <unistd.h>
+#include <signal.h>
+#include <stdio.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <sys/time.h>
+#include <stdlib.h>
+#include <memory.h>
+
 using namespace std;
 
 typedef int bit;

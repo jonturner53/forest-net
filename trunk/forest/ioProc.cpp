@@ -136,7 +136,10 @@ bool ioProc::addEntry(int ifnum, ipa_t ipa, int brate, int prate) {
 	return true;
 }
 
-void ioProc::removeEntry(int ifnum) { ift[ifnum].ipa = 0; }
+void ioProc::removeEntry(int ifnum) {
+	if (ifnum >= 0 && ifnum <= MAXINTF)
+		ift[ifnum].ipa = 0;
+}
 
 bool ioProc::checkEntry(int ifnum) {
 	if (ift[ifnum].maxbitrate < MINBITRATE ||

@@ -1,0 +1,197 @@
+/** \file CtlPkt.cpp
+ *
+ *  The CtlPkt class is used to pack and unpack forest control messages.
+ *  The class has a public field for every field that can be used in
+ *  in a control packet. To create a control packet, the user
+ *  constructs a CtlPkt object with a pointer to the payload part
+ *  of the buffer as the constructor argument. The user then sets
+ *  selected fields to non-zero values and calls pack,
+ *  which packs the appropriate fields into the packet's payload
+ *  and returns the number of 32 bit words that were packed.
+ *  
+ *  To unpack a buffer, the user constructs a CtlPkt object
+ *  and then calls unpack, specifying the number of 32 bit words
+ *  in the payload that are to be unpacked. The control packet fields
+ *  can then be retrieved from the corresponding fields of the CtlPkt
+ *  object.
+ */
+
+#include "CtlPkt.h"
+
+/** Constructor for CtlPkt. */
+CtlPkt::CtlPkt(buffer_t b) {
+	reset(b);
+}
+
+/** Clears CtlPkt fields for re-use with a new buffer. */
+void CtlPkt::reset(buffer_t b) {
+	for (int i = CPA_START; i < CPA_END; i++) aSet[i] = false;
+	buf = b;
+}
+
+/** Destructor for CtlPkt. */
+CtlPkt::~CtlPkt() { } 
+
+/** Pack CtlPkt fields into buffer.
+ *  @return the number of 32 bit payload words in the control packet.
+ *  or 0 if an error was detected.
+ */
+int CtlPkt::pack() {
+	if (!CpType::validIndex(cpType))
+		return 0;
+	if (rrType != REQUEST && rrType != POS_REPLY && rrType != NEG_REPLY)
+		return 0;
+	bp = HDR_LENG/4;
+	buf[bp++] = htonl(CpType::getCode(cpType));
+	buf[bp++] = htonl(rrType);
+	buf[bp++] = htonl(seqNum);
+
+	if (rrType == REQUEST) {
+		// pack all request attributes and confirm that
+		// required attributes are present
+		for (int i = CPA_START + 1; i < CPA_END; i++) {
+			CpAttrIndex ii = CpAttrIndex(i);
+			if (CpType::isReqAttr(cpType, ii)) {
+				if (isSet(CpAttrIndex(i))) packAttr(CpAttrIndex(i));
+				else if (CpType::isReqReqAttr(cpType,CpAttrIndex(i)))
+					return 0;
+			}
+		}
+	} else if (rrType == POS_REPLY) {
+		for (int i = CPA_START + 1; i < CPA_END; i++) {
+			CpAttrIndex ii = CpAttrIndex(i);
+			if (CpType::isRepAttr(cpType, ii)) {
+				if (isSet(ii)) packAttr(ii);
+				else return 0;
+			}
+		}
+	} else {
+		int j = misc::strnlen(errMsg,200);
+		if (j == 200) errMsg[199] = 0;
+		strncpy((char*) &buf[bp], errMsg, j+1);
+		return bp + 1 + (j+1)/4;
+	}
+
+	return bp;
+	
+}
+
+bool CtlPkt::unpack(int pleng) {
+// Unpack CtlPkt fields from buffer. Pleng is the number
+// of 32 bit words in the payload to be unpacked.
+// Return true on success, 0 on failure.
+
+	if (pleng < 3) return false; // too short for control packet
+
+	bp = HDR_LENG/4;
+	cpType = CpType::getIndexByCode(ntohl(buf[bp++]));
+	rrType = (CpRrType) ntohl(buf[bp++]);
+	seqNum = ntohl(buf[bp++]);
+
+	if (!CpType::validIndex(cpType)) return false;
+	if (rrType != REQUEST && rrType != POS_REPLY && rrType != NEG_REPLY)
+		return false;
+	
+	if (rrType == NEG_REPLY) {
+		const int maxLen = 4*(pleng-3);
+		errMsg = new char[maxLen];
+		strncpy(errMsg,(char*) &buf[bp], maxLen);
+		errMsg[maxLen-1] = 0;
+		return true;
+	}
+
+	// unpack all attribute/value pairs
+	while (bp < pleng-1) unpackAttr();
+
+	if (rrType == REQUEST) {
+		// confirm that required attributes are present
+		for (int i = CPA_START + 1; i < CPA_END; i++) {
+			CpAttrIndex ii = CpAttrIndex(i);
+			if (CpType::isReqReqAttr(cpType, ii) && !isSet(ii)) {
+				return false;
+			}
+		}
+	} else {
+		// confirm that all reply attributes are present
+		for (int i = CPA_START + 1; i < CPA_END; i++) {
+			CpAttrIndex ii = CpAttrIndex(i);
+			if (CpType::isRepAttr(cpType, ii) && !isSet(ii)) {
+				return false;
+			}
+		}
+	}
+
+	return true;
+}
+
+void CtlPkt::condPrint(ostream& os, int32_t val, const char* s) {
+	if (val != 0) os << " " << s << ": " << val;
+}
+
+void CtlPkt::print(ostream& os) {
+// Prints CtlPkt content.
+	char* ips;
+	bool reqPkt = (rrType == REQUEST);
+	bool replyPkt = !reqPkt;
+	bool success = (rrType == POS_REPLY);
+
+	char xstr[50];
+	if (reqPkt) strncpy(xstr," (request,",15);
+	else if (rrType == POS_REPLY) strncpy(xstr," (pos reply,",15);
+	else strncpy(xstr," (neg reply,",15);
+	char seqStr[20];
+	sprintf(seqStr,"%d",seqNum);
+	strncat(xstr,seqStr,20); strncat(xstr,"):",5);
+	os << CpType::getName(cpType) << xstr;
+
+	if (rrType == REQUEST) {
+		for (int i = CPA_START+1; i < CPA_END; i++) {
+			CpAttrIndex ii = CpAttrIndex(i);
+			if (!CpType::isReqAttr(cpType,ii)) continue;
+			if (!CpType::isReqReqAttr(cpType,ii) && !isSet(ii))
+				continue;
+			os << " " << CpAttr::getName(ii) << "=";
+			if (isSet(ii)) {
+				int32_t val = attrVal(ii);
+				if (ii == COMTREE_OWNER || ii == LEAF_ADR ||
+				    ii == PEER_ADR || ii == PEER_DEST ||
+				    ii == DEST_ADR) {
+					forest::putForestAdr(os,(fAdr_t) val);
+				} else if (ii == LOCAL_IP || ii == PEER_IP) {
+					char *ips = misc::ipString(val);
+					os << ips;
+					delete ips;
+				} else {
+					os << val;
+				}
+			} else {
+			     os << "(missing)";
+			}
+		}
+	} else if (rrType == POS_REPLY) {
+		for (int i = CPA_START+1; i < CPA_END; i++) {
+			CpAttrIndex ii = CpAttrIndex(i);
+			if (!CpType::isRepAttr(cpType,ii)) continue;
+			os << " " << CpAttr::getName(ii) << "=";
+			if (isSet(ii)) {
+				int32_t val = attrVal(ii);
+				if (ii == COMTREE_OWNER || ii == LEAF_ADR ||
+				    ii == PEER_ADR || ii == PEER_DEST ||
+				    ii == DEST_ADR) {
+					forest::putForestAdr(os,(fAdr_t) val);
+				} else if (ii == LOCAL_IP || ii == PEER_IP) {
+					char *ips = misc::ipString(val);
+					os << ips;
+					delete ips;
+				} else {
+					os << val;
+				}
+			} else {
+			      os << "(missing)";
+			}
+		}
+	} else {
+		os << " errMsg=" << errMsg;
+	}
+	os << endl;
+}

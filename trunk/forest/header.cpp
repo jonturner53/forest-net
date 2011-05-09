@@ -6,7 +6,7 @@ void header::unpack(buffer_t& b) {
 	version() = (x >> 28) & 0xf;
 	leng() = (x >> 16) & 0xfff;
 	int y = (x >> 8) & 0xff;
-	ptype() = (y == 1 ? USERDATA :
+	ptype() = (y == 1 ? CLIENT_DATA :
 		  (y == 11 ? CONNECT :
 		  (y == 12 ? DISCONNECT :
 		  (y == 13 ? SUB_UNSUB :
@@ -57,7 +57,7 @@ bool header::getPacket(istream& is, buffer_t& b) {
 	leng() = lng; flags() = flgs; comtree() = comt;
 	srcAdr() = src; dstAdr() = dst;
 
-             if (ptypString == "data")       ptype() = USERDATA;
+             if (ptypString == "data")       ptype() = CLIENT_DATA;
         else if (ptypString == "sub_unsub")  ptype() = SUB_UNSUB;
         else if (ptypString == "connect")    ptype() = CONNECT;
         else if (ptypString == "disconnect") ptype() = DISCONNECT;
@@ -77,7 +77,7 @@ void header::print(ostream& os, buffer_t& b) {
 // Prints header fields and first 8 payload words of buffer.
         os << "len=" << setw(3) << leng();
         os << " typ=";
-        if (ptype() == USERDATA)        os << "data      ";
+        if (ptype() == CLIENT_DATA)        os << "data      ";
         else if (ptype() == SUB_UNSUB)  os << "sub_unsub ";
         else if (ptype() == CONNECT)    os << "connect   ";
         else if (ptype() == DISCONNECT) os << "disconnect";

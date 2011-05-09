@@ -3,6 +3,8 @@
 #ifndef FROUTER_H
 #define FROUTER_H
 
+#include <queue>
+
 #include "stdinc.h"
 #include "forest.h"
 
@@ -10,6 +12,7 @@
 #include "comtTbl.h"
 #include "rteTbl.h"
 #include "pktStore.h"
+#include "CtlPkt.h"
 #include "qMgr.h"
 #include "ioProc.h"
 #include "statsMod.h"
@@ -44,11 +47,14 @@ private:
 
 	void	addLocalRoutes();	// add routes for adjacent hosts
 	bool	pktCheck(int,int);	// perform basic checks on packet
-	int	subUnsub(int,int);	// subscription processing
-	int	handleCtlPkt(int,int);	// process control packets
+	void	subUnsub(int,int);	// subscription processing
+	void	handleCtlPkt(int);	// process control packets
+	void	errReply(packet,CtlPkt&,char*); // return error message
+	void	returnToSender(packet,int); // return control packet
+	void 	handleRteReply(int, int); // handle route reply packet
 	void	sendRteReply(int,int);	// send route reply packet
-	int	multiSend(int,int,int);	// handle packets with >1 destination
-	int 	forward(int,int);	// do lookup and enqueue packet(s)
+	void	multiSend(int,int,int);	// handle packets with >1 destination
+	void 	forward(int,int);	// do lookup and enqueue packet(s)
 };
 
 #endif

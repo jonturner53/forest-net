@@ -1,0 +1,8 @@
+<map id="G" name="G">
+<area shape="rect" id="node1" href="$classgraph.html" title="graph" alt="" coords="5,55,67,83"/>
+<area shape="rect" id="node3" href="$classdigraph.html" title="digraph" alt="" coords="115,30,189,58"/>
+<area shape="rect" id="node11" href="$classwgraph.html" title="wgraph" alt="" coords="117,81,187,109"/>
+<area shape="rect" id="node5" href="$classflograph.html" title="flograph" alt="" coords="240,5,320,33"/>
+<area shape="rect" id="node9" href="$classwdigraph.html" title="wdigraph" alt="" coords="239,55,321,83"/>
+<area shape="rect" id="node7" href="$classwflograph.html" title="wflograph" alt="" coords="371,5,461,33"/>
+</map>

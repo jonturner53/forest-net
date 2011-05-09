@@ -44,6 +44,16 @@ public:
 private:
 	int	nlnk;			// max number of links in table
 
+	// router level statistics counters
+	uint32_t iPkt;			// count of input packets
+	uint32_t oPkt;			// count of output packets
+	uint64_t iByt;			// count of input bytes
+	uint64_t oByt;			// count of output bytes
+	uint32_t irPkt;			// count of packets from other routers
+	uint32_t orPkt;			// count of packets to other routers
+	uint32_t icPkt;			// count of packets from clients
+	uint32_t ocPkt;			// count of packets to clients
+
 	struct lnkdata {
 	int	intf;			// interface number for link
 	ipa_t	pipa;			// IP address of peer endpoint
@@ -56,8 +66,8 @@ private:
 	int	mindelta;		// minimum time between packets (us)
 	uint32_t iPkt;			// input packet counter
 	uint32_t oPkt;			// output packet counter
-	uint32_t iByt;			// input byte counter
-	uint32_t oByt;			// output byte counter
+	uint64_t iByt;			// input byte counter
+	uint64_t oByt;			// output byte counter
 	};
 	lnkdata	*ld;			// ld[i] is link data for link i
 	hashTbl *ht;			// hash table for fast lookup
@@ -86,15 +96,35 @@ inline int lnkTbl::minDelta(int i) const 	{
 }
 
 // statistics routines
-inline uint32_t lnkTbl::iPktCnt(int i) const { return ld[i].iPkt; }
-inline uint32_t lnkTbl::oPktCnt(int i) const { return ld[i].oPkt; }
-inline uint32_t lnkTbl::iBytCnt(int i) const { return ld[i].iByt; }
-inline uint32_t lnkTbl::oBytCnt(int i) const { return ld[i].oByt; }
+inline uint32_t lnkTbl::iPktCnt(int i) const {
+	return (i > 0 ? ld[i].iPkt :
+		(i == 0 ? iPkt :
+		 (i == -1 ? irPkt : icPkt)));
+}
+inline uint32_t lnkTbl::oPktCnt(int i) const {
+	return (i > 0 ? ld[i].oPkt :
+		(i == 0 ? oPkt :
+		 (i == -1 ? orPkt : ocPkt)));
+}
+inline uint32_t lnkTbl::iBytCnt(int i) const {
+	return (i > 0 ? ld[i].iByt : iByt);
+}
+inline uint32_t lnkTbl::oBytCnt(int i) const {
+	return (i > 0 ? ld[i].oByt : oByt);
+}
 inline void lnkTbl::postIcnt(int i, int leng) {
-	ld[i].iPkt++; ld[i].iByt += forest::truPktLeng(leng);
+	int len = forest::truPktLeng(leng);
+	ld[i].iPkt++; ld[i].iByt += len;
+	iPkt++; iByt += len;
+	if (ld[i].ptyp == ROUTER) irPkt++;
+	if (ld[i].ptyp == CLIENT) icPkt++;
 }
 inline void lnkTbl::postOcnt(int i, int leng) {
-	ld[i].oPkt++; ld[i].oByt += forest::truPktLeng(leng);
+	int len = forest::truPktLeng(leng);
+	ld[i].oPkt++; ld[i].oByt += len;
+	oPkt++; oByt += len;
+	if (ld[i].ptyp == ROUTER) orPkt++;
+	if (ld[i].ptyp == CLIENT) ocPkt++;
 }
 
 // Compute key for hash lookup

@@ -27,13 +27,23 @@ public:
 	static bool getWord(istream&, string&);	// read a word on current line
 	static bool getIpAdr(istream&, ipa_t&);	// read IP address
 	static ipa_t ipAddress(char*); 		// return IP addr for string
-	static char* ipString(ipa_t ipa);	// return str for IP addr
+	static char* ipString(ipa_t);		// return str for IP addr
+	static void printIP(ostream&, ipa_t);	// print string for IP address
+	static void initSockAdr(ipa_t, ipp_t, sockaddr_in*);
+						// initialize socket
+                                                // address structure
+        static int setupSock(ipa_t, int);       // open, bind & configure a
+						// non-blocking datagram socket
+        static int setupTcpSock(ipa_t, int);    // open & bind a non-blocking
+						// TCP socket and wait for
+						// connection
 	static bool verify(istream&, char);	// verify next character
 	static bool skipBlank(istream&);	// skip over blanks, comments
 
 	// other stuff
 	static bool prefix(string, string);	// true if s1 a prefix of s2
 	static void genPerm(int, int*);		// generate random permutation
+	static int strnlen(char*, int);		// for missing strnlen in mac
 };
 
 // u is assumed to be between 1 and 26

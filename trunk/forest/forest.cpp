@@ -20,8 +20,8 @@ bool forest::getForestAdr(istream& is, fAdr_t& fa) {
 	return true;
 }
 
-void forest::putForestAdr(ostream& os, fAdr_t& fa) {
+void forest::putForestAdr(ostream& os, fAdr_t fa) {
 // Print the given forest address.
-	if (fa < 0) cout << fa;
-	else cout << zipCode(fa) << "." << localAdr(fa);
+	if (fa < 0) os << fa;
+	else os << zipCode(fa) << "." << localAdr(fa);
 }
