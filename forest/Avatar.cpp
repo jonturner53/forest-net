@@ -23,7 +23,7 @@
 // the avatar's position, the
 // direction it is facing, the speed at which it is moving
 // and the number of nearby avatars it is tracking.
-// The type of the status packet is USERDATA, the first
+// The type of the status packet is CLIENT_DATA, the first
 // word of the payload is the constant STATUS_REPORT=1,
 // and successive words of the payload contain a timestamp,
 // the avatar's x position, its y position, its direction, its speed
@@ -134,6 +134,7 @@ int Avatar::receive() {
                 fatal("Avatar::receive: error in recvfrom call");
         }
 
+	ps->unpack(p);
         h.ioBytes() = nbytes;
         h.tunSrcIp() = ntohl(ssa.sin_addr.s_addr);
         h.tunSrcPort() = ntohs(ssa.sin_port);
@@ -146,6 +147,7 @@ void Avatar::send(int p) {
 	dsa.sin_addr.s_addr = htonl(rtrIpAdr);
 	dsa.sin_port = htons(FOREST_PORT);
 	header& h = ps->hdr(p);
+	ps->pack(p);
 	int rv = sendto(sock,(void *) ps->buffer(p),h.leng(),0,
 		    	(struct sockaddr *) &dsa, sizeof(dsa));
 	if (rv == -1) fatal("Avatar::send: failure in sendto");
@@ -184,8 +186,8 @@ void Avatar::updateStatus(int now) {
 	// update position
 	double dist = (speed * UPDATE_PERIOD)/1000;
 	double dirRad = direction * (2*PI/360);
-	x += dist * sin(dirRad);
-	y += dist * cos(dirRad);
+	x += (int) (dist * sin(dirRad));
+	y += (int) (dist * cos(dirRad));
 	x = max(x,0); x = min(x,SIZE-1);
 	y = max(y,0); y = min(y,SIZE-1);
 
@@ -220,8 +222,8 @@ int Avatar::groupNum(int x1, int y1) {
 }
 
 void Avatar::updateSubscriptions() {
-	const int SQRT2 = 1.41421356;
-	const int GRANGE = VISRANGE + (2*FAST*UPDATE_PERIOD)/1000;
+	const double SQRT2 = 1.41421356;
+	const int GRANGE = VISRANGE + (4*FAST*UPDATE_PERIOD)/1000;
 
 	int myGroup = groupNum(x,y);
 	dlist *newGroups = new dlist(MAXGROUPS);
@@ -238,14 +240,14 @@ void Avatar::updateSubscriptions() {
 	y1 = max(0, y-GRANGE);
 	if (!newGroups->mbr(g = groupNum(x,y1)))  (*newGroups) &= g;
 
-	x1 = min(SIZE-1, x+GRANGE/SQRT2);
-	y1 = min(SIZE-1, y+GRANGE/SQRT2);
+	x1 = min(SIZE-1, (int) (x+GRANGE/SQRT2));
+	y1 = min(SIZE-1, (int) (y+GRANGE/SQRT2));
 	if (!newGroups->mbr(g = groupNum(x1,y1)))  (*newGroups) &= g;
-	y1 = min(SIZE-1, y-GRANGE/SQRT2);
+	y1 = min(SIZE-1, (int) (y-GRANGE/SQRT2));
 	if (!newGroups->mbr(g = groupNum(x1,y1)))  (*newGroups) &= g;
-	x1 = min(SIZE-1, x-GRANGE/SQRT2);
+	x1 = min(SIZE-1, (int) (x-GRANGE/SQRT2));
 	if (!newGroups->mbr(g = groupNum(x1,y1)))  (*newGroups) &= g;
-	y1 = min(SIZE-1, y+GRANGE/SQRT2);
+	y1 = min(SIZE-1, (int) (y+GRANGE/SQRT2));
 	if (!newGroups->mbr(g = groupNum(x1,y1)))  (*newGroups) &= g;
 
 	packet p = ps->alloc();
@@ -280,7 +282,7 @@ void Avatar::updateSubscriptions() {
 	h.dstAdr() = rtrAdr;
 	h.leng() = 4*(8+nsub+nunsub);
 
-	ps->pack(p); send(p); ps->free(p);
+	send(p); ps->free(p);
 }
 
 void Avatar::updateNearby(int p) {
@@ -322,7 +324,7 @@ void Avatar::sendStatus(int now) {
 	packet p = ps->alloc();
 
 	header& h = ps->hdr(p);
-	h.leng() = 4*(5+8); h.ptype() = USERDATA; h.flags() = 0;
+	h.leng() = 4*(5+8); h.ptype() = CLIENT_DATA; h.flags() = 0;
 	h.comtree() = comt; h.srcAdr() = myAdr; h.dstAdr() = -groupNum(x,y);
 
 	uint32_t *pp = ps->payload(p);
@@ -334,18 +336,18 @@ void Avatar::sendStatus(int now) {
 	pp[5] = htonl((uint32_t) speed);
 	pp[6] = htonl(numNear);
 
-	ps->pack(p); send(p); ps->free(p);
+	send(p); ps->free(p);
 }
 
 void Avatar::connect() {
-// Send initial connect packet
+// Send initial connect packet, using comtree 1 (the signalling comtree)
 	packet p = ps->alloc();
 
 	header& h = ps->hdr(p);
 	h.leng() = 4*(5+1); h.ptype() = CONNECT; h.flags() = 0;
-	h.comtree() = comt; h.srcAdr() = myAdr; h.dstAdr() = rtrAdr;
+	h.comtree() = 1; h.srcAdr() = myAdr; h.dstAdr() = rtrAdr;
 
-	ps->pack(p); send(p); ps->free(p);
+	send(p); ps->free(p);
 }
 
 void Avatar::disconnect() {
@@ -354,9 +356,9 @@ void Avatar::disconnect() {
 	header& h = ps->hdr(p);
 
 	h.leng() = 4*(5+1); h.ptype() = DISCONNECT; h.flags() = 0;
-	h.comtree() = comt; h.srcAdr() = myAdr; h.dstAdr() = rtrAdr;
+	h.comtree() = 1; h.srcAdr() = myAdr; h.dstAdr() = rtrAdr;
 
-	ps->pack(p); send(p); ps->free(p);
+	send(p); ps->free(p);
 }
 
 void Avatar::run(int finishTime) {

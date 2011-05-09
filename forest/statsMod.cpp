@@ -48,8 +48,13 @@ bool statsMod::getStat(istream& is) {
 //   qPkt L Q	number of packets in queue Q on output link L
 //   qByt L Q	number of bytes in queue Q on output link L
 //
-// The three types xPkt, xByt and inBklg only apply to configurations
-// with multiple linecards. In the queue length statistics, if the
+// If inPkt, outPkt, inByt, outByt are given with a link # of 0,
+// the statistics for the router as a whole are reported. If the
+// link # is -1, the statistics for packets to/from other routers
+// is reported. If the link # is -2, the statistics for packets
+// to/from clients is reported. Note, the current implementation
+// does not support byte counts for the statistics to/from other
+// routers or to/from other clients. In the queue length statistics, if the
 // given queue number is zero, then the total number of packets (bytes)
 // queued for the given link (over all queues) is reported.
 //

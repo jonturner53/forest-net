@@ -7,12 +7,12 @@ CXXFLAGS = -O2
 .cpp.o:
 	${CXX} ${CXXFLAGS} -I ${IDIR} -c $<
 
-all : fHost fRouter Avatar Monitor
+all : fHost fRouter Avatar Monitor testCtlPkt
 
 HFILES = ${IDIR}/stdinc.h ${IDIR}/misc.h ${IDIR}/forest.h ${IDIR}/fRouter.h \
 	 ${IDIR}/ioProc.h ${IDIR}/lnkTbl.h ${IDIR}/comtTbl.h ${IDIR}/rteTbl.h \
 	 ${IDIR}/statsMod.h ${IDIR}/qMgr.h ${IDIR}/pktStore.h ${IDIR}/Avatar.h \
-	 ${IDIR}/Monitor.h
+	 ${IDIR}/Monitor.h ${IDIR}/CpType.h ${IDIR}/CpAttr.h ${IDIR}/CtlPkt.h
 
 lnkTbl.o :    ${HFILES}
 comtTbl.o :   ${HFILES}
@@ -26,11 +26,17 @@ fLinecard.o : ${HFILES}
 fHost.o :     ${HFILES}
 Avatar.o :   ${HFILES}
 Monitor.o :   ${HFILES}
+CpType.o :    ${HFILES}
+CpAttr.o :    ${HFILES}
+CtlPkt.o :    ${HFILES}
+testCtlPkt.o : ${HFILES}
 
 ${LIBF} : forest.o lnkTbl.o comtTbl.o rteTbl.o pktStore.o qMgr.o ioProc.o \
-	header.o statsMod.o Avatar.o Monitor.o
+	header.o statsMod.o Avatar.o Monitor.o CpType.o CpAttr.o \
+	CtlPkt.o
 	ar -ru ${LIBF} forest.o lnkTbl.o comtTbl.o rteTbl.o pktStore.o qMgr.o \
-	header.o ioProc.o statsMod.o Avatar.o Monitor.o
+	header.o ioProc.o statsMod.o Avatar.o Monitor.o CpType.o CpAttr.o \
+	CtlPkt.o
 	ranlib ${LIBF}
 
 fRouter : fRouter.o ${LIBS}
@@ -51,6 +57,9 @@ Avatar : Avatar.o ${LIBS}
 Monitor : Monitor.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
 	cp Monitor ${HOME}/bin
+
+testCtlPkt : testCtlPkt.o ${LIBS}
+	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
 
 clean :
 	rm -f lnkTbl.o comtTbl.o rteTbl.o pktStore.o qMgr.o ioProc.o \

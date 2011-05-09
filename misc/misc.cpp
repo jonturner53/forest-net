@@ -193,6 +193,83 @@ char* misc::ipString(ipa_t ipa) {
 	return ips;
 }
 
+void misc::printIP(ostream& os, ipa_t adr) {
+        char *ips = ipString(adr); os << ips; delete ips;
+}
+
+void misc::initSockAdr(ipa_t ipa, ipp_t port, sockaddr_in *sap) {
+// Initialize a socket address structure with ipa in the
+// socket address field and port in the port number field.
+        bzero(sap, sizeof(sockaddr_in));
+        sap->sin_family = AF_INET;
+        sap->sin_port = htons(port); // let system select address
+        sap->sin_addr.s_addr = htonl(ipa);
+}
+
+int misc::setupSock(ipa_t ipa, int port) {
+// Open a datagram socket on the interface with address ipa.
+// Attempt to bind to the specified port number.
+// Configure socket for non-blocking access, so that we don't
+// block when there are no input packets available.
+// Return the socket number on success, -1 on failure.
+        int sock; sockaddr_in sa;
+        initSockAdr(ipa, port, &sa);
+
+        // create datagram socket
+        if ((sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+                return -1;
+        }
+        // bind it to the socket address structure
+        if (bind(sock, (struct sockaddr *) &sa, sizeof(sa)) < 0) {
+                return -1;
+        }
+        // make socket nonblocking
+        int flags;
+        if ((flags = fcntl(sock, F_GETFL, 0)) < 0)
+                return -1;
+        flags |= O_NONBLOCK;
+        if ((flags = fcntl(sock, F_SETFL, flags)) < 0)
+                return -1;
+        return sock;
+}
+
+int misc::setupTcpSock(ipa_t ipa, int port) {
+// Open a TCP socket on the interface with address ipa
+// and wait for a client to connect to the socket.
+// Attempt to bind to the specified port number.
+// Configure socket for non-blocking access, so that we don't
+// block when there are no input packets available.
+// Return the connection file descriptor on success, -1 on failure.
+        int sock; sockaddr_in sa;
+        initSockAdr(ipa, port, &sa);
+
+        // create TCP socket
+        if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+                return -1;
+        }
+        // bind it to the socket address structure
+        if (bind(sock, (struct sockaddr *) &sa, sizeof(sa)) < 0) {
+                return -1;
+        }
+
+	// wait for a connection and return its file descriptor
+	if (listen(sock, 5) < 0) return -1;
+
+	if ((sock = accept(sock,(struct sockaddr *) NULL, NULL)) < 0) {
+		perror("misc::setupTcpSock: failing on accept");
+		return -1;
+	}
+
+        // make socket nonblocking
+        int flags;
+        if ((flags = fcntl(sock, F_GETFL, 0)) < 0)
+                return -1;
+        flags |= O_NONBLOCK;
+        if ((flags = fcntl(sock, F_SETFL, flags)) < 0)
+                return -1;
+        return sock;
+}
+
 void misc::genPerm(int n, int p[]) {
 // Create random permutation on integers 1..n and return in p.
         int i, j, k;
@@ -201,4 +278,11 @@ void misc::genPerm(int n, int p[]) {
                 j = randint(i,n);
                 k = p[i]; p[i] = p[j]; p[j] = k;
         }
+}
+
+int misc::strnlen(char* s, int n) {
+// Replacement for the missing strnlen function.
+	for (int i = 0; i < n; i++) 
+		if (*s++ == '\0') return i+1;
+	return n;
 }
