@@ -15,3 +15,6 @@ Forest packets have a fixed format which is described below.
   * _Destination Address_. This is a 32 bit field that may be either a unicast or multicast address.
   * _Header Error Check_. This is a 32 bit check sum over the header fields.
   * _Payload Error Check_. This is a 32 bit check sum computed over the payload (not the header).
+
+Packet format figure.
+http://code.google.com/p/forest-net/source/browse/trunk/images/packetFormat.png
