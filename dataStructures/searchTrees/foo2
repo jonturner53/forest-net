@@ -1,7 +1,0 @@
-void inline bssets::swap(item i, item j) {
-// Swap items i and j with each other, where it is assumed that
-// item j is not the parent of item i
-	ssets::swap(i,j);
-	int r = rvec[i]; rvec[i] = rvec[j]; rvec[j] = r;
-}
-
