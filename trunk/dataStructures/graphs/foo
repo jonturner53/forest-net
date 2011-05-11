@@ -1,9 +1,0 @@
-edge graph::join(vertex u, vertex v) {
-// Join u and v with edge of given weight. Return edge number.
-	assert(1 <= u && u <= N && 1 <= v && v <= N && M < mM);
-	edge e = ++M;
-	l(e) = u; r(e) = v;
-	lnxt(e) = fe[u]; fe[u] = e;
-	rnxt(e) = fe[v]; fe[v] = e;
-	return e;
-}

@@ -1,7 +1,0 @@
-<map id="G" name="G">
-<area shape="rect" id="node1" href="$classaug_path.html" title="augPath" alt="" coords="7,81,84,109"/>
-<area shape="rect" id="node3" href="$classcap_scale.html" title="capScale" alt="" coords="137,5,220,33"/>
-<area shape="rect" id="node5" href="$classdinic.html" title="dinic" alt="" coords="152,55,205,83"/>
-<area shape="rect" id="node7" href="$classmax_cap.html" title="maxCap" alt="" coords="141,106,216,134"/>
-<area shape="rect" id="node9" href="$classshort_path.html" title="shortPath" alt="" coords="133,157,224,185"/>
-</map>

@@ -1,8 +1,0 @@
-<map id="G" name="G">
-<area shape="rect" id="node2" href="$classaug_path.html" title="augPath" alt="" coords="24,366,101,394"/>
-<area shape="rect" id="node4" href="$classflograph.html" title="flograph" alt="" coords="23,273,103,301"/>
-<area shape="rect" id="node6" href="$classdigraph.html" title="digraph" alt="" coords="25,179,100,207"/>
-<area shape="rect" id="node8" href="$classgraph.html" title="graph" alt="" coords="32,99,93,127"/>
-<area shape="rect" id="node10" href="$structgraph_1_1gedge.html" title="graph::gedge" alt="" coords="5,6,120,34"/>
-<area shape="rect" id="node14" href="$structflograph_1_1flo_data.html" title="flograph::floData" alt="" coords="124,179,265,207"/>
-</map>

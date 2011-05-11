@@ -1,9 +1,0 @@
-rlist::rlist(const rlist& h) {
-// Stub for copy constructor
-	fatal("rlist: no copy constructor not available");
-}
-
-rlist& rlist::operator=(const rlist& L) {
-// Stub for assignment operator
-	fatal("rlist: no assignment operator not available");
-}
