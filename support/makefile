@@ -1,46 +1,18 @@
-BIN = ${HOME}/bin
-IDIR = ~/src/include
-LDIR = ~/src/lib
-LIBS = ${LDIR}/libForest.a ${LDIR}/lib-misc.a ${LDIR}/lib-ds.a
-LIBF = ${LDIR}/libForest.a
-CXXFLAGS = -pg
+CXXFLAGS = -O2
 .cpp.o:
-	${CXX} ${CXXFLAGS} -I ${IDIR} -c $<
+	${CXX} ${CXXFLAGS} -c $<
 
-all : fHost fRouter
+HFILES = stdinc.h misc.h list.h dlist.h listset.h hashTbl.h mheap.h
+OFILES = misc.o list.o dlist.o listset.o hashTbl.o mheap.o
 
-HFILES = ${IDIR}/stdinc.h ${IDIR}/misc.h ${IDIR}/forest.h ${IDIR}/fRouter.h \
-	 ${IDIR}/ioProc.h ${IDIR}/lnkTbl.h ${IDIR}/comtTbl.h ${IDIR}/rteTbl.h \
-	 ${IDIR}/statsMod.h ${IDIR}/qMgr.h ${IDIR}/pktStore.h
+all : ${OFILES}
 
-lnkTbl.o :    ${HFILES}
-comtTbl.o :   ${HFILES}
-rteTbl.o :    ${HFILES}
-pktStore.o :  ${HFILES}
-qMgr.o :      ${HFILES}
-ioProc.o :    ${HFILES}
-statsMod.o :  ${HFILES}
-fRouter.o :   ${HFILES}
-fLinecard.o : ${HFILES}
-fHost.o :     ${HFILES}
-
-${LIBF} : lnkTbl.o comtTbl.o rteTbl.o pktStore.o qMgr.o ioProc.o \
-	header.o statsMod.o
-	ar -ru ${LIBF} lnkTbl.o comtTbl.o rteTbl.o pktStore.o qMgr.o \
-	header.o ioProc.o statsMod.o
-
-fRouter : fRouter.o ${LIBS}
-	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
-	cp fRouter ${HOME}/bin
-
-fLinecard : fLinecard.o ${LIBS}
-	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
-
-fHost : fHost.o ${LIBS}
-	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
-	cp fHost ${HOME}/bin
+list.o :    ${HFILES}
+dlist.o :   ${HFILES}
+listset.o : ${HFILES}
+hashTbl.o : ${HFILES}
+mheap.o :   ${HFILES}
+misc.o :    ${HFILES}
 
 clean :
-	rm -f lnkTbl.o comtTbl.o rteTbl.o pktStore.o qMgr.o ioProc.o \
-	statsMod.o fHost.o fRouter.o fLinecard.o ${LIBF} \
-	fHost fRouter fLinecard *.exe
+	rm -f *.o
