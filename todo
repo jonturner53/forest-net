@@ -1,3 +1,0 @@
-Drop all overloaded operaters.
- - include a copy method in place of assignment.
- - include read and write methods in place of IO operators.
