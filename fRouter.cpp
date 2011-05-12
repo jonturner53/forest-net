@@ -292,8 +292,8 @@ void fRouter::returnToSender(packet p, int paylen) {
  *  Reply packet re-uses the request packet p and its buffer.
  *  The string *s is included in the reply packet.
  */
-void fRouter::errReply(packet p, CtlPkt& cp, char *s) {
-	cp.rrType = NEG_REPLY; cp.errMsg = s;
+void fRouter::errReply(packet p, CtlPkt& cp, const char *s) {
+	cp.rrType = NEG_REPLY; cp.setErrMsg(s);
 	returnToSender(p,4*cp.pack());
 }
 
@@ -332,7 +332,7 @@ void fRouter::handleCtlPkt(int p) {
 			lt->peerPort(inL) = 0;
 		ps->free(p); return;
 	}
-	if (h.ptype() != NET_SIG || h.comtree < 100 || h.comtree > 999) {
+	if (h.ptype() != NET_SIG || h.comtree() < 100 || h.comtree() > 999) {
 		// reject signalling packets on comtrees outside 100-999 range
 		ps->free(p); return;
 	}
@@ -344,35 +344,41 @@ void fRouter::handleCtlPkt(int p) {
 	switch (cp.cpType) {
 	// Configuring logical interfaces
 	case ADD_IFACE:
-		if (iop->addEntry(cp.iface, cp.localIP,
-		     		   cp.maxBitRate, cp.maxPktRate)) {
+		if (iop->addEntry(cp.getAttr(IFACE_NUM),
+				  cp.getAttr(LOCAL_IP),
+		     		  cp.getAttr(MAX_BIT_RATE),
+				  cp.getAttr(MAX_PKT_RATE))) {
 			returnToSender(p,4*cp1.pack());
 		} else {
 			errReply(p,cp1,"add iface: cannot add interface");
 		}
 		break;
         case DROP_IFACE:
-		iop->removeEntry(cp.iface);
+		iop->removeEntry(cp.getAttr(IFACE_NUM));
 		returnToSender(p,4*cp1.pack());
 		break;
         case GET_IFACE:
 		if (iop->valid(cp.iface)) {
-			cp1.iface = cp.iface;
-			cp1.localIP = iop->ipAdr(cp1.iface);
-			cp1.maxBitRate = iop->maxBitRate(cp1.iface);
-			cp1.maxPktRate = iop->maxPktRate(cp1.iface);
+			int32_t iface = cp.getAttr(IFACE_NUM);
+			cp1.setAttr(IFACE_NUM,iface);
+			cp1.setAttr(LOCAL_IP,iop->ipAdr(iface));
+			cp1.setAttr(MAX_BIT_RATE,iop->maxBitRate(iface));
+			cp1.setAttr(MAX_PKT_RATE,iop->maxPktRate(iface));
 			returnToSender(p,4*cp1.pack());
 		} else errReply(p,cp1,"get iface: invalid interface");
 		break;
         case MOD_IFACE:
 		if (iop->valid(cp.iface)) {
-			int br = iop->maxBitRate(cp.iface);
-			int pr = iop->maxPktRate(cp.iface);
-			if (cp.maxBitRate != 0)
-				iop->setMaxBitRate(cp.iface, cp.maxBitRate);
-			if (cp.maxPktRate != 0)
-				iop->setMaxPktRate(cp.iface, cp.maxPktRate);
-			if (iop->checkEntry(cp.iface)) {
+			int32_t iface = cp.getAttr(IFACE_NUM);
+			int br = iop->maxBitRate(iface);
+			int pr = iop->maxPktRate(iface);
+			if (cp.isSet(MAX_BIT_RATE))
+				iop->setMaxBitRate(iface,
+						   cp.getAttr(MAX_BIT_RATE));
+			if (cp.isSet(MAX_PKT_RATE))
+				iop->setMaxPktRate(iface,
+						   cp.getAttr(MAX_PKT_RATE));
+			if (iop->checkEntry(iface)) {
 				returnToSender(p,4*cp1.pack());
 			} else { // undo changes
 				iop->setMaxBitRate(cp.iface, br);
@@ -382,135 +388,142 @@ void fRouter::handleCtlPkt(int p) {
 		} else errReply(p,cp1,"mod iface: invalid interface");
 		break;
         case ADD_LINK:
-		switch (cp.peerType) 
-		if (lt->addEntry(cp.link, cp.iface, (ntyp_t) cp.peerType,
-		    cp.peerIP, cp.peerAdr))
+		if (lt->addEntry(cp.getAttr(LINK_NUM), cp.getAttr(IFACE_NUM),
+		    (ntyp_t) cp.getAttr(PEER_TYPE), cp.getAttr(PEER_IP),
+		    cp.getAttr(PEER_ADR)))
 			returnToSender(p,4*cp1.pack());
 		else errReply(p,cp1,"add link: cannot add link");
 		break;
         case DROP_LINK:
-		if (lt->removeEntry(cp.iface))
+		if (lt->removeEntry(cp.getAttr(LINK_NUM)))
 			returnToSender(p,4*cp1.pack());
 		else errReply(p,cp1,"drop link: cannot drop link");
         case GET_LINK:
 		if (lt->valid(cp.link)) {
-			cp1.link = cp.link;
-			cp1.iface = lt->interface(cp.link);
-			cp1.peerType = lt->peerTyp(cp.link);
-			cp1.peerIP = lt->peerIpAdr(cp.link);
-			cp1.peerPort = lt->peerPort(cp.link);
-			cp1.peerDest = lt->peerDest(cp.link);
-			cp1.bitRate = lt->bitRate(cp.link);
-			cp1.pktRate = lt->pktRate(cp.link);
+			int32_t link = cp.getAttr(LINK_NUM);
+			cp1.setAttr(LINK_NUM, link);
+			cp1.setAttr(IFACE_NUM, lt->interface(link));
+			cp1.setAttr(PEER_IP, lt->peerIpAdr(link));
+			cp1.setAttr(PEER_TYPE, lt->peerTyp(link));
+			cp1.setAttr(PEER_PORT, lt->peerPort(link));
+			cp1.setAttr(PEER_DEST, lt->peerDest(link));
+			cp1.setAttr(BIT_RATE, lt->bitRate(link));
+			cp1.setAttr(PKT_RATE, lt->pktRate(link));
 			returnToSender(p,4*cp1.pack());
 		} else errReply(p,cp1,"get link: invalid link number");
 		break;
-        case MOD_LINK:
-		if (lt->valid(cp.link)) {
-			cp1.link = cp.link;
-			if (cp.peerType != 0) {
-				if (cp.peerType != CLIENT &&
-				    cp.peerType != SERVER &&
-				    cp.peerType != ROUTER &&
-				    cp.peerType != CONTROLLER) {
+        case MOD_LINK: {
+		int link = cp.getAttr(LINK_NUM);
+		if (lt->valid(link)) {
+			cp1.setAttr(LINK_NUM,link);
+			if (cp.isSet(PEER_TYPE)) {
+				ntyp_t pt = (ntyp_t) cp.getAttr(PEER_TYPE);
+				if (pt != CLIENT && pt != SERVER &&
+				    pt != ROUTER && pt != CONTROLLER) {
 					errReply(p,cp1,"mod link:bad peerType");
 					return;
 				}
-				lt->peerTyp(cp.link) = (ntyp_t) cp.peerType;
+				lt->peerTyp(link) = (ntyp_t) pt;
 			}
-			if (cp.peerPort != 0) {
-				if (cp.peerPort > 65535) {
+			if (cp.isSet(PEER_PORT)) {
+				int pp = cp.getAttr(PEER_PORT);
+				if (pp > 65535) {
 					errReply(p,cp1,"mod link:bad peerPort");
 					return;
 				}
-				lt->peerPort(cp.link) = cp.peerPort;
+				lt->peerPort(link) = pp;
 			}
-			if (cp.peerDest != 0) {
-				if (!unicast(cp.peerDest)) {
+			if (cp.isSet(PEER_DEST)) {
+				fAdr_t pd = cp.getAttr(PEER_DEST);
+				if (!forest::ucastAdr(pd)) {
 					errReply(p,cp1,"mod link:bad peerDest");
 					return;
 				}
-				lt->peerDest(cp.link) = cp.peerDest;
+				lt->peerDest(link) = pd;
 			}
-			if (cp.bitRate != 0)
-				lt->bitRate(cp.link) = cp.bitRate;
-			if (cp.pktRate != 0)
-				lt->pktRate(cp.link) = cp.pktRate;
+			if (cp.isSet(BIT_RATE) != 0)
+				lt->bitRate(link) = cp.getAttr(BIT_RATE);
+			if (cp.isSet(PKT_RATE) != 0)
+				lt->pktRate(link) = cp.getAttr(PKT_RATE);
 			returnToSender(p,4*cp1.pack());
 		} else errReply(p,cp1,"get link: invalid link number");
-		break;
+		break; }
         case ADD_COMTREE:
-		if (ctt->addEntry(cp.comtree) != Null)
+		if (ctt->addEntry(cp.getAttr(COMTREE_NUM)) != Null)
 			returnToSender(p,4*cp1.pack());
 		else errReply(p,cp1,"add comtree: cannot add comtree");
 		break;
         case DROP_COMTREE:
-		ctte = ctt->lookup(cp.comtree);
+		ctte = ctt->lookup(cp.getAttr(COMTREE_NUM));
 		if (ctte != Null && ctt->removeEntry(ctte) != Null)
 			returnToSender(p,4*cp1.pack());
 		else
 			errReply(p,cp1,"drop comtree: cannot drop comtree");
 		break;
-        case GET_COMTREE:
-		ctte = ctt->lookup(cp.comtree);
+        case GET_COMTREE: {
+		comt_t comt = cp.getAttr(COMTREE_NUM);
+		ctte = ctt->lookup(comt);
 		if (ctte == Null) {
 			errReply(p,cp1,"get comtree: invalid comtree");
 		} else {
-			CtlPkt cp1(ps->payload(p));
-			cp1.cpType = cp.cpType;
-			cp1.rrType = cp.rrType;
-			cp1.seqNum = cp.seqNum;
-			cp1.comtree = cp.comtree;
-			cp1.coreFlag = (ctt->coreFlag(ctte) ? 1 : -1);
-			cp1.parentLink = ctt->plink(ctte);
-			if (cp1.parentLink == 0) cp1.parentLink = -1;
-			cp1.queue = ctt->qnum(ctte);
+			cp1.setAttr(COMTREE_NUM,comt);
+			cp1.setAttr(CORE_FLAG,ctt->coreFlag(ctte) ? 1 : -1);
+			cp1.setAttr(PARENT_LINK,ctt->plink(ctte));
+			cp1.setAttr(QUEUE_NUM,ctt->qnum(ctte));
 			returnToSender(p,4*cp1.pack());
 		}
 		break;
-        case MOD_COMTREE:
+	}
+        case MOD_COMTREE: {
+		comt_t comt = cp.getAttr(COMTREE_NUM);
 		ctte = ctt->lookup(cp.comtree);
 		if (ctte != Null) {
-			if (cp.coreFlag != 0)
-				ctt->coreFlag(ctte) = cp.coreFlag;
-			if (cp.parentLink != 0)
-				ctt->plink(ctte) = cp.parentLink;
-			if (cp.queue != 0)
-				ctt->qnum(ctte) = cp.queue;
+			if (cp.isSet(CORE_FLAG) != 0)
+				ctt->coreFlag(ctte) = cp.getAttr(CORE_FLAG);
+			if (cp.isSet(PARENT_LINK) != 0)
+				ctt->plink(ctte) = cp.getAttr(PARENT_LINK);
+			if (cp.isSet(QUEUE_NUM) != 0)
+				ctt->qnum(ctte) = cp.getAttr(QUEUE_NUM);
 			returnToSender(p,4*cp1.pack());
 		} else errReply(p,cp1,"modify comtree: invalid comtree");
 		break;
+	}
 
         case ADD_ROUTE:
-		if (rt->addEntry(cp.comtree,cp.destAdr,cp.link,cp.queue)
-		    != Null) {
+		if (rt->addEntry(cp.getAttr(COMTREE_NUM),
+				 cp.getAttr(DEST_ADR),
+				 cp.getAttr(LINK_NUM),
+				 cp.getAttr(QUEUE_NUM)) != Null) {
 			returnToSender(p,4*cp1.pack());
 		} else errReply(p,cp1,"add route: cannot add route");
 		break;
         case DROP_ROUTE:
-		rte = rt->lookup(cp.comtree, cp.destAdr);
+		rte = rt->lookup(cp.getAttr(COMTREE_NUM),cp.getAttr(DEST_ADR));
 		if (rte != Null) {
 			rt->removeEntry(rte);
 			returnToSender(p,4*cp1.pack());
 		} else errReply(p,cp1,"drop route: invalid route");
 		break;
-        case GET_ROUTE:
-		rte = rt->lookup(cp.comtree, cp.destAdr);
+        case GET_ROUTE: {
+		comt_t comt = cp.getAttr(COMTREE_NUM);
+		fAdr_t da = cp.getAttr(DEST_ADR);
+		rte = rt->lookup(comt,da);
 		if (rte != Null) {
-			cp1.comtree = cp.comtree;
-			cp1.destAdr = cp.destAdr;
-			cp1.link = rt->link(rte);
-			cp1.queue = rt->qnum(rte);
+			cp1.setAttr(COMTREE_NUM,comt);
+			cp1.setAttr(DEST_ADR,da);
+			cp1.setAttr(LINK_NUM,rt->link(rte));
+			cp1.setAttr(QUEUE_NUM,rt->qnum(rte));
 			returnToSender(p,4*cp1.pack());
 		} else errReply(p,cp1,"get route: invalid route");
 		break;
+	}
         case MOD_ROUTE:
-		rte = rt->lookup(cp.comtree, cp.destAdr);
+		rte = rt->lookup(cp.getAttr(COMTREE_NUM),cp.getAttr(DEST_ADR));
 		if (rte != Null) {
-			if (cp.link != 0)
-				rt->setLink(rte,cp.link);
-			if (cp.queue != 0)
-				rt->qnum(rte) = cp.queue;
+			if (cp.isSet(LINK_NUM))
+				rt->setLink(rte,cp.getAttr(LINK_NUM));
+			if (cp.isSet(QUEUE_NUM))
+				rt->qnum(rte) = cp.getAttr(QUEUE_NUM);
 			returnToSender(p,4*cp1.pack());
 		} else errReply(p,cp1,"mod route: invalid route");
 		break;
