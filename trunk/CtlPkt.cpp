@@ -42,9 +42,12 @@ int CtlPkt::pack() {
 	if (rrType != REQUEST && rrType != POS_REPLY && rrType != NEG_REPLY)
 		return 0;
 	bp = HDR_LENG/4;
-	buf[bp++] = htonl(CpType::getCode(cpType));
-	buf[bp++] = htonl(rrType);
-	buf[bp++] = htonl(seqNum);
+	buf[bp++] = htonl(
+			(rrType << 30) |
+			((CpType::getCode(cpType) & 0x3fff) << 16) |
+			((int) ((seqNum >> 32) & 0xffff))
+			);
+	buf[bp++] = htonl((int) (seqNum & 0xffffffff));
 
 	if (rrType == REQUEST) {
 		// pack all request attributes and confirm that
@@ -66,8 +69,8 @@ int CtlPkt::pack() {
 			}
 		}
 	} else {
-		int j = misc::strnlen(errMsg,200);
-		if (j == 200) errMsg[199] = 0;
+		int j = misc::strnlen(errMsg,MAX_MSG_LEN);
+		if (j == MAX_MSG_LEN) errMsg[MAX_MSG_LEN] = 0;
 		strncpy((char*) &buf[bp], errMsg, j+1);
 		return bp + 1 + (j+1)/4;
 	}
@@ -84,19 +87,25 @@ bool CtlPkt::unpack(int pleng) {
 	if (pleng < 3) return false; // too short for control packet
 
 	bp = HDR_LENG/4;
-	cpType = CpType::getIndexByCode(ntohl(buf[bp++]));
-	rrType = (CpRrType) ntohl(buf[bp++]);
-	seqNum = ntohl(buf[bp++]);
-
+	buf[bp++] = htonl(
+			(rrType << 30) |
+			((CpType::getCode(cpType) & 0x3fff) << 16) |
+			((int) ((seqNum >> 32) & 0xffff))
+			);
+	buf[bp++] = htonl((int) (seqNum & 0xffffffff));
+	uint32_t x = ntohl(buf[bp++]);
+	rrType = (CpRrType) ((x >> 30) & 0x3);
+	cpType = CpType::getIndexByCode((x >> 16) & 0x3fff);
+	seqNum = x & 0xffff;
+	seqNum = (seqNum << 32) | ntohl(buf[bp++]);
+	
 	if (!CpType::validIndex(cpType)) return false;
 	if (rrType != REQUEST && rrType != POS_REPLY && rrType != NEG_REPLY)
 		return false;
 	
 	if (rrType == NEG_REPLY) {
-		const int maxLen = 4*(pleng-3);
-		errMsg = new char[maxLen];
-		strncpy(errMsg,(char*) &buf[bp], maxLen);
-		errMsg[maxLen-1] = 0;
+		strncpy(errMsg,(char*) &buf[bp], MAX_MSG_LEN);
+		errMsg[MAX_MSG_LEN] = 0;
 		return true;
 	}
 
@@ -140,7 +149,7 @@ void CtlPkt::print(ostream& os) {
 	else if (rrType == POS_REPLY) strncpy(xstr," (pos reply,",15);
 	else strncpy(xstr," (neg reply,",15);
 	char seqStr[20];
-	sprintf(seqStr,"%d",seqNum);
+	sprintf(seqStr,"%lld",seqNum);
 	strncat(xstr,seqStr,20); strncat(xstr,"):",5);
 	os << CpType::getName(cpType) << xstr;
 
@@ -152,7 +161,7 @@ void CtlPkt::print(ostream& os) {
 				continue;
 			os << " " << CpAttr::getName(ii) << "=";
 			if (isSet(ii)) {
-				int32_t val = attrVal(ii);
+				int32_t val = getAttr(ii);
 				if (ii == COMTREE_OWNER || ii == LEAF_ADR ||
 				    ii == PEER_ADR || ii == PEER_DEST ||
 				    ii == DEST_ADR) {
@@ -174,7 +183,7 @@ void CtlPkt::print(ostream& os) {
 			if (!CpType::isRepAttr(cpType,ii)) continue;
 			os << " " << CpAttr::getName(ii) << "=";
 			if (isSet(ii)) {
-				int32_t val = attrVal(ii);
+				int32_t val = getAttr(ii);
 				if (ii == COMTREE_OWNER || ii == LEAF_ADR ||
 				    ii == PEER_ADR || ii == PEER_DEST ||
 				    ii == DEST_ADR) {

@@ -36,9 +36,12 @@ public:
 	bool	unpack(int);		///< unpack CtlPkt fields from packet
 	void	print(ostream&) ; 	///< print CtlPkt
 
-	int32_t	attrVal(CpAttrIndex);	///< return value of specified attribute
-	void	setAttrVal(CpAttrIndex, int32_t); ///< set value of specified attribute
+	int32_t	getAttr(CpAttrIndex);	///< return value of specified attribute
+	void	setAttr(CpAttrIndex, int32_t); ///< set value of specified attribute
 	bool	isSet(CpAttrIndex); 	///< return true if specified attribute has a value
+
+	char*	getErrMsg();		///< return pointer to error message
+	void	setErrMsg(const char*);	///< set error message in control packet
 
 	// CtlPkt fields
 	int32_t bitRate;
@@ -77,13 +80,14 @@ public:
 	CpTypeIndex cpType;
 	int cpCode;
 	CpRrType rrType;
-	int32_t seqNum;
-	char*	errMsg;
+	int64_t seqNum;
 private:
 	uint32_t *buf;			///< reference to packet buffer
 	int	bp;			///< index into buffer used by pack/unpack
 	int32_t aVal[CPA_END+1];	///< array of attribute values
 	bool 	aSet[CPA_END+1];	///< used to mark attributes that have been set
+	static const int MAX_MSG_LEN=500;
+	char	errMsg[MAX_MSG_LEN+1];
 
 	// helper methods
 	void	packAttr(CpAttrIndex);
@@ -105,7 +109,7 @@ inline bool CtlPkt::isSet(CpAttrIndex i) {
  *  @return corresponding value
  *  Assumes that specified attribute has a valid value.
  */
-inline int32_t CtlPkt::attrVal(CpAttrIndex i) {
+inline int32_t CtlPkt::getAttr(CpAttrIndex i) {
 	return aVal[i];
 }
 
@@ -113,7 +117,7 @@ inline int32_t CtlPkt::attrVal(CpAttrIndex i) {
  *  @param i index of desired attribute
  *  @param val desired value for attribute
  */
-inline void CtlPkt::setAttrVal(CpAttrIndex i, int32_t val) {
+inline void CtlPkt::setAttr(CpAttrIndex i, int32_t val) {
 	if (!CpAttr::validIndex(i)) return;
 	aVal[i] = val; aSet[i] = true;
 }
@@ -140,15 +144,23 @@ inline void CtlPkt::packAttrCond(CpAttrIndex i) {
 
 /** Unpacks a single (attribute, value) pair starting at word bp in buf.
  *  The unpacked value is stored in within the CtlPkt object and can
- *  be retrieved using the attrVal() method.
+ *  be retrieved using the getAttr() method.
  *  @returns attribute index of unpacked pair, or 0 for invalid index
  */
 inline CpAttrIndex CtlPkt::unpackAttr() {
         CpAttrIndex i = CpAttr::getIndexByCode(ntohl(buf[bp]));
 	if (!CpAttr::validIndex(i)) return CPA_START; // =0
 	bp++;
-	setAttrVal(i,ntohl(buf[bp++]));
+	setAttr(i,ntohl(buf[bp++]));
 	return i;
+}
+
+/** Returns pointer to error message */
+inline char* CtlPkt::getErrMsg() { return errMsg; }
+
+/** Set the error message for a negative reply */
+inline void CtlPkt::setErrMsg(const char* s) {
+	strncpy(errMsg,s,MAX_MSG_LEN);errMsg[MAX_MSG_LEN] = 0;
 }
 
 #endif

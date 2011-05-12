@@ -49,7 +49,7 @@ private:
 	bool	pktCheck(int,int);	// perform basic checks on packet
 	void	subUnsub(int,int);	// subscription processing
 	void	handleCtlPkt(int);	// process control packets
-	void	errReply(packet,CtlPkt&,char*); // return error message
+	void	errReply(packet,CtlPkt&,const char*); // return error message
 	void	returnToSender(packet,int); // return control packet
 	void 	handleRteReply(int, int); // handle route reply packet
 	void	sendRteReply(int,int);	// send route reply packet
