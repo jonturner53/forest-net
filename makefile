@@ -1,4 +1,4 @@
-CXXFLAGS = -O2
+CXXFLAGS = -O2 -m64
 .cpp.o:
 	${CXX} ${CXXFLAGS} -I support -c $<
 
@@ -9,9 +9,9 @@ HFILES = stdinc.h forest.h fRouter.h ioProc.h lnkTbl.h comtTbl.h \
 	 support/hashTbl.h support/mheap.h
 
 LIBFILES = forest.o ioProc.o lnkTbl.o comtTbl.o rteTbl.o statsMod.o \
-	 CpAttr.o CpType.o CtlPkt.o qMgr.o header.o pktStore.o \
-	 support/misc.o support/list.o support/dlist.o support/listset.o \
-	 support/hashTbl.o support/mheap.o
+	 CpAttr.o CpType.o CtlPkt.o qMgr.o header.o pktStore.o 
+
+SUPPORT = support/timestamp
 
 lnkTbl.o :    ${HFILES}
 comtTbl.o :   ${HFILES}
@@ -29,11 +29,8 @@ CpAttr.o :    ${HFILES}
 CpType.o :    ${HFILES}
 CtlPkt.o :    ${HFILES}
 
-lib : ${LIBFILES}
-	make -C support
-	ar -ru lib ${LIBFILES}
-
 all : fHost fRouter Avatar Monitor
+	cp fHost fRouter Avatar Monitor ${HOME}/bin
 
 fRouter : fRouter.o lib
 	${CXX} ${CXXFLAGS} $< lib -o $@
@@ -47,6 +44,10 @@ Avatar : Avatar.o lib
 Monitor : Monitor.o lib
 	${CXX} ${CXXFLAGS} $< lib -o $@
 
+lib : ${LIBFILES} ${SUPPORT}
+	make -C support lib
+	ar -ru lib ${LIBFILES}
+
 clean :
-	make -C support
+	make -C support clean
 	rm -f *.o lib fHost fRouter Avatar Monitor

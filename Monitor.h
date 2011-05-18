@@ -19,18 +19,18 @@ public:
 	bool	init(char*);		// open and setup socket
 	void	run(int); 		// run avatar
 private:
-	const static short MON_PORT = 30321;// xy extent of virtual world
+	const static short MON_PORT = 30124;// xy extent of virtual world
 	const static int SIZE = 1000000;// xy extent of virtual world
 	const static int GRID = 200000;	// xy extent of one grid square
 
 	const static int UPDATE_PERIOD = 50;	// # ms between status updates
 	const static int MAX_AVATARS = 1000;	// max # of avatars to monitor
 	
-	ipa_t	myIp1, myIp2;		// IP addresses for remote GUI and Forest net
+	ipa_t	extIp, intIp;		// IP addresses for remote GUI and Forest net
 	ipa_t	rtrIp;			// IP address of router
 	fAdr_t	myAdr;			// forest address of host
 	fAdr_t	rtrAdr;			// forest address of router
-	int	sock1, sock2;		// socket numbers
+	int	extSock, intSock;	// socket numbers
 	comt_t	comt;			// comtree number
 	bool	logging;		// true if logging requested
 	ofstream logFile;		// output stream for optional log file
