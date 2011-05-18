@@ -128,14 +128,14 @@ inline int forest::truPktLeng(int x) { return 70+x; }
 
 // Return true if given address is a valid unicast address, else false.
 inline bool forest::ucastAdr(fAdr_t adr) {
-	return zipCode(adr) > 0 && localAdr(adr) > 0;
+	return adr > 0 && zipCode(adr) != 0 && localAdr(adr) != 0;
 }
 
 // Return true if given address is a valid multicast address, else false.
 inline bool forest::mcastAdr(fAdr_t adr) { return adr < 0; }
 
 // Return the "zip code" part of a unicast address
-inline int forest::zipCode(fAdr_t adr) { return (adr >> 16) & 0xffff; }
+inline int forest::zipCode(fAdr_t adr) { return (adr >> 16) & 0x7fff; }
 
 // Return the "local address" part of a unicast address
 inline int forest::localAdr(fAdr_t adr) { return adr & 0xffff; }

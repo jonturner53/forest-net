@@ -253,7 +253,9 @@ int misc::setupTcpSock(ipa_t ipa, int port) {
         }
 
 	// wait for a connection and return its file descriptor
-	if (listen(sock, 5) < 0) return -1;
+	if (listen(sock, 5) < 0) {
+		return -1;
+	}
 
 	if ((sock = accept(sock,(struct sockaddr *) NULL, NULL)) < 0) {
 		perror("misc::setupTcpSock: failing on accept");

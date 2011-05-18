@@ -6,11 +6,7 @@ void header::unpack(buffer_t& b) {
 	version() = (x >> 28) & 0xf;
 	leng() = (x >> 16) & 0xfff;
 	int y = (x >> 8) & 0xff;
-	ptype() = (y == 1 ? CLIENT_DATA :
-		  (y == 11 ? CONNECT :
-		  (y == 12 ? DISCONNECT :
-		  (y == 13 ? SUB_UNSUB :
-		  (y == 101 ? RTE_REPLY : UNDEF_PKT)))));
+	ptype() = (ptyp_t) y;
 	flags() = x & 0xff;
 	comtree() = ntohl(b[1]);
 	srcAdr() = ntohl(b[2]);

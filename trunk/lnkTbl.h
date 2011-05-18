@@ -124,7 +124,8 @@ inline void lnkTbl::postOcnt(int i, int leng) {
 	ld[i].oPkt++; ld[i].oByt += len;
 	oPkt++; oByt += len;
 	if (ld[i].ptyp == ROUTER) orPkt++;
-	if (ld[i].ptyp == CLIENT) ocPkt++;
+	if (ld[i].ptyp == CLIENT) { ocPkt++;
+	}
 }
 
 // Compute key for hash lookup

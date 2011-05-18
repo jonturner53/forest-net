@@ -1,5 +1,5 @@
 // usage:
-//      Monitor myIp1 myIp2 rtrIp myAdr rtrAdr finTime [logfile]
+//      Monitor extIp intIp rtrIp myAdr rtrAdr finTime [logfile]
 //
 // Monitor is a program that monitors a virtual world, tracking
 // the motion of the avatars within it. The monitored data is
@@ -18,8 +18,9 @@
 //
 // Command line arguments include two ip addresses for the
 // Monitor. The first is the IP address that the GUI can
-// use to connect to the Monitor. The second is the IP address
-// used by the Monitor with the Forest overlay. RtrIp
+// use to connect to the Monitor. If this is specified as 127.0.0.1,
+// the Monitor listens on the default IP address. The second is the
+// IP address used by the Monitor within the Forest overlay. RtrIp
 // is the route's IP address, myAdr is the Monitor's Forest
 // address, rtrAdr is the Forest address of the router, and
 // finTime is the number of seconds to run before terminating.
@@ -30,20 +31,35 @@
 #include "Monitor.h"
 
 main(int argc, char *argv[]) {
-	ipa_t myIp1, myIp2, rtrIp; fAdr_t myAdr, rtrAdr;
+	ipa_t intIp, extIp, rtrIp; fAdr_t myAdr, rtrAdr;
 	int comt, finTime;
 
 	if (argc < 7 || argc > 8 ||
-  	    (myIp1  = misc::ipAddress(argv[1])) == 0 ||
-  	    (myIp2  = misc::ipAddress(argv[2])) == 0 ||
+  	    (extIp  = misc::ipAddress(argv[1])) == 0 ||
+  	    (intIp  = misc::ipAddress(argv[2])) == 0 ||
 	    (rtrIp  = misc::ipAddress(argv[3])) == 0 ||
 	    (myAdr  = forest::forestAdr(argv[4])) == 0 ||
 	    (rtrAdr = forest::forestAdr(argv[5])) == 0 ||
 	     sscanf(argv[6],"%d", &finTime) != 1)
-		fatal("usage: Monitor myIp1 myIp2 rtrIpAdr myAdr rtrAdr "
+		fatal("usage: Monitor extIp intIp rtrIpAdr myAdr rtrAdr "
 		      		    "finTime [logfile]");
 
-	Monitor mon(myIp1,myIp2,rtrIp,myAdr,rtrAdr);
+	if (extIp == misc::ipAddress("127.0.0.1")) {
+		char myName[1001];
+		if (gethostname(myName, 1000) != 0)
+			fatal("can't retrieve hostname");
+	
+		hostent* host = gethostbyname(myName);
+		if (host == NULL)
+			fatal("can't retrieve host structure");
+	
+		extIp = (((int) host->h_addr_list[0][0]) << 24) |
+			(((int) host->h_addr_list[0][1]) << 16) |
+			(((int) host->h_addr_list[0][2]) <<  8) |
+			(((int) host->h_addr_list[0][3]));
+	}
+
+	Monitor mon(extIp,intIp,rtrIp,myAdr,rtrAdr);
 	char logFileName[101];
 	strncpy(logFileName,(argc == 8 ? argv[7] : ""),100);
 	if (!mon.init(logFileName))
@@ -53,8 +69,8 @@ main(int argc, char *argv[]) {
 }
 
 // Constructor for Monitor, allocates space and initializes private data
-Monitor::Monitor(ipa_t mipa1, ipa_t mipa2, ipa_t ripa, fAdr_t ma, fAdr_t ra)
-		: myIp1(mipa1), myIp2(mipa2), rtrIp(ripa), myAdr(ma), rtrAdr(ra) {
+Monitor::Monitor(ipa_t xipa, ipa_t iipa, ipa_t ripa, fAdr_t ma, fAdr_t ra)
+		: extIp(xipa), intIp(iipa), rtrIp(ripa), myAdr(ma), rtrAdr(ra) {
 	int nPkts = 10000;
 	ps = new pktStore(nPkts+1, nPkts+1);
 
@@ -69,17 +85,21 @@ Monitor::Monitor(ipa_t mipa1, ipa_t mipa2, ipa_t ripa, fAdr_t ma, fAdr_t ra)
 
 Monitor::~Monitor() {
 	fflush(stdout);
-	if (sock1 > 0) close(sock1);
-	if (sock2 > 0) close(sock2);
+	if (extSock > 0) close(extSock);
+	if (intSock > 0) close(intSock);
 	delete watchedAvatars; delete ps;
 }
 
 bool Monitor::init(char *logFileName) {
 // Initialize sockets and open log file for writing.
 // Return true on success, false on failure.
-	sock1 = misc::setupTcpSock(myIp1,MON_PORT);
-	sock2 = misc::setupSock(myIp2,0);
-	if (sock1 < 0 || sock2 < 0) return false;
+	intSock = misc::setupSock(intIp,0);
+	if (intSock < 0) return false;
+
+	connect(); 		// send initial connect packet
+	usleep(1000000);	// 1 second delay provided for use in SPP
+				// delay gives SPP linecard the time it needs
+				// to setup NAT filters before second packet
 
 	if (logFileName[0] == EOS) {
 		logging = false;
@@ -91,7 +111,10 @@ bool Monitor::init(char *logFileName) {
 		}
 		logging = true;
 	}
-	return true;
+
+	// setup TCP socket and wait for connection
+	extSock = misc::setupTcpSock(extIp,MON_PORT);
+	return extSock >= 0;
 }
 
 int Monitor::receiveReport() { 
@@ -106,7 +129,7 @@ int Monitor::receiveReport() {
         buffer_t& b = ps->buffer(p);
 
         ssaLen = sizeof(ssa); 
-        nbytes = recvfrom(sock2, &b[0], 1500, 0,
+        nbytes = recvfrom(intSock, &b[0], 1500, 0,
                           (struct sockaddr *) &ssa, &ssaLen);
         if (nbytes < 0) {
                 if (errno == EWOULDBLOCK) {
@@ -124,7 +147,7 @@ void Monitor::check4comtree() {
 	int nbytes;	  // number of bytes in received packet
 	uint32_t newComt;
 
-        nbytes = read(sock1, (char *) &newComt, sizeof(uint32_t));
+        nbytes = read(extSock, (char *) &newComt, sizeof(uint32_t));
         if (nbytes < 0) {
                 if (errno == EWOULDBLOCK) return;
                 fatal("Monitor::check4comtree: error in recvfrom call");
@@ -151,7 +174,7 @@ void Monitor::send2router(int p) {
 	}
 	header& h = ps->hdr(p);
 	ps->pack(p);
-	int rv = sendto(sock2,(void *) ps->buffer(p),h.leng(),0,
+	int rv = sendto(intSock,(void *) ps->buffer(p),h.leng(),0,
 		    	(struct sockaddr *) &sa, sizeof(sa));
 	if (rv == -1) fatal("Monitor::send2router: failure in sendto");
 }
@@ -164,7 +187,7 @@ void Monitor::send2gui() {
 	int nbytes = repCnt*8*sizeof(uint32_t);
 	char* p = (char *) statPkt;
 	while (nbytes > 0) {
-		int n = write(sock1, (void *) p, nbytes);
+		int n = write(extSock, (void *) p, nbytes);
 		if (n < 0) fatal("Monitor::send2gui: failure in write");
 		p += n; nbytes -= n;
 	}
@@ -343,11 +366,6 @@ void Monitor::run(int finishTime) {
 // Print a record of all avatar's status, once per second. 
 
 	int p;
-
-	connect(); 		// send initial connect packet
-	usleep(1000000);	// 1 second delay provided for use in SPP
-				// delay gives SPP linecard needs time to
-				// setup NAT filters before second packet
 
 	uint32_t now;    	// free-running microsecond time
 	uint32_t nextTime;	// time of next operational cycle

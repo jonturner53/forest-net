@@ -169,6 +169,7 @@ void fRouter::subUnsub(int p, int ctte) {
 // Ctte is the comtree table entry for the packet.
 // First payload word contains add/drop counts;
 // these must sum to at most 350 and must match packet length
+
 	header& h = ps->hdr(p);
 	uint32_t *pp = ps->payload(p);
 	// add/remove branches from routes
@@ -198,7 +199,7 @@ void fRouter::subUnsub(int p, int ctte) {
 		} else if (!rt->isLink(rte,inlnk)) {
 			rt->addLink(rte,inlnk);
 			pp[i] = 0; // so, parent will ignore
-		}
+		} 
 	}
 	// remove subscriptions
 	int dropcnt = ntohl(pp[addcnt+1]);
@@ -263,7 +264,9 @@ void fRouter::multiSend(int p, int ctte, int rte) {
 	for (int i = 0; i < n-1; i++) { // process first n-1 copies
 		lnk = lnkvec[i];
 		if (lnk == inlnk) continue;
-		if (qm->enq(p1,lnk,qn,now)) p1 = ps->clone(p);
+		if (qm->enq(p1,lnk,qn,now)) {
+			p1 = ps->clone(p);
+		}
 	}
 	// process last copy
 	lnk = lnkvec[n-1];
@@ -314,14 +317,8 @@ void fRouter::handleCtlPkt(int p) {
 	buffer_t& b = ps->buffer(p);
 	CtlPkt cp(ps->payload(p));
 
-	int len = (h.leng() - 24)/4;
-	if (!cp.unpack(len)) {
-		cerr << "misformatted control packet";
-		cp.print(cerr);
-		errReply(p,cp,"misformatted control packet");
-		return;
-	}
 
+	// first handle special cases of CONNECT/DISCONNECT
 	if (h.ptype() == CONNECT) {
 		if (lt->peerPort(inL) == 0)
 			lt->peerPort(inL) = h.tunSrcPort();
@@ -331,6 +328,15 @@ void fRouter::handleCtlPkt(int p) {
 		if (lt->peerPort(inL) == h.tunSrcPort())
 			lt->peerPort(inL) = 0;
 		ps->free(p); return;
+	}
+
+	// then onto normal signalling packets
+	int len = (h.leng() - 24)/4;
+	if (!cp.unpack(len)) {
+		cerr << "misformatted control packet";
+		cp.print(cerr);
+		errReply(p,cp,"misformatted control packet");
+		return;
 	}
 	if (h.ptype() != NET_SIG || h.comtree() < 100 || h.comtree() > 999) {
 		// reject signalling packets on comtrees outside 100-999 range
@@ -579,15 +585,14 @@ void fRouter::forward(int p, int ctte) {
 	header& h = ps->hdr(p);
 	int rte = rt->lookup(h.comtree(),h.dstAdr());
 
-	// reply to route request if we have valid entry
-	if ((h.flags() & RTE_REQ) && rte != Null) {
-		sendRteReply(p,ctte);
-		h.flags() = h.flags() & (~RTE_REQ);
-		ps->pack(p);
-		ps->hdrErrUpdate(p);
-	}
-
 	if (rte != Null) { // valid route case
+		// reply to route request
+		if ((h.flags() & RTE_REQ)) {
+			sendRteReply(p,ctte);
+			h.flags() = h.flags() & (~RTE_REQ);
+			ps->pack(p);
+			ps->hdrErrUpdate(p);
+		}
 		if (forest::ucastAdr(h.dstAdr())) {
 			int qn = rt->qnum(rte);
 			if (qn == 0) qn = ctt->qnum(ctte);
