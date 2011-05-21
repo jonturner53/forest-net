@@ -77,7 +77,7 @@ ostream& operator<<(ostream& os, const mheap& H) {
 	int x;
 	os << "  h:";
 	for (x = 1; x <= H.n; x++) {
-		os << "  "; misc::putNode(os,H.h[x],H.N);
+		os << "  "; Misc::writeNode(os,H.h[x],H.N);
 	}
 	os << "\nkey:";
 	for (x = 1; x <= H.n; x++) os << " " << setw(2) << H.kee[H.h[x]];
