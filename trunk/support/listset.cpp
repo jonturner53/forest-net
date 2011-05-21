@@ -41,7 +41,7 @@ void listset::print(ostream& os, alist j) const {
 	int i;
 	os << setw(2) << j << ": ";
 	for (i = head(j); i != Null; i = next[i]) {
-		misc::putNode(os,i,nI); os << " ";
+		Misc::writeNode(os,i,nI); os << " ";
 	}
 	os << endl;
 }
