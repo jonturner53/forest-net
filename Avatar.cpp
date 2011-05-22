@@ -40,8 +40,8 @@ main(int argc, char *argv[]) {
 	int comt, finTime;
 
 	if (argc != 7 ||
-	    (myIpAdr  = misc::ipAddress(argv[1])) == 0 ||
-	    (rtrIpAdr = misc::ipAddress(argv[2])) == 0 ||
+	    (myIpAdr  = Np4d::ipAddress(argv[1])) == 0 ||
+	    (rtrIpAdr = Np4d::ipAddress(argv[2])) == 0 ||
 	    (myAdr  = forest::forestAdr(argv[3])) == 0 ||
 	    (rtrAdr = forest::forestAdr(argv[4])) == 0 ||
 	    sscanf(argv[5],"%d", &comt) != 1 ||
@@ -81,7 +81,7 @@ Avatar::Avatar(ipa_t mipa, ipa_t ripa, fAdr_t ma, fAdr_t ra, comt_t ct)
 	deltaDir = 0;
 	speed = MEDIUM;
 
-	mcGroups = new dlist(MAXGROUPS);
+	mcGroups = new UiDlist(MAXGROUPS);
 	nearAvatars = new hashTbl(MAXNEAR);
 	numNear = 0;
 	nextAv = 1;
@@ -226,47 +226,47 @@ void Avatar::updateSubscriptions() {
 	const int GRANGE = VISRANGE + (4*FAST*UPDATE_PERIOD)/1000;
 
 	int myGroup = groupNum(x,y);
-	dlist *newGroups = new dlist(MAXGROUPS);
-	(*newGroups) &= myGroup;
+	UiDlist *newGroups = new UiDlist(MAXGROUPS);
+	newGroups->addLast(myGroup);
 
 	int x1, y1, g;
 	x1 = min(SIZE-1, x+GRANGE);
-	if (!newGroups->mbr(g = groupNum(x1,y)))  (*newGroups) &= g;
+	if (!newGroups->member(g = groupNum(x1,y)))  newGroups->addLast(g);
 	x1 = max(0, x-GRANGE);
-	if (!newGroups->mbr(g = groupNum(x1,y)))  (*newGroups) &= g;
+	if (!newGroups->member(g = groupNum(x1,y)))  newGroups->addLast(g);
 
 	y1 = min(SIZE-1, y+GRANGE);
-	if (!newGroups->mbr(g = groupNum(x,y1)))  (*newGroups) &= g;
+	if (!newGroups->member(g = groupNum(x,y1)))  newGroups->addLast(g);
 	y1 = max(0, y-GRANGE);
-	if (!newGroups->mbr(g = groupNum(x,y1)))  (*newGroups) &= g;
+	if (!newGroups->member(g = groupNum(x,y1)))  newGroups->addLast(g);
 
 	x1 = min(SIZE-1, (int) (x+GRANGE/SQRT2));
 	y1 = min(SIZE-1, (int) (y+GRANGE/SQRT2));
-	if (!newGroups->mbr(g = groupNum(x1,y1)))  (*newGroups) &= g;
+	if (!newGroups->member(g = groupNum(x1,y1)))  newGroups->addLast(g);
 	y1 = min(SIZE-1, (int) (y-GRANGE/SQRT2));
-	if (!newGroups->mbr(g = groupNum(x1,y1)))  (*newGroups) &= g;
+	if (!newGroups->member(g = groupNum(x1,y1)))  newGroups->addLast(g);
 	x1 = min(SIZE-1, (int) (x-GRANGE/SQRT2));
-	if (!newGroups->mbr(g = groupNum(x1,y1)))  (*newGroups) &= g;
+	if (!newGroups->member(g = groupNum(x1,y1)))  newGroups->addLast(g);
 	y1 = min(SIZE-1, (int) (y+GRANGE/SQRT2));
-	if (!newGroups->mbr(g = groupNum(x1,y1)))  (*newGroups) &= g;
+	if (!newGroups->member(g = groupNum(x1,y1)))  newGroups->addLast(g);
 
 	packet p = ps->alloc();
 	header& h = ps->hdr(p);
 	uint32_t *pp = ps->payload(p);
 
 	int nsub = 0; int nunsub = 0;
-	g = (*newGroups)[1];
-	while (g != Null) {
-		if (!mcGroups->mbr(g)) 
+	g = newGroups->get(1);
+	while (g != 0) {
+		if (!mcGroups->member(g)) 
 			pp[1+nsub++] = htonl(-g);
-		g = newGroups->suc(g);
+		g = newGroups->next(g);
 	}
 
-	g = (*mcGroups)[1];
+	g = mcGroups->get(1);
 	while (g != Null) {
-		if (!newGroups->mbr(g)) 
+		if (!newGroups->member(g)) 
 			pp[2+nsub+nunsub++] = htonl(-g);
-		g = mcGroups->suc(g);
+		g = mcGroups->next(g);
 	}
 
 	if (nsub + nunsub == 0) { ps->free(p); delete newGroups; return; }

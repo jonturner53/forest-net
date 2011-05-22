@@ -7,7 +7,6 @@
 #include "forest.h"
 #include "header.h"
 #include "pktStore.h"
-#include "dlist.h"
 #include "hashTbl.h"
 #include "Avatar.h"
 

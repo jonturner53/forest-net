@@ -180,7 +180,7 @@ bool Misc::verify(istream& in, char c) {
 	in.putback(c1);
 	return false;
 }
-	
+
 /** Create random permutation on integers 1..n and return in p.
  */
 void Misc::genPerm(int n, int p[]) {

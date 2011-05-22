@@ -62,8 +62,8 @@ bool statsMod::getStat(istream& is) {
 	cntrTyp typ; string typStr, fname;
 	char buf[32];
 
-	misc::skipBlank(is);
-	if (!misc::getWord(is,typStr)) return false;
+	Misc::skipBlank(is);
+	if (!Misc::readWord(is,typStr)) return false;
 
              if (typStr ==  "inPkt") typ = inPkt;
         else if (typStr == "outPkt") typ = outPkt;
@@ -75,14 +75,14 @@ bool statsMod::getStat(istream& is) {
 
 	switch (typ) {
 	case inPkt: case outPkt: case inByt: case outByt:
-		if (!misc::getNum(is,lnk)) return false;
+		if (!Misc::readNum(is,lnk)) return false;
 		break;
 	case qPkt: case qByt:
-		if (!misc::getNum(is,lnk) || !misc::getNum(is,qnum))
+		if (!Misc::readNum(is,lnk) || !Misc::readNum(is,qnum))
 			return false;
 		break;
 	}
-	misc::cflush(is,'\n');
+	Misc::cflush(is,'\n');
 
 	if (n >= maxStats) return false;
 	n++;
@@ -101,9 +101,9 @@ bool operator>>(istream& is, statsMod& sm) {
 // include blank lines and comment lines (any text starting with '#').
 // Each entry must be on a line by itself (possibly with a trailing comment).
 	int num;
- 	misc::skipBlank(is);
-        if (!misc::getNum(is,num)) return false;
-        misc::cflush(is,'\n');
+ 	Misc::skipBlank(is);
+        if (!Misc::readNum(is,num)) return false;
+        Misc::cflush(is,'\n');
 	while (num--) {
 		if (sm.getStat(is) == Null) return false;
 	}

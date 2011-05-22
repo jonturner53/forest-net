@@ -17,19 +17,15 @@ bool ioProc::setup(int i) {
 // Setup an interface. Return true on success, false on failure.
 
 	// create datagram socket
-	if ((ift[i].sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+	ift[i].sock = Np4d::datagramSocket();
+	if (ift[i].sock < 0) {
 		cerr << "ioProc::setup: socket call failed\n";
                 return false;
         }
 	maxSockNum = max(maxSockNum, ift[i].sock);
 
 	// bind it to an address/port
-	sockaddr_in sa;
-	bzero(&sa, sizeof(sa));
-	sa.sin_family = AF_INET;
-	sa.sin_addr.s_addr = htonl(ift[i].ipa);
-	sa.sin_port = htons(FOREST_PORT);
-        if (bind(ift[i].sock, (struct sockaddr *) &sa, sizeof(sa)) < 0) {
+        if (!Np4d::bind4d(ift[i].sock, ift[i].ipa, FOREST_PORT)) {
 		cerr << "ioProc::setup: bind call failed, "
 		     << "check interface's IP address\n";
                 return false;
@@ -71,8 +67,6 @@ int ioProc::receive() {
 	}
 	// Now, read the packet from the interface
 	int nbytes;	  	// number of bytes in received packet
-	sockaddr_in ssa;  	// socket address of sender
-	socklen_t ssaLen;       // length of sender's socket address structure
 	int lnk;	  	// # of link on which packet received
 	ipa_t sIpAdr; ipp_t sPort; // IP address and port number of sender
 
@@ -80,14 +74,10 @@ int ioProc::receive() {
         if (p == 0) return 0;
         header& h = ps->hdr(p);
         buffer_t& b = ps->buffer(p);
-        ssaLen = sizeof(ssa);
 
-	nbytes = recvfrom(ift[cIf].sock, (void *) &b[0], 1500, 0,
-	 	 	  (struct sockaddr *) &ssa, &ssaLen);
+	nbytes = Np4d::recvfrom4d(ift[cIf].sock, (void *) &b[0], 1500,
+				  sIpAdr, sPort);
 	if (nbytes < 0) fatal("ioProc::receive: error in recvfrom call");
-
-	sIpAdr = ntohl(ssa.sin_addr.s_addr);
-	sPort = ntohs(ssa.sin_port);
 
 	ps->unpack(p);
         if (!ps->hdrErrCheck(p) ||
@@ -105,23 +95,23 @@ int ioProc::receive() {
 void ioProc::send(int p, int lnk) {
 // Send packet on specified link and recycle storage.
 
-	dsa.sin_addr.s_addr = htonl(lt->peerIpAdr(lnk));
-	dsa.sin_port = htons(lt->peerPort(lnk));
-	header h = ps->hdr(p);
+	ipa_t farIp = lt->peerIpAdr(lnk);
+	ipp_t farPort = lt->peerPort(lnk);
+	int length = ps->hdr(p).leng();
 
 	if (dsa.sin_port != 0) {
 		int rv, lim = 0;
 		do {
-			rv = sendto(ift[lt->interface(lnk)].sock,
-				(void *) ps->buffer(p), h.leng(),0,
-			    	(struct sockaddr *) &dsa, sizeof(dsa));
+			rv = Np4d::sendto4d(ift[lt->interface(lnk)].sock,
+				(void *) ps->buffer(p), length,
+				farIp, farPort);
 		} while (rv == -1 && errno == EAGAIN && lim++ < 10);
 		if (rv == -1) {
 			cerr << "ioProc:: send: failure in sendto (errno="
 			     << errno << ")\n";
 			exit(1);
 		}
-		lt->postOcnt(lnk,h.leng());
+		lt->postOcnt(lnk,length);
 	}
 	ps->free(p);
 }
@@ -181,12 +171,12 @@ int ioProc::getEntry(istream& is) {
 	ntyp_t t; int pa1, pa2, da1, da2;
 	string typStr;
 
-	misc::skipBlank(is);
-	if ( !misc::getNum(is,ifnum) || !misc::getIpAdr(is,ipa) ||
-	     !misc::getNum(is,brate) || !misc::getNum(is,prate)) {
+	Misc::skipBlank(is);
+	if ( !Misc::readNum(is,ifnum) || !Np4d::readIpAdr(is,ipa) ||
+	     !Misc::readNum(is,brate) || !Misc::readNum(is,prate)) {
 		return Null;
 	}
-	misc::cflush(is,'\n');
+	Misc::cflush(is,'\n');
 
 	if (!addEntry(ifnum,ipa,brate,prate)) return Null;
 	if (!checkEntry(ifnum)) {
@@ -203,9 +193,9 @@ bool operator>>(istream& is, ioProc& iop) {
 // include blank lines and comment lines (any text starting with '#').
 // Each entry must be on a line by itself (possibly with a trailing comment).
 	int num;
- 	misc::skipBlank(is);
-        if (!misc::getNum(is,num)) return false;
-        misc::cflush(is,'\n');
+ 	Misc::skipBlank(is);
+        if (!Misc::readNum(is,num)) return false;
+        Misc::cflush(is,'\n');
 	for (int i = 1; i <= num; i++) {
 		if (iop.getEntry(is) == Null) {
 			cerr << "Error in interface table entry #"

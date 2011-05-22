@@ -35,16 +35,16 @@ main(int argc, char *argv[]) {
 	int comt, finTime;
 
 	if (argc < 7 || argc > 8 ||
-  	    (extIp  = misc::ipAddress(argv[1])) == 0 ||
-  	    (intIp  = misc::ipAddress(argv[2])) == 0 ||
-	    (rtrIp  = misc::ipAddress(argv[3])) == 0 ||
+  	    (extIp  = Np4d::ipAddress(argv[1])) == 0 ||
+  	    (intIp  = Np4d::ipAddress(argv[2])) == 0 ||
+	    (rtrIp  = Np4d::ipAddress(argv[3])) == 0 ||
 	    (myAdr  = forest::forestAdr(argv[4])) == 0 ||
 	    (rtrAdr = forest::forestAdr(argv[5])) == 0 ||
 	     sscanf(argv[6],"%d", &finTime) != 1)
 		fatal("usage: Monitor extIp intIp rtrIpAdr myAdr rtrAdr "
 		      		    "finTime [logfile]");
 
-	if (extIp == misc::ipAddress("127.0.0.1")) {
+	if (extIp == Np4d::ipAddress("127.0.0.1")) {
 		char myName[1001];
 		if (gethostname(myName, 1000) != 0)
 			fatal("can't retrieve hostname");
@@ -93,8 +93,9 @@ Monitor::~Monitor() {
 bool Monitor::init(char *logFileName) {
 // Initialize sockets and open log file for writing.
 // Return true on success, false on failure.
-	intSock = misc::setupSock(intIp,0);
+	intSock = Np4d::datagramSocket();
 	if (intSock < 0) return false;
+	if (!Np4d::bind4d(intSock,intIp,0)) return false;
 
 	connect(); 		// send initial connect packet
 	usleep(1000000);	// 1 second delay provided for use in SPP
@@ -113,7 +114,14 @@ bool Monitor::init(char *logFileName) {
 	}
 
 	// setup TCP socket and wait for connection
-	extSock = misc::setupTcpSock(extIp,MON_PORT);
+	extSock = Np4d::streamSocket();
+	if (extSock < 0) return false;
+	if (!Np4d::bind4d(extSock,extIp,MON_PORT)) return false;
+	if (!Np4d::listen4d(extSock)) return false;
+
+	ipa_t remoteIp; ipp_t remotePort;
+	extSock = Np4d::accept4d(extSock,remoteIp,remotePort);
+
 	return extSock >= 0;
 }
 
@@ -166,16 +174,11 @@ void Monitor::check4comtree() {
 
 void Monitor::send2router(int p) {
 // Send packet to Forest router (connect, disconnect, sub_unsub)
-	static bool initialize = true;
 	static sockaddr_in sa;
-	if (initialize) {
-		misc::initSockAdr(rtrIp,FOREST_PORT,&sa);
-		initialize = false;
-	}
 	header& h = ps->hdr(p);
 	ps->pack(p);
-	int rv = sendto(intSock,(void *) ps->buffer(p),h.leng(),0,
-		    	(struct sockaddr *) &sa, sizeof(sa));
+	int rv = Np4d::sendto4d(intSock,(void *) ps->buffer(p),h.leng(),
+		    	      	rtrIp,FOREST_PORT);
 	if (rv == -1) fatal("Monitor::send2router: failure in sendto");
 }
 

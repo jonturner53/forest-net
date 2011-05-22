@@ -69,7 +69,7 @@ int CtlPkt::pack() {
 			}
 		}
 	} else {
-		int j = misc::strnlen(errMsg,MAX_MSG_LEN);
+		int j = Misc::strnlen(errMsg,MAX_MSG_LEN);
 		if (j == MAX_MSG_LEN) errMsg[MAX_MSG_LEN] = 0;
 		strncpy((char*) &buf[bp], errMsg, j+1);
 		return bp + 1 + (j+1)/4;
@@ -139,7 +139,6 @@ void CtlPkt::condPrint(ostream& os, int32_t val, const char* s) {
 
 void CtlPkt::print(ostream& os) {
 // Prints CtlPkt content.
-	char* ips;
 	bool reqPkt = (rrType == REQUEST);
 	bool replyPkt = !reqPkt;
 	bool success = (rrType == POS_REPLY);
@@ -167,9 +166,8 @@ void CtlPkt::print(ostream& os) {
 				    ii == DEST_ADR) {
 					forest::putForestAdr(os,(fAdr_t) val);
 				} else if (ii == LOCAL_IP || ii == PEER_IP) {
-					char *ips = misc::ipString(val);
-					os << ips;
-					delete ips;
+					string s; Np4d::addIp2string(s,val);
+					os << s;
 				} else {
 					os << val;
 				}
@@ -189,9 +187,8 @@ void CtlPkt::print(ostream& os) {
 				    ii == DEST_ADR) {
 					forest::putForestAdr(os,(fAdr_t) val);
 				} else if (ii == LOCAL_IP || ii == PEER_IP) {
-					char *ips = misc::ipString(val);
-					os << ips;
-					delete ips;
+					string s; Np4d::addIp2string(s,val);
+					os << s;
 				} else {
 					os << val;
 				}

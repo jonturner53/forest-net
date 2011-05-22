@@ -1,6 +1,6 @@
 #include "rteTbl.h"
 
-rteTbl::rteTbl(int nte1, fAdr_t myAdr1, lnkTbl* lt1, comtTbl* ctt1, qMgr* qm1)
+rteTbl::rteTbl(int nte1, fAdr_t myAdr1, lnkTbl* lt1, ComtTbl* ctt1, qMgr* qm1)
 		: nte(nte1), myAdr(myAdr1), lt(lt1), ctt(ctt1), qm(qm1) {
 // Constructor for rteTbl, allocates space and initializes table.
 // Nte1 is the number of routing table entries.
@@ -86,7 +86,7 @@ bool rteTbl::checkEntry(int te) const {
 		// links mentioned in routing table must be valid
 		if (!lt->valid(lnkvec[i])) return false;
 		// links go only to children that are not in core
-		if (lnkvec[i] == ctt->plink(ctte)) return false;
+		if (lnkvec[i] == ctt->getPlink(ctte)) return false;
 		if (ctt->isClink(ctte,lnkvec[i])) return false;
 	}
 	return true;
@@ -100,26 +100,26 @@ bool rteTbl::getEntry(istream& is) {
 // or blank are assumed to contain a complete routing table entry.
 	int comt, lnk, qnum, quant, te; uint32_t adr;
 
-        misc::skipBlank(is);
-        if (!misc::getNum(is, comt) || !misc::getNum(is,adr) ||
-	    !misc::getNum(is,qnum) || !misc::getNum(is,quant)) {
+        Misc::skipBlank(is);
+        if (!Misc::readNum(is, comt) || !Misc::readNum(is,adr) ||
+	    !Misc::readNum(is,qnum) || !Misc::readNum(is,quant)) {
                 return false;
         }
 	if ((te = addEntry(comt,adr,0,qnum)) == 0) return false;
 	if (forest::ucastAdr(adr)) {
-		if (!misc::getNum(is,lnk)) return false;
-		misc::cflush(is,'\n');
+		if (!Misc::readNum(is,lnk)) return false;
+		Misc::cflush(is,'\n');
 		setLink(te,lnk);
 	} else {
 		do {
-			if (!misc::getNum(is,lnk)) {
+			if (!Misc::readNum(is,lnk)) {
 				removeEntry(te); return false;
 			}
 			addLink(te,lnk);
 			if (qnum != 0) qm->quantum(lnk,qnum) = quant;
-		} while (misc::verify(is,','));
+		} while (Misc::verify(is,','));
 	}
-	misc::cflush(is,'\n');
+	Misc::cflush(is,'\n');
 
 	if (!checkEntry(te)) { removeEntry(te); return false; }
 	return true;
@@ -137,9 +137,9 @@ bool operator>>(istream& is, rteTbl& rt) {
 // are given as decimal values. If the address is a unicast address,
 // only the first link number on the line is considered.
 	int num;
-	misc::skipBlank(is);
-	if (!misc::getNum(is,num)) return false;
-	misc::cflush(is,'\n');
+	Misc::skipBlank(is);
+	if (!Misc::readNum(is,num)) return false;
+	Misc::cflush(is,'\n');
 	for (int i = 1; i <= num; i++) {
 		if (!rt.getEntry(is)) {
 			cerr << "Error in route table entry # " << i << endl;

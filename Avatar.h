@@ -7,7 +7,7 @@
 #include "forest.h"
 #include "header.h"
 #include "pktStore.h"
-#include "dlist.h"
+#include "UiDlist.h"
 #include "hashTbl.h"
 
 class Avatar {
@@ -49,7 +49,7 @@ private:
 	const static int MAXGROUPS = (SIZE/GRID)*(SIZE/GRID);
 					// maximum # of multicast groups
 	const static int MAXNEAR = 1000;// max # of nearby avatars
-	dlist	*mcGroups;		// multicast groups subscribed to
+	UiDlist	*mcGroups;		// multicast groups subscribed to
 	int numNear;			// number of nearby avatars
 	int nextAv;			// next available avatar index
 	hashTbl *nearAvatars;		// set of visible avatars

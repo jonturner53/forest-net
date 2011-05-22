@@ -76,18 +76,18 @@ int lnkTbl::getEntry(istream& is) {
 	ntyp_t t; int pa, pd;
 	string typStr;
 
-	misc::skipBlank(is);
-	if ( !misc::getNum(is,lnk) ||
-	     !misc::getNum(is,intf) ||
-	     !misc::getIpAdr(is,pipa) || !misc::verify(is,':') ||
-             !misc::getNum(is,pipp) ||
-	     !misc::getWord(is,typStr) ||
+	Misc::skipBlank(is);
+	if ( !Misc::readNum(is,lnk) ||
+	     !Misc::readNum(is,intf) ||
+	     !Np4d::readIpAdr(is,pipa) || !Misc::verify(is,':') ||
+             !Misc::readNum(is,pipp) ||
+	     !Misc::readWord(is,typStr) ||
 	     !forest::getForestAdr(is,pa) ||
 	     !forest::getForestAdr(is,pd) ||
-	     !misc::getNum(is,brate) || !misc::getNum(is,prate)) {
+	     !Misc::readNum(is,brate) || !Misc::readNum(is,prate)) {
 		return Null;
 	}
-	misc::cflush(is,'\n');
+	Misc::cflush(is,'\n');
 
              if (typStr == "client") t = CLIENT;
         else if (typStr == "server") t = SERVER;
@@ -111,9 +111,9 @@ bool operator>>(istream& is, lnkTbl& lt) {
 // include blank lines and comment lines (any text starting with '#').
 // Each entry must be on a line by itself (possibly with a trailing comment).
 	int num;
- 	misc::skipBlank(is);
-        if (!misc::getNum(is,num)) return false;
-        misc::cflush(is,'\n');
+ 	Misc::skipBlank(is);
+        if (!Misc::readNum(is,num)) return false;
+        Misc::cflush(is,'\n');
 	for (int i = 1; i <= num; i++) {
 		if (lt.getEntry(is) == Null) {
 			cerr << "Error reading link table entry # "
