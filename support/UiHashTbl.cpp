@@ -1,8 +1,11 @@
-#include "hashTbl.h"
+/** \file UiHashTbl.cpp */
 
-hashTbl::hashTbl(int n1) : n(n1) {
-// Constructor for hashTbl, allocates space and initializes table.
-// N1 is the limit on the range of values; it must be less than 2^20.
+#include "UiHashTbl.h"
+
+/** Constructor for hashTbl, allocates space and initializes table.
+ *  N1 is the limit on the range of values; it must be less than 2^20.
+ */
+UiHashTbl::UiHashTbl(int n1) : n(n1) {
 	n = min(n, MAXVAL);
 
 	for (nb = 1; 8*nb < n; nb <<= 1) {}
@@ -17,19 +20,19 @@ hashTbl::hashTbl(int n1) : n(n1) {
 	}
 };
 	
-hashTbl::~hashTbl() {
+UiHashTbl::~UiHashTbl() {
 	delete [] bkt; delete [] keyVec;
 }
 
-void hashTbl::hashit(uint64_t key, int hf, uint32_t& b, uint32_t& fp) {
-// Return a bucket index and a fingerprint, based on given
-// 64 bit key value. Hf is either 0 and 1 and selects one of
-// two different hash functions.
-//
-// Hashit uses multiplicative hashing with one of two
-// different multipliers, after first converting
-// the 64 bit integer into a 32 bit integer.
-//
+/** Return a bucket index and a fingerprint, based on given
+ *  64 bit key value. Hf is either 0 and 1 and selects one of
+ *  two different hash functions.
+ * 
+ *  Hashit uses multiplicative hashing with one of two
+ *  different multipliers, after first converting
+ *  the 64 bit integer into a 32 bit integer.
+ */
+void UiHashTbl::hashit(uint64_t key, int hf, uint32_t& b, uint32_t& fp) {
 	const uint32_t A0 = 0xa8134c35;
 	const uint32_t A1 = 0xe626c2d3;
 
@@ -43,10 +46,11 @@ void hashTbl::hashit(uint64_t key, int hf, uint32_t& b, uint32_t& fp) {
 	fp  = (z >> 29) & fpMsk;
 }
 
-int hashTbl::chkBkt(uint32_t b, uint32_t fp, uint64_t key) {
-// Check the specified bucket for a match with the given fingerprint,
-// and for a matching key in keyVec. If a match is found, return
-// the stored value.
+/** Check the specified bucket for a match with the given fingerprint,
+ *  and for a matching key in keyVec. If a match is found, return
+ *  the stored value.
+ */
+int UiHashTbl::chkBkt(uint32_t b, uint32_t fp, uint64_t key) {
 	int i, v;
 	for (i = 0; i < BKT_SIZ; i++) {
 		if ((bkt[b][i] & fpMsk) == fp) {
@@ -57,9 +61,10 @@ int hashTbl::chkBkt(uint32_t b, uint32_t fp, uint64_t key) {
 	return Null;
 }
 
-int hashTbl::lookup(uint64_t key) {
-// Perform a lookup in the hash table. Return the value stored
-// under key, or 0 if there is none.
+/** Perform a lookup in the hash table. Return the value stored
+ *  under key, or 0 if there is none.
+ */
+int UiHashTbl::lookup(uint64_t key) {
 	int i; uint32_t b, val, fp;
 
 	hashit(key,0,b,fp);
@@ -79,10 +84,11 @@ int hashTbl::lookup(uint64_t key) {
 	return Null;
 }
 
-bool hashTbl::insert(uint64_t key, uint32_t val) {
-// Insert (key,value) pair into hash table. No check is made to
-// ensure that there is no conflicting (key,value) pair.
-// Return true on success, false on failure.
+/** Insert (key,value) pair into hash table. No check is made to
+ *  ensure that there is no conflicting (key,value) pair.
+ *  Return true on success, false on failure.
+ */
+bool UiHashTbl::insert(uint64_t key, uint32_t val) {
 	int i, j0, j1, n0, n1;
 	uint32_t b0, b1, fp0, fp1;
 
@@ -109,8 +115,9 @@ bool hashTbl::insert(uint64_t key, uint32_t val) {
 	return true;
 }
 
-void hashTbl::remove(uint64_t key) {
-// Remove entry for key from the table.
+/** Remove entry for key from the table.
+ */
+void UiHashTbl::remove(uint64_t key) {
 	int i; uint32_t b, val, fp; uint32_t *bucket;
 
 	hashit(key,0,b,fp);
@@ -133,10 +140,11 @@ void hashTbl::remove(uint64_t key) {
 	}
 }
 
-void hashTbl::dump() {
-// Print out all key,value pairs stored in the hash table,
-// along with their bucket index, offset within the bucket
-// and fingerprint.
+/** Print out all key,value pairs stored in the hash table,
+ *  along with their bucket index, offset within the bucket
+ *  and fingerprint.
+ */
+void UiHashTbl::dump() {
 	int i, j, s; uint32_t vm, val, fp; uint32_t *bucket;
 
 	// Determine amount to shift to right-justify fingerprints
