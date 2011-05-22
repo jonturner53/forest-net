@@ -1,4 +1,6 @@
-#include "mheap.h"
+/** \file ModHeap.cpp */
+
+#include "ModHeap.h"
 
 #define p(x) (((x)+(d-2))/d)
 #define left(x) (d*((x)-1)+2)
@@ -8,7 +10,7 @@
 #define above(a,b) ((a) != (b) && (minFlag ? \
 			((b)-(a)) < (1 << 31) : ((a)-(b)) < (1 << 31) ) )
 
-mheap::mheap(int N1, int d1, bool minFlag1) : N(N1), d(d1), minFlag(minFlag1) {
+ModHeap::ModHeap(int N1, int d1, bool minFlag1) : N(N1), d(d1), minFlag(minFlag1) {
 // Initialize a heap to store items in {1,...,N}.
 	n = 0;
 	h = new item[N+1]; pos = new int[N+1]; kee = new keytyp[N+1];
@@ -16,14 +18,14 @@ mheap::mheap(int N1, int d1, bool minFlag1) : N(N1), d(d1), minFlag(minFlag1) {
 	h[Null] = pos[Null] = Null; kee[Null] = 0;
 }
 
-mheap::~mheap() { delete [] h; delete [] pos; delete [] kee; }
+ModHeap::~ModHeap() { delete [] h; delete [] pos; delete [] kee; }
 
-void mheap::insert(item i, keytyp k) {
+void ModHeap::insert(item i, keytyp k) {
 // Add i to heap.
 	kee[i] = k; n++; siftup(i,n);
 }
 
-void mheap::remove(item i) {
+void ModHeap::remove(item i) {
 // Remove item i from heap. Name remove is used since delete is C++ keyword.
 	int j = h[n--];
 	if (i != j) {
@@ -33,7 +35,7 @@ void mheap::remove(item i) {
 	pos[i] = Null;
 }
 
-void mheap::siftup(item i, int x) {
+void ModHeap::siftup(item i, int x) {
 // Shift i up from position x to restore heap order.
 	int px = p(x);
 	while (x > 1 && above(kee[i],kee[h[px]])) {
@@ -43,7 +45,7 @@ void mheap::siftup(item i, int x) {
 	h[x] = i; pos[i] = x;
 }
 
-void mheap::siftdown(item i, int x) {
+void ModHeap::siftdown(item i, int x) {
 // Shift i down from position x to restore heap order.
 	int cx = topchild(x);
 	while (cx != Null && above(kee[h[cx]],kee[i])) {
@@ -55,7 +57,7 @@ void mheap::siftdown(item i, int x) {
 
 // Return the position of the child of the item at position x
 // having the top-most key.
-int mheap::topchild(int x) {
+int ModHeap::topchild(int x) {
 	int y, topc;
 	if ((topc = left(x)) > n) return Null;
 	for (y = topc + 1; y <= right(x) && y <= n; y++) {
@@ -64,7 +66,7 @@ int mheap::topchild(int x) {
 	return topc;
 }
 
-void mheap::changekey(item i, keytyp k) {
+void ModHeap::changekey(item i, keytyp k) {
 // Change the key of i and restore heap order.
 	keytyp ki = kee[i]; kee[i] = k;
 	if (k == ki) return;
@@ -73,14 +75,13 @@ void mheap::changekey(item i, keytyp k) {
 }
 
 // Print the contents of the heap.
-ostream& operator<<(ostream& os, const mheap& H) {
+void ModHeap::write(ostream& os) {
 	int x;
 	os << "  h:";
-	for (x = 1; x <= H.n; x++) {
-		os << "  "; Misc::writeNode(os,H.h[x],H.N);
+	for (x = 1; x <= n; x++) {
+		os << "  "; Misc::writeNode(os,h[x],N);
 	}
 	os << "\nkey:";
-	for (x = 1; x <= H.n; x++) os << " " << setw(2) << H.kee[H.h[x]];
+	for (x = 1; x <= n; x++) os << " " << setw(2) << kee[h[x]];
 	os << endl;
-	return os;
 }
