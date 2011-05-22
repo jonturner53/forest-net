@@ -1,29 +1,30 @@
-// Header file for hashTbl class.
-//
-// Maintains set of (key, value) pairs where key is a 64 bit value and
-// value is a positive 32 bit integer in a restricted range.
-// All (key,value) pairs must be disjoint; that is no two pairs may
-// share the same key and no two pairs may share the same value.
-//
-// Main methods
-//   lookup - returns value for given key
-//   insert - adds a (key,value) pair
-//   remove - removes the pair for a given key
-//
-// The implementation uses a 2-left hash table with eight items
-// in each bucket. The hash table is configured for a specified
-// range of values (max of 10^6) with a maximum load factor of
-// 50% to minimize the potential for overloading any bucket.
+/** \file UiHashTbl.h
+ * 
+ *  Maintains set of (key, value) pairs where key is a 64 bit value and
+ *  value is a positive 32 bit integer in a restricted range.
+ *  All (key,value) pairs must be fully disjoint; that is no two pairs may
+ *  share the same key and no two pairs may share the same value.
+ * 
+ *  Main methods
+ *    lookup - returns value for given key
+ *    insert - adds a (key,value) pair
+ *    remove - removes the pair for a given key
+ * 
+ *  The implementation uses a 2-left hash table with eight items
+ *  in each bucket. The hash table is configured for a specified
+ *  range of values (max of 10^6) with a maximum load factor of
+ *  50% to minimize the potential for overloading any bucket.
+ */
 
 #ifndef HASHTABLE_H
 #define HASHTABLE_H
 
 #include "stdinc.h"
 
-class hashTbl {
+class UiHashTbl {
 public:
-		hashTbl(int);
-		~hashTbl();
+		UiHashTbl(int);
+		~UiHashTbl();
 
 	int	lookup(uint64_t); 		// lookup entry
 	bool	insert(uint64_t, uint32_t); 	// add an entry
