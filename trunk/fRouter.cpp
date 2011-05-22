@@ -48,7 +48,7 @@ fRouter::fRouter(fAdr_t myAdr1) : myAdr(myAdr1) {
 	lt = new lnkTbl(nLnks);
 	ps = new pktStore(nPkts, nBufs);
 	qm = new qMgr(nLnks+1, nPkts, nQus, nBufs-4*nLnks, ps, lt);
-	ctt = new comtTbl(nComts,myAdr,lt,qm);
+	ctt = new ComtTbl(nComts,myAdr,lt,qm);
 	rt = new rteTbl(nRts,myAdr,lt,ctt,qm);
 	iop = new ioProc(lt, ps);
 	sm = new statsMod(100,lt,qm);
@@ -81,7 +81,7 @@ bool fRouter::init(char iftf[],char ltf[],char cttf[],char rtf[],char smf[]) {
         ltfs.close();
 
         cttfs.open(cttf);
-        if (cttfs.fail() || !(cttfs >> *ctt)) {
+        if (cttfs.fail() || !ctt->readTable(cttfs)) {
 		cerr << "fRouter::init: can't read comt table\n";
 		return false;
 	}
@@ -112,7 +112,7 @@ void fRouter::addLocalRoutes() {
 	uint16_t lnkvec[nLnks+1];
 	for (ctte = 1; ctte <= nComts; ctte++) {
 		if (!ctt->valid(ctte)) continue;
-		int comt = ctt->comtree(ctte);
+		int comt = ctt->getComtree(ctte);
 		n = ctt->links(ctte,lnkvec,nLnks);
 		for (i = 0; i < n; i++) {
 			j = lnkvec[i];
@@ -130,7 +130,7 @@ void fRouter::addLocalRoutes() {
 void fRouter::dump(ostream& os) {
 	os << "Interface Table\n\n" << *iop << endl;
 	os << "Link Table\n\n" << *lt << endl;
-	os << "Comtree Table\n\n" << *ctt << endl;
+	os << "Comtree Table\n\n"; ctt->writeTable(os); os << endl;
 	os << "Routing Table\n\n" << *rt << endl;
 	os << "Statistics\n\n" << *sm << endl;
 }
@@ -177,7 +177,7 @@ void fRouter::subUnsub(int p, int ctte) {
 	// appropriate
 	int inlnk = h.inLink();
 	// ignore subscriptions from the parent or core neighbors
-	if (inlnk == ctt->plink(ctte) || ctt->isClink(ctte,inlnk)) {
+	if (inlnk == ctt->getPlink(ctte) || ctt->isClink(ctte,inlnk)) {
 		ps->free(p); return;
 	}
 	int comt = h.comtree();
@@ -221,9 +221,9 @@ void fRouter::subUnsub(int p, int ctte) {
 		}
 	}
 	// propagate subscription packet to parent if not a core node
-	if (propagate && !ctt->coreFlag(ctte) && ctt->plink(ctte) != Null) {
+	if (propagate && !ctt->getCoreFlag(ctte) && ctt->getPlink(ctte) != Null) {
 		ps->payErrUpdate(p);
-		if (qm->enq(p,ctt->plink(ctte),ctt->qnum(ctte),now)) {
+		if (qm->enq(p,ctt->getPlink(ctte),ctt->getQnum(ctte),now)) {
 			return;
 		}
 	}
@@ -239,22 +239,22 @@ void fRouter::multiSend(int p, int ctte, int rte) {
 	header& h = ps->hdr(p);
 
 	if (forest::ucastAdr(h.dstAdr())) { // flooding a unicast packet
-		qn = ctt->qnum(ctte);
+		qn = ctt->getQnum(ctte);
 		if (forest::zipCode(myAdr) == forest::zipCode(h.dstAdr()))
 			n = ctt->llinks(ctte,lnkvec,nLnks);
 		else
 			n = ctt->rlinks(ctte,lnkvec,nLnks);
 	} else { // forwarding a multicast packet
 		n = 0;
-		qn = ctt->qnum(ctte);
+		qn = ctt->getQnum(ctte);
 		if (rte != Null) {
 			if (rt->qnum(rte) != 0) qn = rt->qnum(rte);
 			n = rt->links(rte,lnkvec,nLnks);
 		}
 		n += ctt->clinks(ctte,&lnkvec[n],nLnks);
-		if (ctt->plink(ctte) != Null &&
-		    !ctt->isClink(ctte,ctt->plink(ctte)))
-			lnkvec[n++] = ctt->plink(ctte);
+		if (ctt->getPlink(ctte) != Null &&
+		    !ctt->isClink(ctte,ctt->getPlink(ctte)))
+			lnkvec[n++] = ctt->getPlink(ctte);
 	}
 
 	if (n == 0) { ps->free(p); return; }
@@ -287,7 +287,7 @@ void fRouter::returnToSender(packet p, int paylen) {
 	fAdr_t temp = h.dstAdr(); h.dstAdr() = h.srcAdr(); h.srcAdr() = temp;
 	ps->pack(p);
 
-	int qn = ctt->qnum(ctt->lookup(h.comtree()));
+	int qn = ctt->getQnum(ctt->lookup(h.comtree()));
 	if (!qm->enq(p,h.inLink(),qn,now)) ps->free(p);
 }
 
@@ -363,9 +363,9 @@ void fRouter::handleCtlPkt(int p) {
 		iop->removeEntry(cp.getAttr(IFACE_NUM));
 		returnToSender(p,4*cp1.pack());
 		break;
-        case GET_IFACE:
-		if (iop->valid(cp.iface)) {
-			int32_t iface = cp.getAttr(IFACE_NUM);
+        case GET_IFACE: {
+		int32_t iface = cp.getAttr(IFACE_NUM);
+		if (iop->valid(iface)) {
 			cp1.setAttr(IFACE_NUM,iface);
 			cp1.setAttr(LOCAL_IP,iop->ipAdr(iface));
 			cp1.setAttr(MAX_BIT_RATE,iop->maxBitRate(iface));
@@ -373,9 +373,10 @@ void fRouter::handleCtlPkt(int p) {
 			returnToSender(p,4*cp1.pack());
 		} else errReply(p,cp1,"get iface: invalid interface");
 		break;
-        case MOD_IFACE:
-		if (iop->valid(cp.iface)) {
-			int32_t iface = cp.getAttr(IFACE_NUM);
+	}
+        case MOD_IFACE: {
+		int32_t iface = cp.getAttr(IFACE_NUM);
+		if (iop->valid(iface)) {
 			int br = iop->maxBitRate(iface);
 			int pr = iop->maxPktRate(iface);
 			if (cp.isSet(MAX_BIT_RATE))
@@ -387,12 +388,13 @@ void fRouter::handleCtlPkt(int p) {
 			if (iop->checkEntry(iface)) {
 				returnToSender(p,4*cp1.pack());
 			} else { // undo changes
-				iop->setMaxBitRate(cp.iface, br);
-				iop->setMaxPktRate(cp.iface, pr);
+				iop->setMaxBitRate(iface, br);
+				iop->setMaxPktRate(iface, pr);
 				errReply(p,cp1,"mod iface: invalid rate");
 			}
 		} else errReply(p,cp1,"mod iface: invalid interface");
 		break;
+	}
         case ADD_LINK:
 		if (lt->addEntry(cp.getAttr(LINK_NUM), cp.getAttr(IFACE_NUM),
 		    (ntyp_t) cp.getAttr(PEER_TYPE), cp.getAttr(PEER_IP),
@@ -404,9 +406,9 @@ void fRouter::handleCtlPkt(int p) {
 		if (lt->removeEntry(cp.getAttr(LINK_NUM)))
 			returnToSender(p,4*cp1.pack());
 		else errReply(p,cp1,"drop link: cannot drop link");
-        case GET_LINK:
-		if (lt->valid(cp.link)) {
-			int32_t link = cp.getAttr(LINK_NUM);
+        case GET_LINK: {
+		uint32_t link = cp.getAttr(LINK_NUM);
+		if (lt->valid(link)) {
 			cp1.setAttr(LINK_NUM, link);
 			cp1.setAttr(IFACE_NUM, lt->interface(link));
 			cp1.setAttr(PEER_IP, lt->peerIpAdr(link));
@@ -418,6 +420,7 @@ void fRouter::handleCtlPkt(int p) {
 			returnToSender(p,4*cp1.pack());
 		} else errReply(p,cp1,"get link: invalid link number");
 		break;
+	}
         case MOD_LINK: {
 		int link = cp.getAttr(LINK_NUM);
 		if (lt->valid(link)) {
@@ -473,23 +476,23 @@ void fRouter::handleCtlPkt(int p) {
 			errReply(p,cp1,"get comtree: invalid comtree");
 		} else {
 			cp1.setAttr(COMTREE_NUM,comt);
-			cp1.setAttr(CORE_FLAG,ctt->coreFlag(ctte) ? 1 : -1);
-			cp1.setAttr(PARENT_LINK,ctt->plink(ctte));
-			cp1.setAttr(QUEUE_NUM,ctt->qnum(ctte));
+			cp1.setAttr(CORE_FLAG,ctt->getCoreFlag(ctte) ? 1 : -1);
+			cp1.setAttr(PARENT_LINK,ctt->getPlink(ctte));
+			cp1.setAttr(QUEUE_NUM,ctt->getQnum(ctte));
 			returnToSender(p,4*cp1.pack());
 		}
 		break;
 	}
         case MOD_COMTREE: {
 		comt_t comt = cp.getAttr(COMTREE_NUM);
-		ctte = ctt->lookup(cp.comtree);
+		ctte = ctt->lookup(comt);
 		if (ctte != Null) {
 			if (cp.isSet(CORE_FLAG) != 0)
-				ctt->coreFlag(ctte) = cp.getAttr(CORE_FLAG);
+				ctt->setCoreFlag(ctte,cp.getAttr(CORE_FLAG));
 			if (cp.isSet(PARENT_LINK) != 0)
-				ctt->plink(ctte) = cp.getAttr(PARENT_LINK);
+				ctt->setPlink(ctte,cp.getAttr(PARENT_LINK));
 			if (cp.isSet(QUEUE_NUM) != 0)
-				ctt->qnum(ctte) = cp.getAttr(QUEUE_NUM);
+				ctt->setQnum(ctte,cp.getAttr(QUEUE_NUM));
 			returnToSender(p,4*cp1.pack());
 		} else errReply(p,cp1,"modify comtree: invalid comtree");
 		break;
@@ -559,7 +562,7 @@ void fRouter::handleRteReply(int p, int ctte) {
 		return;
 	}
 	if (rte != Null && lt->peerTyp(rt->link(rte)) == ROUTER &&
-	    qm->enq(p,rt->link(rte),ctt->qnum(ctte),now))
+	    qm->enq(p,rt->link(rte),ctt->getQnum(ctte),now))
 		return;
 }
 
@@ -576,7 +579,7 @@ void fRouter::sendRteReply(int p, int ctte) {
 	ps->pack(p1);
 	ps->payload(p1)[0] = htonl(h.dstAdr());
 	ps->hdrErrUpdate(p1); ps->payErrUpdate(p1);
-	qm->enq(p1,h.inLink(),ctt->qnum(ctte),now);
+	qm->enq(p1,h.inLink(),ctt->getQnum(ctte),now);
 }
 
 void fRouter::forward(int p, int ctte) {
@@ -595,7 +598,7 @@ void fRouter::forward(int p, int ctte) {
 		}
 		if (forest::ucastAdr(h.dstAdr())) {
 			int qn = rt->qnum(rte);
-			if (qn == 0) qn = ctt->qnum(ctte);
+			if (qn == 0) qn = ctt->getQnum(ctte);
 			int lnk = rt->link(rte);
 			if (lnk != h.inLink() && qm->enq(p,lnk,qn,now))
 				return;

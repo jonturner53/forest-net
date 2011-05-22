@@ -11,21 +11,15 @@ ipa_t Np4d::ipAddress(char *ips) {
 	return ntohl(ipa);
 }
 
-/** Return a pointer to a character buffer containing a
- *  dotted decimal string representing the given IP address.
- *  Note that the buffer returned is allocated on the heap
- *  and it is the caller's responsibility to delete it after
- *  use.
+/** Add the string representation of an IP address to a given string.
+ *  @param s is the string to be extended
+ *  @param ipa is the IP address in host byte order
  */
-char* Np4d::ipString(ipa_t ipa) {
-	// ugly code thanks to inet_ntoa's dreadful inteface
+void Np4d::addIp2string(string& s, ipa_t ipa) {
+	// ugly code thanks to inet_ntoa's dreadful interface
 	struct in_addr ipa_struct;
 	ipa_struct.s_addr = htonl(ipa);
-	char* p = inet_ntoa(ipa_struct);
-	char *ips = new char[16];
-	strncpy(ips,p,15);
-	ips[15] = '\0';
-	return ips;
+	s += inet_ntoa(ipa_struct);
 }
 
 /** If next thing on the current line is an ip address,
@@ -47,7 +41,7 @@ bool Np4d::readIpAdr(istream& in, ipa_t& ipa) {
 
 
 void Np4d::writeIpAdr(ostream& out, ipa_t adr) {
-        char *ips = ipString(adr); out << ips; delete ips;
+	string s; addIp2string(s,adr); out << s;
 }
 
 /** Get the default IP address of a specified host

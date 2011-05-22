@@ -9,7 +9,7 @@
 #define PKTSTORE_H
 
 #include "forest.h"
-#include "list.h"
+#include "UiList.h"
 
 #include "header.h"
 
@@ -47,8 +47,8 @@ private:
         buffer_t *buff;                 // array of packet buffers
         int     *ref;                   // array of reference counts for buffers
 
-        list    *freePkts;              // list of free packets
-        list    *freeBufs;              // list of free buffers
+        UiList    *freePkts;              // list of free packets
+        UiList    *freeBufs;              // list of free buffers
 };
 
 // Return reference to packet header

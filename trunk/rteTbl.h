@@ -24,7 +24,7 @@
 
 class rteTbl {
 public:
-		rteTbl(int,fAdr_t,lnkTbl*,comtTbl*,qMgr*);
+		rteTbl(int,fAdr_t,lnkTbl*,ComtTbl*,qMgr*);
 		~rteTbl();
 
 	int	lookup(comt_t, fAdr_t); 	// lookup entry
@@ -64,7 +64,7 @@ private:
 	rtEntry *tbl;			// vector of table entries
 	hashTbl *ht;			// hash table to speed up access
 	lnkTbl*	lt;			// pointer to link table
-	comtTbl* ctt;			// pointer to comtree table
+	ComtTbl* ctt;			// pointer to comtree table
 	qMgr*	qm;			// pointer to queue manager
 
 	int free;			// first unused entry

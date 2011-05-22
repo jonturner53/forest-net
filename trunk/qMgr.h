@@ -10,7 +10,7 @@
 #define QMGR_H
 
 #include "forest.h"
-#include "dlist.h"
+#include "UiDlist.h"
 #include "listset.h"
 #include "mheap.h"
 #include "lnkTbl.h"
@@ -43,7 +43,7 @@ private:
 	int	*npq;			// npq[L] = number of packets for link L
 	int	*nbq;			// nbq[L] = number of bytes for link L
 
-	dlist	**pSched;		// pSched[L] non-empty queues for link L
+	UiDlist	**pSched;		// pSched[L] non-empty queues for link L
 	int	*cq;			// cq[L] is current queue for link L
 	struct qStatStruct {
 		int quantum;		// quantum used in scheduling

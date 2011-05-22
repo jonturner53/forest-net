@@ -5,7 +5,8 @@
 #define FOREST_H
 
 #include "stdinc.h"
-#include "misc.h"
+#include "Misc.h"
+#include "Np4d.h"
 
 #include <sys/types.h>
 #include <sys/socket.h>

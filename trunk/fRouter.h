@@ -38,7 +38,7 @@ private:
 	uint32_t now;			// current time in 32 bit form
 
 	lnkTbl 	*lt;			// table defining links
-	comtTbl *ctt;			// table of comtrees
+	ComtTbl *ctt;			// table of comtrees
 	rteTbl  *rt;			// table of routes
 	pktStore *ps;			// packet buffers and headers
 	qMgr 	*qm;			// collection of queues for all links

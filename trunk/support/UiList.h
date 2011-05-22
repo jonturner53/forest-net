@@ -1,10 +1,15 @@
 /** \file UiList.h
  *  Data structure representing a UiList of unique integers.
  *
- *  Used to represent a UiList of integers from a defined range 1..n,
- *  where each integer may appear on the UiList at most one time.
- *  Allows fast membership tests in addition to the usual UiList
+ *  Used to represent a list of integers from a defined range 1..n,
+ *  where each integer may appear on the list at most one time.
+ *  Allows fast membership tests in addition to the usual list
  *  operations.
+ *
+ *  Note: UiList may be extended by other classes, but it was
+ *  not designed for use in contexts where  polymorphism is
+ *  required. To make it polymorphic, many of its methods
+ *  would have to be made virtual.
  */
 
 #ifndef UILIST_H
@@ -17,24 +22,24 @@ typedef int item;
 
 class UiList {
 public:		UiList(int=26);
-		UiList(const UiList&);
-		virtual ~UiList();
+		~UiList();
 
 	// item access
 	item 	get(int) const;
 	item	next(item) const;
-	item	head() const;
-	item	tail() const;
+	item	first() const;
+	item	last() const;
 	item	n() const;
 
 	// predicates
 	bool	valid(item) const;
 	bool	member(item) const;
 	bool	empty() const;
+	bool	equals(UiList&) const;
 
 	// modifiers
-	bool	insert(item,item);
-	bool	removeNext(item);
+	virtual bool insert(item,item);
+	virtual bool removeNext(item);
 	bool	addFirst(item);
 	bool	addLast(item);
 	bool	removeFirst();
@@ -43,6 +48,7 @@ public:		UiList(int=26);
 
 	// input/output
 	// bool	read(istream&);
+	void	add2string(string&) const;
 	void	write(ostream&);
 
 protected:
@@ -52,21 +58,21 @@ protected:
 
 private:
 	int	nn;			///< list defined on ints in {1,...,nn}
-	item	first;			///< first item in list
-	item	last;			///< last UiList in UiList
+	item	head;			///< first item in list
+	item	tail;			///< last item in list
 	item	*nxt;			///< nxt[i] is successor of i in list
 };
 
 /** Return the successor of i. */
 inline item UiList::next(item i) const {
-        assert(valid(i)); return nxt[i];
+        assert(member(i)); return nxt[i];
 }
 
 /** Return first item on list. */
-inline item UiList::head() const { return first; }
+inline item UiList::first() const { return head; }
 
 /** Return last item on list. */
-inline item UiList::tail() const { return last; }
+inline item UiList::last() const { return tail; }
 
 /** Return the largest value that can be stored in list. */
 inline item UiList::n() const { return nn; }
@@ -75,28 +81,28 @@ inline item UiList::n() const { return nn; }
 inline bool UiList::valid(item i) const { return 1 <= i && i <= n(); }
 
 /** Return true if list is empty. */
-inline bool UiList::empty() const { return first == 0; }
+inline bool UiList::empty() const { return first() == 0; }
 
 /** Return true if specified item in list, else false. */
 inline bool UiList::member(item i) const {
-	return valid(i) && next(i) != -1;
+	return valid(i) && nxt[i] != -1;
 }
 
 /** Add item to the front of the list.
  *  @param item to be added.
  *  @return true if the list was modified, else false
  */
-bool UiList::addFirst(item i) { return insert(i,0); }
+inline bool UiList::addFirst(item i) { return insert(i,0); }
 
 /** Add item to the end of the list.
  *  @param item to be added.
  *  @return true if the list was modified, else false
  */
-bool UiList::addLast(item i) { return insert(i,tail()); }
+inline bool UiList::addLast(item i) { return insert(i,last()); }
 
 /** Remove the first item in the list.
  *  @return true if the list was modified, else false
  */
-bool UiList::removeFirst() { return removeNext(0); }
+inline bool UiList::removeFirst() { return removeNext(0); }
 
 #endif

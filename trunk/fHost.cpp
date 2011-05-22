@@ -106,16 +106,16 @@ bool fHost::init() {
 
 bool fHost::getPacket(packet p, int& pause, int& cnt) {
 // Read an input packet from stdin and return it in p.
-        misc::skipBlank(cin);
-        if (!misc::getNum(cin,pause)) return false;
+        Misc::skipBlank(cin);
+        if (!Misc::readNum(cin,pause)) return false;
         if (pause < 0) {
-                if (!misc::getNum(cin,cnt)) cnt = 0;
-                misc::cflush(cin,'\n');
+                if (!Misc::readNum(cin,cnt)) cnt = 0;
+                Misc::cflush(cin,'\n');
                 return true;
         }
         header& h = ps->hdr(p);
         bool success = h.getPacket(cin,ps->buffer(p));
-        misc::cflush(cin,'\n');
+        Misc::cflush(cin,'\n');
         return success;
 }
 

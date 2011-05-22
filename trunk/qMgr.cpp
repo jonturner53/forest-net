@@ -42,11 +42,11 @@ qMgr::qMgr(int nL1, int nP1, int nQ1, int qL1, pktStore *ps1, lnkTbl *lt1)
 		npq[lnk] = 0; nbq[lnk] = 0;
 	}
 
-	pSched = new dlist*[nL+1];
+	pSched = new UiDlist*[nL+1];
 	cq = new int[nL+1];
 	qStatus = new qStatStruct[nL*nQ+1];
 	for (lnk = 1; lnk <= nL; lnk++) {
-		pSched[lnk] = new dlist(nQ);
+		pSched[lnk] = new UiDlist(nQ);
 		cq[lnk] = 0; 
 		for (q = 1; q <= nQ; q++) {
 			qid = (lnk-1)*nQ+q;
@@ -81,8 +81,8 @@ bool qMgr::enq(int p, int lnk, int q, uint32_t now) {
 
 	// update queue and packet scheduler
 	if (queues->empty(qid)) {
-		*pSched[lnk] &= q;
-		if (q == (*pSched[lnk])[1]) {
+		pSched[lnk]->addLast(q);
+		if (q == pSched[lnk]->get(1)) {
 			cq[lnk] = q;
 			qs->credits = qs->quantum;
 			// update heap of active links
@@ -119,8 +119,8 @@ int qMgr::deq(int lnk) {
 
 	// if current queue has too few credits, advance to next queue
 	while (qs->credits < h.leng()) { 
-		cq[lnk] = pSched[lnk]->suc(q) != Null ?
-				pSched[lnk]->suc(q) : (*pSched[lnk])[1];
+		cq[lnk] = pSched[lnk]->next(q) != 0 ?
+				pSched[lnk]->next(q) : pSched[lnk]->get(1);
 		q = cq[lnk]; qid = (lnk-1)*nQ + q; qs = &qStatus[qid];
 		qs->credits += qs->quantum;
 		p = queues->head(qid); h = ps->hdr(p);
@@ -134,9 +134,9 @@ int qMgr::deq(int lnk) {
 	npq[lnk]--; nbq[lnk] -= pleng;
 
 	if (queues->empty(qid)) {
-		cq[lnk] = pSched[lnk]->suc(q) != Null ?
-				pSched[lnk]->suc(q) : (*pSched[lnk])[1];
-		*pSched[lnk] -= q;
+		cq[lnk] = pSched[lnk]->next(q) != Null ?
+				pSched[lnk]->next(q) : pSched[lnk]->get(1);
+		pSched[lnk]->remove(q);
 		qs = &qStatus[(lnk-1)*nQ+cq[lnk]];
 		qs->credits += qs->quantum;
 	}
@@ -189,8 +189,9 @@ void qMgr::print() const {
 	for (lnk = 1; lnk <= nL; lnk++) {
 		if (pSched[lnk]->empty()) continue;
 		cout << "link " << lnk << ": ";
-		cout << *pSched[lnk] << " | " << cq[lnk] << endl;
-		for (q = (*pSched[lnk])[1]; q!=Null; q = (*pSched[lnk]).suc(q)){
+		pSched[lnk]->write(cout);
+		cout << " | " << cq[lnk] << endl;
+		for (q = pSched[lnk]->get(1); q != 0; q = pSched[lnk]->next(q)){
 			qid = (lnk-1)*nQ + q; qs = &qStatus[qid];
 			cout << "queue " << q << "(" << qs->quantum << ","
 			     << qs->credits << ") ";

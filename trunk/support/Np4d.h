@@ -24,7 +24,7 @@ class Np4d {
 public:
 	// ip address utilities
 	static ipa_t ipAddress(char*); 		
-	static char* ipString(ipa_t);		
+	static void addIp2string(string&, ipa_t);		
 	static bool readIpAdr(istream&, ipa_t&); 
 	static void writeIpAdr(ostream&, ipa_t);
 	static ipa_t getIpAdr(char*);
