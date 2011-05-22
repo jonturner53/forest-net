@@ -2,19 +2,19 @@ CXXFLAGS = -O2 -m64
 .cpp.o:
 	${CXX} ${CXXFLAGS} -I support -c $<
 
-HFILES = stdinc.h forest.h fRouter.h ioProc.h lnkTbl.h comtTbl.h \
+HFILES = stdinc.h forest.h fRouter.h ioProc.h lnkTbl.h ComtTbl.h \
 	 rteTbl.h statsMod.h qMgr.h CpAttr.h CpType.h CtlPkt.h \
 	 header.h pktStore.h Avatar.h Monitor.h \
 	 support/misc.h support/UiList.h support/UiDlist.h support/listset.h \
 	 support/hashTbl.h support/mheap.h
 
-LIBFILES = forest.o ioProc.o lnkTbl.o comtTbl.o rteTbl.o statsMod.o \
+LIBFILES = forest.o ioProc.o lnkTbl.o ComtTbl.o rteTbl.o statsMod.o \
 	 CpAttr.o CpType.o CtlPkt.o qMgr.o header.o pktStore.o 
 
 SUPPORT = support/timestamp
 
 lnkTbl.o :    ${HFILES}
-comtTbl.o :   ${HFILES}
+ComtTbl.o :   ${HFILES}
 rteTbl.o :    ${HFILES}
 pktStore.o :  ${HFILES}
 qMgr.o :      ${HFILES}
