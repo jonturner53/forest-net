@@ -5,7 +5,7 @@
 /** Return the IP address for the string pointed to by ips.
  *  Return 0 if string does not represent a valid IP address
  */
-ipa_t Np4d::ipAddress(char *ips) {
+ipa_t Np4d::ipAddress(const char *ips) {
 	ipa_t ipa = inet_addr(ips);
 	if (ipa == INADDR_NONE) return 0;
 	return ntohl(ipa);

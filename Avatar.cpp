@@ -82,7 +82,7 @@ Avatar::Avatar(ipa_t mipa, ipa_t ripa, fAdr_t ma, fAdr_t ra, comt_t ct)
 	speed = MEDIUM;
 
 	mcGroups = new UiDlist(MAXGROUPS);
-	nearAvatars = new hashTbl(MAXNEAR);
+	nearAvatars = new UiHashTbl(MAXNEAR);
 	numNear = 0;
 	nextAv = 1;
 }

@@ -6,7 +6,7 @@ rteTbl::rteTbl(int nte1, fAdr_t myAdr1, lnkTbl* lt1, ComtTbl* ctt1, qMgr* qm1)
 // Nte1 is the number of routing table entries.
 	int i;
 	tbl = new rtEntry[nte+1];
-	ht = new hashTbl(nte);
+	ht = new UiHashTbl(nte);
 	for (i = 0; i <= nte; i++) tbl[i].ct = 0;    // ct=0 for unused entry
 	for (i = 1; i < nte; i++) {
 		tbl[i].lnks = i+1;  // link unused entries

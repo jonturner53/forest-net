@@ -8,7 +8,7 @@
 #include "header.h"
 #include "pktStore.h"
 #include "UiDlist.h"
-#include "hashTbl.h"
+#include "UiHashTbl.h"
 
 class Avatar {
 public:
@@ -52,7 +52,7 @@ private:
 	UiDlist	*mcGroups;		// multicast groups subscribed to
 	int numNear;			// number of nearby avatars
 	int nextAv;			// next available avatar index
-	hashTbl *nearAvatars;		// set of visible avatars
+	UiHashTbl *nearAvatars;		// set of visible avatars
 
 	pktStore *ps;			// pointer to packet store
 

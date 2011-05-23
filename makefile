@@ -5,8 +5,8 @@ CXXFLAGS = -O2 -m64
 HFILES = stdinc.h forest.h fRouter.h ioProc.h lnkTbl.h ComtTbl.h \
 	 rteTbl.h statsMod.h qMgr.h CpAttr.h CpType.h CtlPkt.h \
 	 header.h pktStore.h Avatar.h Monitor.h \
-	 support/misc.h support/UiList.h support/UiDlist.h support/listset.h \
-	 support/hashTbl.h support/mheap.h
+	 support/misc.h support/UiList.h support/UiDlist.h support/UiListSet.h \
+	 support/UiHashTbl.h support/ModHeap.h
 
 LIBFILES = forest.o ioProc.o lnkTbl.o ComtTbl.o rteTbl.o statsMod.o \
 	 CpAttr.o CpType.o CtlPkt.o qMgr.o header.o pktStore.o 

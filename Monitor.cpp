@@ -74,7 +74,7 @@ Monitor::Monitor(ipa_t xipa, ipa_t iipa, ipa_t ripa, fAdr_t ma, fAdr_t ra)
 	int nPkts = 10000;
 	ps = new pktStore(nPkts+1, nPkts+1);
 
-	watchedAvatars = new hashTbl(MAX_AVATARS);
+	watchedAvatars = new UiHashTbl(MAX_AVATARS);
 	nextAvatar = 1;
 
 	avData = new avatarData[MAX_AVATARS+1];

@@ -65,7 +65,7 @@ private:
 	fAdr_t	myAdr;			///< forest address of this router
 	lnkTbl	*lt;			///< pointer to link table
 	qMgr	*qm;			///< pointer to queue manager
-	hashTbl	*ht;			///< pointer to hash table for fast lookup
+	UiHashTbl *ht;			///< pointer to hash table for fast lookup
 
 	/** helper functions */
 	uint64_t hashkey(comt_t) const;

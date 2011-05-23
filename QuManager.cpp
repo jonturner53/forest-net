@@ -33,9 +33,9 @@ qMgr::qMgr(int nL1, int nP1, int nQ1, int qL1, pktStore *ps1, lnkTbl *lt1)
 	   : nL(nL1), nP(nP1), nQ(nQ1), qL(qL1), ps(ps1), lt(lt1) {
 	int lnk, q, qid;
 
-	queues = new listset(nP,nL*nQ);
-	active = new mheap(nL,4,true);  // active is also a min-heap
-	vactive = new mheap(nL,4,true);  // vactive is a min-heap 
+	queues = new UiListSet(nP,nL*nQ);
+	active = new ModHeap(nL,4,true);  // active is also a min-heap
+	vactive = new ModHeap(nL,4,true);  // vactive is a min-heap 
 	npq = new int[nL+1]; nbq = new int[nL+1];
 
 	for (lnk = 1; lnk <= nL; lnk++) {
@@ -100,7 +100,7 @@ bool qMgr::enq(int p, int lnk, int q, uint32_t now) {
 			qs->credits = 0;
 		}
 	}
-	queues->enq(p,qid);
+	queues->addLast(p,qid);
 	qs->np++; qs->nb += pleng;
 	npq[lnk]++; nbq[lnk] += pleng;
 	return true;
@@ -115,7 +115,7 @@ int qMgr::deq(int lnk) {
 	int q = cq[lnk];
 	int qid = (lnk-1)*nQ + q; // used for accessing queues, qstatus
 	qStatStruct *qs = &qStatus[qid];
-	int p = queues->head(qid); header h = ps->hdr(p);
+	int p = queues->first(qid); header h = ps->hdr(p);
 
 	// if current queue has too few credits, advance to next queue
 	while (qs->credits < h.leng()) { 
@@ -123,11 +123,11 @@ int qMgr::deq(int lnk) {
 				pSched[lnk]->next(q) : pSched[lnk]->get(1);
 		q = cq[lnk]; qid = (lnk-1)*nQ + q; qs = &qStatus[qid];
 		qs->credits += qs->quantum;
-		p = queues->head(qid); h = ps->hdr(p);
+		p = queues->first(qid); h = ps->hdr(p);
 	}
 	// Now, current queue has enough credit, so can deque is first
 	// packet, update credits, pSched and heaps
-	p = queues->deq(qid); h = ps->hdr(p);
+	p = queues->removeFirst(qid); h = ps->hdr(p);
 	int pleng = forest::truPktLeng(h.leng());
 	qs->credits -= pleng;
 	qs->np--; qs->nb -= pleng;
@@ -178,14 +178,14 @@ int qMgr::nextReady(uint32_t now) {
 void qMgr::print(int lnk, int q) const {
 // Print the packets in the specified queue
 	cout << "[" << lnk << "," << q << "] ";
-	queues->print(cout, (lnk-1)*nQ+q);
+	queues->write(cout, (lnk-1)*nQ+q);
 }
 
 void qMgr::print() const {
 // Print the active heap and status of all active links
 	int lnk, q, qid; qStatStruct *qs;
 
-	cout << *active;
+	active->write(cout);
 	for (lnk = 1; lnk <= nL; lnk++) {
 		if (pSched[lnk]->empty()) continue;
 		cout << "link " << lnk << ": ";

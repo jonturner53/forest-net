@@ -23,7 +23,7 @@ typedef in_port_t ipp_t;
 class Np4d {
 public:
 	// ip address utilities
-	static ipa_t ipAddress(char*); 		
+	static ipa_t ipAddress(const char*); 		
 	static void addIp2string(string&, ipa_t);		
 	static bool readIpAdr(istream&, ipa_t&); 
 	static void writeIpAdr(ostream&, ipa_t);

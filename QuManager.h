@@ -11,8 +11,8 @@
 
 #include "forest.h"
 #include "UiDlist.h"
-#include "listset.h"
-#include "mheap.h"
+#include "UiListSet.h"
+#include "ModHeap.h"
 #include "lnkTbl.h"
 #include "pktStore.h"
 
@@ -37,9 +37,9 @@ private:
 	int	nQ;			// number of queues per link
 	int	qL;			// maximum queue length (in packets)
 
-	listset	*queues;		// collection of lists of packets
-	mheap	*active;		// active links, ordered by due time
-	mheap	*vactive;		// virtually active links
+	UiListSet *queues;		// collection of lists of packets
+	ModHeap	*active;		// active links, ordered by due time
+	ModHeap	*vactive;		// virtually active links
 	int	*npq;			// npq[L] = number of packets for link L
 	int	*nbq;			// nbq[L] = number of bytes for link L
 
