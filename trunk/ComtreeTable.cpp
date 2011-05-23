@@ -6,7 +6,7 @@
 ComtTbl::ComtTbl(int maxte1, fAdr_t myAdr1, lnkTbl *lt1, qMgr *qm1)
 		 : maxte(maxte1), myAdr(myAdr1), lt(lt1), qm(qm1) {
 	tbl = new tblEntry[maxte+1];
-	ht = new hashTbl(maxte);
+	ht = new UiHashTbl(maxte);
 
 	free = 1;
 	for (int entry = 1; entry <= maxte; entry++) {

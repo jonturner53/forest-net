@@ -6,7 +6,7 @@
 #define LNKTBL_H
 
 #include "forest.h"
-#include "hashTbl.h"
+#include "UiHashTbl.h"
 
 class lnkTbl {
 public:
@@ -70,7 +70,7 @@ private:
 	uint64_t oByt;			// output byte counter
 	};
 	lnkdata	*ld;			// ld[i] is link data for link i
-	hashTbl *ht;			// hash table for fast lookup
+	UiHashTbl *ht;			// hash table for fast lookup
 
 	// helper functions
 	uint64_t hashkey(ipa_t,uint32_t) const;

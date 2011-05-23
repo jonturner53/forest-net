@@ -4,7 +4,7 @@ lnkTbl::lnkTbl(int nlnk1) : nlnk(nlnk1) {
 // Constructor for lnkTbl, allocates space and initializes table.
 	nlnk = min(MAXLNK,nlnk);
 	ld = new lnkdata[nlnk+1];
-	ht = new hashTbl(nlnk);
+	ht = new UiHashTbl(nlnk);
 
 	iPkt = 0; oPkt = 0; iByt = 0; oByt = 0;
 	irPkt = 0; orPkt = 0; icPkt = 0; ocPkt = 0;

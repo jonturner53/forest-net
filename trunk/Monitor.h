@@ -7,7 +7,7 @@
 #include "forest.h"
 #include "header.h"
 #include "pktStore.h"
-#include "hashTbl.h"
+#include "UiHashTbl.h"
 #include "Avatar.h"
 
 class Monitor {
@@ -50,7 +50,7 @@ private:
 	} *avData;		
 
 	int nextAvatar;			// index of next row in avData table
-	hashTbl *watchedAvatars;	// set of (avatarAddr, row#) pairs
+	UiHashTbl *watchedAvatars;	// set of (avatarAddr, row#) pairs
 
 	pktStore *ps;			// pointer to packet store
 

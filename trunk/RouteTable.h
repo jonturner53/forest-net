@@ -18,7 +18,7 @@
 #define RTETBL_H
 
 #include "forest.h"
-#include "hashTbl.h"
+#include "UiHashTbl.h"
 #include "comtTbl.h"
 #include "qMgr.h"
 
@@ -62,7 +62,7 @@ private:
 	};
 
 	rtEntry *tbl;			// vector of table entries
-	hashTbl *ht;			// hash table to speed up access
+	UiHashTbl *ht;			// hash table to speed up access
 	lnkTbl*	lt;			// pointer to link table
 	ComtTbl* ctt;			// pointer to comtree table
 	qMgr*	qm;			// pointer to queue manager
