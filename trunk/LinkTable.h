@@ -1,46 +1,57 @@
-// Header file for lnkTbl class, which stores information
-// about all the links incident to a given router.
-//
+/** \file LinkTable.h */
 
-#ifndef LNKTBL_H
-#define LNKTBL_H
+#ifndef LINKTABLE_H
+#define LINKTABLE_H
 
-#include "forest.h"
+#include "CommonDefs.h"
 #include "UiHashTbl.h"
 
-class lnkTbl {
+/** Maintains information about a Forest router's virtual links.
+ */
+class LinkTable {
 public:
-		lnkTbl(int=31);
-		~lnkTbl();
-	int	lookup(int,ipa_t,ipp_t,fAdr_t);	// retrieve matching entry
-	bool	addEntry(int,int,ntyp_t,ipa_t,fAdr_t);	// create new entry
-	bool	removeEntry(int);		// remove entry from table
-	bool	checkEntry(int);		// perform consistency check
-	bool	valid(int) const;		// return true for valid entries
-	void	enable(int);			// make table entry valid
-	void	disable(int);			// make table entry invalid
-	// routines for accessing/changing various vields
-	// note that peer's IP address and forest address may not
-	// be changed, as hash access depends on these
-	int	interface(int) const;	
-	ipa_t	peerIpAdr(int) const;	
-	ipp_t& 	peerPort(int);	
-	ntyp_t&	peerTyp(int);	
-	fAdr_t 	peerAdr(int) const;	
-	fAdr_t&	peerDest(int);	
-	int&	bitRate(int);	
-	int&	pktRate(int);	
-	int	minDelta(int) const;	
-	// statistics routines
+		LinkTable(int=31);
+		~LinkTable();
+
+	/** access methods */
+	int	lookup(int,ipa_t,ipp_t,fAdr_t);
+	int	getInterface(int) const;	
+	ipa_t	getPeerIpAdr(int) const;	
+	ipp_t 	getPeerPort(int) const;	
+	ntyp_t	getPeerType(int) const;	
+	fAdr_t 	getPeerAdr(int) const;	
+	fAdr_t	getPeerDest(int) const;	
+	int	getBitRate(int) const;	
+	int	getPktRate(int) const;	
+	int	getMinDelta(int) const;	
+
+	/** predicates */
+	bool	valid(int) const;
+	bool	checkEntry(int);
+
+	/** modifiers */
+	bool	addEntry(int,int,ntyp_t,ipa_t,fAdr_t);
+	bool	removeEntry(int);		
+	void	enable(int);		
+	void	disable(int);
+	void 	setPeerPort(int, ipp_t);	
+	void	setPeerType(int, ntyp_t);	
+	void	setPeerDest(int, fAdr_t);	
+	void	setBitRate(int, int);	
+	void	setPktRate(int, int);	
+
+	/** statistics routines */
 	uint32_t iPktCnt(int) const;
 	uint32_t oPktCnt(int) const;
 	uint32_t iBytCnt(int) const;
 	uint32_t oBytCnt(int) const;
 	void	postIcnt(int, int);
 	void	postOcnt(int, int);
-	// io routines
-	friend	bool operator>>(istream&, lnkTbl&);
-	friend	ostream& operator<<(ostream&, const lnkTbl&);
+
+	/** io routines */
+	bool read(istream&);
+	void write(ostream&) const;
+
 private:
 	int	nlnk;			// max number of links in table
 
@@ -74,53 +85,60 @@ private:
 
 	// helper functions
 	uint64_t hashkey(ipa_t,uint32_t) const;
-	int	getEntry(istream&);	 	
-	void	putEntry(ostream&, int) const;
+	int	readEntry(istream&);	 	
+	void	writeEntry(ostream&, int) const;
 };
 
-inline bool lnkTbl::valid(int i) const { return (ld[i].padr != 0); }
-inline void lnkTbl::enable(int i) { if (ld[i].padr == 0) ld[i].padr++; }
-inline void lnkTbl::disable(int i) { ld[i].padr = 0; }
+inline bool LinkTable::valid(int i) const { return (ld[i].padr != 0); }
+inline void LinkTable::enable(int i) { if (ld[i].padr == 0) ld[i].padr++; }
+inline void LinkTable::disable(int i) { ld[i].padr = 0; }
 
-// Routines to access various fields in lnkTbl entries
-inline int lnkTbl::interface(int i) const 	{ return ld[i].intf; }
-inline ipa_t lnkTbl::peerIpAdr(int i) const 	{ return ld[i].pipa; }
-inline ipp_t& lnkTbl::peerPort(int i) 		{ return ld[i].pipp; }
-inline ntyp_t& lnkTbl::peerTyp(int i) 	 	{ return ld[i].ptyp; }
-inline fAdr_t lnkTbl::peerAdr(int i) const 	{ return ld[i].padr; }
-inline fAdr_t& lnkTbl::peerDest(int i) 	 	{ return ld[i].dadr; }
-inline int& lnkTbl::bitRate(int i) 		{ return ld[i].bitrate; }
-inline int& lnkTbl::pktRate(int i) 		{ return ld[i].pktrate; }
-inline int lnkTbl::minDelta(int i) const 	{
+/** getters */
+inline int LinkTable::getInterface(int i) const { return ld[i].intf; }
+inline ipa_t LinkTable::getPeerIpAdr(int i) const { return ld[i].pipa; }
+inline ipp_t LinkTable::getPeerPort(int i) const { return ld[i].pipp; }
+inline ntyp_t LinkTable::getPeerType(int i) const { return ld[i].ptyp; }
+inline fAdr_t LinkTable::getPeerAdr(int i) const { return ld[i].padr; }
+inline fAdr_t LinkTable::getPeerDest(int i) const { return ld[i].dadr; }
+inline int LinkTable::getBitRate(int i) const { return ld[i].bitrate; }
+inline int LinkTable::getPktRate(int i) const { return ld[i].pktrate; }
+inline int LinkTable::getMinDelta(int i) const 	{
 	return int(1000000.0/ld[i].pktrate);
 }
 
-// statistics routines
-inline uint32_t lnkTbl::iPktCnt(int i) const {
+/** setters */
+inline void LinkTable::setPeerPort(int i, ipp_t pp) { ld[i].pipp = pp; }
+inline void LinkTable::setPeerType(int i, ntyp_t nt) { ld[i].ptyp = nt; }
+inline void LinkTable::setPeerDest(int i, fAdr_t pd) { ld[i].dadr = pd; }
+inline void LinkTable::setBitRate(int i, int br) { ld[i].bitrate = br; }
+inline void LinkTable::setPktRate(int i, int pr) { ld[i].pktrate = pr; }
+
+/** statistics routines */
+inline uint32_t LinkTable::iPktCnt(int i) const {
 	return (i > 0 ? ld[i].iPkt :
 		(i == 0 ? iPkt :
 		 (i == -1 ? irPkt : icPkt)));
 }
-inline uint32_t lnkTbl::oPktCnt(int i) const {
+inline uint32_t LinkTable::oPktCnt(int i) const {
 	return (i > 0 ? ld[i].oPkt :
 		(i == 0 ? oPkt :
 		 (i == -1 ? orPkt : ocPkt)));
 }
-inline uint32_t lnkTbl::iBytCnt(int i) const {
+inline uint32_t LinkTable::iBytCnt(int i) const {
 	return (i > 0 ? ld[i].iByt : iByt);
 }
-inline uint32_t lnkTbl::oBytCnt(int i) const {
+inline uint32_t LinkTable::oBytCnt(int i) const {
 	return (i > 0 ? ld[i].oByt : oByt);
 }
-inline void lnkTbl::postIcnt(int i, int leng) {
-	int len = forest::truPktLeng(leng);
+inline void LinkTable::postIcnt(int i, int leng) {
+	int len = Forest::truPktLeng(leng);
 	ld[i].iPkt++; ld[i].iByt += len;
 	iPkt++; iByt += len;
 	if (ld[i].ptyp == ROUTER) irPkt++;
 	if (ld[i].ptyp == CLIENT) icPkt++;
 }
-inline void lnkTbl::postOcnt(int i, int leng) {
-	int len = forest::truPktLeng(leng);
+inline void LinkTable::postOcnt(int i, int leng) {
+	int len = Forest::truPktLeng(leng);
 	ld[i].oPkt++; ld[i].oByt += len;
 	oPkt++; oByt += len;
 	if (ld[i].ptyp == ROUTER) orPkt++;
@@ -129,18 +147,18 @@ inline void lnkTbl::postOcnt(int i, int leng) {
 }
 
 // Compute key for hash lookup
-inline uint64_t lnkTbl::hashkey(ipa_t x, uint32_t y) const {
+inline uint64_t LinkTable::hashkey(ipa_t x, uint32_t y) const {
 	return (uint64_t(x) << 32) | y;
 }
 
 // Return index of link for a packet received on specified interface,
 // with specified source IP (address,port) pair and the given
 // Forest source address. If no match, return Null.
-inline int lnkTbl::lookup(int intf, ipa_t pipa, ipp_t pipp, fAdr_t srcAdr) {
+inline int LinkTable::lookup(int intf, ipa_t pipa, ipp_t pipp, fAdr_t srcAdr) {
         ipa_t x = (pipp != FOREST_PORT ? srcAdr : pipa);
         int te = ht->lookup(hashkey(pipa,x));
-        if (te !=0 && intf == interface(te) &&
-            (pipp == peerPort(te) || peerPort(te) == 0))
+        if (te !=0 && intf == getInterface(te) &&
+            (pipp == getPeerPort(te) || getPeerPort(te) == 0))
                 return te;
         return 0;
 }

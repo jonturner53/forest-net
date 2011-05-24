@@ -34,6 +34,7 @@ public:
 	static bool prefix(string, string);	
 	static void genPerm(int, int*);	
 	static int strnlen(char*, int);
+	static uint32_t getTime();
 };
 
 /** Convert a small integer to a lower-case letter.

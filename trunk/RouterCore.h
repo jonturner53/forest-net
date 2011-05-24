@@ -1,30 +1,30 @@
-// Header file for fRouter class.
+/** \file RouterCore.h */
 
-#ifndef FROUTER_H
-#define FROUTER_H
+#ifndef ROUTERCORE_H
+#define ROUTERCORE_H
 
 #include <queue>
 
 #include "stdinc.h"
-#include "forest.h"
+#include "CommonDefs.h"
 
-#include "lnkTbl.h"
-#include "comtTbl.h"
-#include "rteTbl.h"
-#include "pktStore.h"
+#include "LinkTable.h"
+#include "ComtreeTable.h"
+#include "RouteTable.h"
+#include "PacketStore.h"
 #include "CtlPkt.h"
-#include "qMgr.h"
-#include "ioProc.h"
-#include "statsMod.h"
+#include "QuManager.h"
+#include "IoProcessor.h"
+#include "StatsModule.h"
 
-class fRouter {
+class RouterCore {
 public:
-		fRouter(fAdr_t);
-		~fRouter();
+		RouterCore(fAdr_t);
+		~RouterCore();
+
 	bool	init(char*,char*,char*,char*,char*);
-					// initialize tables from files
-	void	run(uint32_t,int);	// main processing loop
-	void	dump(ostream& os); 	// print the tables
+	void	run(uint32_t,int);
+	void	dump(ostream& os);
 private:
 	fAdr_t	myAdr;			// forest address of this router
 		
@@ -37,24 +37,31 @@ private:
 
 	uint32_t now;			// current time in 32 bit form
 
-	lnkTbl 	*lt;			// table defining links
-	ComtTbl *ctt;			// table of comtrees
-	rteTbl  *rt;			// table of routes
-	pktStore *ps;			// packet buffers and headers
-	qMgr 	*qm;			// collection of queues for all links
-	ioProc 	*iop;			// class for handling io
-	statsMod *sm;			// class for recording statistics
+	LinkTable *lt;			// table defining links
+	ComtreeTable *ctt;		// table of comtrees
+	RouteTable  *rt;		// table of routes
+	PacketStore *ps;		// packet buffers and headers
+	QuManager *qm;			// collection of queues for all links
+	IoProcessor *iop;		// class for handling io
+	StatsModule *sm;		// class for recording statistics
 
-	void	addLocalRoutes();	// add routes for adjacent hosts
-	bool	pktCheck(int,int);	// perform basic checks on packet
-	void	subUnsub(int,int);	// subscription processing
-	void	handleCtlPkt(int);	// process control packets
-	void	errReply(packet,CtlPkt&,const char*); // return error message
-	void	returnToSender(packet,int); // return control packet
-	void 	handleRteReply(int, int); // handle route reply packet
-	void	sendRteReply(int,int);	// send route reply packet
-	void	multiSend(int,int,int);	// handle packets with >1 destination
-	void 	forward(int,int);	// do lookup and enqueue packet(s)
+	/** setup */
+	void	addLocalRoutes();
+
+	/** basic forwarding */
+	void 	forward(int,int);
+	bool	pktCheck(int,int);
+	void	multiSend(int,int,int);
+
+	/** inband control */
+	void 	handleRteReply(int, int);
+	void	sendRteReply(int,int);	
+	void	subUnsub(int,int);
+
+	/*** signalling packets */
+	void	handleCtlPkt(int);
+	void	errReply(packet,CtlPkt&,const char*);
+	void	returnToSender(packet,int);
 };
 
 #endif

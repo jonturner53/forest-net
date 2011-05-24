@@ -133,11 +133,11 @@ bool CtlPkt::unpack(int pleng) {
 	return true;
 }
 
-void CtlPkt::condPrint(ostream& os, int32_t val, const char* s) {
-	if (val != 0) os << " " << s << ": " << val;
+void CtlPkt::condPrint(ostream& out, int32_t val, const char* s) {
+	if (val != 0) out << " " << s << ": " << val;
 }
 
-void CtlPkt::print(ostream& os) {
+void CtlPkt::write(ostream& out) {
 // Prints CtlPkt content.
 	bool reqPkt = (rrType == REQUEST);
 	bool replyPkt = !reqPkt;
@@ -150,7 +150,7 @@ void CtlPkt::print(ostream& os) {
 	char seqStr[20];
 	sprintf(seqStr,"%lld",seqNum);
 	strncat(xstr,seqStr,20); strncat(xstr,"):",5);
-	os << CpType::getName(cpType) << xstr;
+	out << CpType::getName(cpType) << xstr;
 
 	if (rrType == REQUEST) {
 		for (int i = CPA_START+1; i < CPA_END; i++) {
@@ -158,46 +158,46 @@ void CtlPkt::print(ostream& os) {
 			if (!CpType::isReqAttr(cpType,ii)) continue;
 			if (!CpType::isReqReqAttr(cpType,ii) && !isSet(ii))
 				continue;
-			os << " " << CpAttr::getName(ii) << "=";
+			out << " " << CpAttr::getName(ii) << "=";
 			if (isSet(ii)) {
 				int32_t val = getAttr(ii);
 				if (ii == COMTREE_OWNER || ii == LEAF_ADR ||
 				    ii == PEER_ADR || ii == PEER_DEST ||
 				    ii == DEST_ADR) {
-					forest::putForestAdr(os,(fAdr_t) val);
+					Forest::writeForestAdr(out,(fAdr_t) val);
 				} else if (ii == LOCAL_IP || ii == PEER_IP) {
 					string s; Np4d::addIp2string(s,val);
-					os << s;
+					out << s;
 				} else {
-					os << val;
+					out << val;
 				}
 			} else {
-			     os << "(missing)";
+			     out << "(missing)";
 			}
 		}
 	} else if (rrType == POS_REPLY) {
 		for (int i = CPA_START+1; i < CPA_END; i++) {
 			CpAttrIndex ii = CpAttrIndex(i);
 			if (!CpType::isRepAttr(cpType,ii)) continue;
-			os << " " << CpAttr::getName(ii) << "=";
+			out << " " << CpAttr::getName(ii) << "=";
 			if (isSet(ii)) {
 				int32_t val = getAttr(ii);
 				if (ii == COMTREE_OWNER || ii == LEAF_ADR ||
 				    ii == PEER_ADR || ii == PEER_DEST ||
 				    ii == DEST_ADR) {
-					forest::putForestAdr(os,(fAdr_t) val);
+					Forest::writeForestAdr(out,(fAdr_t) val);
 				} else if (ii == LOCAL_IP || ii == PEER_IP) {
 					string s; Np4d::addIp2string(s,val);
-					os << s;
+					out << s;
 				} else {
-					os << val;
+					out << val;
 				}
 			} else {
-			      os << "(missing)";
+			      out << "(missing)";
 			}
 		}
 	} else {
-		os << " errMsg=" << errMsg;
+		out << " errMsg=" << errMsg;
 	}
-	os << endl;
+	out << endl;
 }

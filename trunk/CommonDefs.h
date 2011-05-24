@@ -1,8 +1,9 @@
-// Common header file for forest.
-// Includes miscellaneous definitions and common utility routines
+/** \file CommonDefs
+ *  Variety of definitions and general support routines.
+ */
 
-#ifndef FOREST_H
-#define FOREST_H
+#ifndef COMMONDEFS_H
+#define COMMONDEFS_H
 
 #include "stdinc.h"
 #include "Misc.h"
@@ -37,37 +38,36 @@ enum ntyp_t {
 	CONTROLLER=102	// network control element
 };
 
-// Forest packet format
-//
-// +----+------------+--------+--------+
-// |ver |   length   |  type  |  flags |
-// +-----------------------------------+
-// |              comtree              |
-// +-----------------------------------+
-// |              src adr              |
-// +-----------------------------------+
-// |              dst adr              |
-// +-----------------------------------+
-// |              hdr chk              |
-// +-----------------------------------+
-// |                                   |
-// |              payload              |
-// |                                   |
-// +-----------------------------------+
-// |            payload chk            |
-// +-----------------------------------+
-//
-// Subscribe/unsubscribe packets have additional fields that
-// appear in the payload field.
-// Specifically, the first word is an addcnt that specifies
-// the number of multicast groups that the sender wants to
-// be added to. The next addcnt words are the multicast addresses
-// of those groups. The next word following the set of added
-// multicast addresses is a drop count. This is followed
-// by a list of multicast addresses for groups that the
-// sender wants to be removed from.
-//
-// 
+/** Forest packet format
+ * 
+ *  +----+------------+--------+--------+
+ *  |ver |   length   |  type  |  flags |
+ *  +-----------------------------------+
+ *  |              comtree              |
+ *  +-----------------------------------+
+ *  |              src adr              |
+ *  +-----------------------------------+
+ *  |              dst adr              |
+ *  +-----------------------------------+
+ *  |              hdr chk              |
+ *  +-----------------------------------+
+ *  |                                   |
+ *  |              payload              |
+ *  |                                   |
+ *  +-----------------------------------+
+ *  |            payload chk            |
+ *  +-----------------------------------+
+ * 
+ *  Subscribe/unsubscribe packets have additional fields that
+ *  appear in the payload field.
+ *  Specifically, the first word is an addcnt that specifies
+ *  the number of multicast groups that the sender wants to
+ *  be added to. The next addcnt words are the multicast addresses
+ *  of those groups. The next word following the set of added
+ *  multicast addresses is a drop count. This is followed
+ *  by a list of multicast addresses for groups that the
+ *  sender wants to be removed from.
+ */  
 
 enum ptyp_t {
 	UNDEF_PKT=0,
@@ -108,11 +108,11 @@ const int MAXBITRATE = 1000000;		// 1 Gb/s
 const int MINPKTRATE = 50; 		// 50 p/s
 const int MAXPKTRATE = 800000;		// 800 Kp/s
 
-class forest {
+class Forest {
 public:
 	// io helper functions
-	static bool getForestAdr(istream&, fAdr_t&);// read forest address
-	static void putForestAdr(ostream&, fAdr_t);// write forest address
+	static bool readForestAdr(istream&, fAdr_t&);// read forest address
+	static void writeForestAdr(ostream&, fAdr_t);// write forest address
 
 	static int truPktLeng(int);
 	static bool ucastAdr(fAdr_t);
@@ -125,29 +125,28 @@ public:
 };
 
 // Effective link packet length for a given forest packet length
-inline int forest::truPktLeng(int x) { return 70+x; }
+inline int Forest::truPktLeng(int x) { return 70+x; }
 
 // Return true if given address is a valid unicast address, else false.
-inline bool forest::ucastAdr(fAdr_t adr) {
+inline bool Forest::ucastAdr(fAdr_t adr) {
 	return adr > 0 && zipCode(adr) != 0 && localAdr(adr) != 0;
 }
 
 // Return true if given address is a valid multicast address, else false.
-inline bool forest::mcastAdr(fAdr_t adr) { return adr < 0; }
+inline bool Forest::mcastAdr(fAdr_t adr) { return adr < 0; }
 
 // Return the "zip code" part of a unicast address
-inline int forest::zipCode(fAdr_t adr) { return (adr >> 16) & 0x7fff; }
+inline int Forest::zipCode(fAdr_t adr) { return (adr >> 16) & 0x7fff; }
 
 // Return the "local address" part of a unicast address
-inline int forest::localAdr(fAdr_t adr) { return adr & 0xffff; }
+inline int Forest::localAdr(fAdr_t adr) { return adr & 0xffff; }
 
 // Return a forest address with a given zip code and local address
-inline fAdr_t forest::forestAdr(int zip, int local ) {
+inline fAdr_t Forest::forestAdr(int zip, int local ) {
 	return ((zip & 0xffff) << 16) | (local & 0xffff);
 }
 
-
-inline fAdr_t forest::forestAdr(char *fas) {
+inline fAdr_t Forest::forestAdr(char *fas) {
 // Return the forest address for the string pointed to by fas.
 // A string representing a negative number is interpreted as a
 // multicast address. Otherwise, we expect a unicast address
@@ -161,7 +160,7 @@ inline fAdr_t forest::forestAdr(char *fas) {
 		return 0;
 }
 
-inline char* forest::forestStr(fAdr_t fAdr) {
+inline char* Forest::forestStr(fAdr_t fAdr) {
 // Return a pointer to a character buffer containing a string
 // representing the given forest address.
 // Note that the buffer returned is allocated on the heap

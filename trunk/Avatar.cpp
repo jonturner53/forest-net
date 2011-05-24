@@ -1,40 +1,31 @@
-// usage:
-//      Avatar myIpAdr rtrIpAdr myAdr rtrAdr comt finTime
-//
-// Avatar is a program that emulates an avatar moving around
-// in a very simple virtual world (a featureless square region).
-// The avatar moves randomly, and as it moves it sends peridic
-// status reports to the multicast group associated with the
-// region that it is currently in. It also subscribes to
-// multicast groups associated with the region it is in,
-// and any adjacent regions that might contain other avatars
-// that are within its "visibility range". As it receives status
-// reports from other visible avatars, it adds them to its set of
-// visible avatars. As avatars move out of the visibility range
-// they are dropped from the visible set.
-//
-// Command line arguments include the ip address of the
-// avatar's machine, the router's IP address, the forest
-// address of the avatar, the forest address of the router,
-// the comtree to be used in the packet and the number of
-// seconds to run before terminating.
-//
-// The status reports include the current time (in us),
-// the avatar's position, the
-// direction it is facing, the speed at which it is moving
-// and the number of nearby avatars it is tracking.
-// The type of the status packet is CLIENT_DATA, the first
-// word of the payload is the constant STATUS_REPORT=1,
-// and successive words of the payload contain a timestamp,
-// the avatar's x position, its y position, its direction, its speed
-// and the number of nearby avatars. This gives a total
-// payload length of 6 words (24 bytes), giving a total
-// packet length of 52 bytes. 
+/** \file Avatar.cpp */
 
 #include "stdinc.h"
-#include "forest.h"
+#include "CommonDefs.h"
 #include "Avatar.h"
 
+/** usage:
+ *       Avatar myIpAdr rtrIpAdr myAdr rtrAdr comt finTime
+ * 
+ *  Command line arguments include the ip address of the
+ *  avatar's machine, the router's IP address, the forest
+ *  address of the avatar, the forest address of the router,
+ *  the comtree to be used in the packet and the number of
+ *  seconds to run before terminating.
+ * 
+ *  The status reports include the current time (in us),
+ *  the avatar's position, the  direction it is facing,
+ *  the speed at which it is moving and the number 
+ *  of nearby avatars it is tracking.
+ *
+ *  The type of the status packet is CLIENT_DATA, the first
+ *  word of the payload is the constant STATUS_REPORT=1,
+ *  and successive words of the payload contain a timestamp,
+ *  the avatar's x position, its y position, its direction, its speed
+ *  and the number of nearby avatars. This gives a total
+ *  payload length of 6 words (24 bytes), giving a total
+ *  packet length of 52 bytes. 
+ */
 main(int argc, char *argv[]) {
 	ipa_t myIpAdr, rtrIpAdr; fAdr_t myAdr, rtrAdr;
 	int comt, finTime;
@@ -42,8 +33,8 @@ main(int argc, char *argv[]) {
 	if (argc != 7 ||
 	    (myIpAdr  = Np4d::ipAddress(argv[1])) == 0 ||
 	    (rtrIpAdr = Np4d::ipAddress(argv[2])) == 0 ||
-	    (myAdr  = forest::forestAdr(argv[3])) == 0 ||
-	    (rtrAdr = forest::forestAdr(argv[4])) == 0 ||
+	    (myAdr  = Forest::forestAdr(argv[3])) == 0 ||
+	    (rtrAdr = Forest::forestAdr(argv[4])) == 0 ||
 	    sscanf(argv[5],"%d", &comt) != 1 ||
 	    sscanf(argv[6],"%d", &finTime) != 1)
 		fatal("usage: Avatar myIpAdr rtrIpAdr myAdr rtrAdr "
@@ -54,21 +45,19 @@ main(int argc, char *argv[]) {
 	avatar.run(1000000*finTime);
 }
 
-
-// Constructor for Avatar, allocates space and initializes private data
+/** Constructor allocates space and initializes private data.
+ * 
+ *  @param mipa is this host's IP address
+ *  @param ripa is the IP address of the access router for this host
+ *  @param ma is the forest address for this host
+ *  @param ra is the forest address for the access router
+ *  @param ct is the comtree used for the virtual world
+ */
 Avatar::Avatar(ipa_t mipa, ipa_t ripa, fAdr_t ma, fAdr_t ra, comt_t ct)
 		: myIpAdr(mipa), rtrIpAdr(ripa), myAdr(ma), rtrAdr(ra),
 		  comt(ct) {
 	int nPkts = 10000;
-	ps = new pktStore(nPkts+1, nPkts+1);
-
-	// initialize socket address structures
-	bzero(&sa, sizeof(sa));
-	sa.sin_family = AF_INET;
-	sa.sin_port = 0; // let system select address
-	sa.sin_addr.s_addr = htonl(myIpAdr);
-	bzero(&dsa, sizeof(dsa));
-	dsa.sin_family = AF_INET;
+	ps = new PacketStore(nPkts+1, nPkts+1);
 
 	// initialize avatar to random position
 	struct timeval tv;
@@ -89,97 +78,141 @@ Avatar::Avatar(ipa_t mipa, ipa_t ripa, fAdr_t ma, fAdr_t ra, comt_t ct)
 
 Avatar::~Avatar() { delete mcGroups; delete nearAvatars; delete ps; }
 
+/** Initialize a datagram socket for nonblocking IO.
+ *  @return true on success, false on failure
+ */
 bool Avatar::init() {
-// Initialize IO. Return true on success, false on failure.
-// Configure socket for non-blocking access, so that we don't
-// block when there are no input packets available.
-	// create datagram socket
-	if ((sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
-                return false;
-        }
-	// bind it to the socket address structure
-        if (bind(sock, (struct sockaddr *) &sa, sizeof(sa)) < 0) {
-                return false;
-        }
-	// make socket nonblocking
-	int flags;
-	if ((flags = fcntl(sock, F_GETFL, 0)) < 0)
-		return false;
-	flags |= O_NONBLOCK;
-	if ((flags = fcntl(sock, F_SETFL, flags)) < 0)
-		return false;
+	// create datagram socket, bind to IP address and make it nonblocking
+	if ((sock = Np4d::datagramSocket()) < 0) return false;
+        if (!Np4d::bind4d(sock, myIpAdr, 0)) return false;
+        if (!Np4d::nonblock(sock)) return false;
+       
 	return true;
 }
 
+/** Main Avatar processing loop.
+ *  Operates on a cycle with a period of UPDATE_PERIOD milliseconds,
+ *  Each cycle, update the current position, direction, speed;
+ *  issue new SUB_UNSUB packet if necessary; read all incoming 
+ *  status reports and update the set of nearby avatars;
+ *  finally, send new status report
+ * 
+ *  @param finishTime is the number of microseconds to 
+ *  to run before halting.
+ */
+void Avatar::run(int finishTime) {
+	connect(); 		// send initial connect packet
+
+	uint32_t now;    	// free-running microsecond time
+	uint32_t nextTime;	// time of next operational cycle
+	now = nextTime = 0;
+
+	while (now <= finishTime) {
+		now = Misc::getTime();
+		updateStatus(now);
+		updateSubscriptions();
+		int p;
+		while ((p = receive()) != 0) {
+			updateNearby(p);
+			ps->free(p);
+		}
+		sendStatus(now);
+
+		nextTime += 1000*UPDATE_PERIOD;
+		useconds_t delay = nextTime - now;
+		usleep(delay);
+	}
+	disconnect(); 		// send final disconnect packet
+}
+
+/** Send a status packet on the multicast group for the current location.
+ *  
+ *  @param now is the reference time for the status report
+ */
+void Avatar::sendStatus(int now) {
+	packet p = ps->alloc();
+
+	PacketHeader& h = ps->getHeader(p);
+	h.setLength(4*(5+8)); h.setPtype(CLIENT_DATA); h.setFlags(0);
+	h.setComtree(comt); h.setSrcAdr(myAdr); h.setDstAdr(-groupNum(x,y));
+
+	uint32_t *pp = ps->getPayload(p);
+	pp[0] = htonl(STATUS_REPORT);
+	pp[1] = htonl(now);
+	pp[2] = htonl(x);
+	pp[3] = htonl(y);
+	pp[4] = htonl((uint32_t) direction);
+	pp[5] = htonl((uint32_t) speed);
+	pp[6] = htonl(numNear);
+
+	send(p);
+}
+
+/** Send initial connect packet, using comtree 1 (the signalling comtree).
+ */
+void Avatar::connect() {
+	packet p = ps->alloc();
+	PacketHeader& h = ps->getHeader(p);
+
+	h.setLength(4*(5+1)); h.setPtype(CONNECT); h.setFlags(0);
+	h.setComtree(1); h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
+
+	send(p);
+}
+
+/** Send final disconnect packet.
+ */
+void Avatar::disconnect() {
+	packet p = ps->alloc();
+	PacketHeader& h = ps->getHeader(p);
+
+	h.setLength(4*(5+1)); h.setPtype(DISCONNECT); h.setFlags(0);
+	h.setComtree(1); h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
+
+	send(p);
+}
+
+/** Send packet and recycle storage.
+ */
+void Avatar::send(int p) {
+	int length = ps->getHeader(p).getLength();
+	ps->pack(p);
+	int rv = Np4d::sendto4d(sock,(void *) ps->getBuffer(p),length,
+		    		rtrIpAdr, FOREST_PORT);
+	if (rv == -1) fatal("Avatar::send: failure in sendto");
+	ps->free(p);
+}
+
+/** Return next waiting packet or 0 if there is none. 
+ */
 int Avatar::receive() { 
-// Return next waiting packet or Null if there is none. 
-	int nbytes;	  // number of bytes in received packet
-	sockaddr_in ssa;  // socket address of sender
-	socklen_t ssaLen; // length of sender's socket address structure
-	int lnk;	  // # of link on which packet received
-	ipa_t sIpAdr; ipp_t sPort;
-
 	int p = ps->alloc();
-	if (p == Null) return Null;
-	header& h = ps->hdr(p);
-        buffer_t& b = ps->buffer(p);
+	if (p == 0) return 0;
+	PacketHeader& h = ps->getHeader(p);
+        buffer_t& b = ps->getBuffer(p);
 
-        ssaLen = sizeof(ssa); 
-        nbytes = recvfrom(sock, &b[0], 1500, 0,
-                          (struct sockaddr *) &ssa, &ssaLen);
+	ipa_t remoteIp; ipp_t remotePort;
+        int nbytes = Np4d::recvfrom4d(sock, &b[0], 1500,
+				      remoteIp, remotePort);
         if (nbytes < 0) {
                 if (errno == EWOULDBLOCK) {
-                        ps->free(p); return Null;
+                        ps->free(p); return 0;
                 }
                 fatal("Avatar::receive: error in recvfrom call");
         }
 
 	ps->unpack(p);
-        h.ioBytes() = nbytes;
-        h.tunSrcIp() = ntohl(ssa.sin_addr.s_addr);
-        h.tunSrcPort() = ntohs(ssa.sin_port);
+        h.setIoBytes(nbytes);
+        h.setTunSrcIp(remoteIp);
+        h.setTunSrcPort(remotePort);
 
         return p;
 }
 
-void Avatar::send(int p) {
-// Send packet on specified link and recycle storage.
-	dsa.sin_addr.s_addr = htonl(rtrIpAdr);
-	dsa.sin_port = htons(FOREST_PORT);
-	header& h = ps->hdr(p);
-	ps->pack(p);
-	int rv = sendto(sock,(void *) ps->buffer(p),h.leng(),0,
-		    	(struct sockaddr *) &dsa, sizeof(dsa));
-	if (rv == -1) fatal("Avatar::send: failure in sendto");
-}
-
-int Avatar::getTime() {
-// Return time expressed as a free-running microsecond clock
-	static uint32_t prevTime = 0;
-	static struct timeval prevTimeval = { 0, 0 };
-	static uint32_t now;
-	struct timeval nowTimeval;
-
-	if (prevTimeval.tv_sec == 0 && prevTimeval.tv_usec == 0) {
-		// first call, initialize and return 0
-		if (gettimeofday(&prevTimeval, NULL) < 0)
-			fatal("Avatar::getTime: gettimeofday failure");
-		prevTime = 0;
-		return 0;
-	}
-	// normal case
-	if (gettimeofday(&nowTimeval, NULL) < 0)
-		fatal("Avatar::getTime: gettimeofday failure");
-	now = prevTime +
-		(nowTimeval.tv_sec == prevTimeval.tv_sec ?
-                 nowTimeval.tv_usec - prevTimeval.tv_usec :
-                 nowTimeval.tv_usec + (1000000 - prevTimeval.tv_usec));
-	prevTime = now; prevTimeval = nowTimeval;
-	return now;
-}
-
+/** Update status of avatar based on passage of time.
+ *  @param now is the reference time for the simulated update
+ */
 void Avatar::updateStatus(int now) {
-// Update status of avatar
 	const double PI = 3.141519625;
 	double r;
 
@@ -215,12 +248,17 @@ void Avatar::updateStatus(int now) {
 	}
 }
 
+/** Return the multicast group number associated with given position.
+ *  Assumes that SIZE is an integer multiple of GRID
+ *  @param x1 is the x coordinate of the position of interest
+ *  @param y1 is the y coordinate of the position of interest
+ */
 int Avatar::groupNum(int x1, int y1) {
-// Return the multicast group number associated with position (x,y)
-// Assumes that SIZE is an integer multiple of GRID
 	return 1 + (x1/GRID) + (y1/GRID)*(SIZE/GRID);
 }
 
+/** Update the set of multicast subscriptions based on current position.
+ */
 void Avatar::updateSubscriptions() {
 	const double SQRT2 = 1.41421356;
 	const int GRANGE = VISRANGE + (4*FAST*UPDATE_PERIOD)/1000;
@@ -251,8 +289,8 @@ void Avatar::updateSubscriptions() {
 	if (!newGroups->member(g = groupNum(x1,y1)))  newGroups->addLast(g);
 
 	packet p = ps->alloc();
-	header& h = ps->hdr(p);
-	uint32_t *pp = ps->payload(p);
+	PacketHeader& h = ps->getHeader(p);
+	uint32_t *pp = ps->getPayload(p);
 
 	int nsub = 0; int nunsub = 0;
 	g = newGroups->get(1);
@@ -263,7 +301,7 @@ void Avatar::updateSubscriptions() {
 	}
 
 	g = mcGroups->get(1);
-	while (g != Null) {
+	while (g != 0) {
 		if (!newGroups->member(g)) 
 			pp[2+nsub+nunsub++] = htonl(-g);
 		g = mcGroups->next(g);
@@ -276,33 +314,31 @@ void Avatar::updateSubscriptions() {
 	pp[0] = htonl(nsub);
 	pp[1+nsub] = htonl(nunsub);
 
-	h.ptype() = SUB_UNSUB; h.flags() = 0;
-	h.comtree() = comt;
-	h.srcAdr() = myAdr;
-	h.dstAdr() = rtrAdr;
-	h.leng() = 4*(8+nsub+nunsub);
+	h.setLength(4*(8+nsub+nunsub)); h.setPtype(SUB_UNSUB); h.setFlags(0);
+	h.setComtree(comt); h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
 
 	send(p); ps->free(p);
 }
 
+/** Update the set of nearby Avatars.
+ *  If the given packet is a status report, check to see if the
+ *  sending avatar is visible. If it is visible, but not in our
+ *  set of nearby avatars, then add it. If it is not visible
+ *  but is in our set of nearby avatars, then delete it.
+ *  Note: we assume that the visibility range and avatar speeds
+ *  are such that we will get at least one report from a newly
+ *  invisible avatar.
+ */
 void Avatar::updateNearby(int p) {
-// If the given packet is a status report, check to see if the
-// sending avatar is visible. If it is visible, but not in our
-// set of nearby avatars, then add it. If it is not visible
-// but is in our set of nearby avatars, then delete it.
-// Note: we assume that the visibility range and avatar speeds
-// are such that we will get at least one report from a newly
-// invisible avatar.
-
 	ps->unpack(p);
-	header& h = ps->hdr(p);
-
-	uint32_t *pp = ps->payload(p);
+	PacketHeader& h = ps->getHeader(p);
+	uint32_t *pp = ps->getPayload(p);
 	if (ntohl(pp[0]) != STATUS_REPORT) return;
+
 	int x1 = ntohl(pp[2]); int y1 = ntohl(pp[3]);
 	double dx = x - x1; double dy = y - y1;
 
-	uint64_t key = h.srcAdr(); key = (key << 32) | h.srcAdr();
+	uint64_t key = h.getSrcAdr(); key = (key << 32) | h.getSrcAdr();
 	if (sqrt(dx*dx + dy*dy) <= VISRANGE) {
 		if (nearAvatars->lookup(key) == 0) {
 			if (nextAv <= MAXNEAR) {
@@ -317,81 +353,4 @@ void Avatar::updateNearby(int p) {
 		}
 	}
 	return;
-}
-
-void Avatar::sendStatus(int now) {
-// Send a status packet
-	packet p = ps->alloc();
-
-	header& h = ps->hdr(p);
-	h.leng() = 4*(5+8); h.ptype() = CLIENT_DATA; h.flags() = 0;
-	h.comtree() = comt; h.srcAdr() = myAdr; h.dstAdr() = -groupNum(x,y);
-
-	uint32_t *pp = ps->payload(p);
-	pp[0] = htonl(STATUS_REPORT);
-	pp[1] = htonl(now);
-	pp[2] = htonl(x);
-	pp[3] = htonl(y);
-	pp[4] = htonl((uint32_t) direction);
-	pp[5] = htonl((uint32_t) speed);
-	pp[6] = htonl(numNear);
-
-	send(p); ps->free(p);
-}
-
-void Avatar::connect() {
-// Send initial connect packet, using comtree 1 (the signalling comtree)
-	packet p = ps->alloc();
-
-	header& h = ps->hdr(p);
-	h.leng() = 4*(5+1); h.ptype() = CONNECT; h.flags() = 0;
-	h.comtree() = 1; h.srcAdr() = myAdr; h.dstAdr() = rtrAdr;
-
-	send(p); ps->free(p);
-}
-
-void Avatar::disconnect() {
-// Send final disconnect packet
-	packet p = ps->alloc();
-	header& h = ps->hdr(p);
-
-	h.leng() = 4*(5+1); h.ptype() = DISCONNECT; h.flags() = 0;
-	h.comtree() = 1; h.srcAdr() = myAdr; h.dstAdr() = rtrAdr;
-
-	send(p); ps->free(p);
-}
-
-void Avatar::run(int finishTime) {
-// Run the avatar, stopping after finishTime
-// Operate on a cycle with a period of UPDATE_PERIOD milliseconds,
-// Each cycle, update my current position, direction, speed;
-// issue new SUB_UNSUB packet if necessary;
-// read all incoming status reports and update my set of nearby
-// avatars; finally, send new status report
-
-	int p;
-
-	connect(); 		// send initial connect packet
-
-	uint32_t now;    	// free-running microsecond time
-	uint32_t nextTime;	// time of next operational cycle
-
-	now = nextTime = 0;
-
-	while (now <= finishTime) {
-		now = getTime();
-		updateStatus(now);
-		updateSubscriptions();
-		while ((p = receive()) != Null) {
-			updateNearby(p);
-			ps->free(p);
-		}
-		sendStatus(now);
-
-		nextTime += 1000*UPDATE_PERIOD;
-		useconds_t delay = nextTime - now;
-		usleep(delay);
-	}
-
-	disconnect(); 		// send final disconnect packet
 }

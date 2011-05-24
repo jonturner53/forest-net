@@ -1,36 +1,38 @@
-// Header file for ioProc class, which supports io processing.
+/** \file IoProcessor.h */
 
-#ifndef IOPROC_H
-#define IOPROC_H
+#ifndef IOPROCESSOR_H
+#define IOPROCESSOR_H
 
-#include "forest.h"
-#include "lnkTbl.h"
-#include "pktStore.h"
+#include "CommonDefs.h"
+#include "LinkTable.h"
+#include "PacketStore.h"
 
-class ioProc {
+class IoProcessor {
 public:
-		ioProc(lnkTbl*, pktStore*);
-		~ioProc();
+		IoProcessor(LinkTable*, PacketStore*);
+		~IoProcessor();
 
-	int	receive();		// return next input packet
-	void	send(int,int);		// send packet
-	bool 	valid(int) const;	// check for valid interface
-	bool	addEntry(int,ipa_t,int,int); // add interface table entry
-	void	removeEntry(int); 	// remove interface table entry
-	bool	checkEntry(int); 	// do consistency check
-	// routines for accessing interface table fields
-	ipa_t	ipAdr(int) const;	
-	int	maxBitRate(int) const;
-	int	maxPktRate(int) const;
-	// routines for setting interface table fields
+	/** access methods */
+	ipa_t	getIpAdr(int) const;	
+	int	getMaxBitRate(int) const;
+	int	getMaxPktRate(int) const;
+
+	/** predicates */
+	bool 	valid(int) const;	
+	bool	checkEntry(int); 
+
+	/** modifiers */
+	int	receive();	
+	void	send(int,int);
+	bool	addEntry(int,ipa_t,int,int);
+	void	removeEntry(int);
 	void	setMaxBitRate(int, int);
 	void	setMaxPktRate(int, int);
-	// io routines
-	friend	bool operator>>(istream&, ioProc&);
-	friend	ostream& operator<<(ostream&, const ioProc&);
-private:
-	sockaddr_in dsa;		// destination socket address structure
 
+	// io routines
+	bool	read(istream&);
+	void	write(ostream&) const;
+private:
 	int	maxSockNum;		// largest socket num opened by ioProc
 	fd_set	*sockets;		// file descriptor set for open sockets
 	int	cIf;			// number of "current interface"
@@ -44,25 +46,25 @@ private:
 	int	maxpktrate;		// max packet rate for interface
 	} ift[MAXINT+1];		// ift[i]=data for interface i
 
-	lnkTbl *lt;			// pointer to link table
-	pktStore *ps;			// pointer to packet store
+	LinkTable *lt;			// pointer to link table
+	PacketStore *ps;		// pointer to packet store
 
 	// helper methods
-	int	getEntry(istream&);		// read ift entry
-	void	putEntry(ostream&, int) const;	// write ift entry
-	bool	setup(int);			// open and setup socket
+	bool	setup(int);
+	int	readEntry(istream&);		
+	void	writeEntry(ostream&, int) const;
 };
 
 // Return true if there is a valid entry for interface i
-inline bool ioProc::valid(int i) const {
+inline bool IoProcessor::valid(int i) const {
 	return 1 <= i && i <= MAXINT && ift[i].ipa != 0;
 }
 
 // routines to access and set various fields in interface table
-inline ipa_t ioProc::ipAdr(int i) const		{ return ift[i].ipa; }	
-inline int ioProc::maxBitRate(int i) const	{ return ift[i].maxbitrate; }
-inline int ioProc::maxPktRate(int i) const	{ return ift[i].maxpktrate; }
-inline void ioProc::setMaxBitRate(int i, int r) { ift[i].maxbitrate = r; }
-inline void ioProc::setMaxPktRate(int i, int r) { ift[i].maxpktrate = r; }
+inline ipa_t IoProcessor::getIpAdr(int i) const { return ift[i].ipa; }	
+inline int IoProcessor::getMaxBitRate(int i) const { return ift[i].maxbitrate; }
+inline int IoProcessor::getMaxPktRate(int i) const { return ift[i].maxpktrate; }
+inline void IoProcessor::setMaxBitRate(int i, int r) { ift[i].maxbitrate = r; }
+inline void IoProcessor::setMaxPktRate(int i, int r) { ift[i].maxpktrate = r; }
 
 #endif

@@ -1,22 +1,29 @@
-// Header file for fHost class, which implements forest host
+/** \file Host.h */
 
-#ifndef FHOST_H
-#define FHOST_H
+#ifndef HOST_H
+#define HOST_H
 
-#include "forest.h"
-#include "header.h"
-#include "pktStore.h"
+#include "CommonDefs.h"
+#include "PacketHeader.h"
+#include "PacketStore.h"
 
-class fHost {
+/** Host implements a forest host.
+ *
+ *  More specifically, this program generates and sends a set of
+ *  forest packets based on a script. The script format supports
+ *  a simple repetition mechanism, allowing for non-trivial
+ *  demonstrations.
+ */
+class Host {
 public:
-		fHost(ipa_t, ipa_t);
-		~fHost();
+		Host(ipa_t, ipa_t);
+		~Host();
 
 	bool	init();			// open and setup socket
 	int	receive();		// return next input packet
 	void	send(int);		// send packet
 	void	run(bool,uint32_t,uint32_t); // run host
-	bool 	getPacket(int,int&,int&);    // get packet from stdin
+	bool 	readPacket(int,int&,int&);    // get packet from stdin
 private:
 	int	nPkts;			// max number of input packets
 	ipa_t	myIpAdr;		// IP address of interface
@@ -26,7 +33,7 @@ private:
 	int	sock;			// socket number
 	sockaddr_in sa, dsa;		// socket address structures
 
-	pktStore *ps;			// pointer to packet store
+	PacketStore *ps;		// pointer to packet store
 };
 
 #endif
