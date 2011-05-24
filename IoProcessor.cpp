@@ -1,40 +1,42 @@
-#include "ioProc.h"
+/** \file IoProcessor.h */
 
-// Constructor for ioProc, allocates space and initializes private data
-ioProc::ioProc(lnkTbl *lt1, pktStore *ps1) : lt(lt1), ps(ps1) {
+#include "IoProcessor.h"
+
+// Constructor for IoProcessor, allocates space and initializes private data
+IoProcessor::IoProcessor(LinkTable *lt1, PacketStore *ps1) : lt(lt1), ps(ps1) {
 	nRdy = 0; maxSockNum = -1;
 	sockets = new fd_set;
 	for (int i = 0; i <= MAXINT; i++) ift[i].ipa = 0;
-	// initialize destination socket address structures
-	bzero(&dsa, sizeof(dsa));
-	dsa.sin_family = AF_INET;
 }
 
-// Null destructor
-ioProc::~ioProc() { }
+IoProcessor::~IoProcessor() {
+	for (int i = 1; i <= MAXINT; i++) 
+		if (valid(i)) close(ift[i].sock);
+	delete sockets;
+}
 
-bool ioProc::setup(int i) {
+bool IoProcessor::setup(int i) {
 // Setup an interface. Return true on success, false on failure.
 
 	// create datagram socket
 	ift[i].sock = Np4d::datagramSocket();
 	if (ift[i].sock < 0) {
-		cerr << "ioProc::setup: socket call failed\n";
+		cerr << "IoProcessor::setup: socket call failed\n";
                 return false;
         }
 	maxSockNum = max(maxSockNum, ift[i].sock);
 
 	// bind it to an address/port
         if (!Np4d::bind4d(ift[i].sock, ift[i].ipa, FOREST_PORT)) {
-		cerr << "ioProc::setup: bind call failed, "
+		cerr << "IoProcessor::setup: bind call failed, "
 		     << "check interface's IP address\n";
                 return false;
         }
 	return true;
 }
 
-int ioProc::receive() { 
-// Return next waiting packet or Null if there is none. 
+int IoProcessor::receive() { 
+// Return next waiting packet or 0 if there is none. 
 	if (nRdy == 0) { // if no ready interface check for new arrivals
 		FD_ZERO(sockets);
 		for (int i = 1; i <= MAXINT; i++) {
@@ -49,18 +51,18 @@ int ioProc::receive() {
 			       (fd_set *)NULL, (fd_set *)NULL, &zero);
 		} while (nRdy < 0 && cnt++ < 10);
 		if (cnt > 5) {
-			cerr << "ioProc::receive: select failed "
+			cerr << "IoProcessor::receive: select failed "
 			     << cnt-1 << " times\n";
 		}
 		if (nRdy < 0) {
-			fatal("ioProc::receive: select failed");
+			fatal("IoProcessor::receive: select failed");
 		}
-		if (nRdy == 0) return Null;
+		if (nRdy == 0) return 0;
 		cIf = 0;
 	}
 	while (1) { // find next ready interface
 		cIf++;
-		if (cIf > MAXINT) return Null; // should never reach here
+		if (cIf > MAXINT) return 0; // should never reach here
 		if (valid(cIf) && FD_ISSET(ift[cIf].sock,sockets)) {
 			nRdy--; break;
 		}
@@ -68,55 +70,55 @@ int ioProc::receive() {
 	// Now, read the packet from the interface
 	int nbytes;	  	// number of bytes in received packet
 	int lnk;	  	// # of link on which packet received
-	ipa_t sIpAdr; ipp_t sPort; // IP address and port number of sender
 
 	packet p = ps->alloc();
         if (p == 0) return 0;
-        header& h = ps->hdr(p);
-        buffer_t& b = ps->buffer(p);
+        PacketHeader& h = ps->getHeader(p);
+        buffer_t& b = ps->getBuffer(p);
 
+	ipa_t sIpAdr; ipp_t sPort;
 	nbytes = Np4d::recvfrom4d(ift[cIf].sock, (void *) &b[0], 1500,
 				  sIpAdr, sPort);
-	if (nbytes < 0) fatal("ioProc::receive: error in recvfrom call");
+	if (nbytes < 0) fatal("IoProcessor::receive: error in recvfrom call");
 
 	ps->unpack(p);
         if (!ps->hdrErrCheck(p) ||
-            (lnk = lt->lookup(cIf,sIpAdr,sPort,h.srcAdr())) == 0) {
+            (lnk = lt->lookup(cIf,sIpAdr,sPort,h.getSrcAdr())) == 0) {
                 ps->free(p); return 0;
         }
-        h.ioBytes() = nbytes;
-        h.inLink() = lnk;
-        h.tunSrcIp() = sIpAdr;
-        h.tunSrcPort() = sPort;
+        h.setIoBytes(nbytes);
+        h.setInLink(lnk);
+        h.setTunSrcIp(sIpAdr);
+        h.setTunSrcPort(sPort);
+
         lt->postIcnt(lnk,nbytes);
         return p;
 }
 
-void ioProc::send(int p, int lnk) {
+void IoProcessor::send(int p, int lnk) {
 // Send packet on specified link and recycle storage.
+	ipp_t farPort = lt->getPeerPort(lnk);
+	if (farPort == 0) { ps->free(p); return; }
 
-	ipa_t farIp = lt->peerIpAdr(lnk);
-	ipp_t farPort = lt->peerPort(lnk);
-	int length = ps->hdr(p).leng();
+	ipa_t farIp = lt->getPeerIpAdr(lnk);
+	int length = ps->getHeader(p).getLength();
 
-	if (dsa.sin_port != 0) {
-		int rv, lim = 0;
-		do {
-			rv = Np4d::sendto4d(ift[lt->interface(lnk)].sock,
-				(void *) ps->buffer(p), length,
-				farIp, farPort);
-		} while (rv == -1 && errno == EAGAIN && lim++ < 10);
-		if (rv == -1) {
-			cerr << "ioProc:: send: failure in sendto (errno="
-			     << errno << ")\n";
-			exit(1);
-		}
-		lt->postOcnt(lnk,length);
+	int rv, lim = 0;
+	do {
+		rv = Np4d::sendto4d(ift[lt->getInterface(lnk)].sock,
+			(void *) ps->getBuffer(p), length,
+			farIp, farPort);
+	} while (rv == -1 && errno == EAGAIN && lim++ < 10);
+	if (rv == -1) {
+		cerr << "IoProcessor:: send: failure in sendto (errno="
+		     << errno << ")\n";
+		exit(1);
 	}
+	lt->postOcnt(lnk,length);
 	ps->free(p);
 }
 
-bool ioProc::addEntry(int ifnum, ipa_t ipa, int brate, int prate) {
+bool IoProcessor::addEntry(int ifnum, ipa_t ipa, int brate, int prate) {
 // Allocate and initialize a new interface table entry.
 // Return true on success.
 	if (ifnum < 1 || ifnum > MAXINTF) return false;
@@ -126,12 +128,12 @@ bool ioProc::addEntry(int ifnum, ipa_t ipa, int brate, int prate) {
 	return true;
 }
 
-void ioProc::removeEntry(int ifnum) {
+void IoProcessor::removeEntry(int ifnum) {
 	if (ifnum >= 0 && ifnum <= MAXINTF)
 		ift[ifnum].ipa = 0;
 }
 
-bool ioProc::checkEntry(int ifnum) {
+bool IoProcessor::checkEntry(int ifnum) {
 	if (ift[ifnum].maxbitrate < MINBITRATE ||
 	    ift[ifnum].maxbitrate > MAXBITRATE ||
 	    ift[ifnum].maxpktrate < MINPKTRATE ||
@@ -140,8 +142,8 @@ bool ioProc::checkEntry(int ifnum) {
 	int br = 0; int pr = 0;
 	for (int i = 1; i <= MAXLNK; i++ ) {
 		if (!lt->valid(i)) continue;
-		if (lt->interface(i) == ifnum) {
-			br += lt->bitRate(i); pr += lt->pktRate(i);
+		if (lt->getInterface(i) == ifnum) {
+			br += lt->getBitRate(i); pr += lt->getPktRate(i);
 		}
 	}
 	if (br > ift[ifnum].maxbitrate || pr > ift[ifnum].maxpktrate)
@@ -149,8 +151,8 @@ bool ioProc::checkEntry(int ifnum) {
 	return true;
 }
 
-int ioProc::getEntry(istream& is) {
-// Read an entry from is and store it in the interface table.
+int IoProcessor::readEntry(istream& in) {
+// Read an entry from in and store it in the interface table.
 // Return the interface number for the new entry.
 // A line is a pure comment line if it starts with a # sign.
 // A trailing comment is also allowed at the end of a line by
@@ -160,44 +162,41 @@ int ioProc::getEntry(istream& is) {
 // interface (in Kb/s) and the max packet rate (in p/s).
 //
 // If the interface number specified in the input is already in use,
-// the call to getEntry will fail, in which case Null is returned.
+// the call to readEntry will fail, in which case 0 is returned.
 // The call can also fail if the input is not formatted correctly.
 //
 // GetEntry also opens a socket for each new interface and
 // initializes the sock field of the innterface table entry.
 //
-	int ifnum, brate, prate, suc, pred;
-	ipa_t ipa;
-	ntyp_t t; int pa1, pa2, da1, da2;
-	string typStr;
+	int ifnum, brate, prate; ipa_t ipa;
 
-	Misc::skipBlank(is);
-	if ( !Misc::readNum(is,ifnum) || !Np4d::readIpAdr(is,ipa) ||
-	     !Misc::readNum(is,brate) || !Misc::readNum(is,prate)) {
-		return Null;
+	Misc::skipBlank(in);
+	if ( !Misc::readNum(in,ifnum) || !Np4d::readIpAdr(in,ipa) ||
+	     !Misc::readNum(in,brate) || !Misc::readNum(in,prate)) {
+		return 0;
 	}
-	Misc::cflush(is,'\n');
+	Misc::cflush(in,'\n');
 
-	if (!addEntry(ifnum,ipa,brate,prate)) return Null;
+	if (!addEntry(ifnum,ipa,brate,prate)) return 0;
 	if (!checkEntry(ifnum)) {
-		removeEntry(ifnum); return Null;
+		removeEntry(ifnum); return 0;
 	}
 	if (setup(ifnum)) return ifnum;
 	removeEntry(ifnum);
-	return Null;
+	return 0;
 }
 
-bool operator>>(istream& is, ioProc& iop) {
+bool IoProcessor::read(istream& in) {
 // Read interface table entries from the input. The first line must contain an
 // integer, giving the number of entries to be read. The input may
 // include blank lines and comment lines (any text starting with '#').
 // Each entry must be on a line by itself (possibly with a trailing comment).
 	int num;
- 	Misc::skipBlank(is);
-        if (!Misc::readNum(is,num)) return false;
-        Misc::cflush(is,'\n');
+ 	Misc::skipBlank(in);
+        if (!Misc::readNum(in,num)) return false;
+        Misc::cflush(in,'\n');
 	for (int i = 1; i <= num; i++) {
-		if (iop.getEntry(is) == Null) {
+		if (readEntry(in) == 0) {
 			cerr << "Error in interface table entry #"
 			     << i << endl;
 			return false;
@@ -206,23 +205,17 @@ bool operator>>(istream& is, ioProc& iop) {
 	return true;
 }
 
-void ioProc::putEntry(ostream& os, int i) const {
+void IoProcessor::writeEntry(ostream& out, int i) const {
 // Print entry for interface i
-	os << setw(2) << i << " ";
-	// ip address of interface
-	os << ((ift[i].ipa >> 24) & 0xFF) << "." 
-	   << ((ift[i].ipa >> 16) & 0xFF) << "." 
-	   << ((ift[i].ipa >>  8) & 0xFF) << "." 
-	   << ((ift[i].ipa      ) & 0xFF);
-	// bitrate, pktrate
-	os << " " << setw(6) << ift[i].maxbitrate
+	out << setw(2) << i << " ";
+	Np4d::writeIpAdr(out,ift[i].ipa);
+	out << " " << setw(6) << ift[i].maxbitrate
 	   << " " << setw(6) << ift[i].maxpktrate
 	   << endl;
 }
 
-ostream& operator<<(ostream& os, const ioProc& iop) {
+void IoProcessor::write(ostream& out) const {
 // Output human readable representation of link table.
-	for (int i = 1; i <= iop.MAXINT; i++) 
-		if (iop.valid(i)) iop.putEntry(os,i);
-	return os;
+	for (int i = 1; i <= MAXINT; i++) 
+		if (valid(i)) writeEntry(out,i);
 }

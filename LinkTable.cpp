@@ -1,7 +1,9 @@
-#include "lnkTbl.h"
+/** \file LinkTable.cpp */
 
-lnkTbl::lnkTbl(int nlnk1) : nlnk(nlnk1) {
-// Constructor for lnkTbl, allocates space and initializes table.
+#include "LinkTable.h"
+
+// Constructor for LinkTable, allocates space and initializes table.
+LinkTable::LinkTable(int nlnk1) : nlnk(nlnk1) {
 	nlnk = min(MAXLNK,nlnk);
 	ld = new lnkdata[nlnk+1];
 	ht = new UiHashTbl(nlnk);
@@ -9,13 +11,12 @@ lnkTbl::lnkTbl(int nlnk1) : nlnk(nlnk1) {
 	iPkt = 0; oPkt = 0; iByt = 0; oByt = 0;
 	irPkt = 0; orPkt = 0; icPkt = 0; ocPkt = 0;
 
-	// Null peer address identifies unused entry
 	for (int i = 1; i <= nlnk; i++) { disable(i); }
 };
 	
-lnkTbl::~lnkTbl() { delete [] ld; delete ht; }
+LinkTable::~LinkTable() { delete [] ld; delete ht; }
 
-bool lnkTbl::addEntry(int lnk, int intf, ntyp_t pTyp, ipa_t pipa, fAdr_t pfa) {
+bool LinkTable::addEntry(int lnk, int intf, ntyp_t pTyp, ipa_t pipa, fAdr_t pfa) {
 // Add a link table entry for the specified lnk on the specified interface.
 // PTyp is the peer's node type, pipa is the peer's IP address,
 // and pfa is the peer's forest address.
@@ -28,7 +29,7 @@ bool lnkTbl::addEntry(int lnk, int intf, ntyp_t pTyp, ipa_t pipa, fAdr_t pfa) {
         return true;
 }
 
-bool lnkTbl::removeEntry(int lnk) {
+bool LinkTable::removeEntry(int lnk) {
 // Remove the table entry for lnk. Return true on success, false on failure.
 	if (!valid(lnk)) return false;
 	uint32_t x = (ld[lnk].ptyp != ROUTER ?
@@ -37,23 +38,22 @@ bool lnkTbl::removeEntry(int lnk) {
 	disable(lnk);  // mark entry as invalid
 }
 
-bool lnkTbl::checkEntry(int te) {
+bool LinkTable::checkEntry(int te) {
 // Return true if entry is consistent, else false.
 	// the forest address of every peer must be a valid unicast address
-	if (!forest::ucastAdr(peerAdr(te))) return false;
+	if (!Forest::ucastAdr(getPeerAdr(te))) return false;
 
 	// the forest address of restricted destination must be unicast
 	// or zero
-	if (peerDest(te) != 0 && !forest::ucastAdr(peerDest(te))) return false;
+	if (getPeerDest(te) != 0 && !Forest::ucastAdr(getPeerDest(te))) return false;
 
 	// only a router may use the forest port number
-	if (peerPort(te) == FOREST_PORT && peerTyp(te) != ROUTER)
+	if (getPeerPort(te) == FOREST_PORT && getPeerType(te) != ROUTER)
                 return false;
 
 	return true;
 }
 
-int lnkTbl::getEntry(istream& is) {
 // Read an entry from is and store it in the link table.
 // Return the link number for the new link.
 // A line is a pure comment line if it starts with a # sign.
@@ -68,54 +68,54 @@ int lnkTbl::getEntry(istream& is) {
 // (in Kb/s) and a maximum packet rate (in p/s).
 //
 // If the link number specified in the input is already in use,
-// the call to getEntry will fail, in which case Null is returned.
+// the call to readEntry will fail, in which case 0 is returned.
 // The call can also fail if the input is not formatted correctly.
 //
+int LinkTable::readEntry(istream& in) {
 	int lnk, intf, brate, prate;
 	ipa_t pipa; ipp_t pipp;
-	ntyp_t t; int pa, pd;
+	ntyp_t ntyp; int pa, pd;
 	string typStr;
 
-	Misc::skipBlank(is);
-	if ( !Misc::readNum(is,lnk) ||
-	     !Misc::readNum(is,intf) ||
-	     !Np4d::readIpAdr(is,pipa) || !Misc::verify(is,':') ||
-             !Misc::readNum(is,pipp) ||
-	     !Misc::readWord(is,typStr) ||
-	     !forest::getForestAdr(is,pa) ||
-	     !forest::getForestAdr(is,pd) ||
-	     !Misc::readNum(is,brate) || !Misc::readNum(is,prate)) {
-		return Null;
+	Misc::skipBlank(in);
+	if ( !Misc::readNum(in,lnk) ||
+	     !Misc::readNum(in,intf) ||
+	     !Np4d::readIpAdr(in,pipa) || !Misc::verify(in,':') ||
+             !Misc::readNum(in,pipp) ||
+	     !Misc::readWord(in,typStr) ||
+	     !Forest::readForestAdr(in,pa) ||
+	     !Forest::readForestAdr(in,pd) ||
+	     !Misc::readNum(in,brate) || !Misc::readNum(in,prate)) {
+		return 0;
 	}
-	Misc::cflush(is,'\n');
+	Misc::cflush(in,'\n');
 
-             if (typStr == "client") t = CLIENT;
-        else if (typStr == "server") t = SERVER;
-        else if (typStr == "router") t = ROUTER;
-        else if (typStr == "controller") t = CONTROLLER;
-        else return Null;
+             if (typStr == "client") ntyp = CLIENT;
+        else if (typStr == "server") ntyp = SERVER;
+        else if (typStr == "router") ntyp = ROUTER;
+        else if (typStr == "controller") ntyp = CONTROLLER;
+        else return 0;
 
-	if (!addEntry(lnk,intf,t,pipa,pa)) return Null;
-	peerPort(lnk) =  pipp;
-	peerDest(lnk) = pd;
-	bitRate(lnk) =  brate; pktRate(lnk) = prate;
+	if (!addEntry(lnk,intf,ntyp,pipa,pa)) return 0;
+	setPeerPort(lnk,pipp); setPeerDest(lnk,pd);
+	setBitRate(lnk,brate); setPktRate(lnk,prate);
 
-	if (!checkEntry(lnk)) { removeEntry(lnk); return Null; }
+	if (!checkEntry(lnk)) { removeEntry(lnk); return 0; }
 
 	return lnk;
 }
 
-bool operator>>(istream& is, lnkTbl& lt) {
 // Read link table entries from the input. The first line must contain an
 // integer, giving the number of entries to be read. The input may
 // include blank lines and comment lines (any text starting with '#').
 // Each entry must be on a line by itself (possibly with a trailing comment).
+bool LinkTable::read(istream& in) {
 	int num;
- 	Misc::skipBlank(is);
-        if (!Misc::readNum(is,num)) return false;
-        Misc::cflush(is,'\n');
+ 	Misc::skipBlank(in);
+        if (!Misc::readNum(in,num)) return false;
+        Misc::cflush(in,'\n');
 	for (int i = 1; i <= num; i++) {
-		if (lt.getEntry(is) == Null) {
+		if (readEntry(in) == 0) {
 			cerr << "Error reading link table entry # "
 			     << i << endl;
 			return false;
@@ -124,37 +124,32 @@ bool operator>>(istream& is, lnkTbl& lt) {
 	return true;
 }
 
-void lnkTbl::putEntry(ostream& os, int i) const {
+void LinkTable::writeEntry(ostream& out, int i) const {
 // Print entry for link i
-	char tempstr[50];
-	os << setw(2) << i << " " << ld[i].intf << " ";
-	// peer ip address and port
-	os << ((ld[i].pipa >> 24) & 0xFF) << "." 
-	   << ((ld[i].pipa >> 16) & 0xFF) << "." 
-	   << ((ld[i].pipa >>  8) & 0xFF) << "." 
-	   << ((ld[i].pipa      ) & 0xFF) << ":" << ld[i].pipp;
-	// peer type and address information
-        switch (ld[i].ptyp) {
-        case CLIENT: 	  os << " client    "; break;
-        case SERVER: 	  os << " server    "; break;
-        case ROUTER: 	  os << " router    "; break;
-        case CONTROLLER:  os << " controller"; break;
-        default: fatal("lnkTbl::putEntry: undefined type");
+	out << setw(2) << i << " " << getInterface(i) << " ";
+	
+	Np4d::writeIpAdr(out,getPeerIpAdr(i));
+	out << ":" << getPeerPort(i);
+
+        switch (getPeerType(i)) {
+        case CLIENT: 	  out << " client    "; break;
+        case SERVER: 	  out << " server    "; break;
+        case ROUTER: 	  out << " router    "; break;
+        case CONTROLLER:  out << " controller"; break;
+        default: fatal("LinkTable::writeEntry: undefined type");
         }
-        os << " " << (ld[i].padr  >> 16)
-           << "." << (ld[i].padr  & 0xffff)
-           << " " << (ld[i].dadr  >> 16)
-           << "." << (ld[i].dadr  & 0xffff);
-	// bitrate, pktrate, mindelta
-	os << " " << setw(6) << ld[i].bitrate
-	   << " " << setw(6) << ld[i].pktrate
-	   << " " << setw(6) << ld[i].mindelta
-	   << endl;
+
+	out << " "; Np4d::writeIpAdr(out,getPeerAdr(i));
+	out << " "; Np4d::writeIpAdr(out,getPeerDest(i));
+	
+	out << " " << setw(6) << getBitRate(i)
+	    << " " << setw(6) << getPktRate(i)
+	    << " " << setw(6) << getMinDelta(i)
+	    << endl;
 }
 
-ostream& operator<<(ostream& os, const lnkTbl& lt) {
+void LinkTable::write(ostream& out) const {
 // Output human readable representation of link table.
-	for (int i = 1; i <= lt.nlnk; i++) 
-		if (lt.valid(i)) lt.putEntry(os,i);
-	return os;
+	for (int i = 1; i <= nlnk; i++) 
+		if (valid(i)) writeEntry(out,i);
 }

@@ -1,15 +1,18 @@
-// Header file for Monitor class, which emulates an avatar
-// moving randomly in a very simple virtual world.
+/** \file Monitor.h */
 
 #ifndef MONITOR_H
 #define MONITOR_H
 
-#include "forest.h"
-#include "header.h"
-#include "pktStore.h"
+#include "CommonDefs.h"
+#include "PacketHeader.h"
+#include "PacketStore.h"
 #include "UiHashTbl.h"
 #include "Avatar.h"
 
+/** Monitor observes status reports sent by Avatars in a virtual
+ *  world and reports them to a remote client that implements
+ *  a graphical display of the moving Avatars.
+ */
 class Monitor {
 public:
 		Monitor(ipa_t, ipa_t , ipa_t, fAdr_t, fAdr_t);
@@ -52,7 +55,7 @@ private:
 	int nextAvatar;			// index of next row in avData table
 	UiHashTbl *watchedAvatars;	// set of (avatarAddr, row#) pairs
 
-	pktStore *ps;			// pointer to packet store
+	PacketStore *ps;		// pointer to packet store
 
 	// private helper methods
 	void 	check4comtree(); 	// check for new comtree # from GUI
@@ -65,7 +68,7 @@ private:
 	void	updateSubscriptions(comt_t,comt_t);// (sub/unsub)scribe to multicasts
 	void	connect();		// send connect packet
 	void	disconnect();		// send disconnect packet
-	void	printStatus(int);	// print periodic log
+	void	writeStatus(int);	// write periodic log
 };
 
 #endif

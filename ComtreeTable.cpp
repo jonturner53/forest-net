@@ -1,10 +1,11 @@
-/** \file ComtTbl.cpp */
+/** \file ComtreeTable.cpp */
 
-#include "ComtTbl.h"
+#include "ComtreeTable.h"
 
-/** Constructor for ComtTbl, allocates space and initializes table. */
-ComtTbl::ComtTbl(int maxte1, fAdr_t myAdr1, lnkTbl *lt1, qMgr *qm1)
-		 : maxte(maxte1), myAdr(myAdr1), lt(lt1), qm(qm1) {
+/** Constructor for ComtreeTable, allocates space and initializes table. */
+ComtreeTable::ComtreeTable(int maxte1, fAdr_t myAdr1,
+			   LinkTable *lt1, QuManager *qm1)
+		 	  : maxte(maxte1), myAdr(myAdr1), lt(lt1), qm(qm1) {
 	tbl = new tblEntry[maxte+1];
 	ht = new UiHashTbl(maxte);
 
@@ -16,12 +17,12 @@ ComtTbl::ComtTbl(int maxte1, fAdr_t myAdr1, lnkTbl *lt1, qMgr *qm1)
 	tbl[maxte].links = Null;
 };
 	
-ComtTbl::~ComtTbl() { delete [] tbl; delete ht; }
+ComtreeTable::~ComtreeTable() { delete [] tbl; delete ht; }
 
 /** Add the specified comtree to the set of comtrees in use.
  *  Return the index of the table entry or Null on failure.
  */
-int ComtTbl::addEntry(comt_t ct) {
+int ComtreeTable::addEntry(comt_t ct) {
 	if (ht->lookup(ct) != Null) return Null;
 	if (free == Null) return Null;
 	int entry = free; free = tbl[free].links;
@@ -38,7 +39,7 @@ int ComtTbl::addEntry(comt_t ct) {
 /** Remove an entry from the table of comtrees.
  *  Return true on success, false on failure.
  */
-bool ComtTbl::removeEntry(int entry) {
+bool ComtreeTable::removeEntry(int entry) {
 	if (entry == Null) return false;
 	ht->remove(hashkey(tbl[entry].comt));
 	tbl[entry].qn = 0; tbl[entry].links = free; free = entry;
@@ -46,15 +47,15 @@ bool ComtTbl::removeEntry(int entry) {
 
 /** Return true if table entry is consistent, else false.
  */
-bool ComtTbl::checkEntry(int entry) const {
+bool ComtreeTable::checkEntry(int entry) const {
 	int i, n; uint16_t lnkvec[MAXLNK+1];
 	// every link in comtree entry must be valid
-	n = links(entry,lnkvec,MAXLNK);
+	n = getLinks(entry,lnkvec,MAXLNK);
 	for (i = 0; i < n; i++) {
 		if (!lt->valid(lnkvec[i])) return false;
 	}
 	// every core link must be a comtree link
-	n = clinks(entry,lnkvec,MAXLNK);
+	n = getClinks(entry,lnkvec,MAXLNK);
 	for (i = 0; i < n; i++) {
 		if (!isLink(entry,lnkvec[i])) return false;
 	}
@@ -71,10 +72,10 @@ bool ComtTbl::checkEntry(int entry) const {
 	}
 	// every router link must be a comtree link
 	// also, peer must be a router
-	n = rlinks(entry,lnkvec,MAXLNK);
+	n = getRlinks(entry,lnkvec,MAXLNK);
 	for (i = 0; i < n; i++) {
 		if (!isLink(entry,lnkvec[i])) return false;
-		if (lt->peerTyp(lnkvec[i]) != ROUTER) return false;
+		if (lt->getPeerType(lnkvec[i]) != ROUTER) return false;
 	}
 	// parent must be a router
 	if (plnk != Null && !isRlink(entry,plnk)) return false;
@@ -84,7 +85,7 @@ bool ComtTbl::checkEntry(int entry) const {
 
 /** Helper function for links, rlinks and clinks.
  */
-int ComtTbl::listLinks(int vec, uint16_t* lnks, int limit) const {
+int ComtreeTable::listLinks(int vec, uint16_t* lnks, int limit) const {
 	vec >>= 1; int i = 0; int lnk = 1;
 	while (lnk <= limit && vec != 0) {
 		if (vec & 1) lnks[i++] = lnk;
@@ -95,7 +96,7 @@ int ComtTbl::listLinks(int vec, uint16_t* lnks, int limit) const {
 
 /** Get a list of links from is and return it as a bit vector.
  */
-int ComtTbl::readLinks(istream& is) {
+int ComtreeTable::readLinks(istream& is) {
 	int nlnks = 0; int lnk; int vec = 0;
 	do {
 		if (!Misc::readNum(is,lnk)) return 0;
@@ -106,7 +107,7 @@ int ComtTbl::readLinks(istream& is) {
 
 /** Read a comtree from is and initialize its table entry.
  */
-bool ComtTbl::readEntry(istream& is) {
+bool ComtreeTable::readEntry(istream& is) {
 	int ct, cFlg, plnk, qn, quant;
 
         Misc::skipBlank(is);
@@ -129,10 +130,10 @@ bool ComtTbl::readEntry(istream& is) {
 	int n = listLinks(lnks,lnkvec,MAXLNK);
 	for (int i = 0; i < n; i++ ) {
 		int j = lnkvec[i];
-		if (lt->peerTyp(j) == ROUTER) {
+		if (lt->getPeerType(j) == ROUTER) {
 			rlnks |= (1 << j);
-			if (forest::zipCode(lt->peerAdr(j))
-			    == forest::zipCode(myAdr))
+			if (Forest::zipCode(lt->getPeerAdr(j))
+			    == Forest::zipCode(myAdr))
 				llnks |= (1 << j);
 		}
 	}
@@ -146,7 +147,7 @@ bool ComtTbl::readEntry(istream& is) {
 
 	if (!checkEntry(entry)) { removeEntry(entry); return false; }
 
-	for (int i = 0; i < n; i++ ) qm->quantum(lnkvec[i],qn) = quant;
+	for (int i = 0; i < n; i++ ) qm->setQuantum(lnkvec[i],qn,quant);
 	
         return true;
 }
@@ -159,7 +160,7 @@ bool ComtTbl::readEntry(istream& is) {
  *  number of the link leading to the parent, a queue number, a queue quantum,
  *  and three comma-separated lists of links.
  */
-bool ComtTbl::readTable(istream& is) {
+bool ComtreeTable::readTable(istream& is) {
 	int num;
 	Misc::skipBlank(is);
 	if (!Misc::readNum(is,num)) return false;
@@ -175,7 +176,7 @@ bool ComtTbl::readTable(istream& is) {
 }
 
 /** Helper function for writeComt. Prints list of links. */
-void ComtTbl::writeLinks(ostream& os, int lnks) const {
+void ComtreeTable::writeLinks(ostream& os, int lnks) const {
 	int i = 1; lnks >>= 1;
 	if (lnks == 0) { os << "-"; return; }
 	while (lnks != 0) {
@@ -187,8 +188,8 @@ void ComtTbl::writeLinks(ostream& os, int lnks) const {
 	}
 }
 
-void ComtTbl::writeEntry(ostream& os, int entry) const {
-// Print entry for link i
+void ComtreeTable::writeEntry(ostream& os, int entry) const {
+// Write entry for link i
 	os << setw(3) << getComtree(entry) << " "  
 	   << (getCoreFlag(entry) ? "true  " : "false ")
 	   << setw(2) << getPlink(entry) << " "
@@ -199,7 +200,7 @@ void ComtTbl::writeEntry(ostream& os, int entry) const {
 }
 
 /** Output human readable representation of comtree table. */
-void ComtTbl::writeTable(ostream& os) const {
+void ComtreeTable::writeTable(ostream& os) const {
         for (int i = 1; i <= maxte; i++) {
                 if (valid(i)) writeEntry(os,i);
 	}

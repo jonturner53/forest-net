@@ -1,5 +1,5 @@
 /** \file CtlPkt.h
- *  Header file for CtlPkt class.
+ *  
  *  This class provides a simple mechanism for handling forest control packets.
  *  The basic structure contains various named fields, all of type int32.
  *  To format a control packet, construct a new CtlPkt and set the
@@ -18,12 +18,12 @@
  *  all of which are encoded as 32 bit integer values.
  */
 
-#ifndef FCTLPKT_H
-#define FCTLPKT_H
+#ifndef CTLPKT_H
+#define CTLPKT_H
 
-#include "forest.h"
+#include "CommonDefs.h"
 #include "CpType.h"
-#include "pktStore.h"
+#include "PacketStore.h"
 
 enum CpRrType { REQUEST=1, POS_REPLY=2, NEG_REPLY=3 };
 
@@ -31,61 +31,41 @@ class CtlPkt {
 public:
 		CtlPkt(buffer_t);
 		~CtlPkt();
+
 	void	reset(buffer_t);
-	int	pack();			///< pack CtlPkt fields into packet
-	bool	unpack(int);		///< unpack CtlPkt fields from packet
-	void	print(ostream&) ; 	///< print CtlPkt
+	int	pack();	
+	bool	unpack(int);	
+	/** predicates */
+	bool	isSet(CpAttrIndex); 	
 
-	int32_t	getAttr(CpAttrIndex);	///< return value of specified attribute
-	void	setAttr(CpAttrIndex, int32_t); ///< set value of specified attribute
-	bool	isSet(CpAttrIndex); 	///< return true if specified attribute has a value
+	/** getters */
+	CpTypeIndex getCpType();
+	int 	    getCpCode();
+	CpRrType    getRrType();
+	int64_t     getSeqNum();
+	int32_t	    getAttr(CpAttrIndex);
+	char*	    getErrMsg();	
 
-	char*	getErrMsg();		///< return pointer to error message
-	void	setErrMsg(const char*);	///< set error message in control packet
+	/** setters */
+	void	setCpType(CpTypeIndex);
+	void	setCpCode(int);
+	void	setRrType(CpRrType);
+	void	setSeqNum(int64_t);
+	void	setAttr(CpAttrIndex, int32_t);
+	void	setErrMsg(const char*);	
 
-	// CtlPkt fields
-	int32_t bitRate;
-	int32_t bitRateUp;
-	int32_t bitRateDown;
-	int32_t	comtree;
-	int32_t	comtreeOwner;
-	int32_t	coreFlag;
-	int32_t	destAdr;
-	int32_t extBitRateUp;
-	int32_t extBitRateDown;
-	int32_t extPktRateUp;
-	int32_t extPktRateDown;
-	int32_t iface;
-	int32_t intBitRateUp;
-	int32_t intBitRateDown;
-	int32_t intPktRateUp;
-	int32_t intPktRateDown;
-	int32_t	leafAdr;
-	int32_t leafCount;
-	int32_t link;
-	int32_t	localIP;
-	int32_t maxBitRate;
-	int32_t maxPktRate;
-	int32_t parentLink;
-	int32_t	peerAdr;
-	int32_t	peerDest;
-	int32_t	peerIP;
-	int32_t	peerPort;
-	int32_t peerType;
-	int32_t pktRate;
-	int32_t pktRateUp;
-	int32_t pktRateDown;
-	int32_t queue;
-
-	CpTypeIndex cpType;
-	int cpCode;
-	CpRrType rrType;
-	int64_t seqNum;
+	/** input/output */
+	void	write(ostream&) ; 
 private:
+	CpTypeIndex cpType;		///< control packet type index
+	int cpCode;			///< control packet type code
+	CpRrType rrType;		///< request/return type
+	int64_t seqNum;			///< sequence number
 	uint32_t *buf;			///< reference to packet buffer
-	int	bp;			///< index into buffer used by pack/unpack
+	int	bp;			///< index into buf used by pack/unpack
 	int32_t aVal[CPA_END+1];	///< array of attribute values
-	bool 	aSet[CPA_END+1];	///< used to mark attributes that have been set
+	bool 	aSet[CPA_END+1];	///< mark attributes that have been set
+
 	static const int MAX_MSG_LEN=500;
 	char	errMsg[MAX_MSG_LEN+1];
 
@@ -104,6 +84,11 @@ inline bool CtlPkt::isSet(CpAttrIndex i) {
 	return CpAttr::validIndex(i) && aSet[i];
 }
 
+inline CpTypeIndex CtlPkt::getCpType() { return cpType; }
+inline int CtlPkt::getCpCode() { return cpCode; }
+inline CpRrType CtlPkt::getRrType() { return rrType; }
+inline int64_t CtlPkt::getSeqNum() { return seqNum; }
+
 /** Get value of specified attribute
  *  @param i index of desired attribute
  *  @return corresponding value
@@ -121,6 +106,11 @@ inline void CtlPkt::setAttr(CpAttrIndex i, int32_t val) {
 	if (!CpAttr::validIndex(i)) return;
 	aVal[i] = val; aSet[i] = true;
 }
+
+inline void CtlPkt::setCpType(CpTypeIndex t) { cpType = t; }
+inline void CtlPkt::setCpCode(int c) { cpCode = c; }
+inline void CtlPkt::setRrType(CpRrType rr) { rrType = rr; }
+inline void CtlPkt::setSeqNum(int64_t s) { seqNum = s; }
 
 /** Packs a single (attribute_code, value) pair starting at word i in buf.
  *  @param attr attribute code for the pair

@@ -1,24 +1,23 @@
-// Header file for statsMod class, which handles recording of
-// of statistics to external files
-//
+/** \file StatsModule.h */
 
-#ifndef STATSMOD_H
-#define STATSMOD_H
+#ifndef STATSMODULE_H
+#define STATSMODULE_H
 
-#include "forest.h"
-#include "lnkTbl.h"
-#include "qMgr.h"
+#include "CommonDefs.h"
+#include "LinkTable.h"
+#include "QuManager.h"
 
-class statsMod {
+class StatsModule {
 public:
-		statsMod(int,lnkTbl*,qMgr*);
-		~statsMod();
+		StatsModule(int,LinkTable*,QuManager*);
+		~StatsModule();
 
-	void	record(uint32_t);	// record statistics to files
+	/** record stats to a file */
+	void	record(uint32_t);
 
-	// io routines for reading in description of stats to record
-	friend	bool operator>>(istream&, statsMod&); // read entire stat set
-	friend	ostream& operator<<(ostream&, const statsMod&); // print set
+	/** input/output */
+	bool read(istream&);
+	void write(ostream&) const;
 protected:
 	int	maxStats;		// max number of recorded statistics
 	int	n;			// number of statistics to record
@@ -35,12 +34,12 @@ protected:
 	} *stat;			// stat[i] is statistic number i
 	ofstream fs;			// file stream for statistics
 
-	lnkTbl	*lt;			// pointer to link table
-	qMgr	*qm;			// pointer to queue manager
+	LinkTable *lt;			// pointer to link table
+	QuManager *qm;			// pointer to queue manager
 
 	// helper functions
-	bool	getStat(istream&);	 	// read one new statistic
-	void	putStat(ostream&, int) const; // write a single stat entry
+	bool	readStat(istream&);	 	// read one new statistic
+	void	writeStat(ostream&, int) const; // write a single stat entry
 };
 
 #endif

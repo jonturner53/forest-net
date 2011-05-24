@@ -199,3 +199,32 @@ int Misc::strnlen(char* s, int n) {
 		if (*s++ == '\0') return i+1;
 	return n;
 }
+
+/** Return time expressed as a free-running microsecond clock
+ *
+ *  Uses the gettimeofday system call, but converts result to
+ *  simple microsecond clock for greater convenience.
+ */
+uint32_t Misc::getTime() {
+        /** note use of static variables */
+        static uint32_t now;
+        static struct timeval prevTimeval = { 0, 0 };
+
+        if (prevTimeval.tv_sec == 0 && prevTimeval.tv_usec == 0) {
+                // first call to getTime(); initialize and return 0
+                if (gettimeofday(&prevTimeval, NULL) < 0)
+                        fatal("Misc::getTime: gettimeofday failure");
+                now = 0;
+                return 0;
+        }
+        // normal case
+        struct timeval nowTimeval;
+        if (gettimeofday(&nowTimeval, NULL) < 0)
+                fatal("Misc::getTime: gettimeofday failure");
+	int dsec = nowTimeval.tv_sec - prevTimeval.tv_sec;
+	if (nowTimeval.tv_usec < prevTimeval.tv_usec) dsec--;
+	now += 1000000*dsec + nowTimeval.tv_usec - prevTimeval.tv_usec;
+        prevTimeval = nowTimeval;
+
+        return now;
+}

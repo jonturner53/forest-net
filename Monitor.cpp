@@ -1,35 +1,34 @@
-// usage:
-//      Monitor extIp intIp rtrIp myAdr rtrAdr finTime [logfile]
-//
-// Monitor is a program that monitors a virtual world, tracking
-// the motion of the avatars within it. The monitored data is
-// sent to a remote GUI which can display it visually. The remote
-// GUI "connects" to the Monitor by sending it a datagram with
-// a magic number in the first word (1234567). The second word
-// of the connection packet identifies the comtree which should
-// be displayed. The remote GUI can switch to another comtree
-// by sending another connection packet. To sever the connection,
-// the GUI sends a disconnect packet with another magic number
-// (7654321) in the first word.
-//
-// Data is forwarded in binary form with 40 reports per packet.
-// If an optional log file is specified, the reports are also
-// written to a local log file in binary form.
-//
-// Command line arguments include two ip addresses for the
-// Monitor. The first is the IP address that the GUI can
-// use to connect to the Monitor. If this is specified as 127.0.0.1,
-// the Monitor listens on the default IP address. The second is the
-// IP address used by the Monitor within the Forest overlay. RtrIp
-// is the route's IP address, myAdr is the Monitor's Forest
-// address, rtrAdr is the Forest address of the router, and
-// finTime is the number of seconds to run before terminating.
-//
+/** \file Monitor.cpp */
 
-#include "stdinc.h"
-#include "forest.h"
 #include "Monitor.h"
 
+/** usage:
+ *       Monitor extIp intIp rtrIp myAdr rtrAdr finTime [logfile]
+ * 
+ *  Monitor is a program that monitors a virtual world, tracking
+ *  the motion of the avatars within it. The monitored data is
+ *  sent to a remote GUI which can display it visually. The remote
+ *  GUI "connects" to the Monitor by sending it a datagram with
+ *  a magic number in the first word (1234567). The second word
+ *  of the connection packet identifies the comtree which should
+ *  be displayed. The remote GUI can switch to another comtree
+ *  by sending another connection packet. To sever the connection,
+ *  the GUI sends a disconnect packet with another magic number
+ *  (7654321) in the first word.
+ * 
+ *  Data is forwarded in binary form with 40 reports per packet.
+ *  If an optional log file is specified, the reports are also
+ *  written to a local log file in binary form.
+ * 
+ *  Command line arguments include two ip addresses for the
+ *  Monitor. The first is the IP address that the GUI can
+ *  use to connect to the Monitor. If this is specified as 0.0.0.0,
+ *  the Monitor listens on the default IP address. The second is the
+ *  IP address used by the Monitor within the Forest overlay. RtrIp
+ *  is the route's IP address, myAdr is the Monitor's Forest
+ *  address, rtrAdr is the Forest address of the router, and
+ *  finTime is the number of seconds to run before terminating.
+ */
 main(int argc, char *argv[]) {
 	ipa_t intIp, extIp, rtrIp; fAdr_t myAdr, rtrAdr;
 	int comt, finTime;
@@ -38,26 +37,14 @@ main(int argc, char *argv[]) {
   	    (extIp  = Np4d::ipAddress(argv[1])) == 0 ||
   	    (intIp  = Np4d::ipAddress(argv[2])) == 0 ||
 	    (rtrIp  = Np4d::ipAddress(argv[3])) == 0 ||
-	    (myAdr  = forest::forestAdr(argv[4])) == 0 ||
-	    (rtrAdr = forest::forestAdr(argv[5])) == 0 ||
+	    (myAdr  = Forest::forestAdr(argv[4])) == 0 ||
+	    (rtrAdr = Forest::forestAdr(argv[5])) == 0 ||
 	     sscanf(argv[6],"%d", &finTime) != 1)
 		fatal("usage: Monitor extIp intIp rtrIpAdr myAdr rtrAdr "
 		      		    "finTime [logfile]");
 
-	if (extIp == Np4d::ipAddress("127.0.0.1")) {
-		char myName[1001];
-		if (gethostname(myName, 1000) != 0)
-			fatal("can't retrieve hostname");
-	
-		hostent* host = gethostbyname(myName);
-		if (host == NULL)
-			fatal("can't retrieve host structure");
-	
-		extIp = (((int) host->h_addr_list[0][0]) << 24) |
-			(((int) host->h_addr_list[0][1]) << 16) |
-			(((int) host->h_addr_list[0][2]) <<  8) |
-			(((int) host->h_addr_list[0][3]));
-	}
+	if (extIp == 0) extIp = Np4d::myIpAddress(); 
+	if (extIp == 0) fatal("can't retrieve default IP address");
 
 	Monitor mon(extIp,intIp,rtrIp,myAdr,rtrAdr);
 	char logFileName[101];
@@ -72,7 +59,7 @@ main(int argc, char *argv[]) {
 Monitor::Monitor(ipa_t xipa, ipa_t iipa, ipa_t ripa, fAdr_t ma, fAdr_t ra)
 		: extIp(xipa), intIp(iipa), rtrIp(ripa), myAdr(ma), rtrAdr(ra) {
 	int nPkts = 10000;
-	ps = new pktStore(nPkts+1, nPkts+1);
+	ps = new PacketStore(nPkts+1, nPkts+1);
 
 	watchedAvatars = new UiHashTbl(MAX_AVATARS);
 	nextAvatar = 1;
@@ -126,22 +113,16 @@ bool Monitor::init(char *logFileName) {
 }
 
 int Monitor::receiveReport() { 
-// Return next report packet from Forest network or Null if there is none. 
-	int nbytes;	  // number of bytes in received packet
-	sockaddr_in ssa;  // socket address of sender
-	socklen_t ssaLen; // length of sender's socket address structure
-
+// Return next report packet from Forest network or 0 if there is none. 
 	int p = ps->alloc();
-	if (p == Null) return Null;
-	header& h = ps->hdr(p);
-        buffer_t& b = ps->buffer(p);
+	if (p == 0) return 0;
+        buffer_t& b = ps->getBuffer(p);
 
-        ssaLen = sizeof(ssa); 
-        nbytes = recvfrom(intSock, &b[0], 1500, 0,
-                          (struct sockaddr *) &ssa, &ssaLen);
+	ipa_t remoteIp; ipp_t remotePort;
+        int nbytes = Np4d::recvfrom4d(intSock, &b[0], 1500, remoteIp, remotePort);
         if (nbytes < 0) {
                 if (errno == EWOULDBLOCK) {
-                        ps->free(p); return Null;
+                        ps->free(p); return 0;
                 }
                 fatal("Monitor::receive: error in recvfrom call");
         }
@@ -175,9 +156,9 @@ void Monitor::check4comtree() {
 void Monitor::send2router(int p) {
 // Send packet to Forest router (connect, disconnect, sub_unsub)
 	static sockaddr_in sa;
-	header& h = ps->hdr(p);
+	int leng = ps->getHeader(p).getLength();
 	ps->pack(p);
-	int rv = Np4d::sendto4d(intSock,(void *) ps->buffer(p),h.leng(),
+	int rv = Np4d::sendto4d(intSock,(void *) ps->getBuffer(p),leng,
 		    	      	rtrIp,FOREST_PORT);
 	if (rv == -1) fatal("Monitor::send2router: failure in sendto");
 }
@@ -232,8 +213,8 @@ void Monitor::updateSubscriptions(comt_t oldcomt, comt_t newcomt) {
 // in oldcomt. if newcomt != 0 send a packet to subscribe to all
 // multicasts in newcomt.
 	packet p = ps->alloc();
-	header& h = ps->hdr(p);
-	uint32_t *pp = ps->payload(p);
+	PacketHeader& h = ps->getHeader(p);
+	uint32_t *pp = ps->getPayload(p);
 
 	// unsubscriptions
 	if (oldcomt != 0) {
@@ -246,8 +227,8 @@ void Monitor::updateSubscriptions(comt_t oldcomt, comt_t newcomt) {
 		}
 		pp[0] = 0; pp[1] = htonl(nunsub);
 	
-		h.leng() = 4*(8+nunsub); h.ptype() = SUB_UNSUB; h.flags() = 0;
-		h.comtree() = oldcomt; h.srcAdr() = myAdr; h.dstAdr() = rtrAdr;
+		h.setLength(4*(8+nunsub)); h.setPtype(SUB_UNSUB); h.setFlags(0);
+		h.setComtree(oldcomt); h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
 	
 		send2router(p);
 	}
@@ -263,8 +244,8 @@ void Monitor::updateSubscriptions(comt_t oldcomt, comt_t newcomt) {
 		}
 		pp[0] = htonl(nsub); pp[nsub+1] = 0;
 	
-		h.leng() = 4*(8+nsub); h.ptype() = SUB_UNSUB; h.flags() = 0;
-		h.comtree() = newcomt; h.srcAdr() = myAdr; h.dstAdr() = rtrAdr;
+		h.setLength(4*(8+nsub)); h.setPtype(SUB_UNSUB); h.setFlags(0);
+		h.setComtree(newcomt); h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
 	
 		send2router(p);
 	}
@@ -281,26 +262,26 @@ void Monitor::updateStatus(int p, int now) {
 // are such that we will get at least one report from a newly
 // invisible avatar.
 
-	header& h = ps->hdr(p);
-	uint32_t *pp = ps->payload(p);
+	PacketHeader& h = ps->getHeader(p);
+	uint32_t *pp = ps->getPayload(p);
 
-	uint64_t key = h.srcAdr(); key = (key << 32) | h.srcAdr();
+	uint64_t key = h.getSrcAdr(); key = (key << 32) | h.getSrcAdr();
 	int avNum = watchedAvatars->lookup(key);
 	if (avNum == 0) {
 		watchedAvatars->insert(key, nextAvatar);
 		avNum = nextAvatar++;
 	}
 
-	avData[avNum].adr = h.srcAdr();
+	avData[avNum].adr = h.getSrcAdr();
 	avData[avNum].ts = ntohl(pp[1]);
 	avData[avNum].x = ntohl(pp[2]);
 	avData[avNum].y = ntohl(pp[3]);
 	avData[avNum].dir = ntohl(pp[4]);
 	avData[avNum].speed = ntohl(pp[5]);
 	avData[avNum].numNear = ntohl(pp[6]);
-	avData[avNum].comt = h.comtree();
+	avData[avNum].comt = h.getComtree();
 
-	if (h.comtree() != comt) return;
+	if (h.getComtree() != comt) return;
 
 	// if no room in statusPkt buffer for another report,
 	// send current buffer
@@ -315,7 +296,7 @@ void Monitor::updateStatus(int p, int now) {
 	statPkt[8*repCnt+4] = htonl(avData[avNum].dir);
 	statPkt[8*repCnt+5] = htonl(avData[avNum].speed);
 	statPkt[8*repCnt+6] = htonl(avData[avNum].numNear);
-	statPkt[8*repCnt+7] = htonl(h.comtree());
+	statPkt[8*repCnt+7] = htonl(h.getComtree());
 	repCnt++;
 
 	return;
@@ -326,9 +307,9 @@ void Monitor::connect() {
 // Uses comtree 1, which is for user signalling.
 	packet p = ps->alloc();
 
-	header& h = ps->hdr(p);
-	h.leng() = 4*(5+1); h.ptype() = CONNECT; h.flags() = 0;
-	h.comtree() = 1; h.srcAdr() = myAdr; h.dstAdr() = rtrAdr;
+	PacketHeader& h = ps->getHeader(p);
+	h.setLength(4*(5+1)); h.setPtype(CONNECT); h.setFlags(0);
+	h.setComtree(1); h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
 
 	send2router(p); ps->free(p);
 }
@@ -339,20 +320,20 @@ void Monitor::disconnect() {
 	comt = 0;
 
 	packet p = ps->alloc();
-	header& h = ps->hdr(p);
+	PacketHeader& h = ps->getHeader(p);
 
-	h.leng() = 4*(5+1); h.ptype() = DISCONNECT; h.flags() = 0;
-	h.comtree() = 1; h.srcAdr() = myAdr; h.dstAdr() = rtrAdr;
+	h.setLength(4*(5+1)); h.setPtype(DISCONNECT); h.setFlags(0);
+	h.setComtree(1); h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
 
 	send2router(p); ps->free(p);
 }
 
-void Monitor::printStatus(int now) {
+void Monitor::writeStatus(int now) {
 	if (comt == 0 || logging == false) return;
 	for (int i = 1; i < nextAvatar; i++) {
 		struct avatarData *ad = & avData[i];
 		if (ad->comt != comt) continue;
-		char *adrStr = forest::forestStr(ad->adr);
+		char *adrStr = Forest::forestStr(ad->adr);
 		logFile << now << " " << adrStr << " " << ad->ts << " "
 			<< ad->x << " " << ad->y << " "
 			<< ad->dir << " " << ad->speed << " "
@@ -379,12 +360,12 @@ void Monitor::run(int finishTime) {
 	while (now <= finishTime) {
 		now = getTime();
 		check4comtree();
-		while ((p = receiveReport()) != Null) {
+		while ((p = receiveReport()) != 0) {
 			updateStatus(p,now);
 			ps->free(p);
 		}
 		if (now > printTime) {
-			printStatus(now); printTime += 1000*UPDATE_PERIOD;
+			writeStatus(now); printTime += 1000*UPDATE_PERIOD;
 		}
 
 		nextTime += 1000*UPDATE_PERIOD;

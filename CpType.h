@@ -5,7 +5,7 @@
 #ifndef CPTYPE_H
 #define CPTYPE_H
 
-#include "forest.h"
+#include "CommonDefs.h"
 #include "CpAttr.h"
 
 /** Control packet types indices */

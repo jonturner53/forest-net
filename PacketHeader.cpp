@@ -1,93 +1,95 @@
-#include "header.h"
+/** \file PacketHeader.cpp */
 
-void header::unpack(buffer_t& b) {
-// Unpack header fields from buffer.
+#include "PacketHeader.h"
+
+void PacketHeader::unpack(buffer_t& b) {
+// Unpack PacketHeader fields from buffer.
 	uint32_t x = ntohl(b[0]);
-	version() = (x >> 28) & 0xf;
-	leng() = (x >> 16) & 0xfff;
+	setVersion((x >> 28) & 0xf);
+	setLength((x >> 16) & 0xfff);
 	int y = (x >> 8) & 0xff;
-	ptype() = (ptyp_t) y;
-	flags() = x & 0xff;
-	comtree() = ntohl(b[1]);
-	srcAdr() = ntohl(b[2]);
-	dstAdr() = ntohl(b[3]);
+	setPtype((ptyp_t) y);
+	setFlags(x & 0xff);
+	setComtree(ntohl(b[1]));
+	setSrcAdr(ntohl(b[2]));
+	setDstAdr(ntohl(b[3]));
 }
 
-void header::pack(buffer_t& b) {
-// Pack header fields into buffer.
+void PacketHeader::pack(buffer_t& b) {
+// Pack PacketHeader fields into buffer.
         uint32_t x = (FOREST_VERSION << 28)
-                     | ((leng() & 0xfff) << 16) 
-                     | ((ptype() & 0xff) << 8)
-                     | (flags() & 0xff);
+                     | ((getLength() & 0xfff) << 16) 
+                     | ((getPtype() & 0xff) << 8)
+                     | (getFlags() & 0xff);
         b[0] = htonl(x);
-        b[1] = htonl(comtree());
-        b[2] = htonl(srcAdr());
-        b[3] = htonl(dstAdr());
+        b[1] = htonl(getComtree());
+        b[2] = htonl(getSrcAdr());
+        b[3] = htonl(getDstAdr());
 }
 
-bool header::hdrErrCheck(buffer_t& b) const {
+bool PacketHeader::hdrErrCheck(buffer_t& b) const {
         return true;
 }
 
-bool header::payErrCheck(buffer_t& b) const {
+bool PacketHeader::payErrCheck(buffer_t& b) const {
         return true;
 }
 
-void header::hdrErrUpdate(buffer_t& b) {
+void PacketHeader::hdrErrUpdate(buffer_t& b) {
 }
 
-void header::payErrUpdate(buffer_t& b) {
+void PacketHeader::payErrUpdate(buffer_t& b) {
 }
 
-bool header::getPacket(istream& is, buffer_t& b) {
+bool PacketHeader::read(istream& in, buffer_t& b) {
 // Read an input packet from is and initialize (*this) and buffer *b.
 	int lng, ptyp, flgs, comt; fAdr_t src, dst; string ptypString;
-	Misc::skipBlank(is);
-	if (!Misc::readNum(is,lng) ||
-	    !Misc::readWord(is,ptypString) ||
-	    !Misc::readNum(is,flgs) ||
-	    !Misc::readNum(is,comt) ||
-	    !forest::getForestAdr(is,src) ||
-	    !forest::getForestAdr(is,dst))
+	Misc::skipBlank(in);
+	if (!Misc::readNum(in,lng) ||
+	    !Misc::readWord(in,ptypString) ||
+	    !Misc::readNum(in,flgs) ||
+	    !Misc::readNum(in,comt) ||
+	    !Forest::readForestAdr(in,src) ||
+	    !Forest::readForestAdr(in,dst))
 		return false;
-	leng() = lng; flags() = flgs; comtree() = comt;
-	srcAdr() = src; dstAdr() = dst;
+	setLength(lng); setFlags(flgs); setComtree(comt);
+	setSrcAdr(src); setDstAdr(dst);
 
-             if (ptypString == "data")       ptype() = CLIENT_DATA;
-        else if (ptypString == "sub_unsub")  ptype() = SUB_UNSUB;
-        else if (ptypString == "connect")    ptype() = CONNECT;
-        else if (ptypString == "disconnect") ptype() = DISCONNECT;
-        else if (ptypString == "rteRep")     ptype() = RTE_REPLY;
-        else fatal("header::getPacket: invalid packet type");
+             if (ptypString == "data")       setPtype(CLIENT_DATA);
+        else if (ptypString == "sub_unsub")  setPtype(SUB_UNSUB);
+        else if (ptypString == "connect")    setPtype(CONNECT);
+        else if (ptypString == "disconnect") setPtype(DISCONNECT);
+        else if (ptypString == "rteRep")     setPtype(RTE_REPLY);
+        else fatal("PacketHeader::getPacket: invalid packet type");
 
 	pack(b); int32_t x;
-	for (int i = 0; i < min(8,(leng()-HDR_LENG)/4); i++) {
-		if (Misc::readNum(is,x)) b[(HDR_LENG/4)+i] = htonl(x);
+	for (int i = 0; i < min(8,(getLength()-HDR_LENG)/4); i++) {
+		if (Misc::readNum(in,x)) b[(HDR_LENG/4)+i] = htonl(x);
 		else b[(HDR_LENG/4)+i] = 0;
 	}
 	hdrErrUpdate(b); payErrUpdate(b);
 	return true;
 }
 
-void header::print(ostream& os, buffer_t& b) {
-// Prints header fields and first 8 payload words of buffer.
-        os << "len=" << setw(3) << leng();
-        os << " typ=";
-        if (ptype() == CLIENT_DATA)        os << "data      ";
-        else if (ptype() == SUB_UNSUB)  os << "sub_unsub ";
-        else if (ptype() == CONNECT)    os << "connect   ";
-        else if (ptype() == DISCONNECT) os << "disconnect";
-        else if (ptype() == RTE_REPLY)  os << "rteRep    ";
-        else                            os << "--------- ";
-        os << " flags=" << int(flags());
-        os << " comt=" << setw(3) << comtree();
-        os << " sadr="; forest::putForestAdr(os, srcAdr());
-        os << " dadr="; forest::putForestAdr(os, dstAdr());
+void PacketHeader::write(ostream& out, buffer_t& b) const {
+// Prints PacketHeader fields and first 8 payload words of buffer.
+        out << "len=" << setw(3) << getLength();
+        out << " typ=";
+        if (getPtype() == CLIENT_DATA)     out << "data      ";
+        else if (getPtype() == SUB_UNSUB)  out << "sub_unsub ";
+        else if (getPtype() == CONNECT)    out << "connect   ";
+        else if (getPtype() == DISCONNECT) out << "disconnect";
+        else if (getPtype() == RTE_REPLY)  out << "rteRep    ";
+        else                            out << "--------- ";
+        out << " flags=" << int(getFlags());
+        out << " comt=" << setw(3) << getComtree();
+        out << " sadr="; Forest::writeForestAdr(out, getSrcAdr());
+        out << " dadr="; Forest::writeForestAdr(out, getDstAdr());
 
 	int32_t x;
-        for (int i = 0; i < min(8,(leng()-HDR_LENG)/4); i++) {
+        for (int i = 0; i < min(8,(getLength()-HDR_LENG)/4); i++) {
 		x = ntohl(b[(HDR_LENG/4)+i]);
-                os << " " << x;
+                out << " " << x;
 	}
-        os << endl;
+        out << endl;
 }

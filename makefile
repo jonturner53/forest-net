@@ -2,40 +2,41 @@ CXXFLAGS = -O2 -m64
 .cpp.o:
 	${CXX} ${CXXFLAGS} -I support -c $<
 
-HFILES = stdinc.h forest.h fRouter.h ioProc.h lnkTbl.h ComtTbl.h \
-	 rteTbl.h statsMod.h qMgr.h CpAttr.h CpType.h CtlPkt.h \
-	 header.h pktStore.h Avatar.h Monitor.h \
-	 support/misc.h support/UiList.h support/UiDlist.h support/UiListSet.h \
+HFILES = stdinc.h CommonDefs.h RouterCore.h IoProcessor.h \
+	 LinkTable.h ComtreeTable.h RouteTable.h statsModule.h \
+	 QuManager.h CpAttr.h CpType.h CtlPkt.h \
+	 PacketHeader.h PacketStore.h Avatar.h Monitor.h \
+	 support/Misc.h support/UiList.h support/UiDlist.h support/UiListSet.h \
 	 support/UiHashTbl.h support/ModHeap.h
 
-LIBFILES = forest.o ioProc.o lnkTbl.o ComtTbl.o rteTbl.o statsMod.o \
-	 CpAttr.o CpType.o CtlPkt.o qMgr.o header.o pktStore.o 
+LIBFILES = CommonDefs.o IoProcessor.o LinkTable.o ComtreeTable.o \
+	   RouteTable.o StatsModule.o CpAttr.o CpType.o CtlPkt.o \
+	   QuManager.o PacketHeader.o PacketStore.o 
 
 SUPPORT = support/timestamp
 
-lnkTbl.o :    ${HFILES}
-ComtTbl.o :   ${HFILES}
-rteTbl.o :    ${HFILES}
-pktStore.o :  ${HFILES}
-qMgr.o :      ${HFILES}
-ioProc.o :    ${HFILES}
-statsMod.o :  ${HFILES}
-fRouter.o :   ${HFILES}
-fLinecard.o : ${HFILES}
-fHost.o :     ${HFILES}
-Avatar.o :    ${HFILES}
-Monitor.o :   ${HFILES}
-CpAttr.o :    ${HFILES}
-CpType.o :    ${HFILES}
-CtlPkt.o :    ${HFILES}
+lnkTbl.o :       ${HFILES}
+ComtreeTable.o : ${HFILES}
+RouteTable.o :   ${HFILES}
+PacketStore.o :  ${HFILES}
+QuManager.o :    ${HFILES}
+IoProcessor.o :  ${HFILES}
+StatsModule.o :  ${HFILES}
+RouterCore.o :   ${HFILES}
+Host.o :         ${HFILES}
+Avatar.o :       ${HFILES}
+Monitor.o :      ${HFILES}
+CpAttr.o :       ${HFILES}
+CpType.o :       ${HFILES}
+CtlPkt.o :       ${HFILES}
 
 all : fHost fRouter Avatar Monitor
 	cp fHost fRouter Avatar Monitor ${HOME}/bin
 
-fRouter : fRouter.o lib
+fRouter : RouterCore.o lib
 	${CXX} ${CXXFLAGS} $< lib -o $@
 
-fHost : fHost.o lib
+fHost : Host.o lib
 	${CXX} ${CXXFLAGS} $< lib -o $@
 
 Avatar : Avatar.o lib

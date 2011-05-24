@@ -1,49 +1,48 @@
-/** \file ComtTbl.h
+/** \file ComtreeTable.h
  * Comtree table class.
  *
  */
 
-#ifndef COMTTBL_H
-#define COMTTBL_H
+#ifndef COMTREETABLE_H
+#define COMTREETABLE_H
 
-#include "forest.h"
-#include "qMgr.h"
+#include "CommonDefs.h"
+#include "QuManager.h"
 
-class ComtTbl {
+class ComtreeTable {
 public:
-		ComtTbl(int, fAdr_t, lnkTbl*, qMgr*);
-		~ComtTbl();
+		ComtreeTable(int, fAdr_t, LinkTable*, QuManager*);
+		~ComtreeTable();
 
-	int	lookup(comt_t);			///< return comtree's table entry
-	int	addEntry(comt_t);	 	///< add table entry
-	bool	removeEntry(int);		///< remove table entry
-	bool	checkEntry(int) const;		///< perform consistency checks
-	void 	addLink(int, int, bool, bool); 	///< add link to comtree
-	void 	removeLink(int, int);		///< remove link from comtree
-	
-	/** getters and setters */
+	/** access routines */
+	int	lookup(comt_t);		
 	comt_t	getComtree(int) const;
 	bool	getCoreFlag(int) const;
 	int	getPlink(int) const;
 	int	getQnum(int) const;
+	int	getLinks(int,uint16_t*,int) const;	
+	int	getRlinks(int,uint16_t*,int) const;
+	int	getLlinks(int,uint16_t*,int) const;
+	int	getClinks(int,uint16_t*,int) const;
 
+	/** predicates */
+	bool	valid(int) const;		
+	bool	isLink(int,int) const;	
+	bool	isRlink(int,int) const;
+	bool	isLlink(int,int) const;
+	bool	isClink(int,int) const;
+	bool	inComt(int,int) const;	
+
+
+	/** add/modify table entries */
+	int	addEntry(comt_t);
+	bool	removeEntry(int);
+	bool	checkEntry(int) const;
+	void 	addLink(int, int, bool, bool);
+	void 	removeLink(int, int);
 	void	setCoreFlag(int, bool);
 	void	setPlink(int, int);
 	void	setQnum(int, int);
-
-	/** test various properties */
-	bool	valid(int) const;		///< return true for valid entry
-	bool	isLink(int,int) const;		///< return true for valid link
-	bool	isRlink(int,int) const;		///< true for link to rtr
-	bool	isLlink(int,int) const;		///< true for link to local rtr
-	bool	isClink(int,int) const;		///< true for core link
-	bool	inComt(int,int) const;		///< return true if link in comt
-
-	/** return various sets of links */
-	int	links(int,uint16_t*,int) const;	///< return vector of links
-	int	rlinks(int,uint16_t*,int) const;///< return vec of rtr links
-	int	llinks(int,uint16_t*,int) const;///< return vec of local rtr links
-	int	clinks(int,uint16_t*,int) const;///< return vec of core links
 
 	/** input/output of table contents */
 	bool 	readTable(istream&);
@@ -59,13 +58,13 @@ private:
 		int rlinks;		///< bit vec of links to other routers
 		int llinks;		///< bit vec of links to local routers
 		int clinks;		///< bit vec to neighboring core routers
-	} *tbl;				///< tbl[i] contains data for table entry
+	} *tbl;				///< tbl[i] contains data for entry i
 	int free;			///< start of free list
 
 	fAdr_t	myAdr;			///< forest address of this router
-	lnkTbl	*lt;			///< pointer to link table
-	qMgr	*qm;			///< pointer to queue manager
-	UiHashTbl *ht;			///< pointer to hash table for fast lookup
+	LinkTable *lt;			///< pointer to link table
+	QuManager *qm;			///< pointer to queue manager
+	UiHashTbl *ht;			///< hash table for fast lookup
 
 	/** helper functions */
 	uint64_t hashkey(comt_t) const;
@@ -83,7 +82,7 @@ private:
  *  @param rflg is true if far end of link is another router
  *  @param cflg is true if far end of link is a core router for this comtree
  */
-inline void ComtTbl::addLink(int entry, int lnk, bool rflg, bool cflg) {
+inline void ComtreeTable::addLink(int entry, int lnk, bool rflg, bool cflg) {
 	if (entry > 0 && entry <= maxte && valid(entry)) {
 		tbl[entry].links |= (1 << lnk);
 		if (rflg) tbl[entry].rlinks |= (1 << lnk);
@@ -96,7 +95,7 @@ inline void ComtTbl::addLink(int entry, int lnk, bool rflg, bool cflg) {
  *  @param entry is number of table entry to be modified
  *  @param link is the number of the link to add
  */
-inline void ComtTbl::removeLink(int entry, int lnk) {
+inline void ComtreeTable::removeLink(int entry, int lnk) {
 	if (entry > 0 && entry <= maxte && valid(entry)) {
 		tbl[entry].links &= ~(1 << lnk);
 		tbl[entry].rlinks &= ~(1 << lnk);
@@ -104,60 +103,60 @@ inline void ComtTbl::removeLink(int entry, int lnk) {
 	}
 }
 
-inline comt_t ComtTbl::getComtree(int entry) const {
+inline comt_t ComtreeTable::getComtree(int entry) const {
 	assert(valid(entry)); return tbl[entry].comt;
 }
 
-inline int ComtTbl::getPlink(int entry) const {
+inline int ComtreeTable::getPlink(int entry) const {
 	assert(valid(entry)); return tbl[entry].plnk;
 }
 
-inline bool ComtTbl::getCoreFlag(int entry) const {
+inline bool ComtreeTable::getCoreFlag(int entry) const {
 	assert(valid(entry)); return tbl[entry].cFlag;
 }
 
-inline int ComtTbl::getQnum(int entry) const {
+inline int ComtreeTable::getQnum(int entry) const {
 	assert(valid(entry)); return tbl[entry].qn;
 }
 
-inline void ComtTbl::setPlink(int entry, int p) {
+inline void ComtreeTable::setPlink(int entry, int p) {
 	assert(valid(entry)); tbl[entry].plnk = p;
 }
 
-inline void ComtTbl::setCoreFlag(int entry, bool f) {
+inline void ComtreeTable::setCoreFlag(int entry, bool f) {
 	assert(valid(entry)); tbl[entry].cFlag = f;
 }
 
-inline void ComtTbl::setQnum(int entry, int q) {
+inline void ComtreeTable::setQnum(int entry, int q) {
 	assert(valid(entry)); tbl[entry].qn = q;
 }
 
-inline bool ComtTbl::valid(int entry) const {
+inline bool ComtreeTable::valid(int entry) const {
 	return entry > 0 && entry <= maxte && tbl[entry].qn != 0;
 }
 
 /** return true for valid link */
-inline bool ComtTbl::isLink(int entry, int lnk) const {
+inline bool ComtreeTable::isLink(int entry, int lnk) const {
 	return (tbl[entry].links & (1 << lnk)) ? true : false;
 }
 
 /** return true for link to rtr */
-inline bool ComtTbl::isRlink(int entry, int lnk) const {
+inline bool ComtreeTable::isRlink(int entry, int lnk) const {
 	return (tbl[entry].rlinks & (1 << lnk)) ? true : false;
 }
 
 /** return true for link to rtr in same zip code */
-inline bool ComtTbl::isLlink(int entry, int lnk) const {
+inline bool ComtreeTable::isLlink(int entry, int lnk) const {
 	return (tbl[entry].llinks & (1 << lnk)) ? true : false;
 }
 
 /** return true for core link */
-inline bool ComtTbl::isClink(int entry, int lnk) const {
+inline bool ComtreeTable::isClink(int entry, int lnk) const {
 	return (tbl[entry].clinks & (1 << lnk)) ? true : false;
 }
 
 /** return true for link in comtree */
-inline bool ComtTbl::inComt(int entry, int lnk) const {
+inline bool ComtreeTable::inComt(int entry, int lnk) const {
 	return entry > 0 && entry <= maxte && valid(entry)
 		        && (tbl[entry].links & (1<<lnk));
 }
@@ -170,38 +169,38 @@ inline bool ComtTbl::inComt(int entry, int lnk) const {
  *  extra ones will be ignored. The value returned by the function 
  *  is the number of links that were returned. 
  */
-inline int ComtTbl::links(int entry, uint16_t* lnks, int limit) const {
+inline int ComtreeTable::getLinks(int entry, uint16_t* lnks, int limit) const {
         if (entry < 1 || entry > maxte || !valid(entry)) return 0;
 	return listLinks(tbl[entry].links,lnks,limit);
 }
 
 /** Return all the comtree links that go to other routers. */
-inline int ComtTbl::rlinks(int entry, uint16_t* lnks, int limit) const {
+inline int ComtreeTable::getRlinks(int entry, uint16_t* lnks, int limit) const {
         if (entry < 1 || entry > maxte || !valid(entry)) return 0;
 	return listLinks(tbl[entry].rlinks,lnks,limit);
 }
 
 /** Return all the comtree links that go to other routers in same zip code */
-inline int ComtTbl::llinks(int entry, uint16_t* lnks, int limit) const {
+inline int ComtreeTable::getLlinks(int entry, uint16_t* lnks, int limit) const {
         if (entry < 1 || entry > maxte || !valid(entry)) return 0;
 	return listLinks(tbl[entry].llinks,lnks,limit);
 }
 
 /** Return all the comtree links that go to core routers. */
-inline int ComtTbl::clinks(int entry, uint16_t* lnks, int limit) const {
+inline int ComtreeTable::getClinks(int entry, uint16_t* lnks, int limit) const {
         if (entry < 1 || entry > maxte || !valid(entry)) return 0;
 	return listLinks(tbl[entry].clinks,lnks,limit);
 }
 
 /** Compute key for hash lookup */
-inline uint64_t ComtTbl::hashkey(comt_t ct) const {
+inline uint64_t ComtreeTable::hashkey(comt_t ct) const {
         return (uint64_t(ct) << 32) | ct;
 }
 
 /** Return index of table entry for given comtree 
  *  If no match, return Null. 
  */
-inline int ComtTbl::lookup(comt_t ct) {
+inline int ComtreeTable::lookup(comt_t ct) {
         return ht->lookup(hashkey(ct));
 }
 

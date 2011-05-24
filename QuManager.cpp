@@ -1,3 +1,5 @@
+/** \file QuManager */
+
 /*
 Implementation Notes
 
@@ -26,11 +28,12 @@ nextReady routine, which is expected to be called frequently
 (e.g. once on each iteration of the router's main loop).
 */
 
-#include "qMgr.h"
+#include "QuManager.h"
 
-// Constructor for qMgr, allocates space and initializes everything.
-qMgr::qMgr(int nL1, int nP1, int nQ1, int qL1, pktStore *ps1, lnkTbl *lt1)
-	   : nL(nL1), nP(nP1), nQ(nQ1), qL(qL1), ps(ps1), lt(lt1) {
+// Constructor for QuManager, allocates space and initializes everything.
+QuManager::QuManager(int nL1, int nP1, int nQ1, int qL1,
+		     PacketStore *ps1, LinkTable *lt1)
+	   	    : nL(nL1), nP(nP1), nQ(nQ1), qL(qL1), ps(ps1), lt(lt1) {
 	int lnk, q, qid;
 
 	queues = new UiListSet(nP,nL*nQ);
@@ -59,16 +62,16 @@ qMgr::qMgr(int nL1, int nP1, int nQ1, int qL1, pktStore *ps1, lnkTbl *lt1)
 	}
 }
 		
-qMgr::~qMgr() {
+QuManager::~QuManager() {
 	delete queues; delete active; delete [] npq; delete [] nbq;
 	delete [] pSched; delete [] cq; delete [] qStatus;
 }
 
-bool qMgr::enq(int p, int lnk, int q, uint32_t now) {
+bool QuManager::enq(int p, int lnk, int q, uint32_t now) {
 // Enqueue packet on specified queue for lnk. Return true if
 // packet was successfully queued, else false. Note, it
 // is up to the caller to discard packets that are not queued.
-	int pleng = forest::truPktLeng((ps->hdr(p)).leng());
+	int pleng = Forest::truPktLeng((ps->getHeader(p)).getLength());
 	int qid = (lnk-1)*nQ + q; // used for accessing queues, qStatus
 	qStatStruct *qs = &qStatus[qid];
 
@@ -93,8 +96,6 @@ bool qMgr::enq(int p, int lnk, int q, uint32_t now) {
 					d = now;
 				vactive->remove(lnk);
 			}
-// Note to self. Would be slightly better to retain left-over credits for
-// queues that are still virtually active when new packet arrives.
 			active->insert(lnk,d);
 		} else {
 			qs->credits = 0;
@@ -106,7 +107,7 @@ bool qMgr::enq(int p, int lnk, int q, uint32_t now) {
 	return true;
 }
 
-int qMgr::deq(int lnk) {
+int QuManager::deq(int lnk) {
 // Find the next queue for the given link that has sufficient credits
 // to send its next packet. Add quantum credits for each queue that
 // is considered but does not have enough credits now.
@@ -115,26 +116,26 @@ int qMgr::deq(int lnk) {
 	int q = cq[lnk];
 	int qid = (lnk-1)*nQ + q; // used for accessing queues, qstatus
 	qStatStruct *qs = &qStatus[qid];
-	int p = queues->first(qid); header h = ps->hdr(p);
+	int p = queues->first(qid); PacketHeader h = ps->getHeader(p);
 
 	// if current queue has too few credits, advance to next queue
-	while (qs->credits < h.leng()) { 
+	while (qs->credits < h.getLength()) { 
 		cq[lnk] = pSched[lnk]->next(q) != 0 ?
 				pSched[lnk]->next(q) : pSched[lnk]->get(1);
 		q = cq[lnk]; qid = (lnk-1)*nQ + q; qs = &qStatus[qid];
 		qs->credits += qs->quantum;
-		p = queues->first(qid); h = ps->hdr(p);
+		p = queues->first(qid); h = ps->getHeader(p);
 	}
 	// Now, current queue has enough credit, so can deque is first
 	// packet, update credits, pSched and heaps
-	p = queues->removeFirst(qid); h = ps->hdr(p);
-	int pleng = forest::truPktLeng(h.leng());
+	p = queues->removeFirst(qid); h = ps->getHeader(p);
+	int pleng = Forest::truPktLeng(h.getLength());
 	qs->credits -= pleng;
 	qs->np--; qs->nb -= pleng;
 	npq[lnk]--; nbq[lnk] -= pleng;
 
 	if (queues->empty(qid)) {
-		cq[lnk] = pSched[lnk]->next(q) != Null ?
+		cq[lnk] = pSched[lnk]->next(q) != 0 ?
 				pSched[lnk]->next(q) : pSched[lnk]->get(1);
 		pSched[lnk]->remove(q);
 		qs = &qStatus[(lnk-1)*nQ+cq[lnk]];
@@ -143,8 +144,8 @@ int qMgr::deq(int lnk) {
 
 	// update heaps for lnk
 	uint32_t d;
-	d = (pleng*8000)/lt->bitRate(lnk);
-	d = max(d,lt->minDelta(lnk));
+	d = (pleng*8000)/lt->getBitRate(lnk);
+	d = max(d,lt->getMinDelta(lnk));
 	d += active->key(lnk);
 	if (pSched[lnk]->empty()) {
 		vactive->insert(lnk,d);
@@ -158,30 +159,30 @@ int qMgr::deq(int lnk) {
 }
 
 
-int qMgr::nextReady(uint32_t now) {
-// Return the index of the next link that is ready to send, or Null if
+int QuManager::nextReady(uint32_t now) {
+// Return the index of the next link that is ready to send, or 0 if
 // none is ready to send. This routine also checks to see if any of
 // the links in the vactive heap can be removed.
 	// remove vactive links whose times are now past
 	int lnk = vactive->findmin(); uint32_t d = vactive->key(lnk);
-	while (lnk != Null && (now - d) <= (1 << 31)) {
+	while (lnk != 0 && (now - d) <= (1 << 31)) {
 		vactive->remove(lnk);
 		lnk = vactive->findmin(); d = vactive->key(lnk);
 	}
 	// determine next active link that is ready to send
-	if (active->empty()) return Null;
+	if (active->empty()) return 0;
 	lnk = active->findmin(); d = active->key(lnk);
 	if ((now - d) <= (1 << 31)) return lnk;
-	return Null;
+	return 0;
 }
 
-void qMgr::print(int lnk, int q) const {
+void QuManager::write(int lnk, int q) const {
 // Print the packets in the specified queue
 	cout << "[" << lnk << "," << q << "] ";
 	queues->write(cout, (lnk-1)*nQ+q);
 }
 
-void qMgr::print() const {
+void QuManager::write() const {
 // Print the active heap and status of all active links
 	int lnk, q, qid; qStatStruct *qs;
 
@@ -195,7 +196,7 @@ void qMgr::print() const {
 			qid = (lnk-1)*nQ + q; qs = &qStatus[qid];
 			cout << "queue " << q << "(" << qs->quantum << ","
 			     << qs->credits << ") ";
-			print(lnk,q);
+			write(lnk,q);
 		}
 	}
 	cout << endl;

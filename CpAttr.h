@@ -1,12 +1,9 @@
-
-/** \file CpAttr.h
- *  Header file for CpAttr class.
- */
+/** \file CpAttr.h */
 
 #ifndef CPATTR_H
 #define CPATTR_H
 
-#include "forest.h"
+#include "CommonDefs.h"
 
 /** Control packet types indices */
 enum CpAttrIndex {

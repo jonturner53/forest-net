@@ -1,37 +1,52 @@
-// Header file for header class
+/** \file PacketHeader.h */
 
-#ifndef FHEADER_H
-#define FHEADER_H
+#ifndef PACKETHEADER_H
+#define PACKETHEADER_H
 
-#include "forest.h"
+#include "CommonDefs.h"
 
-class header {
+class PacketHeader {
 public:
-	void	unpack(buffer_t&);	// unpack header fields from buffer
-	void	pack(buffer_t&);	// pack header fields into buffer
+	void	unpack(buffer_t&);	// unpack PacketHeader fields from buffer
+	void	pack(buffer_t&);	// pack PacketHeader fields into buffer
 
-	// access header fields
-	int& 	version();		// return version field
-	int& 	leng();			// return packet length (in bytes) 
-	int& 	hleng();		// return header length (in words)
-        ptyp_t&  ptype();      		// return packet type field
-        flgs_t&  flags();      		// return flags field
-        comt_t& comtree();	     	// return comtree field
-	fAdr_t&	srcAdr();		// return source address field
-	fAdr_t&	dstAdr();		// return destination address field
-	int&	inLink();		// return link on which header arrived
-	ipa_t&	tunSrcIp();		// source IP address of tunnel packet
-	ipp_t&	tunSrcPort();		// source port number of tunnel packet
-	int&	ioBytes();		// number of bytes in buffer
+	/** getters */ 
+	int 	getVersion() const;
+	int 	getLength() const;	
+	int 	getHdrLength() const;
+        ptyp_t  getPtype() const;
+        flgs_t  getFlags() const;
+        comt_t 	getComtree() const;
+	fAdr_t	getSrcAdr() const;
+	fAdr_t	getDstAdr() const;
+	int	getInLink() const;
+	ipa_t	getTunSrcIp() const;
+	ipp_t	getTunSrcPort() const;
+	int	getIoBytes() const;
 
-	// buffer error checking
+	/** setters */ 
+	void 	setVersion(int);
+	void 	setLength(int);	
+	void 	setHdrLength(int);
+        void  	setPtype(ptyp_t);
+        void  	setFlags(flgs_t);
+        void 	setComtree(comt_t);
+	void	setSrcAdr(fAdr_t);
+	void	setDstAdr(fAdr_t);
+	void	setInLink(int);
+	void	setTunSrcIp(ipa_t);
+	void	setTunSrcPort(ipp_t);
+	void	setIoBytes(int);
+
+	/** buffer error checking */
         bool    hdrErrCheck(buffer_t&) const; 
         bool    payErrCheck(buffer_t&) const;
         void    hdrErrUpdate(buffer_t&);    
         void    payErrUpdate(buffer_t&);   
 
-	bool	getPacket(istream&, buffer_t&); // get header from input
-	void	print(ostream&, buffer_t&) ; 	// print header
+	/** input/output */
+	bool	read(istream&, buffer_t&);
+	void	write(ostream&, buffer_t&) const;
 private:
 	int	ver;			// version number field
 	int	lng;			// length field
@@ -40,24 +55,35 @@ private:
 	comt_t	comt;			// comtree field
 	fAdr_t	sadr;			// source address
 	fAdr_t	dadr;			// destination address
-	int	inlnk;			// link on which header arrived
-	ipa_t	tSrcIp;			// source IP address from substrate header
-	ipp_t	tSrcPort;		// source port # from substrate header
+	int	inlnk;			// link on which PacketHeader arrived
+	ipa_t	tSrcIp;			// source IP address from substrate PacketHeader
+	ipp_t	tSrcPort;		// source port # from substrate PacketHeader
 	int	iob;			// number of bytes in buffer
 };
 
-// Header field access methods - note that references
-// are returned, allowing values to be assigned
-inline int& header::version()		{ return ver; }
-inline int& header::leng()		{ return lng; }
-inline ptyp_t& header::ptype()		{ return typ; }
-inline flgs_t& header::flags()		{ return flg; }
-inline comt_t& header::comtree()	{ return comt; }
-inline fAdr_t& header::srcAdr()		{ return sadr; }
-inline fAdr_t& header::dstAdr()		{ return dadr; }
-inline int& header::inLink()		{ return inlnk; }
-inline ipa_t& header::tunSrcIp()	{ return tSrcIp; }
-inline ipp_t& header::tunSrcPort()	{ return tSrcPort; }
-inline int& header::ioBytes()		{ return iob; }
+/** getters */
+inline int PacketHeader::getVersion() const { return ver; }
+inline int PacketHeader::getLength() const { return lng; }
+inline ptyp_t PacketHeader::getPtype() const { return typ; }
+inline flgs_t PacketHeader::getFlags() const { return flg; }
+inline comt_t PacketHeader::getComtree() const { return comt; }
+inline fAdr_t PacketHeader::getSrcAdr() const { return sadr; }
+inline fAdr_t PacketHeader::getDstAdr() const { return dadr; }
+inline int PacketHeader::getInLink() const { return inlnk; }
+inline ipa_t PacketHeader::getTunSrcIp() const { return tSrcIp; }
+inline ipp_t PacketHeader::getTunSrcPort() const { return tSrcPort; }
+inline int PacketHeader::getIoBytes() const { return iob; }
 
+/** setters */
+inline void PacketHeader::setVersion(int v) { ver = v; }
+inline void PacketHeader::setLength(int len) { lng = len; }
+inline void PacketHeader::setPtype(ptyp_t t) { typ = t; }
+inline void PacketHeader::setFlags(flgs_t f) { flg = f; }
+inline void PacketHeader::setComtree(comt_t ct) { comt = ct; }
+inline void PacketHeader::setSrcAdr(fAdr_t sa) { sadr = sa; }
+inline void PacketHeader::setDstAdr(fAdr_t da) { dadr = da; }
+inline void PacketHeader::setInLink(int lnk) { inlnk = lnk; }
+inline void PacketHeader::setTunSrcIp(ipa_t sip) { tSrcIp = sip; }
+inline void PacketHeader::setTunSrcPort(ipp_t sp) { tSrcPort = sp; }
+inline void PacketHeader::setIoBytes(int b) { iob = b; }
 #endif
