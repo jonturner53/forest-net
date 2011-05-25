@@ -19,17 +19,16 @@
 main(int argc, char *argv[]) {
 	int finTime;
 	int ip0, ip1, ip2, ip3;
-	ipa_t ipadr; fAdr_t fAdr, fa1, fa2;
+	ipa_t ipadr; fAdr_t fAdr;
 	int numData = 0;
 	if (argc < 8 || argc > 9 ||
-	    sscanf(argv[1],"%d.%d", &fa1, &fa2) != 2 ||
+	    (fAdr = Forest::forestAdr(argv[1])) == 0 ||
 	    sscanf(argv[7],"%d", &finTime) != 1 ||
 	    (argc == 9 && sscanf(argv[8],"%d",&numData) != 1)) {
 		fatal("usage: fRouter fAdr ifTbl lnkTbl comtTbl "
 		      "rteTbl stats finTime");
 	}
 
-	fAdr = (fa1 << 16) | (fa2 & 0xffff);
 	RouterCore router(fAdr);
 	if (!router.init(argv[2],argv[3],argv[4],argv[5],argv[6])) {
 		fatal("router: fRouter::init() failed");
@@ -190,6 +189,7 @@ void RouterCore::run(uint32_t finishTime, int numData) {
 			didNothing = false;
 			PacketHeader& h = ps->getHeader(p);
 			int ptype = h.getPtype();
+
 			if (evCnt < MAXEVENTS &&
 			    (ptype != CLIENT_DATA || numData > 0)) {
 				int p1 = ps->clone(p);
@@ -284,8 +284,8 @@ bool RouterCore::pktCheck(int p, int ctte) {
 // Return true if all checks pass, else false.
 	PacketHeader& h = ps->getHeader(p);
 	// check version and  length
-	if (h.getVersion() != FOREST_VERSION) return false;
-	if (h.getLength() != h.getIoBytes() || h.getLength() < HDR_LENG)
+	if (h.getVersion() != Forest::FOREST_VERSION) return false;
+	if (h.getLength() != h.getIoBytes() || h.getLength() < Forest::HDR_LENG)
 		return false;
 
 	int inL = h.getInLink();
@@ -318,9 +318,9 @@ void RouterCore::forward(int p, int ctte) {
 
 	if (rte != 0) { // valid route case
 		// reply to route request
-		if ((h.getFlags() & RTE_REQ)) {
+		if ((h.getFlags() & Forest::RTE_REQ)) {
 			sendRteReply(p,ctte);
-			h.setFlags(h.getFlags() & (~RTE_REQ));
+			h.setFlags(h.getFlags() & (~Forest::RTE_REQ));
 			ps->pack(p);
 			ps->hdrErrUpdate(p);
 		}
@@ -339,7 +339,7 @@ void RouterCore::forward(int p, int ctte) {
 	// no valid route
 	if (Forest::ucastAdr(h.getDstAdr())) {
 		// send to neighboring routers in comtree
-		h.setFlags(RTE_REQ);
+		h.setFlags(Forest::RTE_REQ);
 		ps->pack(p); ps->hdrErrUpdate(p);
 	}
 	multiSend(p,ctte,rte);
@@ -398,7 +398,7 @@ void RouterCore::sendRteReply(int p, int ctte) {
 
 	int p1 = ps->alloc();
 	PacketHeader& h1 = ps->getHeader(p1);
-	h1.setLength(HDR_LENG + 8);
+	h1.setLength(Forest::HDR_LENG + 8);
 	h1.setPtype(RTE_REPLY);
 	h1.setFlags(0);
 	h1.setComtree(h.getComtree());
@@ -415,7 +415,7 @@ void RouterCore::handleRteReply(int p, int ctte) {
 // Handle route reply packet p.
 	PacketHeader& h = ps->getHeader(p);
 	int rte = rt->lookup(h.getComtree(), h.getDstAdr());
-	if ((h.getFlags() & RTE_REQ) && rte != 0) sendRteReply(p,ctte);
+	if ((h.getFlags() & Forest::RTE_REQ) && rte != 0) sendRteReply(p,ctte);
 	int adr = ntohl(ps->getPayload(p)[0]);
 	if (Forest::ucastAdr(adr) &&
 	    rt->lookup(h.getComtree(),adr) == 0) {
@@ -423,7 +423,7 @@ void RouterCore::handleRteReply(int p, int ctte) {
 	}
 	if (rte == 0) {
 		// send to neighboring routers in comtree
-		h.setFlags(RTE_REQ);
+		h.setFlags(Forest::RTE_REQ);
 		ps->pack(p); ps->hdrErrUpdate(p);
 		multiSend(p,ctte,rte);
 		return;
@@ -751,7 +751,7 @@ void RouterCore::handleCtlPkt(int p) {
  */
 void RouterCore::returnToSender(packet p, int paylen) {
 	PacketHeader& h = ps->getHeader(p);
-	h.setLength(HDR_LENG + paylen + 4);
+	h.setLength(Forest::HDR_LENG + paylen + 4);
 
 	fAdr_t temp = h.getDstAdr();
 	h.setDstAdr(h.getSrcAdr());

@@ -75,13 +75,13 @@ bool RouteTable::removeEntry(int te) {
 
 bool RouteTable::checkEntry(int te) const {
 // Return true if consistent, else false;
-	int i, n; uint16_t lnkvec[MAXLNK];
+	int i, n; uint16_t lnkvec[Forest::MAXLNK];
 	// comtrees in routing table must be valid
 	int ctte = ctt->lookup(getComtree(te));
 	if (ctte == 0) return false;
 
 	// only multicast addresses can have more than one link
-	n = getLinks(te,lnkvec,MAXLNK);
+	n = getLinks(te,lnkvec,Forest::MAXLNK);
 	if (Forest::ucastAdr(getAddress(te))) return (n == 1 ? true : false);
 
 	// check links of multicast routes

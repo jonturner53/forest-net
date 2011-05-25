@@ -41,7 +41,7 @@ int CtlPkt::pack() {
 		return 0;
 	if (rrType != REQUEST && rrType != POS_REPLY && rrType != NEG_REPLY)
 		return 0;
-	bp = HDR_LENG/4;
+	bp = Forest::HDR_LENG/4;
 	buf[bp++] = htonl(
 			(rrType << 30) |
 			((CpType::getCode(cpType) & 0x3fff) << 16) |
@@ -86,7 +86,7 @@ bool CtlPkt::unpack(int pleng) {
 
 	if (pleng < 3) return false; // too short for control packet
 
-	bp = HDR_LENG/4;
+	bp = Forest::HDR_LENG/4;
 	buf[bp++] = htonl(
 			(rrType << 30) |
 			((CpType::getCode(cpType) & 0x3fff) << 16) |

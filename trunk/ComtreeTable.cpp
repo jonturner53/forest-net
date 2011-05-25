@@ -14,20 +14,25 @@ ComtreeTable::ComtreeTable(int maxte1, fAdr_t myAdr1,
 		tbl[entry].links = entry+1;
 		tbl[entry].qn = 0;		// 0 for invalid entry
 	}
-	tbl[maxte].links = Null;
+	tbl[maxte].links = 0;
 };
 	
 ComtreeTable::~ComtreeTable() { delete [] tbl; delete ht; }
 
-/** Add the specified comtree to the set of comtrees in use.
- *  Return the index of the table entry or Null on failure.
+/** Add a new entry to the table.
+ *
+ *  Attempts to add a new table entry. Can fail if the specified comtree
+ *  number is already in use, or if the table has run out of space.
+ *
+ *  @param ct is the number of the comtree for which an entry is to be added
+ *  @return the index of the new table entry or 0 on failure
  */
 int ComtreeTable::addEntry(comt_t ct) {
-	if (ht->lookup(ct) != Null) return Null;
-	if (free == Null) return Null;
+	if (ht->lookup(ct) != 0) return 0;
+	if (free == 0) return 0;
 	int entry = free; free = tbl[free].links;
 	if (!ht->insert(hashkey(ct),entry)) {
-		free = entry; return Null;
+		free = entry; return 0;
 	}
 	tbl[entry].links = tbl[entry].rlinks = 0;
 	tbl[entry].llinks = tbl[entry].clinks = 0;
@@ -36,54 +41,70 @@ int ComtreeTable::addEntry(comt_t ct) {
 	return entry;
 }
 
-/** Remove an entry from the table of comtrees.
- *  Return true on success, false on failure.
+/** Remove a table entry.
+ *
+ *  @param entry is the index of the entry to be deleted
+ *  @return true on success, false on failure (that is, if there
+ *  was no such entry in the first place)
  */
 bool ComtreeTable::removeEntry(int entry) {
-	if (entry == Null) return false;
+	if (!valid(entry)) return false;
 	ht->remove(hashkey(tbl[entry].comt));
 	tbl[entry].qn = 0; tbl[entry].links = free; free = entry;
 }
 
-/** Return true if table entry is consistent, else false.
+/** Perform consistency check on table entry.
+ *
+ *  Does a series of consistency checks using the comtree
+ *  entry plus information about the comtree links obtained
+ *  from the link table.
+ *
+ *  @param is the number of the entry to be checked
+ *  @return true if the entry is consistent, else false
  */
 bool ComtreeTable::checkEntry(int entry) const {
-	int i, n; uint16_t lnkvec[MAXLNK+1];
+	int i, n; uint16_t lnkvec[Forest::MAXLNK+1];
+
+	if (!valid(entry)) return false;
 	// every link in comtree entry must be valid
-	n = getLinks(entry,lnkvec,MAXLNK);
+	n = getLinks(entry,lnkvec,Forest::MAXLNK);
 	for (i = 0; i < n; i++) {
 		if (!lt->valid(lnkvec[i])) return false;
 	}
 	// every core link must be a comtree link
-	n = getClinks(entry,lnkvec,MAXLNK);
+	n = getClinks(entry,lnkvec,Forest::MAXLNK);
 	for (i = 0; i < n; i++) {
 		if (!isLink(entry,lnkvec[i])) return false;
 	}
 	// parent of a core router must be a core router
 	int plnk = getPlink(entry);
 	if (getCoreFlag(entry)) {
-		if (plnk != Null && !isClink(entry,plnk)) return false;
+		if (plnk != 0 && !isClink(entry,plnk)) return false;
 	} else {
 		// and a non-core router has at most one core link
 		if (n > 1) return false;
-		if (plnk == Null || 
+		if (plnk == 0 || 
 		    (n == 1 && lnkvec[0] != plnk))
 			return false;
 	}
 	// every router link must be a comtree link
 	// also, peer must be a router
-	n = getRlinks(entry,lnkvec,MAXLNK);
+	n = getRlinks(entry,lnkvec,Forest::MAXLNK);
 	for (i = 0; i < n; i++) {
 		if (!isLink(entry,lnkvec[i])) return false;
 		if (lt->getPeerType(lnkvec[i]) != ROUTER) return false;
 	}
 	// parent must be a router
-	if (plnk != Null && !isRlink(entry,plnk)) return false;
+	if (plnk != 0 && !isRlink(entry,plnk)) return false;
 	return true;
 }
 
 
 /** Helper function for links, rlinks and clinks.
+ *  @param vec is a bit vector representing a set of links.
+ *  @param lnks points to an output array of link numbers
+ *  @param limit is a limit on the number of link numbers to write
+ *  @return the number of links in the returned array
  */
 int ComtreeTable::listLinks(int vec, uint16_t* lnks, int limit) const {
 	vec >>= 1; int i = 0; int lnk = 1;
@@ -126,8 +147,8 @@ bool ComtreeTable::readEntry(istream& is) {
 	// determine set of router links and local links
 	// using link table and address information
 	int rlnks = 0; int llnks = 0;
-	uint16_t lnkvec[MAXLNK];
-	int n = listLinks(lnks,lnkvec,MAXLNK);
+	uint16_t lnkvec[Forest::MAXLNK];
+	int n = listLinks(lnks,lnkvec,Forest::MAXLNK);
 	for (int i = 0; i < n; i++ ) {
 		int j = lnkvec[i];
 		if (lt->getPeerType(j) == ROUTER) {
@@ -139,7 +160,7 @@ bool ComtreeTable::readEntry(istream& is) {
 	}
 
 	int entry = addEntry(ct);
-	if (entry == Null) return false;
+	if (entry == 0) return false;
 	tbl[entry].comt = ct; setCoreFlag(entry,cFlg);
 	setPlink(entry,plnk); setQnum(entry,qn);
 	tbl[entry].links = lnks;   tbl[entry].rlinks = rlnks;
@@ -188,8 +209,9 @@ void ComtreeTable::writeLinks(ostream& os, int lnks) const {
 	}
 }
 
+/** Write entry for link i
+ */
 void ComtreeTable::writeEntry(ostream& os, int entry) const {
-// Write entry for link i
 	os << setw(3) << getComtree(entry) << " "  
 	   << (getCoreFlag(entry) ? "true  " : "false ")
 	   << setw(2) << getPlink(entry) << " "
@@ -199,7 +221,8 @@ void ComtreeTable::writeEntry(ostream& os, int entry) const {
 	writeLinks(os,tbl[entry].clinks); os << "\n";
 }
 
-/** Output human readable representation of comtree table. */
+/** Output human readable representation of comtree table.
+ */
 void ComtreeTable::writeTable(ostream& os) const {
         for (int i = 1; i <= maxte; i++) {
                 if (valid(i)) writeEntry(os,i);

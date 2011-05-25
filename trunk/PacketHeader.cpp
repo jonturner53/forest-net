@@ -17,7 +17,7 @@ void PacketHeader::unpack(buffer_t& b) {
 
 void PacketHeader::pack(buffer_t& b) {
 // Pack PacketHeader fields into buffer.
-        uint32_t x = (FOREST_VERSION << 28)
+        uint32_t x = (Forest::FOREST_VERSION << 28)
                      | ((getLength() & 0xfff) << 16) 
                      | ((getPtype() & 0xff) << 8)
                      | (getFlags() & 0xff);
@@ -63,9 +63,9 @@ bool PacketHeader::read(istream& in, buffer_t& b) {
         else fatal("PacketHeader::getPacket: invalid packet type");
 
 	pack(b); int32_t x;
-	for (int i = 0; i < min(8,(getLength()-HDR_LENG)/4); i++) {
-		if (Misc::readNum(in,x)) b[(HDR_LENG/4)+i] = htonl(x);
-		else b[(HDR_LENG/4)+i] = 0;
+	for (int i = 0; i < min(8,(getLength()-Forest::HDR_LENG)/4); i++) {
+		if (Misc::readNum(in,x)) b[(Forest::HDR_LENG/4)+i] = htonl(x);
+		else b[(Forest::HDR_LENG/4)+i] = 0;
 	}
 	hdrErrUpdate(b); payErrUpdate(b);
 	return true;
@@ -87,8 +87,8 @@ void PacketHeader::write(ostream& out, buffer_t& b) const {
         out << " dadr="; Forest::writeForestAdr(out, getDstAdr());
 
 	int32_t x;
-        for (int i = 0; i < min(8,(getLength()-HDR_LENG)/4); i++) {
-		x = ntohl(b[(HDR_LENG/4)+i]);
+        for (int i = 0; i < min(8,(getLength()-Forest::HDR_LENG)/4); i++) {
+		x = ntohl(b[(Forest::HDR_LENG/4)+i]);
                 out << " " << x;
 	}
         out << endl;

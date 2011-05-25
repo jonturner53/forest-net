@@ -71,7 +71,7 @@ inline buffer_t& PacketStore::getBuffer(packet p) const {
 
 // Return pointer to start of payload for p.
 inline uint32_t* PacketStore::getPayload(packet p) const {
-	return &buff[pb[p]][HDR_LENG/sizeof(uint32_t)];
+	return &buff[pb[p]][Forest::HDR_LENG/sizeof(uint32_t)];
 }
 
 inline void PacketStore::setHeader(packet p, const PacketHeader& h) {

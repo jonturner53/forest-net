@@ -221,9 +221,13 @@ uint32_t Misc::getTime() {
         struct timeval nowTimeval;
         if (gettimeofday(&nowTimeval, NULL) < 0)
                 fatal("Misc::getTime: gettimeofday failure");
-	int dsec = nowTimeval.tv_sec - prevTimeval.tv_sec;
-	if (nowTimeval.tv_usec < prevTimeval.tv_usec) dsec--;
-	now += 1000000*dsec + nowTimeval.tv_usec - prevTimeval.tv_usec;
+	uint32_t dsec = nowTimeval.tv_sec; dsec -= prevTimeval.tv_sec;
+	uint32_t dusec = nowTimeval.tv_usec - prevTimeval.tv_usec;
+	if (nowTimeval.tv_usec < prevTimeval.tv_usec) {
+		dusec = nowTimeval.tv_usec + (1000000 - prevTimeval.tv_usec);
+		dsec--;
+	}
+	now += 1000000*dsec + dusec;
         prevTimeval = nowTimeval;
 
         return now;

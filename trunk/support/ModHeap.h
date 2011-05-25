@@ -34,7 +34,7 @@
 #define MODHEAP_H
 
 #include "stdinc.h"
-#include "misc.h"
+#include "Misc.h"
 
 typedef uint32_t keytyp;
 typedef int item;

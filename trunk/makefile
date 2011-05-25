@@ -30,20 +30,20 @@ CpAttr.o :       ${HFILES}
 CpType.o :       ${HFILES}
 CtlPkt.o :       ${HFILES}
 
-all : fHost fRouter Avatar Monitor
-	cp fHost fRouter Avatar Monitor ${HOME}/bin
+all : fHost fRouter fAvatar fMonitor
+	cp fHost fRouter fAvatar fMonitor ${HOME}/bin
 
 fRouter : RouterCore.o lib
-	${CXX} ${CXXFLAGS} $< lib -o $@
+	${CXX} ${CXXFLAGS} $< lib -o fRouter
 
 fHost : Host.o lib
-	${CXX} ${CXXFLAGS} $< lib -o $@
+	${CXX} ${CXXFLAGS} $< lib -o fHost
 
-Avatar : Avatar.o lib
-	${CXX} ${CXXFLAGS} $< lib -o $@
+fAvatar : Avatar.o lib
+	${CXX} ${CXXFLAGS} $< lib -o fAvatar
 
-Monitor : Monitor.o lib
-	${CXX} ${CXXFLAGS} $< lib -o $@
+fMonitor : Monitor.o lib
+	${CXX} ${CXXFLAGS} $< lib -o fMonitor
 
 lib : ${LIBFILES} ${SUPPORT}
 	make -C support lib

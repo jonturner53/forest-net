@@ -248,7 +248,7 @@ void Host::send(int p) {
 // Send packet and recycle storage.
 	int length = ps->getHeader(p).getLength();
 	int rv = Np4d::sendto4d(sock,(void *) ps->getBuffer(p),length,
-		    		rtrIpAdr, FOREST_PORT);
+		    		rtrIpAdr, Forest::ROUTER_PORT);
 	if (rv == -1) fatal("Host::send: failure in sendto");
 }
 

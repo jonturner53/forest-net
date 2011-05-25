@@ -38,13 +38,12 @@ private:
 	int	cIf;			// number of "current interface"
 	int	nRdy;			// number of ready sockets
 
-	static int const MAXINT = 20;	// max number of distinct interfaces
 	struct ifTbl {
 	ipa_t	ipa;			// IP address of interface
 	int	sock;			// socket number of interface
 	int	maxbitrate;		// max bit rate for interface (Kb/s)
 	int	maxpktrate;		// max packet rate for interface
-	} ift[MAXINT+1];		// ift[i]=data for interface i
+	} ift[Forest::MAXINTF+1];	// ift[i]=data for interface i
 
 	LinkTable *lt;			// pointer to link table
 	PacketStore *ps;		// pointer to packet store
@@ -57,7 +56,7 @@ private:
 
 // Return true if there is a valid entry for interface i
 inline bool IoProcessor::valid(int i) const {
-	return 1 <= i && i <= MAXINT && ift[i].ipa != 0;
+	return 1 <= i && i <= Forest::MAXINTF && ift[i].ipa != 0;
 }
 
 // routines to access and set various fields in interface table

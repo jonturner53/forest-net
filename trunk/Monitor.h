@@ -21,7 +21,7 @@ public:
 	bool	init(char*);		// open and setup socket
 	void	run(int); 		// run avatar
 private:
-	const static short MON_PORT = 30124;// xy extent of virtual world
+	const static short MON_PORT = 30125;// xy extent of virtual world
 	const static int SIZE = 1000000;// xy extent of virtual world
 	const static int GRID = 200000;	// xy extent of one grid square
 

@@ -4,7 +4,7 @@
 
 // Constructor for LinkTable, allocates space and initializes table.
 LinkTable::LinkTable(int nlnk1) : nlnk(nlnk1) {
-	nlnk = min(MAXLNK,nlnk);
+	nlnk = min(Forest::MAXLNK,nlnk);
 	ld = new lnkdata[nlnk+1];
 	ht = new UiHashTbl(nlnk);
 
@@ -23,8 +23,10 @@ bool LinkTable::addEntry(int lnk, int intf, ntyp_t pTyp, ipa_t pipa, fAdr_t pfa)
 // Return true on success, false on failure.
         uint32_t x = (pTyp != ROUTER ? pfa : pipa); 
         if (!ht->insert(hashkey(pipa,x),lnk)) return false;
-        ld[lnk].intf = intf; ld[lnk].pipa = pipa; ld[lnk].padr = pfa;
-        ld[lnk].ptyp = pTyp; ld[lnk].pipp = (pTyp != ROUTER ? 0 : FOREST_PORT);
+        ld[lnk].intf = intf;
+	ld[lnk].pipa = pipa; ld[lnk].padr = pfa;
+        ld[lnk].ptyp = pTyp;
+	ld[lnk].pipp = (pTyp != ROUTER ? 0 : Forest::ROUTER_PORT);
         enable(lnk); // mark as valid entry (even tho some fields not yet set)
         return true;
 }
@@ -48,7 +50,7 @@ bool LinkTable::checkEntry(int te) {
 	if (getPeerDest(te) != 0 && !Forest::ucastAdr(getPeerDest(te))) return false;
 
 	// only a router may use the forest port number
-	if (getPeerPort(te) == FOREST_PORT && getPeerType(te) != ROUTER)
+	if (getPeerPort(te) == Forest::ROUTER_PORT && getPeerType(te) != ROUTER)
                 return false;
 
 	return true;
@@ -139,8 +141,8 @@ void LinkTable::writeEntry(ostream& out, int i) const {
         default: fatal("LinkTable::writeEntry: undefined type");
         }
 
-	out << " "; Np4d::writeIpAdr(out,getPeerAdr(i));
-	out << " "; Np4d::writeIpAdr(out,getPeerDest(i));
+	out << " "; Forest::writeForestAdr(out,getPeerAdr(i));
+	out << " "; Forest::writeForestAdr(out,getPeerDest(i));
 	
 	out << " " << setw(6) << getBitRate(i)
 	    << " " << setw(6) << getPktRate(i)
