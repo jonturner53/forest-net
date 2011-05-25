@@ -83,9 +83,13 @@ Avatar::~Avatar() { delete mcGroups; delete nearAvatars; delete ps; }
  */
 bool Avatar::init() {
 	// create datagram socket, bind to IP address and make it nonblocking
+cout << "a\n";
 	if ((sock = Np4d::datagramSocket()) < 0) return false;
+cout << "b\n";
         if (!Np4d::bind4d(sock, myIpAdr, 0)) return false;
+cout << "c\n";
         if (!Np4d::nonblock(sock)) return false;
+cout << "d\n";
        
 	return true;
 }
@@ -178,7 +182,7 @@ void Avatar::send(int p) {
 	int length = ps->getHeader(p).getLength();
 	ps->pack(p);
 	int rv = Np4d::sendto4d(sock,(void *) ps->getBuffer(p),length,
-		    		rtrIpAdr, FOREST_PORT);
+		    		rtrIpAdr, Forest::ROUTER_PORT);
 	if (rv == -1) fatal("Avatar::send: failure in sendto");
 	ps->free(p);
 }

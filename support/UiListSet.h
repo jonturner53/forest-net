@@ -8,7 +8,7 @@
 #define UILISTSET_H
 
 #include "stdinc.h"
-#include "misc.h"
+#include "Misc.h"
 
 typedef int item;
 typedef int alist;

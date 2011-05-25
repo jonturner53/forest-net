@@ -6,11 +6,11 @@
 IoProcessor::IoProcessor(LinkTable *lt1, PacketStore *ps1) : lt(lt1), ps(ps1) {
 	nRdy = 0; maxSockNum = -1;
 	sockets = new fd_set;
-	for (int i = 0; i <= MAXINT; i++) ift[i].ipa = 0;
+	for (int i = 0; i <= Forest::MAXINTF; i++) ift[i].ipa = 0;
 }
 
 IoProcessor::~IoProcessor() {
-	for (int i = 1; i <= MAXINT; i++) 
+	for (int i = 1; i <= Forest::MAXINTF; i++) 
 		if (valid(i)) close(ift[i].sock);
 	delete sockets;
 }
@@ -27,7 +27,7 @@ bool IoProcessor::setup(int i) {
 	maxSockNum = max(maxSockNum, ift[i].sock);
 
 	// bind it to an address/port
-        if (!Np4d::bind4d(ift[i].sock, ift[i].ipa, FOREST_PORT)) {
+        if (!Np4d::bind4d(ift[i].sock, ift[i].ipa, Forest::ROUTER_PORT)) {
 		cerr << "IoProcessor::setup: bind call failed, "
 		     << "check interface's IP address\n";
                 return false;
@@ -39,7 +39,7 @@ int IoProcessor::receive() {
 // Return next waiting packet or 0 if there is none. 
 	if (nRdy == 0) { // if no ready interface check for new arrivals
 		FD_ZERO(sockets);
-		for (int i = 1; i <= MAXINT; i++) {
+		for (int i = 1; i <= Forest::MAXINTF; i++) {
 			if (valid(i)) {	
 				FD_SET(ift[i].sock,sockets);
 			}
@@ -62,7 +62,7 @@ int IoProcessor::receive() {
 	}
 	while (1) { // find next ready interface
 		cIf++;
-		if (cIf > MAXINT) return 0; // should never reach here
+		if (cIf > Forest::MAXINTF) return 0; // should never reach here
 		if (valid(cIf) && FD_ISSET(ift[cIf].sock,sockets)) {
 			nRdy--; break;
 		}
@@ -86,6 +86,12 @@ int IoProcessor::receive() {
             (lnk = lt->lookup(cIf,sIpAdr,sPort,h.getSrcAdr())) == 0) {
                 ps->free(p); return 0;
         }
+if (lnk == 5) {
+cout << "receiving packet on 5 from ";
+Np4d::writeIpAdr(cout,sIpAdr);
+cout << ":" << sPort << " " << h.getSrcAdr() << endl;
+h.write(cout,ps->getBuffer(p));
+}
         h.setIoBytes(nbytes);
         h.setInLink(lnk);
         h.setTunSrcIp(sIpAdr);
@@ -121,7 +127,7 @@ void IoProcessor::send(int p, int lnk) {
 bool IoProcessor::addEntry(int ifnum, ipa_t ipa, int brate, int prate) {
 // Allocate and initialize a new interface table entry.
 // Return true on success.
-	if (ifnum < 1 || ifnum > MAXINTF) return false;
+	if (ifnum < 1 || ifnum > Forest::MAXINTF) return false;
 	if (valid(ifnum)) return false;
 	ift[ifnum].ipa = ipa;
 	ift[ifnum].maxbitrate = brate; ift[ifnum].maxpktrate = prate;
@@ -129,18 +135,18 @@ bool IoProcessor::addEntry(int ifnum, ipa_t ipa, int brate, int prate) {
 }
 
 void IoProcessor::removeEntry(int ifnum) {
-	if (ifnum >= 0 && ifnum <= MAXINTF)
+	if (ifnum >= 0 && ifnum <= Forest::MAXINTF)
 		ift[ifnum].ipa = 0;
 }
 
 bool IoProcessor::checkEntry(int ifnum) {
-	if (ift[ifnum].maxbitrate < MINBITRATE ||
-	    ift[ifnum].maxbitrate > MAXBITRATE ||
-	    ift[ifnum].maxpktrate < MINPKTRATE ||
-	    ift[ifnum].maxpktrate > MAXPKTRATE)
+	if (ift[ifnum].maxbitrate < Forest::MINBITRATE ||
+	    ift[ifnum].maxbitrate > Forest::MAXBITRATE ||
+	    ift[ifnum].maxpktrate < Forest::MINPKTRATE ||
+	    ift[ifnum].maxpktrate > Forest::MAXPKTRATE)
 		return false;
 	int br = 0; int pr = 0;
-	for (int i = 1; i <= MAXLNK; i++ ) {
+	for (int i = 1; i <= Forest::MAXLNK; i++ ) {
 		if (!lt->valid(i)) continue;
 		if (lt->getInterface(i) == ifnum) {
 			br += lt->getBitRate(i); pr += lt->getPktRate(i);
@@ -216,6 +222,6 @@ void IoProcessor::writeEntry(ostream& out, int i) const {
 
 void IoProcessor::write(ostream& out) const {
 // Output human readable representation of link table.
-	for (int i = 1; i <= MAXINT; i++) 
+	for (int i = 1; i <= Forest::MAXINTF; i++) 
 		if (valid(i)) writeEntry(out,i);
 }

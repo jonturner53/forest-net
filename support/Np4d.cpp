@@ -120,9 +120,17 @@ int Np4d::streamSocket() {
  *  @return true on success, false on failure
  */
 bool Np4d::bind4d(int sock, ipa_t ipa, ipp_t ipp) {
+cout << "entered bind4d\n";
 	sockaddr_in sa;
 	initSockAdr(ipa,ipp,&sa);
-	return (bind(sock,(struct sockaddr *) &sa, sizeof(sa)) == 0);
+cout << "calling bind on " << sock << " "; Np4d::writeIpAdr(cout,ipa);
+cout << ":" << ipp << endl;
+writeIpAdr(cout,ntohl(sa.sin_addr.s_addr)); cout << endl;
+
+	int x = bind(sock,(struct sockaddr *) &sa, sizeof(sa));
+
+cout << "bind returned " << x << endl;
+	return (x == 0);
 }
 
 /** Listen for a stream connection. Uses the listen

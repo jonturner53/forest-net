@@ -155,7 +155,7 @@ inline uint64_t LinkTable::hashkey(ipa_t x, uint32_t y) const {
 // with specified source IP (address,port) pair and the given
 // Forest source address. If no match, return Null.
 inline int LinkTable::lookup(int intf, ipa_t pipa, ipp_t pipp, fAdr_t srcAdr) {
-        ipa_t x = (pipp != FOREST_PORT ? srcAdr : pipa);
+        ipa_t x = (pipp != Forest::ROUTER_PORT ? srcAdr : pipa);
         int te = ht->lookup(hashkey(pipa,x));
         if (te !=0 && intf == getInterface(te) &&
             (pipp == getPeerPort(te) || getPeerPort(te) == 0))

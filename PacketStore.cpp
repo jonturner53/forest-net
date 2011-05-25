@@ -27,7 +27,7 @@ packet PacketStore::alloc() {
 	if (freePkts->empty() || freeBufs->empty()) return 0;
 	n++; m++;
 	p = freePkts->get(1); freePkts->removeFirst();
-	p = freeBufs->get(1); freeBufs->removeFirst();
+	b = freeBufs->get(1); freeBufs->removeFirst();
 	pb[p] = b; ref[b] = 1;
 	return p;
 }
@@ -37,15 +37,16 @@ void PacketStore::free(packet p) {
 	assert(1 <= p && p <= N);
 	int b = pb[p]; pb[p] = 0;
 	freePkts->addFirst(p); n--;
-	if ((--ref[b]) == 0) { freeBufs->addFirst(b); m--; }
+	if ((--ref[b]) == 0) {
+	freeBufs->addFirst(b); m--; }
 }
 
 packet PacketStore::clone(packet p) {
-// Allocate a new packet that references same buffer as p,
+// Allocate a new packet that references the same buffer as p,
 // and initialize its header fields to match p.
 // Return a pointer to the new packet.
 	int b = pb[p];
-	if (freePkts->empty() || ref[b] >= MAXREFCNT) return 0;
+	if (freePkts->empty()) return 0;
 	n++;
 	packet p1 = freePkts->get(1); freePkts->removeFirst();
 	ref[b]++; setHeader(p1,getHeader(p)); pb[p1] = pb[p];
