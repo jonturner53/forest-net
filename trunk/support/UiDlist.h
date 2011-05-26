@@ -1,11 +1,9 @@
 /** \file UiDlist.h
- *  Data structure representing a list of unique integers.
  *
- *  Used to represent a list of integers from a defined range 1..n,
- *  where each integer may appear on the list at most one time.
- *  Allows fast membership tests in addition to the usual list
- *  operations. This class extends UiList and adds support for
- *  reverse traversal and general remove operation.
+ *  @author Jon Turner
+ *  @date 2011
+ *  This is open source software licensed under the Apache 2.0 license.
+ *  See http://www.apache.org/licenses/LICENSE-2.0 for details.
  */
 
 #ifndef UIDLIST_H
@@ -15,6 +13,15 @@
 #include "Misc.h"
 #include "UiList.h"
 
+/**
+ *  Data structure representing a list of unique integers.
+ *
+ *  Used to represent a list of integers from a defined range 1..n,
+ *  where each integer may appear on the list at most one time.
+ *  Allows fast membership tests in addition to the usual list
+ *  operations. This class extends UiList and adds support for
+ *  reverse traversal and general remove operation.
+ */
 class UiDlist : public UiList {
 public:		UiDlist(int=26);
 		~UiDlist();

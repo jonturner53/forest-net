@@ -1,5 +1,9 @@
-/** \file CpType.h
- *  Header file for CpType class.
+/** @file CpType.h
+ *
+ *  @author Jon Turner
+ *  @date 2011
+ *  This is open source software licensed under the Apache 2.0 license.
+ *  See http://www.apache.org/licenses/LICENSE-2.0 for details.
  */
 
 #ifndef CPTYPE_H
@@ -8,29 +12,34 @@
 #include "CommonDefs.h"
 #include "CpAttr.h"
 
-/** Control packet types indices */
+/** Control packet types indices.
+ *  Each control packet has a numerical index which is used within
+ *  programs to access various pieces of information about control
+ *  packet types.
+ */
 enum CpTypeIndex {
 	CPT_START,			///< marker preceding first index
 
-	// messages between clients and comtree controller
+	/** messages used by clients to manage comtrees */
 	CLIENT_ADD_COMTREE, CLIENT_DROP_COMTREE,
 	CLIENT_GET_COMTREE, CLIENT_MOD_COMTREE,
 	CLIENT_JOIN_COMTREE, CLIENT_LEAVE_COMTREE,
 	CLIENT_RESIZE_COMTREE,
 	CLIENT_GET_LEAF_RATE, CLIENT_MOD_LEAF_RATE,
 
-	// internal control packet types
+	/** packet types to manage router interfaces */
 	ADD_IFACE, DROP_IFACE, GET_IFACE, MOD_IFACE,
 
+	/** packet types to manage router links */
 	ADD_LINK, DROP_LINK, GET_LINK, MOD_LINK,
 
+	/** packet types to manage comtrees at routers */
 	ADD_COMTREE, DROP_COMTREE, GET_COMTREE, MOD_COMTREE,
-
 	ADD_COMTREE_LINK, DROP_COMTREE_LINK,
 	RESIZE_COMTREE_LINK,
 
+	/** packet types to manage routes at routers */
 	ADD_ROUTE, DROP_ROUTE, GET_ROUTE, MOD_ROUTE,
-
 	ADD_ROUTE_LINK, DROP_ROUTE_LINK,
 	
 	CPT_END			///< marker following last CtlPktType
@@ -39,10 +48,10 @@ enum CpTypeIndex {
 class CpType {
 private:
 	struct CpTypeInfo {
-		int index;
-		int code;
-		const char* name;
-		const char* abbrev;
+		int index;		///< index for control packet type
+		int code;		///< control packet type code
+		const char* name;	///< name for control packet type
+		const char* abbrev;	///< short name for control packet type
 		uint64_t reqAttr;	///< possible attributes for requests
 		uint64_t reqReqAttr;	///< required attributes for requests
 		uint64_t replyAttr;	///< possible attributes for replies
@@ -55,15 +64,15 @@ private:
 	static void check(); 		///< check consistency of index values
 
 public:
-	static bool validIndex(CpTypeIndex);	///< check validity of index value
+	static bool validIndex(CpTypeIndex);	
 	static CpTypeIndex getIndexByCode(int);
 
-	static int getCode(CpTypeIndex);		///< get code for a given index
-	static const char*  getName(CpTypeIndex);	///< get name for a given index
-	static const char*  getAbbrev(CpTypeIndex);	///< get abbreviation for a given index
-	static bool isReqAttr(CpTypeIndex, CpAttrIndex);	///< true for valid request attributes
-	static bool isReqReqAttr(CpTypeIndex, CpAttrIndex);	///< true for required request attributes
-	static bool isRepAttr(CpTypeIndex, CpAttrIndex);	///< true for valid reply attributes
+	static int getCode(CpTypeIndex);
+	static const char* getName(CpTypeIndex);
+	static const char* getAbbrev(CpTypeIndex);	
+	static bool isReqAttr(CpTypeIndex, CpAttrIndex);
+	static bool isReqReqAttr(CpTypeIndex, CpAttrIndex);
+	static bool isRepAttr(CpTypeIndex, CpAttrIndex);
 
 	static CpTypeIndex findMatch(const char*);
 };
@@ -113,4 +122,3 @@ inline bool CpType::isRepAttr(CpTypeIndex i, CpAttrIndex j) {
 }
 
 #endif
-

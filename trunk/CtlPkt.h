@@ -1,21 +1,9 @@
-/** \file CtlPkt.h
- *  
- *  This class provides a simple mechanism for handling forest control packets.
- *  The basic structure contains various named fields, all of type int32.
- *  To format a control packet, construct a new CtlPkt and set the
- *  desired fields to non-zero values. For the few fields for which
- *  0 is valid value, use -1. This includes flag fields, such as coreFlag,
- *  where 0 would normally denote false.
+/** @file CtlPkt.h
  *
- *  Format of control packets.
- *  The packet type in the first word of the forest header must be
- *  CLIENT_SIG or NET_SIG. The first word of the payload is the control
- *  packet type. The second word is a request/response type (1 for
- *  a request packet, 2 for a positive response, 3 for a negative response)
- *  and the third word is opaque data that is returned to the sender
- *  (typically used for a sequence number). After that comes the body of
- *  of the message in the form of a set of (attribute code, value) pairs,
- *  all of which are encoded as 32 bit integer values.
+ *  @author Jon Turner
+ *  @date 2011
+ *  This is open source software licensed under the Apache 2.0 license.
+ *  See http://www.apache.org/licenses/LICENSE-2.0 for details.
  */
 
 #ifndef CTLPKT_H
@@ -27,6 +15,29 @@
 
 enum CpRrType { REQUEST=1, POS_REPLY=2, NEG_REPLY=3 };
 
+/** This class provides a simple mechanism for handling forest control packets.
+ *  The basic structure contains various named fields, all of type int32.
+ *  To format a control packet, construct a new CtlPkt and set the
+ *  desired fields to non-zero values. For the few fields for which
+ *  0 is valid value, use -1. This includes flag fields, such as coreFlag,
+ *  where 0 would normally denote false.
+ *
+ *  Format of control packets.
+ *
+ *  The packet type in the first word of the forest header must be
+ *  CLIENT_SIG or NET_SIG.
+ *
+ *  The first word of the payload contains the packet's request/return
+ *  type in its two high order bits. The next 14 bits are the type code
+ *  for the packet. The remainder of the first payload word, plus the
+ *  second payload word form a sequence number field. This is not used
+ *  by the target of a control packet, but is returned as part of the
+ *  reply, so that control packet senders can easily associate replies
+ *  with control packets sent earlier.
+ *  The remainder of the payload contains the body of the control
+ *  packet in the form of a set of (attribute code, value) pairs;
+ *  both attribute codes and values are encoded as 32 bit integer values.
+ */
 class CtlPkt {
 public:
 		CtlPkt(buffer_t);
@@ -61,19 +72,20 @@ private:
 	int cpCode;			///< control packet type code
 	CpRrType rrType;		///< request/return type
 	int64_t seqNum;			///< sequence number
-	uint32_t *buf;			///< reference to packet buffer
-	int	bp;			///< index into buf used by pack/unpack
+
 	int32_t aVal[CPA_END+1];	///< array of attribute values
 	bool 	aSet[CPA_END+1];	///< mark attributes that have been set
 
-	static const int MAX_MSG_LEN=500;
-	char	errMsg[MAX_MSG_LEN+1];
+	uint32_t *buf;			///< reference to packet buffer
+	int	bp;			///< index into buf used by pack/unpack
+
+	static const int MAX_MSG_LEN=500; ///< bound on error message length
+	char	errMsg[MAX_MSG_LEN+1];	///< buffer for error messages
 
 	// helper methods
 	void	packAttr(CpAttrIndex);
 	void	packAttrCond(CpAttrIndex);
 	CpAttrIndex unpackAttr();
-	void	condPrint(ostream&, int32_t, const char*); 
 };
 
 /** Check if specified attribute is set.
@@ -84,9 +96,26 @@ inline bool CtlPkt::isSet(CpAttrIndex i) {
 	return CpAttr::validIndex(i) && aSet[i];
 }
 
+/** Get the type index of a control packet.
+ *  @return true the type index.
+ */
 inline CpTypeIndex CtlPkt::getCpType() { return cpType; }
+
+/** Get the conrol packet code number of a control packet.
+ *  The code number is the value that is sent in packet headers
+ *  to identify the type of a control packet.
+ *  @return true the code value
+ */
 inline int CtlPkt::getCpCode() { return cpCode; }
+
+/** Get the request/return type of the packet.
+ *  @return true the request/return type
+ */
 inline CpRrType CtlPkt::getRrType() { return rrType; }
+
+/** Get the sequence number of the packet.
+ *  @return true the sequence number
+ */
 inline int64_t CtlPkt::getSeqNum() { return seqNum; }
 
 /** Get value of specified attribute
@@ -107,9 +136,24 @@ inline void CtlPkt::setAttr(CpAttrIndex i, int32_t val) {
 	aVal[i] = val; aSet[i] = true;
 }
 
+/** Set the type index of a control packet.
+ *  @param t is the specified type index
+ */
 inline void CtlPkt::setCpType(CpTypeIndex t) { cpType = t; }
+
+/** Set the type type code of a controle packet.
+ *  @param c is the specified type code
+ */
 inline void CtlPkt::setCpCode(int c) { cpCode = c; }
+
+/** Set the type request/return type of a control packet.
+ *  @param rr is the specified request/return type 
+ */
 inline void CtlPkt::setRrType(CpRrType rr) { rrType = rr; }
+
+/** Set the type sequence number of a control packet.
+ *  @param s is the specified sequence number
+ */
 inline void CtlPkt::setSeqNum(int64_t s) { seqNum = s; }
 
 /** Packs a single (attribute_code, value) pair starting at word i in buf.

@@ -1,4 +1,10 @@
-/** \file PacketHeader.cpp */
+/** @file PacketHeader.cpp 
+ *
+ *  @author Jon Turner
+ *  @date 2011
+ *  This is open source software licensed under the Apache 2.0 license.
+ *  See http://www.apache.org/licenses/LICENSE-2.0 for details.
+ */
 
 #include "PacketHeader.h"
 

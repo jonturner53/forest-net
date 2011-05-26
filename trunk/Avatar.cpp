@@ -1,4 +1,11 @@
-/** \file Avatar.cpp */
+/** @file Avatar.cpp
+ *
+ *  @author Jon Turner
+ *  @date 2011
+ *
+ *  This is open source software licensed under the Apache 2.0 license.
+ *  See http://www.apache.org/licenses/LICENSE-2.0 for details.
+ */
 
 #include "stdinc.h"
 #include "CommonDefs.h"
@@ -82,16 +89,11 @@ Avatar::~Avatar() { delete mcGroups; delete nearAvatars; delete ps; }
  *  @return true on success, false on failure
  */
 bool Avatar::init() {
-	// create datagram socket, bind to IP address and make it nonblocking
-cout << "a\n";
-	if ((sock = Np4d::datagramSocket()) < 0) return false;
-cout << "b\n";
-        if (!Np4d::bind4d(sock, myIpAdr, 0)) return false;
-cout << "c\n";
-        if (!Np4d::nonblock(sock)) return false;
-cout << "d\n";
-       
-	return true;
+	sock = Np4d::datagramSocket();
+
+	return	sock >= 0 &&
+        	Np4d::bind4d(sock, myIpAdr, 0) &&
+        	Np4d::nonblock(sock);
 }
 
 /** Main Avatar processing loop.

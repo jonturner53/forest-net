@@ -1,4 +1,10 @@
-/** \file PacketHeader.h */
+/** @file PacketHeader.h 
+ *
+ *  @author Jon Turner
+ *  @date 2011
+ *  This is open source software licensed under the Apache 2.0 license.
+ *  See http://www.apache.org/licenses/LICENSE-2.0 for details.
+ */
 
 #ifndef PACKETHEADER_H
 #define PACKETHEADER_H
@@ -7,8 +13,8 @@
 
 class PacketHeader {
 public:
-	void	unpack(buffer_t&);	// unpack PacketHeader fields from buffer
-	void	pack(buffer_t&);	// pack PacketHeader fields into buffer
+	void	unpack(buffer_t&);
+	void	pack(buffer_t&);
 
 	/** getters */ 
 	int 	getVersion() const;
@@ -55,9 +61,9 @@ private:
 	comt_t	comt;			// comtree field
 	fAdr_t	sadr;			// source address
 	fAdr_t	dadr;			// destination address
-	int	inlnk;			// link on which PacketHeader arrived
-	ipa_t	tSrcIp;			// source IP address from substrate PacketHeader
-	ipp_t	tSrcPort;		// source port # from substrate PacketHeader
+	int	inlnk;			// link on which packet arrived
+	ipa_t	tSrcIp;			// src IP addr from substrate header
+	ipp_t	tSrcPort;		// src port # from substrate header
 	int	iob;			// number of bytes in buffer
 };
 

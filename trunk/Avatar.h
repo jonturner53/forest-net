@@ -1,4 +1,10 @@
-/** \file Avatar.h */
+/** @file Avatar.h 
+ *
+ *  @author Jon Turner
+ *  @date 2011
+ *  This is open source software licensed under the Apache 2.0 license.
+ *  See http://www.apache.org/licenses/LICENSE-2.0 for details.
+ */
 
 #ifndef AVATAR_H
 #define AVATAR_H
@@ -11,7 +17,7 @@
 
 /** Class that implements a simulated avatar in a virtual world.
  *  
- *  This program implements an avatar in a very simple virtual world.
+ *  This class implements an avatar in a very simple virtual world.
  *  The world is just a square area that is divided into a set of
  *  grid squares. The avatar wanders randomly around the square,
  *  issuing status reports periodically, indicating where it is,
@@ -39,7 +45,7 @@ private:
 	const static int MEDIUM =25000;	///< medium avatar speed
 	const static int FAST = 80000;	///< fast avatar speed
 
-	const static int UPDATE_PERIOD = 50;	// # ms between status updates
+	const static int UPDATE_PERIOD = 50;  ///< # ms between status updates
 	
 	/** network parameters */
 	ipa_t	myIpAdr;		///< IP address of interface
@@ -51,10 +57,11 @@ private:
 	comt_t	comt;			///< comtree number
 
 	/** avatar properties */
-	int	x, y;			// position in virtual world
-	double	direction;		// direction avatar is facing in degrees
-	double	deltaDir;		// change in direction per period
-	double	speed;			// speed moving in UNITS/sec
+	int	x;			///< x coordinate in virtual world
+	int	y;			///< y coordinate in virtual world
+	double	direction;		///< direction avatar is facing in deg
+	double	deltaDir;		///< change in direction per period
+	double	speed;			///< speed moving in UNITS/sec
 
 	/** info on groups and nearby avatars */
 	const static int MAXGROUPS = (SIZE/GRID)*(SIZE/GRID);

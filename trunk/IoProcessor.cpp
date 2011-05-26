@@ -1,4 +1,10 @@
-/** \file IoProcessor.h */
+/** @file IoProcessor.h 
+ *
+ *  @author Jon Turner
+ *  @date 2011
+ *  This is open source software licensed under the Apache 2.0 license.
+ *  See http://www.apache.org/licenses/LICENSE-2.0 for details.
+ */
 
 #include "IoProcessor.h"
 
@@ -86,12 +92,6 @@ int IoProcessor::receive() {
             (lnk = lt->lookup(cIf,sIpAdr,sPort,h.getSrcAdr())) == 0) {
                 ps->free(p); return 0;
         }
-if (lnk == 5) {
-cout << "receiving packet on 5 from ";
-Np4d::writeIpAdr(cout,sIpAdr);
-cout << ":" << sPort << " " << h.getSrcAdr() << endl;
-h.write(cout,ps->getBuffer(p));
-}
         h.setIoBytes(nbytes);
         h.setInLink(lnk);
         h.setTunSrcIp(sIpAdr);

@@ -1,6 +1,9 @@
 /** \file TestUiList.cpp
  *
- *  Unit test for UiList data structure.
+ *  @author Jon Turner
+ *  @date 2011
+ *  This is open source software licensed under the Apache 2.0 license.
+ *  See http://www.apache.org/licenses/LICENSE-2.0 for details.
  */
 
 #include "UiList.h"
@@ -75,6 +78,9 @@ void basicTests() {
 		"mismatch on list [ 3 2 1 ]");
 }
 
+/**
+ *  Unit test for UiList data structure.
+ */
 main() {
 	cout << "running basic tests\n";
 	basicTests();

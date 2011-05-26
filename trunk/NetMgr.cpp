@@ -1,8 +1,16 @@
-/** \file NetMgr.cpp
+/** @file NetMgr.cpp
+ *
+ *  @author Jon Turner
+ *  @date 2011
+ *  This is open source software licensed under the Apache 2.0 license.
+ *  See http://www.apache.org/licenses/LICENSE-2.0 for details.
+ */
+
+/**
  *  NetMgr provides a basic network management interface to a
  *  forest network. It uses a simple command line interpreter
  *  that reads commands from stdin and prints results on stdout.
-
+ *
  *  usage:
  *       NetMgr config
  */

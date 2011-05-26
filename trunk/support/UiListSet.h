@@ -1,7 +1,9 @@
-/** \file UiListSet.h
- *  Header file for data structure representing a collection of lists
- *  defined over integers 1,2,... Each item can be on at most one list.
- *  Lists are also numbered 1,2,...
+/** @file UiListSet.h
+ *
+ *  @author Jon Turner
+ *  @date 2011
+ *  This is open source software licensed under the Apache 2.0 license.
+ *  See http://www.apache.org/licenses/LICENSE-2.0 for details.
  */
 
 #ifndef UILISTSET_H
@@ -13,6 +15,10 @@
 typedef int item;
 typedef int alist;
 
+/**  Header file for data structure representing a collection of lists
+ *  defined over integers 1,2,... Each item can be on at most one list.
+ *  Lists are also numbered 1,2,...
+ */
 class UiListSet {
 public:		UiListSet(int=26,int=5);
 		~UiListSet();

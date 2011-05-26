@@ -1,4 +1,10 @@
-/** \file RouterCore.cpp */
+/** @file RouterCore.cpp 
+ *
+ *  @author Jon Turner
+ *  @date 2011
+ *  This is open source software licensed under the Apache 2.0 license.
+ *  See http://www.apache.org/licenses/LICENSE-2.0 for details.
+ */
 
 #include "RouterCore.h"
 
@@ -307,7 +313,7 @@ bool RouterCore::pktCheck(int p, int ctte) {
 			return false;
 	}
 	// check for invalid comtrees
-	if (!ctt->valid(ctte) || !ctt->inComt(ctte,inL)) return false;
+	if (!ctt->valid(ctte) || !ctt->isLink(ctte,inL)) return false;
 	return true;
 }
 void RouterCore::forward(int p, int ctte) {
