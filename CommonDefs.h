@@ -1,5 +1,9 @@
-/** \file CommonDefs
- *  Constant and type definitions plus general support routines.
+/** @file CommonDefs
+ *
+ *  @author Jon Turner
+ *  @date 2011
+ *  This is open source software licensed under the Apache 2.0 license.
+ *  See http://www.apache.org/licenses/LICENSE-2.0 for details.
  */
 
 #ifndef COMMONDEFS_H
@@ -24,6 +28,7 @@
 #include <memory.h>
 
 /** Forest node types.
+ *
  *  Nodes in a Forest network are assigned specific roles.
  *  Nodes with node type codes smaller than 100, are considered
  *  untrusted. All packets received from such hosts are subjected
@@ -66,16 +71,13 @@ enum ptyp_t {
 	VOQSTATUS=201
 };
 
-
-/** miscellaneous typedefs */
 typedef int32_t fAdr_t;			///< denotes a forest address
 typedef uint32_t comt_t;		///< denotes a comtree
 typedef uint8_t flgs_t;			///< flags field from packet header
 
-
 /** Miscellaneous utility functions.
- *  This class implements a collection of common functions useful
- *  within a Forest router and Forest hosts. Most deal with addresses.
+ *  This class defines various constants and common functions useful
+ *  within a Forest router and Forest hosts.
  */
 class Forest {
 public:
@@ -183,6 +185,7 @@ inline void Forest::addFadr2string(string& s, fAdr_t fAdr) {
 }
 
 /** Compute link packet length for a given forest packet length.
+ *
  *  @param x is the number of bytes in the Forest packet
  *  @return the number of bytes sent on the link, including the
  *  IP/UDP header and a presumed Ethernet header plus inter-frame gap.

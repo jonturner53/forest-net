@@ -1,6 +1,18 @@
 /** \file UiHashTbl.h
- * 
- *  Maintains set of (key, value) pairs where key is a 64 bit value and
+ *
+ *  @author Jon Turner
+ *  @date 2011
+ *  This is open source software licensed under the Apache 2.0 license.
+ *  See http://www.apache.org/licenses/LICENSE-2.0 for details.
+ */
+  
+
+#ifndef HASHTABLE_H
+#define HASHTABLE_H
+
+#include "stdinc.h"
+
+/** Maintains set of (key, value) pairs where key is a 64 bit value and
  *  value is a positive 32 bit integer in a restricted range.
  *  All (key,value) pairs must be fully disjoint; that is no two pairs may
  *  share the same key and no two pairs may share the same value.
@@ -15,12 +27,6 @@
  *  range of values (max of 10^6) with a maximum load factor of
  *  50% to minimize the potential for overloading any bucket.
  */
-
-#ifndef HASHTABLE_H
-#define HASHTABLE_H
-
-#include "stdinc.h"
-
 class UiHashTbl {
 public:
 		UiHashTbl(int);

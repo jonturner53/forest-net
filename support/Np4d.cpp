@@ -1,4 +1,10 @@
-/** \file Np4d.cpp */
+/** @file Np4d.cpp 
+ *
+ *  @author Jon Turner
+ *  @date 2011
+ *  This is open source software licensed under the Apache 2.0 license.
+ *  See http://www.apache.org/licenses/LICENSE-2.0 for details.
+ */
 
 #include "Np4d.h"
 
@@ -120,16 +126,11 @@ int Np4d::streamSocket() {
  *  @return true on success, false on failure
  */
 bool Np4d::bind4d(int sock, ipa_t ipa, ipp_t ipp) {
-cout << "entered bind4d\n";
 	sockaddr_in sa;
 	initSockAdr(ipa,ipp,&sa);
-cout << "calling bind on " << sock << " "; Np4d::writeIpAdr(cout,ipa);
-cout << ":" << ipp << endl;
-writeIpAdr(cout,ntohl(sa.sin_addr.s_addr)); cout << endl;
 
 	int x = bind(sock,(struct sockaddr *) &sa, sizeof(sa));
 
-cout << "bind returned " << x << endl;
 	return (x == 0);
 }
 
@@ -138,9 +139,14 @@ cout << "bind returned " << x << endl;
  *  @param sock is socket number
  *  @return true on success, false on failure
  */
-bool Np4d::listen4d(int sock) {
-	return (listen(sock, 100) == 0);
-}
+bool Np4d::listen4d(int sock) { return (listen(sock, 5) == 0); }
+
+/** Accept the next waiting connection request.
+ *  Uses accept system call but hides the ugliness.
+ *  @param sock is socket number
+ *  @return the socket number of the new connection or -1 on failure
+ */
+int Np4d::accept4d(int sock) { return accept(sock,NULL,NULL); }
 
 /** Accept the next waiting connection request.
  *  Uses accept system call but hides the ugliness.
@@ -154,6 +160,7 @@ bool Np4d::listen4d(int sock) {
 int Np4d::accept4d(int sock, ipa_t& ipa, ipp_t& ipp) {
 	sockaddr_in sa; socklen_t len = sizeof(sa);
 	sock = accept(sock,(struct sockaddr *) &sa, &len);
+	if (sock < 0) return -1;
 	extractSockAdr(&sa,ipa,ipp);
 	return sock;
 }
@@ -185,7 +192,18 @@ int Np4d::sendto4d(int sock, void* buf, int leng, ipa_t ipa, ipp_t ipp) {
 }
 
 /** Receive a datagram from a remote host.
- *  Uses receivefrom system call but hides the ugliness.
+ *  Uses recv system call.
+ *  @param sock is socket number
+ *  @param buf is pointer to the buffer containing the packet payload
+ *  @param leng is the maximum number of bytes to be stored in buf
+ *  @return the number of bytes received, or -1 on failure
+ */
+int Np4d::recv4d(int sock, void* buf, int leng) {
+	return recv(sock,buf,leng,0);
+}
+
+/** Receive a datagram from a remote host.
+ *  Uses recvfrom system call but hides the ugliness.
  *  @param sock is socket number
  *  @param buf is pointer to the buffer containing the packet payload
  *  @param leng is the maximum number of bytes to be stored in buf
@@ -198,7 +216,7 @@ int Np4d::sendto4d(int sock, void* buf, int leng, ipa_t ipa, ipp_t ipp) {
 int Np4d::recvfrom4d(int sock, void* buf, int leng, ipa_t& ipa, ipp_t& ipp) {
 	sockaddr_in sa; initSockAdr(ipa,ipp,&sa);
 	socklen_t socklen = sizeof(sa);
-	int nbytes = recvfrom(sock,buf,leng,0,(struct sockaddr *) &sa, &socklen);
+	int nbytes = recvfrom(sock,buf,leng,0,(struct sockaddr *) &sa,&socklen);
 	extractSockAdr(&sa,ipa,ipp);
 	return nbytes;
 }

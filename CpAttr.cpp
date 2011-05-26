@@ -1,10 +1,16 @@
-/** \file CpAttr.cpp */
+/** @file CpAttr.cpp 
+ *
+ *  @author Jon Turner
+ *  @date 2011
+ *  This is open source software licensed under the Apache 2.0 license.
+ *  See http://www.apache.org/licenses/LICENSE-2.0 for details.
+ */
 
 #include "CpAttr.h"
 
 bool CpAttr::firstCall = true;
 
-const CpAttrInfo CpAttr::attrInfo[50] = {
+const CpAttr::CpAttrInfo CpAttr::attrInfo[CPA_END+1] = {
 	// index		code	 name			  
 	{ CPA_START,	 	0,	"cp attr start" }, 
 

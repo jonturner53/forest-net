@@ -1,4 +1,10 @@
-/** \file RouteTable.h */
+/** @file RouteTable.h 
+ *
+ *  @author Jon Turner
+ *  @date 2011
+ *  This is open source software licensed under the Apache 2.0 license.
+ *  See http://www.apache.org/licenses/LICENSE-2.0 for details.
+ */
 
 #ifndef ROUTETABLE_H
 #define ROUTETABLE_H
@@ -55,26 +61,26 @@ public:
 	bool read(istream&);
 	void write(ostream&) const;
 private:
-	int	nte;			// max number of table entries
-	int	myAdr;			// address of this router
+	int	nte;			///< max number of table entries
+	int	myAdr;			///< address of this router
 
 	struct rtEntry {
-	comt_t	ct;			// comtree number
-	fAdr_t	adr;			// destination address
-	int	qn;			// queue number (if 0 use default)
-	int 	lnks;			// link or links
+	comt_t	ct;			///< comtree number
+	fAdr_t	adr;			///< destination address
+	int	qn;			///< queue number (if 0 use default)
+	int 	lnks;			///< link or links
 	};
 
-	rtEntry *tbl;			// vector of table entries
-	UiHashTbl *ht;			// hash table to speed up access
-	LinkTable* lt;			// pointer to link table
-	ComtreeTable* ctt;		// pointer to comtree table
-	QuManager* qm;			// pointer to queue manager
+	rtEntry *tbl;			///< vector of table entries
+	UiHashTbl *ht;			///< hash table to speed up access
+	LinkTable* lt;			///< pointer to link table
+	ComtreeTable* ctt;		///< pointer to comtree table
+	QuManager* qm;			///< pointer to queue manager
 
-	int free;			// first unused entry
+	int free;			///< first unused entry
 
 	// helper functions
-	uint64_t hashkey(comt_t, fAdr_t);  // return hash key
+	uint64_t hashkey(comt_t, fAdr_t);  ///< return hash key
 	bool 	readEntry(istream&);	
 	void	writeEntry(ostream&, int) const; 
 };

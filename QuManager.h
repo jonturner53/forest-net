@@ -1,4 +1,10 @@
-/** \file QuManager */
+/** @file QuManager 
+ *
+ *  @author Jon Turner
+ *  @date 2011
+ *  This is open source software licensed under the Apache 2.0 license.
+ *  See http://www.apache.org/licenses/LICENSE-2.0 for details.
+ */
 
 #ifndef QUMANAGER_H
 #define QUMANAGER_H

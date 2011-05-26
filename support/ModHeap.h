@@ -1,6 +1,21 @@
 /** \file ModHeap.h
  *
- *  This class implements a "modulo" heap heap data structure.
+ *  @author Jon Turner
+ *  @date 2011
+ *  This is open source software licensed under the Apache 2.0 license.
+ *  See http://www.apache.org/licenses/LICENSE-2.0 for details.
+ */
+
+#ifndef MODHEAP_H
+#define MODHEAP_H
+
+#include "stdinc.h"
+#include "Misc.h"
+
+typedef uint32_t keytyp;
+typedef int item;
+
+/** This class implements a "modulo" heap heap data structure.
  *  In this heap, keys are 32 bit unsigned integers and
  *  are ordered circularly around the 32 bit key value
  *  space and are assumed to never occupy more than half
@@ -29,16 +44,6 @@
  *  If you call findmin on a max-heap, you will actually
  *  get the item with the largest key, not the smallest.
  */
-
-#ifndef MODHEAP_H
-#define MODHEAP_H
-
-#include "stdinc.h"
-#include "Misc.h"
-
-typedef uint32_t keytyp;
-typedef int item;
-
 class ModHeap {
 public:		ModHeap(int,int,bool);
 		~ModHeap();

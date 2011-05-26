@@ -1,4 +1,10 @@
-/** \file IoProcessor.h */
+/** @file IoProcessor.h
+ *
+ *  @author Jon Turner
+ *  @date 2011
+ *  This is open source software licensed under the Apache 2.0 license.
+ *  See http://www.apache.org/licenses/LICENSE-2.0 for details.
+ */
 
 #ifndef IOPROCESSOR_H
 #define IOPROCESSOR_H
@@ -54,16 +60,42 @@ private:
 	void	writeEntry(ostream&, int) const;
 };
 
-// Return true if there is a valid entry for interface i
+/** Check an interface number for validity.
+ *  @param i is the interface to be checked
+ *  @return true if i is a valid interface number, else false
+ */
 inline bool IoProcessor::valid(int i) const {
 	return 1 <= i && i <= Forest::MAXINTF && ift[i].ipa != 0;
 }
 
-// routines to access and set various fields in interface table
+/** Get the IP address associated with a given interface.
+ *  @param i is the interface number
+ *  @return the associated IP address
+ */
 inline ipa_t IoProcessor::getIpAdr(int i) const { return ift[i].ipa; }	
+
+/** Get the maximum bit rate allowed for this interface.
+ *  @param i is the interface number
+ *  @return the bit rate in Kb/s
+ */
 inline int IoProcessor::getMaxBitRate(int i) const { return ift[i].maxbitrate; }
+
+/** Get the maximum packet rate allowed for this interface.
+ *  @param i is the interface number
+ *  @return the packet rate in p/s
+ */
 inline int IoProcessor::getMaxPktRate(int i) const { return ift[i].maxpktrate; }
+
+/** Set the maximum bit rate for this interface.
+ *  @param i is the interface number
+ *  @param r is the max bit rate in Kb/s
+ */
 inline void IoProcessor::setMaxBitRate(int i, int r) { ift[i].maxbitrate = r; }
+
+/** Set the maximum packet rate for this interface.
+ *  @param i is the interface number
+ *  @param r is the max packet rate in Kb/s
+ */
 inline void IoProcessor::setMaxPktRate(int i, int r) { ift[i].maxpktrate = r; }
 
 #endif

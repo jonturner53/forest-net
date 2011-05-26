@@ -1,4 +1,10 @@
-/** \file LinkTable.h */
+/** @file LinkTable.h
+ *
+ *  @author Jon Turner
+ *  @date 2011
+ *  This is open source software licensed under the Apache 2.0 license.
+ *  See http://www.apache.org/licenses/LICENSE-2.0 for details.
+ */
 
 #ifndef LINKTABLE_H
 #define LINKTABLE_H
@@ -53,35 +59,35 @@ public:
 	void write(ostream&) const;
 
 private:
-	int	nlnk;			// max number of links in table
+	int	nlnk;			///< max number of links in table
 
 	// router level statistics counters
-	uint32_t iPkt;			// count of input packets
-	uint32_t oPkt;			// count of output packets
-	uint64_t iByt;			// count of input bytes
-	uint64_t oByt;			// count of output bytes
-	uint32_t irPkt;			// count of packets from other routers
-	uint32_t orPkt;			// count of packets to other routers
-	uint32_t icPkt;			// count of packets from clients
-	uint32_t ocPkt;			// count of packets to clients
+	uint32_t iPkt;			///< count of input packets
+	uint32_t oPkt;			///< count of output packets
+	uint64_t iByt;			///< count of input bytes
+	uint64_t oByt;			///< count of output bytes
+	uint32_t irPkt;			///< count of packets from other routers
+	uint32_t orPkt;			///< count of packets to other routers
+	uint32_t icPkt;			///< count of packets from clients
+	uint32_t ocPkt;			///< count of packets to clients
 
 	struct lnkdata {
-	int	intf;			// interface number for link
-	ipa_t	pipa;			// IP address of peer endpoint
-	ipp_t	pipp;			// peer port number
-	ntyp_t	ptyp;			// node type of peer
-	fAdr_t	padr;			// peer's forest address
-	fAdr_t	dadr;			// peer's allowed destination address
-	int	bitrate;		// maximum bit rate of link (MAC level)
-	int	pktrate;		// maximum packet rate of link
-	int	mindelta;		// minimum time between packets (us)
-	uint32_t iPkt;			// input packet counter
-	uint32_t oPkt;			// output packet counter
-	uint64_t iByt;			// input byte counter
-	uint64_t oByt;			// output byte counter
+	int	intf;			///< interface number for link
+	ipa_t	pipa;			///< IP address of peer endpoint
+	ipp_t	pipp;			///< peer port number
+	ntyp_t	ptyp;			///< node type of peer
+	fAdr_t	padr;			///< peer's forest address
+	fAdr_t	dadr;			///< peer's allowed destination address
+	int	bitrate;		///< max bit rate of link (MAC level)
+	int	pktrate;		///< maximum packet rate of link
+	int	mindelta;		///< minimum time between packets (us)
+	uint32_t iPkt;			///< input packet counter
+	uint32_t oPkt;			///< output packet counter
+	uint64_t iByt;			///< input byte counter
+	uint64_t oByt;			///< output byte counter
 	};
-	lnkdata	*ld;			// ld[i] is link data for link i
-	UiHashTbl *ht;			// hash table for fast lookup
+	lnkdata	*ld;			///< ld[i] is link data for link i
+	UiHashTbl *ht;			///< hash table for fast lookup
 
 	// helper functions
 	uint64_t hashkey(ipa_t,uint32_t) const;
@@ -146,14 +152,16 @@ inline void LinkTable::postOcnt(int i, int leng) {
 	}
 }
 
-// Compute key for hash lookup
+/** Compute key for hash lookup
+ */
 inline uint64_t LinkTable::hashkey(ipa_t x, uint32_t y) const {
 	return (uint64_t(x) << 32) | y;
 }
 
-// Return index of link for a packet received on specified interface,
-// with specified source IP (address,port) pair and the given
-// Forest source address. If no match, return Null.
+/** Return index of link for a packet received on specified interface,
+ *  with specified source IP (address,port) pair and the given
+ *  Forest source address. If no match, return Null.
+ */
 inline int LinkTable::lookup(int intf, ipa_t pipa, ipp_t pipp, fAdr_t srcAdr) {
         ipa_t x = (pipp != Forest::ROUTER_PORT ? srcAdr : pipa);
         int te = ht->lookup(hashkey(pipa,x));

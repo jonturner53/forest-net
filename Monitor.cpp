@@ -1,4 +1,10 @@
-/** \file Monitor.cpp */
+/** @file Monitor.cpp 
+ *
+ *  @author Jon Turner
+ *  @date 2011
+ *  This is open source software licensed under the Apache 2.0 license.
+ *  See http://www.apache.org/licenses/LICENSE-2.0 for details.
+ */
 
 #include "Monitor.h"
 
@@ -43,18 +49,17 @@ main(int argc, char *argv[]) {
 		fatal("usage: Monitor extIp intIp rtrIpAdr myAdr rtrAdr "
 		      		    "finTime [logfile]");
 
-cout << "Monitor: myAdr is "; Forest::writeForestAdr(cout, myAdr); cout << "\n";
 	if (extIp == Np4d::ipAddress("127.0.0.1")) extIp = Np4d::myIpAddress(); 
-cout << "y\n";
 	if (extIp == 0) fatal("can't retrieve default IP address");
 
-cout << "z\n";
 	Monitor mon(extIp,intIp,rtrIp,myAdr,rtrAdr);
 	char logFileName[101];
 	strncpy(logFileName,(argc == 8 ? argv[7] : ""),100);
-	if (!mon.init(logFileName))
-		fatal("Monitor:: initialization failure");
-	mon.run(1000000*finTime);
+	if (!mon.init(logFileName)) {
+		perror("perror");
+		fatal("Monitor: initialization failure");
+	}
+	mon.run(1000000*(finTime-1)); // -1 to compensate for delay in init
 	exit(0);
 }
 
@@ -71,32 +76,31 @@ Monitor::Monitor(ipa_t xipa, ipa_t iipa, ipa_t ripa, fAdr_t ma, fAdr_t ra)
 	statPkt = new uint32_t[500];
 
 	comt = 0; repCnt = 0;
+	connSock = -1;
 }
 
 Monitor::~Monitor() {
-	fflush(stdout);
+	cout.flush();
 	if (extSock > 0) close(extSock);
 	if (intSock > 0) close(intSock);
 	delete watchedAvatars; delete ps;
 }
 
+/** Initialize sockets and open log file for writing.
+ *  Return true on success, false on failure.
+ */
 bool Monitor::init(char *logFileName) {
-// Initialize sockets and open log file for writing.
-// Return true on success, false on failure.
-
-cout << "a\n";
 	intSock = Np4d::datagramSocket();
-	if (intSock < 0) return false;
-cout << "b\n";
-	if (!Np4d::bind4d(intSock,intIp,0)) return false;
+	if (intSock < 0 || 
+	    !Np4d::bind4d(intSock,intIp,0) ||
+	    !Np4d::nonblock(intSock))
+		return false;
 
-cout << "c\n";
 	connect(); 		// send initial connect packet
 	usleep(1000000);	// 1 second delay provided for use in SPP
 				// delay gives SPP linecard the time it needs
 				// to setup NAT filters before second packet
 
-cout << "d\n";
 	if (logFileName[0] == EOS) {
 		logging = false;
         } else {
@@ -107,26 +111,15 @@ cout << "d\n";
 		}
 		logging = true;
 	}
-cout << "e\n";
 
-	// setup TCP socket and wait for connection
+	// setup external TCP socket for use by remote GUI
 	extSock = Np4d::streamSocket();
 	if (extSock < 0) return false;
-cout << "attemting to bind socket " << extSock << " to "; 
-Np4d::writeIpAdr(cout,extIp);
-cout << ":" << MON_PORT << "\n";
 	bool status = Np4d::bind4d(extSock,extIp,MON_PORT);
-cout << "bind4d returns " << status << endl;
-	if (!status) return false;
-cout << "g\n";
-	if (!Np4d::listen4d(extSock)) return false;
-cout << "h\n";
-
-	ipa_t remoteIp; ipp_t remotePort;
-	extSock = Np4d::accept4d(extSock,remoteIp,remotePort);
-cout << "i\n";
-
-	return extSock >= 0;
+	if (!status) {
+		return false;
+	}
+	return Np4d::listen4d(extSock) && Np4d::nonblock(extSock);
 }
 
 int Monitor::receiveReport() { 
@@ -135,28 +128,32 @@ int Monitor::receiveReport() {
 	if (p == 0) return 0;
         buffer_t& b = ps->getBuffer(p);
 
-	ipa_t remoteIp; ipp_t remotePort;
-        int nbytes = Np4d::recvfrom4d(intSock, &b[0], 1500, remoteIp, remotePort);
-        if (nbytes < 0) {
-                if (errno == EWOULDBLOCK) {
-                        ps->free(p); return 0;
-                }
-                fatal("Monitor::receive: error in recvfrom call");
-        }
+        int nbytes = Np4d::recv4d(intSock,&b[0],1500);
+        if (nbytes < 0) { ps->free(p); return 0; }
 
 	ps->unpack(p);
         return p;
 }
 
+/** Check for a new comtree number from the GUI and update subscriptions.
+ *  If the remote GUI has connected and sent a comtree number,
+ *  read the comtree number and store it. If the new comtree is
+ *  different from the previous one, unsubscribe from all multicasts
+ *  in the old one and subscribe to all multicasts in the new one.
+ */
 void Monitor::check4comtree() { 
-// Check for a new comtree number from the GUI.
-	int nbytes;	  // number of bytes in received packet
-	uint32_t newComt;
+	if (connSock < 0) {
+		connSock = Np4d::accept4d(extSock);
+		if (connSock < 0) return;
+		if (!Np4d::nonblock(connSock))
+			fatal("can't make connection socket nonblocking");
+	}
 
-        nbytes = read(extSock, (char *) &newComt, sizeof(uint32_t));
+	comt_t newComt;
+        int nbytes = read(connSock, (char *) &newComt, sizeof(uint32_t));
         if (nbytes < 0) {
-                if (errno == EWOULDBLOCK) return;
-                fatal("Monitor::check4comtree: error in recvfrom call");
+                if (errno == EAGAIN) return;
+                fatal("Monitor::check4comtree: error in read call");
         } else if (nbytes < sizeof(uint32_t)) {
 		fatal("Monitor::check4comtree: incomplete comtree number");
 	}
@@ -188,35 +185,10 @@ void Monitor::send2gui() {
 	int nbytes = repCnt*8*sizeof(uint32_t);
 	char* p = (char *) statPkt;
 	while (nbytes > 0) {
-		int n = write(extSock, (void *) p, nbytes);
+		int n = write(connSock, (void *) p, nbytes);
 		if (n < 0) fatal("Monitor::send2gui: failure in write");
 		p += n; nbytes -= n;
 	}
-}
-
-int Monitor::getTime() {
-// Return time expressed as a free-running microsecond clock
-	static uint32_t prevTime = 0;
-	static struct timeval prevTimeval = { 0, 0 };
-	static uint32_t now;
-	struct timeval nowTimeval;
-
-	if (prevTimeval.tv_sec == 0 && prevTimeval.tv_usec == 0) {
-		// first call, initialize and return 0
-		if (gettimeofday(&prevTimeval, NULL) < 0)
-			fatal("Monitor::getTime: gettimeofday failure");
-		prevTime = 0;
-		return 0;
-	}
-	// normal case
-	if (gettimeofday(&nowTimeval, NULL) < 0)
-		fatal("Monitor::getTime: gettimeofday failure");
-	now = prevTime +
-		(nowTimeval.tv_sec == prevTimeval.tv_sec ?
-                 nowTimeval.tv_usec - prevTimeval.tv_usec :
-                 nowTimeval.tv_usec + (1000000 - prevTimeval.tv_usec));
-	prevTime = now; prevTimeval = nowTimeval;
-	return now;
 }
 
 int Monitor::groupNum(int x1, int y1) {
@@ -327,11 +299,8 @@ void Monitor::connect() {
 	PacketHeader& h = ps->getHeader(p);
 	h.setLength(4*(5+1)); h.setPtype(CONNECT); h.setFlags(0);
 	h.setComtree(1); h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
-cout << "sending connect \n";
-h.write(cout,ps->getBuffer(p));
 
 	send2router(p); ps->free(p);
-cout << "sent connect \n";
 }
 
 void Monitor::disconnect() {
@@ -377,7 +346,8 @@ void Monitor::run(int finishTime) {
 	now = nextTime = 0; printTime = 1000*UPDATE_PERIOD;
 
 	while (now <= finishTime) {
-		now = getTime();
+		now = Misc::getTime();
+
 		check4comtree();
 		while ((p = receiveReport()) != 0) {
 			updateStatus(p,now);
@@ -388,8 +358,8 @@ void Monitor::run(int finishTime) {
 		}
 
 		nextTime += 1000*UPDATE_PERIOD;
-		useconds_t delay = nextTime - getTime();
-		if (delay <= 1000*UPDATE_PERIOD) usleep(delay);
+		useconds_t delay = nextTime - Misc::getTime();
+		if (0 < delay && delay <= 1000*UPDATE_PERIOD) usleep(delay);
 	}
 
 	disconnect(); 		// send final disconnect packet

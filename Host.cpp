@@ -1,4 +1,10 @@
-/** \file Host.cpp */
+/** @file Host.cpp 
+ *
+ *  @author Jon Turner
+ *  @date 2011
+ *  This is open source software licensed under the Apache 2.0 license.
+ *  See http://www.apache.org/licenses/LICENSE-2.0 for details.
+ */
 
 #include "stdinc.h"
 #include "Host.h"
@@ -67,39 +73,22 @@ main(int argc, char *argv[]) {
 Host::Host(ipa_t mipa, ipa_t ripa) : myIpAdr(mipa) , rtrIpAdr(ripa) {
 	nPkts = 10000;
 	ps = new PacketStore(nPkts+1, nPkts+1);
-
-	// initialize socket address structures
-	bzero(&sa, sizeof(sa));
-	sa.sin_family = AF_INET;
-	sa.sin_port = 0; // let system select address
-	sa.sin_addr.s_addr = htonl(myIpAdr);
-	bzero(&dsa, sizeof(dsa));
-	dsa.sin_family = AF_INET;
 }
 
 Host::~Host() { delete ps; }
 
+/** Initialize IO. Return true on success, false on failure.
+ *  Configure socket for non-blocking access, so that we don't
+ *  block when there are no input packets available.
+ */
 bool Host::init() {
-// Initialize IO. Return true on success, false on failure.
-// Configure socket for non-blocking access, so that we don't
-// block when there are no input packets available.
-	// create datagram socket
-	if ((sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
-                return false;
-        }
-	// bind it to the socket address structure
-        if (bind(sock, (struct sockaddr *) &sa, sizeof(sa)) < 0) {
-                return false;
-        }
-	// make socket nonblocking
-	int flags;
-	if ((flags = fcntl(sock, F_GETFL, 0)) < 0)
-		return false;
-	flags |= O_NONBLOCK;
-	if ((flags = fcntl(sock, F_SETFL, flags)) < 0)
-		return false;
-	return true;
+	sock = Np4d::datagramSocket();
+
+	return  sock >= 0 &&
+        	Np4d::bind4d(sock, myIpAdr, 0) &&
+		Np4d::nonblock(sock);
 }
+
 void Host::run(bool repeatFlag, uint32_t delta, uint32_t finishTime) {
 // Run the host. If repeatFlag is false, then all repeat specifications
 // are ignored. Delta is the minimum time between packets.

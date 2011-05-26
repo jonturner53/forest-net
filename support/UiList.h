@@ -1,5 +1,20 @@
-/** \file UiList.h
- *  Data structure representing a UiList of unique integers.
+/** @file UiList.h
+ *
+ *  @author Jon Turner
+ *  @date 2011
+ *  This is open source software licensed under the Apache 2.0 license.
+ *  See http://www.apache.org/licenses/LICENSE-2.0 for details.
+ */
+
+#ifndef UILIST_H
+#define UILIST_H
+
+#include "stdinc.h"
+#include "Misc.h"
+
+typedef int item;
+
+/** Data structure representing a UiList of unique integers.
  *
  *  Used to represent a list of integers from a defined range 1..n,
  *  where each integer may appear on the list at most one time.
@@ -11,15 +26,6 @@
  *  required. To make it polymorphic, many of its methods
  *  would have to be made virtual.
  */
-
-#ifndef UILIST_H
-#define UILIST_H
-
-#include "stdinc.h"
-#include "Misc.h"
-
-typedef int item;
-
 class UiList {
 public:		UiList(int=26);
 		~UiList();

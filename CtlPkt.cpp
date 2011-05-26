@@ -1,4 +1,12 @@
-/** \file CtlPkt.cpp
+/** @file CtlPkt.cpp
+ *
+ *  @author Jon Turner
+ *  @date 2011
+ *  This is open source software licensed under the Apache 2.0 license.
+ *  See http://www.apache.org/licenses/LICENSE-2.0 for details.
+ */
+
+/**
  *
  *  The CtlPkt class is used to pack and unpack forest control messages.
  *  The class has a public field for every field that can be used in
@@ -131,10 +139,6 @@ bool CtlPkt::unpack(int pleng) {
 	}
 
 	return true;
-}
-
-void CtlPkt::condPrint(ostream& out, int32_t val, const char* s) {
-	if (val != 0) out << " " << s << ": " << val;
 }
 
 void CtlPkt::write(ostream& out) {
