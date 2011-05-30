@@ -50,7 +50,7 @@ public:
 	static bool connect4d(int, ipa_t, ipp_t);
 	static bool nonblock(int);
 
-	// sending and receiving deatagrams
+	// sending and receiving datagrams
 	static int sendto4d(int, void*, int, ipa_t, ipp_t);
 	static int recv4d(int, void*, int);
 	static int recvfrom4d(int, void*, int, ipa_t&, ipp_t&);

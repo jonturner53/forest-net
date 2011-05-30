@@ -21,10 +21,8 @@ typedef int item;
  *  Allows fast membership tests in addition to the usual list
  *  operations.
  *
- *  Note: UiList may be extended by other classes, but it was
- *  not designed for use in contexts where  polymorphism is
- *  required. To make it polymorphic, many of its methods
- *  would have to be made virtual.
+ *  Note: UiList has two virtual members, insert() and removeNext()
+ *  to allow facilitate extension by other classes.
  */
 class UiList {
 public:		UiList(int=26);

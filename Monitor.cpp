@@ -87,7 +87,8 @@ Monitor::~Monitor() {
 }
 
 /** Initialize sockets and open log file for writing.
- *  Return true on success, false on failure.
+ *  @param logFileName is the name of the file to use for logging or EOS
+ *  @return true on success, false on failure
  */
 bool Monitor::init(char *logFileName) {
 	intSock = Np4d::datagramSocket();
@@ -121,9 +122,46 @@ bool Monitor::init(char *logFileName) {
 	}
 	return Np4d::listen4d(extSock) && Np4d::nonblock(extSock);
 }
+/** Run the monitor, stopping after finishTime
+ *  Operate on a cycle with a period of UPDATE_PERIOD milliseconds,
+ *  Each cycle, process all the packets that came in during
+ *  that period and store results.
+ *  Print a record of all avatar's status, once per second. 
+ */
+void Monitor::run(int finishTime) {
 
+	int p;
+
+	uint32_t now;    	// free-running microsecond time
+	uint32_t nextTime;	// time of next operational cycle
+	uint32_t printTime;	// next time to print status
+
+	now = nextTime = 0; printTime = 1000*UPDATE_PERIOD;
+
+	while (now <= finishTime) {
+		now = Misc::getTime();
+
+		check4comtree();
+		while ((p = receiveReport()) != 0) {
+			updateStatus(p,now);
+			ps->free(p);
+		}
+		if (now > printTime) {
+			writeStatus(now); printTime += 1000*UPDATE_PERIOD;
+		}
+
+		nextTime += 1000*UPDATE_PERIOD;
+		useconds_t delay = nextTime - Misc::getTime();
+		if (0 < delay && delay <= 1000*UPDATE_PERIOD) usleep(delay);
+	}
+
+	disconnect(); 		// send final disconnect packet
+}
+
+/** Check for next Avatar report packet and return it if there is one.
+ *  @return next report packet or 0, if no report has been received.
+ */
 int Monitor::receiveReport() { 
-// Return next report packet from Forest network or 0 if there is none. 
 	int p = ps->alloc();
 	if (p == 0) return 0;
         buffer_t& b = ps->getBuffer(p);
@@ -167,8 +205,9 @@ void Monitor::check4comtree() {
         return;
 }
 
+/** Send packet to Forest router (connect, disconnect, sub_unsub).
+ */
 void Monitor::send2router(int p) {
-// Send packet to Forest router (connect, disconnect, sub_unsub)
 	static sockaddr_in sa;
 	int leng = ps->getHeader(p).getLength();
 	ps->pack(p);
@@ -177,8 +216,9 @@ void Monitor::send2router(int p) {
 	if (rv == -1) fatal("Monitor::send2router: failure in sendto");
 }
 
+/** Send status packet to remote GUI, assuming the comt value is non-zero.
+ */
 void Monitor::send2gui() {
-// Send status packet to remote GUI, assuming the comt value is non-zero
 
 	if (comt == 0) return;
 
@@ -191,16 +231,21 @@ void Monitor::send2gui() {
 	}
 }
 
+/** Return the multicast group number associated with a virtual world positon.
+ *  Assumes that SIZE is an integer multiple of GRID
+ *  @param x1 is x coordinate
+ *  @param y1 is y coordinate
+ *  @return the group number for the grid square containing (x1,y1)
+ */
 int Monitor::groupNum(int x1, int y1) {
-// Return the multicast group number associated with position (x,y)
-// Assumes that SIZE is an integer multiple of GRID
 	return 1 + (x1/GRID) + (y1/GRID)*(SIZE/GRID);
 }
 
+/** If oldcomt != 0, send a packet to unsubscribe from all multicasts
+ *  in oldcomt. if newcomt != 0 send a packet to subscribe to all
+ *  multicasts in newcomt.
+ */
 void Monitor::updateSubscriptions(comt_t oldcomt, comt_t newcomt) {
-// If oldcomt != 0, send a packet to unsubscribe from all multicasts
-// in oldcomt. if newcomt != 0 send a packet to subscribe to all
-// multicasts in newcomt.
 	packet p = ps->alloc();
 	PacketHeader& h = ps->getHeader(p);
 	uint32_t *pp = ps->getPayload(p);
@@ -241,15 +286,16 @@ void Monitor::updateSubscriptions(comt_t oldcomt, comt_t newcomt) {
 	ps->free(p);
 }
 
+/** If the given packet is a status report, track the sender.
+ *  Add to our set of watchedAvatars if not already there.
+ *  sending avatar is visible. If it is visible, but not in our
+ *  set of nearby avatars, then add it. If it is not visible
+ *  but is in our set of nearby avatars, then delete it.
+ *  Note: we assume that the visibility range and avatar speeds
+ *  are such that we will get at least one report from a newly
+ *  invisible avatar.
+ */
 void Monitor::updateStatus(int p, int now) {
-// If the given packet is a status report, track the sender.
-// Add to our set of watchedAvatars if not already there.
-// sending avatar is visible. If it is visible, but not in our
-// set of nearby avatars, then add it. If it is not visible
-// but is in our set of nearby avatars, then delete it.
-// Note: we assume that the visibility range and avatar speeds
-// are such that we will get at least one report from a newly
-// invisible avatar.
 
 	PacketHeader& h = ps->getHeader(p);
 	uint32_t *pp = ps->getPayload(p);
@@ -291,9 +337,10 @@ void Monitor::updateStatus(int p, int now) {
 	return;
 }
 
+/** Send initial connect packet to forest router
+ *  Uses comtree 1, which is for user signalling.
+ */
 void Monitor::connect() {
-// Send initial connect packet to forest router
-// Uses comtree 1, which is for user signalling.
 	packet p = ps->alloc();
 
 	PacketHeader& h = ps->getHeader(p);
@@ -303,8 +350,9 @@ void Monitor::connect() {
 	send2router(p); ps->free(p);
 }
 
+/** Send final disconnect packet to forest router, after unsubscribing.
+ */
 void Monitor::disconnect() {
-// Send final disconnect packet to forest router, after unsubscribing.
 	updateSubscriptions(comt, 0);
 	comt = 0;
 
@@ -330,37 +378,3 @@ void Monitor::writeStatus(int now) {
 	}
 }
 
-void Monitor::run(int finishTime) {
-// Run the monitor, stopping after finishTime
-// Operate on a cycle with a period of UPDATE_PERIOD milliseconds,
-// Each cycle, process all the packets that came in during
-// that period and store results.
-// Print a record of all avatar's status, once per second. 
-
-	int p;
-
-	uint32_t now;    	// free-running microsecond time
-	uint32_t nextTime;	// time of next operational cycle
-	uint32_t printTime;	// next time to print status
-
-	now = nextTime = 0; printTime = 1000*UPDATE_PERIOD;
-
-	while (now <= finishTime) {
-		now = Misc::getTime();
-
-		check4comtree();
-		while ((p = receiveReport()) != 0) {
-			updateStatus(p,now);
-			ps->free(p);
-		}
-		if (now > printTime) {
-			writeStatus(now); printTime += 1000*UPDATE_PERIOD;
-		}
-
-		nextTime += 1000*UPDATE_PERIOD;
-		useconds_t delay = nextTime - Misc::getTime();
-		if (0 < delay && delay <= 1000*UPDATE_PERIOD) usleep(delay);
-	}
-
-	disconnect(); 		// send final disconnect packet
-}

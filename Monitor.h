@@ -56,7 +56,8 @@ private:
 	struct avatarData {
 	fAdr_t	adr;		///< forest address of avatar
 	int	ts;		///< timestamp of latest update
-	int	x, y;		///< position in virtual world
+	int	x;		///< x coordinate in virtual world
+	int	y;		///< y coordinate in virtual world
 	int	dir;		///< direction avatar is facing in degrees
 	int	speed;		///< speed moving in UNITS/sec
 	int	numNear;	///< number of nearby avatars
