@@ -38,8 +38,6 @@ public:		UiDlist(int=26);
         void    copyFrom(const UiDlist&); 
 	void	clear();
 
-	void	dump() const;	
-
 protected:
 	// handle dynamic storage
         void    makeSpace();   

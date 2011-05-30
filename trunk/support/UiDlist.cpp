@@ -21,6 +21,8 @@ void UiDlist::makeSpace() {
         for (item i = 1; i <= n(); i++) prv[i] = -1;
         prv[0] = 0;
 }
+
+/** Release dynamic storage used by this object. */
 void UiDlist::freeSpace() { delete [] prv; }
 
 /** Get an item based on its position in the lsit.
@@ -39,7 +41,7 @@ item UiDlist::get(int i) const {
  *  @param i is item to insert; if i is 0 or already in
  *  the list, no change is made
  *  @param j is item after which i is to be inserted;
- *  if zero, i is inserted at the front of the list
+ *  if j == 0, i is inserted at the front of the list
  *  @return true if list was modified, else false
  */
 bool UiDlist::insert(item i, item j) {
@@ -66,7 +68,9 @@ bool UiDlist::remove(item i) {
 	return true;
 }
 
-/** Copy into list from L. */
+/** Replace the content of the list with that of another.
+ *  @param src is the list whose value is to replace this list's
+ */
 void UiDlist::copyFrom(const UiDlist& src) {
 	bool resize = (src.n() > n());
 	UiList::copyFrom(src);
@@ -85,33 +89,3 @@ void UiDlist::clear() {
 	}
 	UiList::clear();
 }
-
-// Print the raw data structure, including non-list elements.
-void UiDlist::dump() const {
-	int i;
-	cout << "first="; Misc::writeNode(cout,first(),n());
-	cout << " last="; Misc::writeNode(cout,last(),n()); cout << endl;
-/*
-	cout << "next: ";
-	for (i = 1; i <= n(); i++) {
-		if (next(i) > 0) { cout << " "; Misc::writeNode(cout,next(i),n()); }
-		else if (n <= 26) cout << " -"
-		else cout << next(i);
-		}
-	}
-*/
-	cout << "\nprv: ";
-	for (i = 1; i <= n(); i++) {
-		if (n() <= 26 && prv[i] == -1)
-			cout << ", ";
-		else if (n() <= 26 && prv[i] == 0)
-			cout << "- ";
-		else if (n() <= 26)
-			cout << char(prv[i]+('a'-1)) << ' ';
-		else {
-			cout.width(2); cout << prv[i]+('a'-1) << ' ';
-		}
-	}
-	printf("\n");
-}
-

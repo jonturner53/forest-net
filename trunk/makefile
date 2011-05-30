@@ -30,7 +30,7 @@ CpAttr.o :       ${HFILES}
 CpType.o :       ${HFILES}
 CtlPkt.o :       ${HFILES}
 
-all : fHost fRouter fAvatar fMonitor
+all : fHost fRouter fAvatar fMonitor lib
 	cp fHost fRouter fAvatar fMonitor ${HOME}/bin
 
 fRouter : RouterCore.o lib

@@ -100,8 +100,8 @@ void UiList::clear() {
  *
  *  @param other is the list to be compared to this one
  *  @return true if they are the same list or have the
- *  same contents; they need not have the same storage
- *  capacity to be equal
+ *  same contents (in the same order);
+ *  they need not have the same storage capacity to be equal
  */
 bool UiList::equals(UiList& other) const {
 	if (this == &other) return true;

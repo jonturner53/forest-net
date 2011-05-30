@@ -126,7 +126,7 @@ void Avatar::run(int finishTime) {
 
 		nextTime += 1000*UPDATE_PERIOD;
 		useconds_t delay = nextTime - now;
-		usleep(delay);
+		if (delay > 0) usleep(delay);
 	}
 	disconnect(); 		// send final disconnect packet
 }
@@ -231,10 +231,10 @@ void Avatar::updateStatus(int now) {
 	y = max(y,0); y = min(y,SIZE-1);
 
 	// adjust direction and deltaDir
-	if (x == 0)		direction = 90;
-	else if (x == SIZE-1)	direction = 270;
-	else if (y == 0)	direction = 0;
-	else if (y == SIZE-1)	direction = 180;
+	if (x == 0)             direction = -direction;
+        else if (x == SIZE-1)   direction = -direction;
+        else if (y == 0)        direction = 180 - direction;
+        else if (y == SIZE-1)   direction = 180 - direction;
 	else {
 		direction += deltaDir;
 		if (direction < 0) direction += 360;
@@ -245,6 +245,7 @@ void Avatar::updateStatus(int now) {
 			deltaDir = max(-1.0,deltaDir);
 		}
 	}
+	if (direction < 0) direction += 360;
 
 	// update speed
 	if ((r = randfrac()) <= 0.1) {

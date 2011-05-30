@@ -32,25 +32,24 @@ public:
 		UiHashTbl(int);
 		~UiHashTbl();
 
-	int	lookup(uint64_t); 		// lookup entry
-	bool	insert(uint64_t, uint32_t); 	// add an entry
-	void	remove(uint64_t); 		// remove an entry
-	void	dump();				// print hash table contents
+	int	lookup(uint64_t); 		
+	bool	insert(uint64_t, uint32_t); 
+	void	remove(uint64_t); 	
+	void	dump();		
 private:
-	static const int BKT_SIZ = 8;		// # of items per bucket
-	static const int MAXVAL = (1 << 20)-1;	// largest stored value
-	int	n;			// range of values is 1..n
-	int	nb;			// number of hash buckets per section
-	int	bktMsk;			// mask used to extract bucket index
-	int	valMsk;			// mask used to extract value
-	int	fpMsk;			// mask used to extract fingerprint
+	static const int BKT_SIZ = 8;		///< # of items per bucket
+	static const int MAXVAL = (1 << 20)-1;	///< largest stored value
+	int	n;			///< range of values is 1..n
+	int	nb;			///< number of hash buckets per section
+	int	bktMsk;			///< mask used to extract bucket index
+	int	valMsk;			///< mask used to extract value
+	int	fpMsk;			///< mask used to extract fingerprint
 
-	typedef uint32_t bkt_t[BKT_SIZ]; // type declaration for buckets
-	bkt_t	*bkt;			// vector of hash backets
-	uint64_t *keyVec;		// vector of keys, indexed by value
+	typedef uint32_t bkt_t[BKT_SIZ]; ///< type declaration for buckets
+	bkt_t	*bkt;			///< vector of hash backets
+	uint64_t *keyVec;		///< vector of keys, indexed by value
 
-	void hashit(uint64_t,int,uint32_t&,uint32_t&); // hash function
-	int chkBkt(uint32_t, uint32_t, uint64_t); // check bucket for match
+	void hashit(uint64_t,int,uint32_t&,uint32_t&);
 };
 
 #endif

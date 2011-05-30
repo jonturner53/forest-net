@@ -30,13 +30,18 @@ UiHashTbl::~UiHashTbl() {
 	delete [] bkt; delete [] keyVec;
 }
 
-/** Return a bucket index and a fingerprint, based on given
- *  64 bit key value. Hf is either 0 and 1 and selects one of
- *  two different hash functions.
+/** Compute a bucket index and fingerprint, for a given key.
  * 
  *  Hashit uses multiplicative hashing with one of two
  *  different multipliers, after first converting
  *  the 64 bit integer into a 32 bit integer.
+ *
+ *  @param key is the key to be hashed
+ *  @param hf is either 0 or 1 and selects one of two hash functions
+ *  @param b is a reference; on return its value is equal to the
+ *  hash bucket for the given key
+ *  @param fp is a reference; on return its value is equal to the
+ *  fingerprint for the given key
  */
 void UiHashTbl::hashit(uint64_t key, int hf, uint32_t& b, uint32_t& fp) {
 	const uint32_t A0 = 0xa8134c35;
@@ -52,53 +57,45 @@ void UiHashTbl::hashit(uint64_t key, int hf, uint32_t& b, uint32_t& fp) {
 	fp  = (z >> 29) & fpMsk;
 }
 
-/** Check the specified bucket for a match with the given fingerprint,
- *  and for a matching key in keyVec. If a match is found, return
- *  the stored value.
- */
-int UiHashTbl::chkBkt(uint32_t b, uint32_t fp, uint64_t key) {
-	int i, v;
-	for (i = 0; i < BKT_SIZ; i++) {
-		if ((bkt[b][i] & fpMsk) == fp) {
-			v = bkt[b][i] & valMsk;
-			if (keyVec[v] == key) return v;
-		}
-	}
-	return Null;
-}
-
-/** Perform a lookup in the hash table. Return the value stored
- *  under key, or 0 if there is none.
+/** Perform a lookup in the hash table.
+ *  @param key is the keey to be looked up in the table
+ *  @return the value stored for the given key, or 0 if there is none.
  */
 int UiHashTbl::lookup(uint64_t key) {
 	int i; uint32_t b, val, fp;
 
+	// check bucket in the first half of the bucket array
 	hashit(key,0,b,fp);
 	for (i = 0; i < BKT_SIZ; i++) {
-		if ((bkt[b][i] & fpMsk) == fp) {
-			val = bkt[b][i] & valMsk;
-			if (keyVec[val] == key) return val;
-		}
-	}
-	hashit(key,1,b,fp); b += nb;
-	for (i = 0; i < BKT_SIZ; i++) {
-		if ((bkt[b][i] & fpMsk) == fp) {
-			val = bkt[b][i] & valMsk;
-			if (keyVec[val] == key) return val;
-		}
-	}
-	return Null;
+                if ((bkt[b][i] & fpMsk) == fp) {
+                        val = bkt[b][i] & valMsk;
+                        if (keyVec[val] == key) return val;
+                }
+        }
+
+	// check bucket in the second half of the bucket array
+        hashit(key,1,b,fp); b += nb;
+        for (i = 0; i < BKT_SIZ; i++) {
+                if ((bkt[b][i] & fpMsk) == fp) {
+                        val = bkt[b][i] & valMsk;
+                        if (keyVec[val] == key) return val;
+                }
+        }
+
 }
 
-/** Insert (key,value) pair into hash table. No check is made to
- *  ensure that there is no conflicting (key,value) pair.
- *  Return true on success, false on failure.
+/** Insert a (key,value) pair into hash table.
+ *  No check is made to ensure that there is no conflicting
+ *  (key,value) pair.
+ *  @param key is the key part of the pair
+ *  @param val is the value part of the pair
+ *  @return true on success, false on failure.
  */
 bool UiHashTbl::insert(uint64_t key, uint32_t val) {
 	int i, j0, j1, n0, n1;
 	uint32_t b0, b1, fp0, fp1;
 
-	// Count the number of unused item in each bucket
+	// Count the number of unused items in each bucket
 	// and find an unused item in each (if there is one)
 	hashit(key,0,b0,fp0);
 	n0 = 0;
@@ -121,7 +118,8 @@ bool UiHashTbl::insert(uint64_t key, uint32_t val) {
 	return true;
 }
 
-/** Remove entry for key from the table.
+/** Remove a (key, value) pair from the table.
+ *  @param key is the key of the pair to be removed
  */
 void UiHashTbl::remove(uint64_t key) {
 	int i; uint32_t b, val, fp; uint32_t *bucket;

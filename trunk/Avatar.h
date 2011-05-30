@@ -47,7 +47,7 @@ private:
 
 	const static int UPDATE_PERIOD = 50;  ///< # ms between status updates
 	
-	/** network parameters */
+	// network parameters 
 	ipa_t	myIpAdr;		///< IP address of interface
 	uint16_t myPort;		///< port number for all io
 	ipa_t	rtrIpAdr;		///< IP address of router
@@ -56,14 +56,14 @@ private:
 	int	sock;			///< socket number
 	comt_t	comt;			///< comtree number
 
-	/** avatar properties */
+	// avatar properties
 	int	x;			///< x coordinate in virtual world
 	int	y;			///< y coordinate in virtual world
 	double	direction;		///< direction avatar is facing in deg
 	double	deltaDir;		///< change in direction per period
 	double	speed;			///< speed moving in UNITS/sec
 
-	/** info on groups and nearby avatars */
+	// info on groups and nearby avatars 
 	const static int MAXGROUPS = (SIZE/GRID)*(SIZE/GRID);
 					///< maximum # of multicast groups
 	const static int MAXNEAR = 1000;///< max # of nearby avatars
@@ -74,7 +74,7 @@ private:
 
 	PacketStore *ps;		///< pointer to packet store
 
-	/** private helper methods */
+	// private helper methods 
 	int	groupNum(int, int);	///< return group num for given position
 
 	void	updateStatus(int);	///< update avatar position, etc
