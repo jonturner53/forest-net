@@ -81,7 +81,7 @@ int UiHashTbl::lookup(uint64_t key) {
                         if (keyVec[val] == key) return val;
                 }
         }
-
+	return 0;
 }
 
 /** Insert a (key,value) pair into hash table.
