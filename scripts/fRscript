@@ -1,0 +1,26 @@
+#! /bin/sh
+# Run a forest router
+#
+# usage: fRouter dir rip tlim [ dplim ]
+#
+# dir is the directory in which to run fRouter
+# rip is the host's IP address in the forest network
+# tlim is the number of seconds to run
+# dplim is a limit on the number of data packets
+# to be recorded in the router's log; if omitted,
+# the number of data packets is limited only by the
+# router's logging capacity.
+#
+# The script assumes that the directory in which
+# the router is run includes configuration files for
+# the interface table (called ift), link table (lt),
+# comtree table (ctt), routing table (rt) and
+# statistics spec (ss). Logging output is placed
+# in the file log/r and the standard error output
+# is sent to err/r.
+#
+# The router is run in the background, so the script
+# returns immediately.
+#
+cd $1
+fRouter $2 ift lt ctt rt ss $3 >log/r 2>err/r ${4} &

@@ -1,0 +1,30 @@
+#! /bin/sh
+# Run a forest host
+#
+# usage: fHost dir hip rip rep delta tlim tag
+#
+# dir is the directory in which to run fHost
+# hip is the host's IP address in the forest network
+# rip is the IP address of the host's router
+# rep is the repeat flag for the fHost; if zero,
+# repeat specifications in the packet generation file
+# are ignored
+# delta is the minimum number of microseconds between
+# packets sent by the host; this overrides any smaller
+# inter-packet delays in the packet generation file
+# tlim is the number of seconds to run
+# tag is an integer tag
+#
+# The script assumes that the packet generation file
+# is in the directory in which fHost runs and is named hi,
+# where i is the value of the tag argument.
+# The script also assumes that the directory in which
+# the fHost is run contains log and err subdirectories.
+# The logging output is placed in the file log/hi,
+# The standard error output is sent to err/hi.
+#
+# The forest host is run in the background, so the
+# script returns immediately.
+#
+cd $1
+fHost $2 $3 $4 $5 $6 <h$7 >log/h$7 2>err/h${7} &
