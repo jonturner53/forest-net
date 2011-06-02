@@ -1,14 +1,15 @@
 
-%.class: %.java
-	javac $<
-
 CLASSFILES = ShowWorld.class AvatarGraphic.class AvatarStatus.class
 
-AvatarGraphic.class : AvatarStatus.class
-ShowWorld.class : AvatarGraphic.class
+%.class: %.java
+	javac $<
+	cp $@ ~/bin/java/remoteDisplay
 
 all : ${CLASSFILES}
-	cp ${CLASSFILES} ~/bin/java/remoteDisplay
+
+AvatarGraphic.class : AvatarStatus.class
+
+ShowWorld.class : AvatarGraphic.class
 
 clean :
 	rm -f *.class
