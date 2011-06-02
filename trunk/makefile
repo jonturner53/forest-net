@@ -1,5 +1,6 @@
 CXXFLAGS = -O2 -m64
-.cpp.o:
+
+%.o: %.cpp
 	${CXX} ${CXXFLAGS} -I support -c $<
 
 HFILES = stdinc.h CommonDefs.h RouterCore.h IoProcessor.h \
@@ -12,8 +13,6 @@ HFILES = stdinc.h CommonDefs.h RouterCore.h IoProcessor.h \
 LIBFILES = CommonDefs.o IoProcessor.o LinkTable.o ComtreeTable.o \
 	   RouteTable.o StatsModule.o CpAttr.o CpType.o CtlPkt.o \
 	   QuManager.o PacketHeader.o PacketStore.o 
-
-SUPPORT = support/timestamp
 
 lnkTbl.o :       ${HFILES}
 ComtreeTable.o : ${HFILES}
@@ -30,25 +29,31 @@ CpAttr.o :       ${HFILES}
 CpType.o :       ${HFILES}
 CtlPkt.o :       ${HFILES}
 
-all : fHost fRouter fAvatar fMonitor lib
+all : fHost fRouter fAvatar fMonitor
 	cp fHost fRouter fAvatar fMonitor ${HOME}/bin
 
+Support:
+	${MAKE} -C support
+
+RemoteDisplay:
+	${MAKE} -C remoteDisplay
+
 fRouter : RouterCore.o lib
-	${CXX} ${CXXFLAGS} $< lib -o fRouter
+	${CXX} ${CXXFLAGS} $< lib -o $@
 
 fHost : Host.o lib
-	${CXX} ${CXXFLAGS} $< lib -o fHost
+	${CXX} ${CXXFLAGS} $< lib -o $@
 
 fAvatar : Avatar.o lib
-	${CXX} ${CXXFLAGS} $< lib -o fAvatar
+	${CXX} ${CXXFLAGS} $< lib -o $@
 
 fMonitor : Monitor.o lib
-	${CXX} ${CXXFLAGS} $< lib -o fMonitor
+	${CXX} ${CXXFLAGS} $< lib -o $@
 
-lib : ${LIBFILES} ${SUPPORT}
-	make -C support lib
+lib : ${LIBFILES}
+	${MAKE} -C support lib
 	ar -ru lib ${LIBFILES}
 
 clean :
-	make -C support clean
+	${MAKE} -C support clean
 	rm -f *.o lib fHost fRouter Avatar Monitor

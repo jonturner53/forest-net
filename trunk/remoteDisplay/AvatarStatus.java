@@ -1,4 +1,4 @@
-package forest-net;
+package remoteDisplay;
 
 /** Class used to record the status of an Avatar.
  *  @author Jon Turner

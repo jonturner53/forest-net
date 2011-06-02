@@ -1,4 +1,4 @@
-package forest-net;
+package remoteDisplay;
 
 import java.awt.Color;
 import java.lang.Math;
