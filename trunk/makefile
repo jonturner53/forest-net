@@ -3,7 +3,7 @@ CXXFLAGS = -O2 -m64
 	${CXX} ${CXXFLAGS} -I support -c $<
 
 HFILES = stdinc.h CommonDefs.h RouterCore.h IoProcessor.h \
-	 LinkTable.h ComtreeTable.h RouteTable.h statsModule.h \
+	 LinkTable.h ComtreeTable.h RouteTable.h StatsModule.h \
 	 QuManager.h CpAttr.h CpType.h CtlPkt.h \
 	 PacketHeader.h PacketStore.h Avatar.h Monitor.h \
 	 support/Misc.h support/UiList.h support/UiDlist.h support/UiListSet.h \
