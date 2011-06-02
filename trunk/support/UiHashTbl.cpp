@@ -20,14 +20,19 @@ UiHashTbl::UiHashTbl(int n1) : n(n1) {
 
 	bkt = new bkt_t[2*nb]; keyVec = new uint64_t[n+1];
 
-	int i, j;
-	for (i = 0; i < 2*nb; i++) {
-		for (j = 0; j < BKT_SIZ; j++) bkt[i][j] = 0;
-	}
+	clear();
 };
 	
 UiHashTbl::~UiHashTbl() {
 	delete [] bkt; delete [] keyVec;
+}
+
+/** Clear the hashtable contents. */
+void UiHashTbl::clear() {
+	for (int i = 0; i < 2*nb; i++) {
+		for (int j = 0; j < BKT_SIZ; j++) bkt[i][j] = 0;
+	}
+	for (int i = 0; i < n; i++) keyVec[i] = 0;
 }
 
 /** Compute a bucket index and fingerprint, for a given key.

@@ -35,6 +35,7 @@ public:
 	int	lookup(uint64_t); 		
 	bool	insert(uint64_t, uint32_t); 
 	void	remove(uint64_t); 	
+	void	clear(); 	
 	void	dump();		
 private:
 	static const int BKT_SIZ = 8;		///< # of items per bucket
