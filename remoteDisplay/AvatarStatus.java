@@ -10,6 +10,7 @@ class AvatarStatus {
 	double x;	// Avatar's x position
 	double y;	// Avatar's y position
 	double dir;	// direction facing (in degrees)
+	int numVisible;  // number of visible Avatars and includes the number of nearby avatars
 	int numNear;	// number of nearby Avatars
 	int comtree;	// comtree that report relates to
 	
@@ -21,6 +22,7 @@ class AvatarStatus {
 		id = other.id; when = other.when;
 		x = other.x; y = other.y;
 		dir = other.dir;
+		numVisible = other.numVisible;
 		numNear = other.numNear;
 		comtree = other.comtree;
 	}
@@ -28,7 +30,7 @@ class AvatarStatus {
 	/** @return String representing this object. */
 	public String toString() {
 		return ((id >> 16) & 0xffff) + "." + (id & 0xffff) +
-			" " + when + " (" + x + "," + y + ")/" + dir +
+			" " + when + " (" + x + "," + y + ")/" + dir + " " + numVisible + 
 			" " + numNear;
 	}
 }

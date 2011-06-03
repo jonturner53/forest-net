@@ -79,7 +79,8 @@ Avatar::Avatar(ipa_t mipa, ipa_t ripa, fAdr_t ma, fAdr_t ra, comt_t ct)
 
 	mcGroups = new UiDlist(MAXGROUPS);
 	nearAvatars = new UiHashTbl(MAXNEAR);
-	numNear = 0;
+	visibleAvatars = new UiHashTbl(MAXNEAR);
+	numVisible = numNear = stableNumNear = stableNumVisible = 0;
 	nextAv = 1;
 }
 
@@ -112,8 +113,14 @@ void Avatar::run(int finishTime) {
 	uint32_t now;    	// free-running microsecond time
 	uint32_t nextTime;	// time of next operational cycle
 	now = nextTime = 0;
-
 	while (now <= finishTime) {
+		//reset hashtables and report
+		nearAvatars->clear();
+		visibleAvatars->clear();
+		stableNumNear = numNear; stableNumVisible = numVisible;
+		numVisible = numNear = 0;
+		nextAv = 1;
+
 		now = Misc::getTime();
 		updateStatus(now);
 		updateSubscriptions();
@@ -149,7 +156,8 @@ void Avatar::sendStatus(int now) {
 	pp[3] = htonl(y);
 	pp[4] = htonl((uint32_t) direction);
 	pp[5] = htonl((uint32_t) speed);
-	pp[6] = htonl(numNear);
+	pp[6] = htonl(stableNumVisible);
+	pp[7] = htonl(stableNumNear);
 
 	send(p);
 }
@@ -268,31 +276,30 @@ int Avatar::groupNum(int x1, int y1) {
  */
 void Avatar::updateSubscriptions() {
 	const double SQRT2 = 1.41421356;
-	const int GRANGE = VISRANGE + (4*FAST*UPDATE_PERIOD)/1000;
-
+	
 	int myGroup = groupNum(x,y);
 	UiDlist *newGroups = new UiDlist(MAXGROUPS);
 	newGroups->addLast(myGroup);
 
 	int x1, y1, g;
-	x1 = min(SIZE-1, x+GRANGE);
+	x1 = min(SIZE-1, x+VISRANGE);
 	if (!newGroups->member(g = groupNum(x1,y)))  newGroups->addLast(g);
-	x1 = max(0, x-GRANGE);
+	x1 = max(0, x-VISRANGE);
 	if (!newGroups->member(g = groupNum(x1,y)))  newGroups->addLast(g);
 
-	y1 = min(SIZE-1, y+GRANGE);
+	y1 = min(SIZE-1, y+VISRANGE);
 	if (!newGroups->member(g = groupNum(x,y1)))  newGroups->addLast(g);
-	y1 = max(0, y-GRANGE);
+	y1 = max(0, y-VISRANGE);
 	if (!newGroups->member(g = groupNum(x,y1)))  newGroups->addLast(g);
 
-	x1 = min(SIZE-1, (int) (x+GRANGE/SQRT2));
-	y1 = min(SIZE-1, (int) (y+GRANGE/SQRT2));
+	x1 = min(SIZE-1, (int) (x+VISRANGE/SQRT2));
+	y1 = min(SIZE-1, (int) (y+VISRANGE/SQRT2));
 	if (!newGroups->member(g = groupNum(x1,y1)))  newGroups->addLast(g);
-	y1 = min(SIZE-1, (int) (y-GRANGE/SQRT2));
+	y1 = min(SIZE-1, (int) (y-VISRANGE/SQRT2));
 	if (!newGroups->member(g = groupNum(x1,y1)))  newGroups->addLast(g);
-	x1 = min(SIZE-1, (int) (x-GRANGE/SQRT2));
+	x1 = min(SIZE-1, (int) (x-VISRANGE/SQRT2));
 	if (!newGroups->member(g = groupNum(x1,y1)))  newGroups->addLast(g);
-	y1 = min(SIZE-1, (int) (y+GRANGE/SQRT2));
+	y1 = min(SIZE-1, (int) (y+VISRANGE/SQRT2));
 	if (!newGroups->member(g = groupNum(x1,y1)))  newGroups->addLast(g);
 
 	packet p = ps->alloc();
@@ -346,17 +353,16 @@ void Avatar::updateNearby(int p) {
 	double dx = x - x1; double dy = y - y1;
 
 	uint64_t key = h.getSrcAdr(); key = (key << 32) | h.getSrcAdr();
+	if(nearAvatars->lookup(key) == 0) {
+		numNear++;
+		nearAvatars->insert(key, nextAv++);
+	}
 	if (sqrt(dx*dx + dy*dy) <= VISRANGE) {
-		if (nearAvatars->lookup(key) == 0) {
+		if (visibleAvatars->lookup(key) == 0) {
 			if (nextAv <= MAXNEAR) {
-				nearAvatars->insert(key, nextAv++);
-				numNear++;
+				visibleAvatars->insert(key, nextAv++);
+				numVisible++;
 			}
-		}
-	} else {
-		if (nearAvatars->lookup(key) != 0)  {
-			nearAvatars->remove(key);
-			numNear--;
 		}
 	}
 	return;

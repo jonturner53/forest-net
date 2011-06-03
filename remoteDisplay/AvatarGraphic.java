@@ -54,6 +54,8 @@ class AvatarGraphic {
 			     ((avaStatus.id >> 16) & 0xffff) + "." +
 			     (avaStatus.id & 0xffff));
 		StdDraw.text(avaStatus.x+SIZE/3,avaStatus.y-SIZE/3,
-			    ((Integer) avaStatus.numNear).toString());	
+			    ((Integer) avaStatus.numVisible).toString());
+		StdDraw.text(avaStatus.x-SIZE/3,avaStatus.y-SIZE/3,
+                            ((Integer) avaStatus.numNear).toString()); 
 	}
 }

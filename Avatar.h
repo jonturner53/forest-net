@@ -68,9 +68,13 @@ private:
 					///< maximum # of multicast groups
 	const static int MAXNEAR = 1000;///< max # of nearby avatars
 	UiDlist	*mcGroups;		///< multicast groups subscribed to
-	int numNear;			///< number of nearby avatars
+	int numVisible;			///< number of visible avatars
+	int numNear;			///< number of avatars in multicast groups
+	int stableNumNear;		///< number of nearby avatars reported
+	int stableNumVisible;		///< number of visible avatare reported
 	int nextAv;			///< next available avatar index
-	UiHashTbl *nearAvatars;		///< set of visible avatars
+	UiHashTbl *visibleAvatars;	///< set of visible avatars
+	UiHashTbl *nearAvatars;		///< set of nearby avatars (receiving multicasts)
 
 	PacketStore *ps;		///< pointer to packet store
 
