@@ -41,7 +41,7 @@ public class ShowWorld {
 	 */
 	private static AvatarStatus getReport() {
 		if (repBuf == null) {
-			repBuf = ByteBuffer.allocate(40*32);
+			repBuf = ByteBuffer.allocate(36*36);
 			repBuf.clear();
 		}
 		
@@ -52,7 +52,7 @@ public class ShowWorld {
 				try {					
 					if (monChan.read(repBuf) == 0)
 						return null;
-					if (repBuf.position() >= 32) {
+					if (repBuf.position() >= 36) {
 						repBuf.flip(); needData = false;
 					}
 				} catch(Exception x) {
@@ -71,10 +71,10 @@ public class ShowWorld {
 		rep.y = repBuf.getInt()/1000000.0;
 		rep.dir = repBuf.getInt();
 		repBuf.getInt(); // discard value
+		rep.numVisible = repBuf.getInt();
 		rep.numNear = repBuf.getInt();
 		rep.comtree = repBuf.getInt();
-		
-		if (repBuf.remaining() < 32) needData = true;
+		if (repBuf.remaining() < 36) needData = true;
 			
 		return rep;		
 	}

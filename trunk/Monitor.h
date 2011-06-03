@@ -28,6 +28,7 @@ public:
 	void	run(int); 		///< run avatar
 private:
 	const static short MON_PORT = 30124;///< port# for connection to GUI
+	const static int NUMITEMS = 9;///<number of distinct items in a status packet
 	const static int SIZE = 1000000;///< xy extent of virtual world
 	const static int GRID = 200000;	///< xy extent of one grid square
 
@@ -60,6 +61,7 @@ private:
 	int	y;		///< y coordinate in virtual world
 	int	dir;		///< direction avatar is facing in degrees
 	int	speed;		///< speed moving in UNITS/sec
+	int	numVisible;	///< number of visible avatars + number of nearby avatars
 	int	numNear;	///< number of nearby avatars
 	comt_t	comt;		///< comtree that avatar appears in
 	} *avData;		

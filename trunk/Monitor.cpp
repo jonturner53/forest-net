@@ -222,7 +222,7 @@ void Monitor::send2gui() {
 
 	if (comt == 0) return;
 
-	int nbytes = repCnt*8*sizeof(uint32_t);
+	int nbytes = repCnt*NUMITEMS*sizeof(uint32_t);
 	char* p = (char *) statPkt;
 	while (nbytes > 0) {
 		int n = write(connSock, (void *) p, nbytes);
@@ -313,7 +313,8 @@ void Monitor::updateStatus(int p, int now) {
 	avData[avNum].y = ntohl(pp[3]);
 	avData[avNum].dir = ntohl(pp[4]);
 	avData[avNum].speed = ntohl(pp[5]);
-	avData[avNum].numNear = ntohl(pp[6]);
+	avData[avNum].numVisible = ntohl(pp[6]);
+	avData[avNum].numNear = ntohl(pp[7]);
 	avData[avNum].comt = h.getComtree();
 
 	if (h.getComtree() != comt) return;
@@ -324,14 +325,15 @@ void Monitor::updateStatus(int p, int now) {
 		send2gui(); repCnt = 0;
 	}
 	// add new report to the outgoing status packet
-	statPkt[8*repCnt]   = htonl(now);
-	statPkt[8*repCnt+1] = htonl(avData[avNum].adr);
-	statPkt[8*repCnt+2] = htonl(avData[avNum].x);
-	statPkt[8*repCnt+3] = htonl(avData[avNum].y);
-	statPkt[8*repCnt+4] = htonl(avData[avNum].dir);
-	statPkt[8*repCnt+5] = htonl(avData[avNum].speed);
-	statPkt[8*repCnt+6] = htonl(avData[avNum].numNear);
-	statPkt[8*repCnt+7] = htonl(h.getComtree());
+	statPkt[NUMITEMS*repCnt]   = htonl(now);
+	statPkt[NUMITEMS*repCnt+1] = htonl(avData[avNum].adr);
+	statPkt[NUMITEMS*repCnt+2] = htonl(avData[avNum].x);
+	statPkt[NUMITEMS*repCnt+3] = htonl(avData[avNum].y);
+	statPkt[NUMITEMS*repCnt+4] = htonl(avData[avNum].dir);
+	statPkt[NUMITEMS*repCnt+5] = htonl(avData[avNum].speed);
+	statPkt[NUMITEMS*repCnt+6] = htonl(avData[avNum].numVisible);
+	statPkt[NUMITEMS*repCnt+7] = htonl(avData[avNum].numNear);
+	statPkt[NUMITEMS*repCnt+8] = htonl(h.getComtree());
 	repCnt++;
 
 	return;
