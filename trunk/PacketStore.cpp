@@ -58,3 +58,17 @@ packet PacketStore::clone(packet p) {
 	ref[b]++; setHeader(p1,getHeader(p)); pb[p1] = pb[p];
 	return p1;
 }
+
+/** Allocate a new packet that with the same content as b.
+ *  A new buffer is allocated for this packet.
+ *  @return the index of the new packet.
+ */
+packet PacketStore::fullCopy(packet p) {
+	int p1 = alloc();
+	if (p1 == 0) return 0;
+	int len = ((getHeader(p)).getLength()+3)/4;
+	buffer_t& buf = getBuffer(p); buffer_t& buf1 = getBuffer(p1);
+	for (int i = 0; i < len; i++) buf1[i] = buf[i];
+	(getHeader(p1)).unpack(getBuffer(p1));
+	return p1;
+}

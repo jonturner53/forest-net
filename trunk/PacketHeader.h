@@ -10,6 +10,7 @@
 #define PACKETHEADER_H
 
 #include "CommonDefs.h"
+#include "CtlPkt.h"
 
 class PacketHeader {
 public:

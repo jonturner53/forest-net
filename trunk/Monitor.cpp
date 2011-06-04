@@ -138,8 +138,10 @@ void Monitor::run(int finishTime) {
 
 	now = nextTime = 0; printTime = 1000*UPDATE_PERIOD;
 
+cout << "entering main loop" << endl;
 	while (now <= finishTime) {
 		now = Misc::getTime();
+cout << "now=" << now << " finishTime=" << finishTime << endl;
 
 		check4comtree();
 		while ((p = receiveReport()) != 0) {
@@ -155,6 +157,7 @@ void Monitor::run(int finishTime) {
 		if (0 < delay && delay <= 1000*UPDATE_PERIOD) usleep(delay);
 	}
 
+cout << "exiting at " << now << endl;
 	disconnect(); 		// send final disconnect packet
 }
 
