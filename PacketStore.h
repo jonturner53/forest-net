@@ -37,6 +37,7 @@ public:
         packet  alloc();           
         void    free(packet);     
         packet  clone(packet);   
+        packet  fullCopy(packet);   
 
         /** pack/unpack header fields to/from buffer */
         void    unpack(packet);         

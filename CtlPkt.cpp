@@ -26,22 +26,26 @@
 
 #include "CtlPkt.h"
 
-/** Constructor for CtlPkt. */
-CtlPkt::CtlPkt(buffer_t b) {
-	reset(b);
+/** Constructor for CtlPkt.
+ *  @param pl is pointer to the packet payload
+ */
+CtlPkt::CtlPkt(uint32_t* pl) {
+	reset(pl);
 }
 
-/** Clears CtlPkt fields for re-use with a new buffer. */
-void CtlPkt::reset(buffer_t b) {
+/** Clears CtlPkt fields for re-use with a new buffer.
+ *  @param pl is a pointer to the start of the payload
+ */
+void CtlPkt::reset(uint32_t* pl) {
 	for (int i = CPA_START; i < CPA_END; i++) aSet[i] = false;
-	buf = b;
+	payload = pl;
 }
 
 /** Destructor for CtlPkt. */
 CtlPkt::~CtlPkt() { } 
 
 /** Pack CtlPkt fields into buffer.
- *  @return the number of 32 bit payload words in the control packet.
+ *  @return the length of the packed payload in bytes.
  *  or 0 if an error was detected.
  */
 int CtlPkt::pack() {
@@ -49,13 +53,11 @@ int CtlPkt::pack() {
 		return 0;
 	if (rrType != REQUEST && rrType != POS_REPLY && rrType != NEG_REPLY)
 		return 0;
-	bp = Forest::HDR_LENG/4;
-	buf[bp++] = htonl(
-			(rrType << 30) |
-			((CpType::getCode(cpType) & 0x3fff) << 16) |
-			((int) ((seqNum >> 32) & 0xffff))
-			);
-	buf[bp++] = htonl((int) (seqNum & 0xffffffff));
+	pp = 0;
+	payload[pp++] = htonl(rrType);
+	payload[pp++] = htonl(CpType::getCode(cpType));
+	payload[pp++] = htonl((uint32_t) (seqNum >> 32));
+	payload[pp++] = htonl((uint32_t) (seqNum & 0xffffffff));
 
 	if (rrType == REQUEST) {
 		// pack all request attributes and confirm that
@@ -73,52 +75,47 @@ int CtlPkt::pack() {
 			CpAttrIndex ii = CpAttrIndex(i);
 			if (CpType::isRepAttr(cpType, ii)) {
 				if (isSet(ii)) packAttr(ii);
-				else return 0;
+				else { 
+					return 0;
+				}
 			}
 		}
 	} else {
 		int j = Misc::strnlen(errMsg,MAX_MSG_LEN);
 		if (j == MAX_MSG_LEN) errMsg[MAX_MSG_LEN] = 0;
-		strncpy((char*) &buf[bp], errMsg, j+1);
-		return bp + 1 + (j+1)/4;
+		strncpy((char*) &payload[pp], errMsg, j+1);
+		return pp + 1 + (j+1)/4;
 	}
 
-	return bp;
-	
+	return 4*pp;
 }
 
+/** Unpack CtlPkt fields from the packet payload.
+ *  @param pleng is the length of the payload in bytes
+ *  @return true on success, 0 on failure
+ */
 bool CtlPkt::unpack(int pleng) {
-// Unpack CtlPkt fields from buffer. Pleng is the number
-// of 32 bit words in the payload to be unpacked.
-// Return true on success, 0 on failure.
+	pleng /= 4; // to get length in 32 bit words
+	if (pleng < 4) return false; // too short for control packet
 
-	if (pleng < 3) return false; // too short for control packet
+	pp = 0;
+	rrType = (CpRrType) ntohl(payload[pp++]);
+	cpType = CpType::getIndexByCode(ntohl(payload[pp++]));
+	seqNum = ntohl(payload[pp++]); seqNum <<= 32;
+	seqNum |= ntohl(payload[pp++]);
 
-	bp = Forest::HDR_LENG/4;
-	buf[bp++] = htonl(
-			(rrType << 30) |
-			((CpType::getCode(cpType) & 0x3fff) << 16) |
-			((int) ((seqNum >> 32) & 0xffff))
-			);
-	buf[bp++] = htonl((int) (seqNum & 0xffffffff));
-	uint32_t x = ntohl(buf[bp++]);
-	rrType = (CpRrType) ((x >> 30) & 0x3);
-	cpType = CpType::getIndexByCode((x >> 16) & 0x3fff);
-	seqNum = x & 0xffff;
-	seqNum = (seqNum << 32) | ntohl(buf[bp++]);
-	
 	if (!CpType::validIndex(cpType)) return false;
 	if (rrType != REQUEST && rrType != POS_REPLY && rrType != NEG_REPLY)
 		return false;
 	
 	if (rrType == NEG_REPLY) {
-		strncpy(errMsg,(char*) &buf[bp], MAX_MSG_LEN);
+		strncpy(errMsg,(char*) &payload[pp], MAX_MSG_LEN);
 		errMsg[MAX_MSG_LEN] = 0;
 		return true;
 	}
 
 	// unpack all attribute/value pairs
-	while (bp < pleng-1) unpackAttr();
+	while (pp < pleng-1) { unpackAttr(); }
 
 	if (rrType == REQUEST) {
 		// confirm that required attributes are present

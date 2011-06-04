@@ -11,7 +11,7 @@
 
 #include "CommonDefs.h"
 #include "CpType.h"
-#include "PacketStore.h"
+//#include "PacketStore.h"
 
 enum CpRrType { REQUEST=1, POS_REPLY=2, NEG_REPLY=3 };
 
@@ -40,10 +40,10 @@ enum CpRrType { REQUEST=1, POS_REPLY=2, NEG_REPLY=3 };
  */
 class CtlPkt {
 public:
-		CtlPkt(buffer_t);
+		CtlPkt(uint32_t*);
 		~CtlPkt();
 
-	void	reset(buffer_t);
+	void	reset(uint32_t*);
 	int	pack();	
 	bool	unpack(int);	
 	/** predicates */
@@ -76,8 +76,8 @@ private:
 	int32_t aVal[CPA_END+1];	///< array of attribute values
 	bool 	aSet[CPA_END+1];	///< mark attributes that have been set
 
-	uint32_t *buf;			///< reference to packet buffer
-	int	bp;			///< index into buf used by pack/unpack
+	uint32_t *payload;		///< pointer to start of packet payload
+	int	pp;			///< index into payload used by pack/unpack
 
 	static const int MAX_MSG_LEN=500; ///< bound on error message length
 	char	errMsg[MAX_MSG_LEN+1];	///< buffer for error messages
@@ -156,14 +156,14 @@ inline void CtlPkt::setRrType(CpRrType rr) { rrType = rr; }
  */
 inline void CtlPkt::setSeqNum(int64_t s) { seqNum = s; }
 
-/** Packs a single (attribute_code, value) pair starting at word i in buf.
+/** Packs a single (attribute_code, value) pair starting at word i in payload.
  *  @param attr attribute code for the pair
  *  @param val value part of the pair
  *  @returns index of next available word
  */
 inline void CtlPkt::packAttr(CpAttrIndex i) {
-        buf[bp++] = htonl(CpAttr::getCode(i));
-	buf[bp++] = htonl(aVal[i]);
+        payload[pp++] = htonl(CpAttr::getCode(i));
+	payload[pp++] = htonl(aVal[i]);
 }
 
 /** Packs a single (attribute_code, value) conditionally.
@@ -176,16 +176,16 @@ inline void CtlPkt::packAttrCond(CpAttrIndex i) {
         if (aSet[i]) packAttr(i);
 }
 
-/** Unpacks a single (attribute, value) pair starting at word bp in buf.
+/** Unpacks a single (attribute, value) pair starting at word pp in payload.
  *  The unpacked value is stored in within the CtlPkt object and can
  *  be retrieved using the getAttr() method.
  *  @returns attribute index of unpacked pair, or 0 for invalid index
  */
 inline CpAttrIndex CtlPkt::unpackAttr() {
-        CpAttrIndex i = CpAttr::getIndexByCode(ntohl(buf[bp]));
+        CpAttrIndex i = CpAttr::getIndexByCode(ntohl(payload[pp]));
 	if (!CpAttr::validIndex(i)) return CPA_START; // =0
-	bp++;
-	setAttr(i,ntohl(buf[bp++]));
+	pp++;
+	setAttr(i,ntohl(payload[pp++]));
 	return i;
 }
 

@@ -66,6 +66,8 @@ bool PacketHeader::read(istream& in, buffer_t& b) {
         else if (ptypString == "connect")    setPtype(CONNECT);
         else if (ptypString == "disconnect") setPtype(DISCONNECT);
         else if (ptypString == "rteRep")     setPtype(RTE_REPLY);
+        else if (ptypString == "client_sig") setPtype(CLIENT_SIG);
+        else if (ptypString == "net_sig")    setPtype(NET_SIG);
         else fatal("PacketHeader::getPacket: invalid packet type");
 
 	pack(b); int32_t x;
@@ -86,6 +88,8 @@ void PacketHeader::write(ostream& out, buffer_t& b) const {
         else if (getPtype() == CONNECT)    out << "connect   ";
         else if (getPtype() == DISCONNECT) out << "disconnect";
         else if (getPtype() == RTE_REPLY)  out << "rteRep    ";
+        else if (getPtype() == CLIENT_SIG) out << "client_sig";
+        else if (getPtype() == NET_SIG)    out << "net_sig   ";
         else                            out << "--------- ";
         out << " flags=" << int(getFlags());
         out << " comt=" << setw(3) << getComtree();
@@ -98,4 +102,9 @@ void PacketHeader::write(ostream& out, buffer_t& b) const {
                 out << " " << x;
 	}
         out << endl;
+	if (getPtype() == CLIENT_SIG || getPtype() == NET_SIG) {
+		CtlPkt cp(&b[Forest::HDR_LENG/4]);
+		cp.unpack(getLength()-(Forest::HDR_LENG+4));
+		cp.write(out);
+	}
 }
