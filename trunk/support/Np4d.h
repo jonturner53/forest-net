@@ -54,6 +54,10 @@ public:
 	static int sendto4d(int, void*, int, ipa_t, ipp_t);
 	static int recv4d(int, void*, int);
 	static int recvfrom4d(int, void*, int, ipa_t&, ipp_t&);
+
+	// reading data from stream sockets
+	static int readWord32(int, uint32_t&);
+	static bool hasData(int);
 };
 
 #endif

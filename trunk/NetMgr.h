@@ -44,11 +44,11 @@ private:
 	void	connect();		
 	void	disconnect();	
 
-	void	sendToUi();	
-	int	receiveFromUi();
+	void	writeToUi();	
+	int	readFromUi();
 
 	void	sendToForest(int);
-	int 	receiveFromForest();
+	int 	rcvFromForest();
 
 };
 

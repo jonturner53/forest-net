@@ -141,11 +141,6 @@ inline void CtlPkt::setAttr(CpAttrIndex i, int32_t val) {
  */
 inline void CtlPkt::setCpType(CpTypeIndex t) { cpType = t; }
 
-/** Set the type type code of a controle packet.
- *  @param c is the specified type code
- */
-inline void CtlPkt::setCpCode(int c) { cpCode = c; }
-
 /** Set the type request/return type of a control packet.
  *  @param rr is the specified request/return type 
  */
