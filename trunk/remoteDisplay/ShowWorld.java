@@ -182,12 +182,6 @@ public class ShowWorld {
 			StdDraw.line(.2*i,0,.2*i,1);
 		}
 		StdDraw.setPenColor(Color.BLACK);
-		for(int i = 0; i < WALLS.length(); i++) {
-			if(WALLS.charAt(i)=='0')
-				StdDraw.line(.2*(i%5),.2*(i/5),.2*(i%5)+.2,.2*(i/5));
-			else
-				StdDraw.line(.2*(i%5),.2*(i/5),.2*(i%5),.2*(i/5)+.2);
-		}
 		StdDraw.text(.08, -.02, "comtree: " + comtree);
 	}
 	
