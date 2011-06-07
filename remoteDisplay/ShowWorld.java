@@ -25,7 +25,7 @@ public class ShowWorld {
 	private static int comtree;	// number of comtree to be monitored
 	
 	private static final int MON_PORT = 30124; // port number used by monitor
-	
+	private static final String WALLS = "0010100101110100100101101"; // list of solid walls
 	private static SocketChannel monChan = null;	// channel to remote monitor
 	private static ByteBuffer repBuf = null; 	// buffer for report packets
 	private static AvatarStatus rep = null;		// most recent report
@@ -182,6 +182,12 @@ public class ShowWorld {
 			StdDraw.line(.2*i,0,.2*i,1);
 		}
 		StdDraw.setPenColor(Color.BLACK);
+		for(int i = 0; i < WALLS.length(); i++) {
+			if(WALLS.charAt(i)=='0')
+				StdDraw.line(.2*(i%5),.2*(i/5),.2*(i%5)+.2,.2*(i/5));
+			else
+				StdDraw.line(.2*(i%5),.2*(i/5),.2*(i%5),.2*(i/5)+.2);
+		}
 		StdDraw.text(.08, -.02, "comtree: " + comtree);
 	}
 	

@@ -42,7 +42,7 @@ class AvatarGraphic {
 		double scaleFactor = 2*Math.PI/360; // for converting degrees to radians
 			
 		StdDraw.setPenColor(Color.GRAY);
-		StdDraw.circle(avaStatus.x,avaStatus.y,SIZE);		
+		//StdDraw.circle(avaStatus.x,avaStatus.y,SIZE);		
 		StdDraw.line(avaStatus.x, avaStatus.y,
 			     avaStatus.x + SIZE*Math.sin(avaStatus.dir*scaleFactor),
 			     avaStatus.y + SIZE*Math.cos(avaStatus.dir*scaleFactor));
