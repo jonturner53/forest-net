@@ -220,3 +220,36 @@ int Np4d::recvfrom4d(int sock, void* buf, int leng, ipa_t& ipa, ipp_t& ipp) {
 	extractSockAdr(&sa,ipa,ipp);
 	return nbytes;
 }
+
+/** Read a 32 bit word from a stream socket.
+ *  @param sock is socket number
+ *  @param val is a reference argument; on return it will have the value read
+ *  @return true on success, false on failure
+ */
+int Np4d::readWord32(int sock, uint32_t& val) {
+	uint32_t temp;
+	int nbytes = read(sock, (char *) &temp, sizeof(uint32_t));
+	if (nbytes != sizeof(uint32_t)) return false;
+	val = temp;
+	return true;
+}
+
+/** Test a socket to see if it has data to be read.
+ *  Uses the select system call but hides the ugliness.
+ *  @param sock is the socket to be tested
+ *  @return true if the socket has data to be read, else false
+ */
+bool Np4d::hasData(int sock) {
+	static bool firstTime = true;
+	static fd_set sockVec;
+	static struct timeval zero;
+
+	if (firstTime) {
+		FD_ZERO(&sockVec);
+		zero.tv_sec = zero.tv_usec = 0;
+	}
+	FD_SET(sock,&sockVec);
+	int n = select(sock+1, &sockVec, (fd_set*) NULL, (fd_set*) NULL, &zero);
+	FD_CLR(sock,&sockVec);
+	return n == 1;
+}

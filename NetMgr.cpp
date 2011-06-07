@@ -142,14 +142,16 @@ int NetMgr::rcvFromForest() {
 }
 
 /** Check for next message from the remote UI.
+ *  @return a packet number with a formatted control packet on success,
+ *  0 on failure
  */
 int NetMgr::readFromUi() { 
 	if (connSock < 0) {
 		connSock = Np4d::accept4d(extSock);
 		if (connSock < 0) return;
-		if (!Np4d::nonblock(connSock))
-			fatal("can't make connection socket nonblocking");
 	}
+
+	if (!Np4d::hadData(connSock)) return;
 
 	uint32_t numPairs;
 	if (!Np4d::readWord32(connSock, numPairs))
@@ -157,12 +159,13 @@ int NetMgr::readFromUi() {
 	uint32_t target;
 	if (!Np4d::readWord32(connSock, target))
 		fatal("NetMgr::readFromUi: cannot process message from UI");
-	uint32_t cpCode;
-	if (!Np4d::readWord32(connSock, cpCode))
+	uint32_t cpTypCode;
+	if (!Np4d::readWord32(connSock, cpTypCode))
 		fatal("NetMgr::readFromUi: cannot process message from UI");
 	if (!Forest::ucastAdr(target)) 
 		fatal("NetMgr::readFromUi: misformatted target address");
-	if (CpType::getIndexByCode(cpCode) == 0) 
+	CpTypeIndex cpTypIndex = CpType::getIndexByCode(cpTypCode);
+	if (cpTypIndex == 0) 
 		fatal("NetMgr::readFromUi: invalid control message code");
 	
 	int p = ps->alloc();
@@ -173,8 +176,20 @@ int NetMgr::readFromUi() {
 	uint32_t* payload = ps->getPayload(p);
 	CtlPkt cp(payload);
 
-	h.setLength(xxx); h.setType(NET_SIG); h.setFlags(0);
+	h.setLength(Forest::HDR_LENG + 4 + 4*(4+2*numPairs));
+	h.setType(NET_SIG); h.setFlags(0);
 	h.setComtree(100); h.setDestAdr(target); h.setSrcAdr(myAdr);
+
+	cp.setRrType(REQUEST); cp.setCpType(cpTypIndex);
+	cp.setSeqNum(nextSeqNum++);
+
+	for (int i = 0; i < numPairs; i++) {
+		uint32_t attr, val;
+		if (!Np4d::readWord32(connSock, attr))
+			fatal("NetMgr::readFromUi: cannot read attribute");
+		if (!Np4d::readWord32(connSock, val))
+			fatal("NetMgr::readFromUi: cannot read value");
+		CpAttrIndex attrIndex;
 	
 
         int nbytes = read(connSock, (char *) &length, sizeof(uint32_t));

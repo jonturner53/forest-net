@@ -65,8 +65,8 @@ int CtlPkt::pack() {
 		for (int i = CPA_START + 1; i < CPA_END; i++) {
 			CpAttrIndex ii = CpAttrIndex(i);
 			if (CpType::isReqAttr(cpType, ii)) {
-				if (isSet(CpAttrIndex(i))) packAttr(CpAttrIndex(i));
-				else if (CpType::isReqReqAttr(cpType,CpAttrIndex(i)))
+				if (isSet(ii)) packAttr(ii);
+				else if (CpType::isReqReqAttr(cpType,ii))
 					return 0;
 			}
 		}
