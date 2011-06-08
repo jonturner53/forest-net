@@ -123,8 +123,7 @@ inline int RouteTable::getLinks(int te) const {
 // Return link vector for a unicast table entry.
 // Return 0 if this is a unicast entry.
 	assert(valid(te));
-	if (Forest::ucastAdr(getAddress(te))) return 0;
-	return tbl[te].lnks;
+	return (Forest::mcastAdr(getAddress(te)) ? tbl[te].lnks : 0);
 }
 
 inline bool RouteTable::setLink(int te, int lnk) {
@@ -145,26 +144,29 @@ inline bool RouteTable::addLink(int te, int lnk) {
 // Add a link to a multicast table entry. Return true on success,
 // false if entry is not a multicast entry.
 	assert(valid(te));
-	if (Forest::ucastAdr(tbl[te].adr)) return false;
-	tbl[te].lnks |= (1 << lnk);
-	return true;
+	if (Forest::mcastAdr(tbl[te].adr)) {
+		tbl[te].lnks |= (1 << lnk); return true;
+	} else return false;
 }
 
 inline bool RouteTable::removeLink(int te, int lnk) {
 // Remove a link from a multicast table entry. Return true on success,
 // false if entry is not a multicast entry.
 	assert(valid(te));
-	if (Forest::ucastAdr(tbl[te].adr)) return false;
-	tbl[te].lnks &= (~(1 << lnk));
-	return true;
+	if (Forest::mcastAdr(tbl[te].adr)) {
+		tbl[te].lnks &= (~(1 << lnk)); return true;
+	} else return false;
 }
 
 inline uint64_t RouteTable::hashkey(comt_t ct, fAdr_t fa) {
 // Return the hashkey for the specified comtree and address
-	return  (uint64_t(ct) << 32) |
-		(Forest::ucastAdr(fa) &&
-		    (Forest::zipCode(fa) != Forest::zipCode(myAdr)) ?
-			(fa & 0xffff0000) : fa);
+	if (!Forest::mcastAdr(fa)) {
+		int zip = Forest::zipCode(fa);
+		if (zip != Forest::zipCode(myAdr))
+			fa = Forest::forestAdr(zip,0);
+	}
+	return (uint64_t(ct) << 32) | fa;
+
 }
 
 #endif

@@ -40,6 +40,7 @@ private:
 
 	PacketStore *ps;		///< pointer to packet store
 
+
 	// private helper methods
 	void	connect();		
 	void	disconnect();	
