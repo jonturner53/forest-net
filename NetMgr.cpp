@@ -85,13 +85,13 @@ bool NetMgr::init() {
 
 /** Run the NetMgr until killed by some external signal.
  */
-void NetMgr::run(int finishTime) {
+void NetMgr::run() {
 
 	int idleCount = 0;
 
 	uint32_t now = Misc::getTime();
 
-	while (now <= finishTime) {
+	while (true) {
 
 		idleCount++;
 
@@ -184,7 +184,7 @@ int NetMgr::rcvFromForest() {
 
 	PacketHeader& h = ps->getHeader(p);
 	CtlPkt cp(ps->getPayload(p));
-	cp.unpack(ps->getLength(p) - (Forest::HDR_LENG + 4));
+	cp.unpack(h.getLength() - (Forest::HDR_LENG + 4));
 
 	/* add later
 	if (it's a control packet reply) {

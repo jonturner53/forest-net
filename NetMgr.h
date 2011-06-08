@@ -23,8 +23,8 @@ public:
 		NetMgr(ipa_t, ipa_t, ipa_t, fAdr_t, fAdr_t);
 		~NetMgr();
 
-	bool	init(char*);
-	void	run(int); 
+	bool	init();
+	void	run(); 
 private:
 	const static short NM_PORT = 30125; ///< port# for used by remote UI
 	
@@ -45,7 +45,7 @@ private:
 	void	connect();		
 	void	disconnect();	
 
-	void	writeToUi();	
+	void	writeToUi(int);	
 	int	readFromUi();
 
 	void	sendToForest(int);
