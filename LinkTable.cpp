@@ -49,11 +49,12 @@ bool LinkTable::removeEntry(int lnk) {
 bool LinkTable::checkEntry(int te) {
 // Return true if entry is consistent, else false.
 	// the forest address of every peer must be a valid unicast address
-	if (!Forest::ucastAdr(getPeerAdr(te))) return false;
+	if (!Forest::validUcastAdr(getPeerAdr(te))) return false;
 
 	// the forest address of restricted destination must be unicast
 	// or zero
-	if (getPeerDest(te) != 0 && !Forest::ucastAdr(getPeerDest(te))) return false;
+	if (getPeerDest(te) != 0 && !Forest::validUcastAdr(getPeerDest(te)))
+		return false;
 
 	// only a router may use the forest port number
 	if (getPeerPort(te) == Forest::ROUTER_PORT && getPeerType(te) != ROUTER)

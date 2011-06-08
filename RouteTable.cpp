@@ -38,7 +38,7 @@ int RouteTable::getLinks(int te, uint16_t lnks[], int limit) const {
 // Return a vector of links for a given multicast table entry.
 // N is the size of lnkVec. Return the number of links, or 0
 // if this is  not a multicast table entry.
-	if (Forest::ucastAdr(tbl[te].adr)) return 0;
+	if (!Forest::mcastAdr(tbl[te].adr)) return 0;
 	int vec = tbl[te].lnks >> 1; int i = 0; int lnk = 1;
 	while (lnk <= limit && vec != 0) {
 		if (vec & 1) lnks[i++] = lnk;
@@ -59,14 +59,16 @@ int RouteTable::addEntry(comt_t comt, fAdr_t adr, int lnk, int qnum) {
 
 	if (ht->insert(hashkey(comt,adr),te)) {
 		tbl[te].ct = comt;
-		tbl[te].adr = (Forest::ucastAdr(adr) &&
-				Forest::zipCode(adr)!=Forest::zipCode(myAdr)) ?
-				(adr & 0xffff0000) : adr;
 		tbl[te].qn = qnum;
-		if (Forest::ucastAdr(adr) || lnk == 0)
+		if (Forest::mcastAdr(adr)) {
+			tbl[te].adr = adr;
+			tbl[te].lnks = (lnk == 0 ? 0 : 1 << lnk);
+		} else {
+			int zip = Forest::zipCode(adr);
+			tbl[te].adr =  (zip == Forest::zipCode(myAdr) ?
+					adr : Forest::forestAdr(zip,0));
 			tbl[te].lnks = lnk;
-		else
-			tbl[te].lnks = (1 << lnk);
+		}
 		return te;
 	} else {
 		free = te; return 0;
@@ -88,7 +90,7 @@ bool RouteTable::checkEntry(int te) const {
 
 	// only multicast addresses can have more than one link
 	n = getLinks(te,lnkvec,Forest::MAXLNK);
-	if (Forest::ucastAdr(getAddress(te))) return (n == 1 ? true : false);
+	if (!Forest::mcastAdr(getAddress(te))) return (n == 1 ? true : false);
 
 	// check links of multicast routes
 	for (i = 0; i < n; i++) {
@@ -102,24 +104,20 @@ bool RouteTable::checkEntry(int te) const {
 }
 
 bool RouteTable::readEntry(istream& in) {
-// Read an entry from is and create a routing table entry for it.
+// Read an entry from in and create a routing table entry for it.
 // A line is a pure comment line if it starts with a # sign.
 // A trailing comment is also allowed at the end of a line by
 // including a # sign. All lines that are not pure comment lines
 // or blank are assumed to contain a complete routing table entry.
-	int comt, lnk, qnum, quant, te; uint32_t adr;
+	int comt, lnk, qnum, quant, te; fAdr_t adr;
 
         Misc::skipBlank(in);
-        if (!Misc::readNum(in, comt) || !Misc::readNum(in,adr) ||
+        if (!Misc::readNum(in, comt) || !Forest::readForestAdr(in,adr) ||
 	    !Misc::readNum(in,qnum) || !Misc::readNum(in,quant)) {
                 return false;
         }
 	if ((te = addEntry(comt,adr,0,qnum)) == 0) return false;
-	if (Forest::ucastAdr(adr)) {
-		if (!Misc::readNum(in,lnk)) return false;
-		Misc::cflush(in,'\n');
-		setLink(te,lnk);
-	} else {
+	if (Forest::mcastAdr(adr)) {
 		do {
 			if (!Misc::readNum(in,lnk)) {
 				removeEntry(te); return false;
@@ -127,6 +125,10 @@ bool RouteTable::readEntry(istream& in) {
 			addLink(te,lnk);
 			if (qnum != 0) qm->setQuantum(lnk,qnum,quant);
 		} while (Misc::verify(in,','));
+	} else {
+		if (!Misc::readNum(in,lnk)) return false;
+		Misc::cflush(in,'\n');
+		setLink(te,lnk);
 	}
 	Misc::cflush(in,'\n');
 

@@ -297,6 +297,10 @@ bool RouterCore::pktCheck(int p, int ctte) {
 	if (h.getLength() != h.getIoBytes() || h.getLength() < Forest::HDR_LENG)
 		return false;
 
+	fAdr_t adr = h.getDstAdr();
+	if (!Forest::validUcastAdr(adr) && !Forest::mcastAdr(adr))
+		return false;
+
 	int inL = h.getInLink();
 	if (inL == 0) return false;
 
@@ -333,7 +337,7 @@ void RouterCore::forward(int p, int ctte) {
 			ps->pack(p);
 			ps->hdrErrUpdate(p);
 		}
-		if (Forest::ucastAdr(h.getDstAdr())) {
+		if (Forest::validUcastAdr(h.getDstAdr())) {
 			int qn = rt->getQnum(rte);
 			if (qn == 0) qn = ctt->getQnum(ctte);
 			int lnk = rt->getLink(rte);
@@ -346,7 +350,7 @@ void RouterCore::forward(int p, int ctte) {
 		return;
 	}
 	// no valid route
-	if (Forest::ucastAdr(h.getDstAdr())) {
+	if (Forest::validUcastAdr(h.getDstAdr())) {
 		// send to neighboring routers in comtree
 		h.setFlags(Forest::RTE_REQ);
 		ps->pack(p); ps->hdrErrUpdate(p);
@@ -362,7 +366,7 @@ void RouterCore::multiSend(int p, int ctte, int rte) {
 	uint16_t lnkvec[2*nLnks];
 	PacketHeader& h = ps->getHeader(p);
 
-	if (Forest::ucastAdr(h.getDstAdr())) { // flooding a unicast packet
+	if (Forest::validUcastAdr(h.getDstAdr())) { // flooding a unicast packet
 		qn = ctt->getQnum(ctte);
 		if (Forest::zipCode(myAdr) == Forest::zipCode(h.getDstAdr()))
 			n = ctt->getLlinks(ctte,lnkvec,nLnks);
@@ -426,7 +430,7 @@ void RouterCore::handleRteReply(int p, int ctte) {
 	int rte = rt->lookup(h.getComtree(), h.getDstAdr());
 	if ((h.getFlags() & Forest::RTE_REQ) && rte != 0) sendRteReply(p,ctte);
 	int adr = ntohl(ps->getPayload(p)[0]);
-	if (Forest::ucastAdr(adr) &&
+	if (Forest::validUcastAdr(adr) &&
 	    rt->lookup(h.getComtree(),adr) == 0) {
 		rt->addEntry(h.getComtree(),adr,h.getInLink(),0); 
 	}
@@ -468,7 +472,7 @@ void RouterCore::subUnsub(int p, int ctte) {
 	}
 	for (int i = 1; i <= addcnt; i++) {
 		addr = ntohl(pp[i]);
-		if (Forest::ucastAdr(addr)) continue;  // ignore unicast
+		if (!Forest::mcastAdr(addr)) continue;  // ignore unicast
 		rte = rt->lookup(comt,addr);
 		if (rte == 0) { 
 			rte = rt->addEntry(comt,addr,inlnk,0);
@@ -486,7 +490,7 @@ void RouterCore::subUnsub(int p, int ctte) {
 	}
 	for (int i = addcnt + 2; i <= addcnt + dropcnt + 1; i++) {
 		addr = ntohl(pp[i]);
-		if (Forest::ucastAdr(addr)) continue; // ignore unicast
+		if (!Forest::mcastAdr(addr)) continue; // ignore unicast
 		rte = rt->lookup(comt,addr);
 		if (rte == 0) continue;
 		rt->removeLink(rte,inlnk);
@@ -655,7 +659,7 @@ void RouterCore::handleCtlPkt(int p) {
 			}
 			if (cp.isSet(PEER_DEST)) {
 				fAdr_t pd = cp.getAttr(PEER_DEST);
-				if (!Forest::ucastAdr(pd)) {
+				if (!Forest::validUcastAdr(pd)) {
 					errReply(p,cp1,"mod link:bad peerDest");
 					return;
 				}

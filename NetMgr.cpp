@@ -87,29 +87,33 @@ bool NetMgr::init() {
  */
 void NetMgr::run(int finishTime) {
 
-	int p; int idleCount = 0;
+	int idleCount = 0;
 
-	uint32_t now;    	// free-running microsecond time
-
-	now = Misc::getTime();
+	uint32_t now = Misc::getTime();
 
 	while (now <= finishTime) {
 
-		if ("packet" received from remote UI) {
-			fill in fields and forward it into forest net
+		idleCount++;
+
+		int p = readFromUi();
+
+		if (p != 0) {
+			sendToForest(p);
 			idleCount = 0;
-		} else if (packet received from forest net) {
-			if (it is a reply to an earlier UI request) {
-				return it to remote UI
-			} else if (it is a reply to an earlier autonomous req) {
-				update local state
-			}
-			idleCount = 0;
-		} else {
-			idleCount++;
 		}
 
-		if (idleCount >= 10) {
+		p = rcvFromForest();
+
+		if (p != 0) {
+			writeToUi(p);
+			idleCount = 0;
+		} 
+
+		/* add later
+		checkTimers(); // if any expired timers, re-send
+		*/
+
+		if (idleCount >= 10) { // sleep for 1 ms
 			struct timespec sleeptime, rem;
                         sleeptime.tv_sec = 0; sleeptime.tv_nsec = 1000000;
                         nanosleep(&sleeptime,&rem);
@@ -117,6 +121,53 @@ void NetMgr::run(int finishTime) {
 
 		now = Misc::getTime();
 	}
+}
+
+/** Check for next message from the remote UI.
+ *  @return a packet number with a formatted control packet on success,
+ *  0 on failure
+ */
+int NetMgr::readFromUi() { 
+	if (connSock < 0) {
+		connSock = Np4d::accept4d(extSock);
+		if (connSock < 0) return 0;
+	}
+
+	if (!Np4d::hasData(connSock)) return 0;
+
+	uint32_t length;
+	if (!Np4d::readWord32(connSock, length))
+		fatal("NetMgr::readFromUi: cannot read packet length from UI");
+
+	int p = ps->alloc();
+	if (p == 0) fatal("NetMgr::readFromUi: out of packets");
+
+	PacketHeader& h = ps->getHeader(p);
+	buffer_t& b = ps->getBuffer(p);
+
+	int nbytes = read(connSock, (char *) &b, length);
+	if (nbytes != length)
+		fatal("NetMgr::readFromUi: cannot read message from UI");
+
+	h.setSrcAdr(myAdr);
+
+        return p;
+}
+
+/** Write a packet to the socket for the user interface.
+ */
+void NetMgr::writeToUi(int p) {
+	buffer_t& buf = ps->getBuffer(p);
+	int length = ps->getHeader(p).getLength();
+	ps->pack(p);
+
+	int nbytes = write(connSock, (void *) &length, sizeof(uint32_t));
+	if (nbytes != sizeof(uint32_t))
+		fatal("NetMgr::writeToUi: can't write packet length to UI");
+	nbytes = write(connSock, (void *) &buf, length);
+	if (nbytes != length)
+		fatal("NetMgr::writeToUi: can't write packet to UI");
+	ps->free(p);
 }
 
 /** Check for next packet from the Forest network.
@@ -131,211 +182,39 @@ int NetMgr::rcvFromForest() {
         if (nbytes < 0) { ps->free(p); return 0; }
 	ps->unpack(p);
 
+	PacketHeader& h = ps->getHeader(p);
+	CtlPkt cp(ps->getPayload(p));
+	cp.unpack(ps->getLength(p) - (Forest::HDR_LENG + 4));
+
+	/* add later
 	if (it's a control packet reply) {
 		match it to an outgoing request and clear timer
+		use hash table with sequence number as key
+		packets from UI are required to have sequence
+		numbers with a high order bit or zero;
+		those that originate with the NetMgr have
+		a seq# with a high bit of 1;
+		or, we distinguish in some other way.
 	}
-	if (there are expired timers) {
-		re-send packets with expired timers up to 5 times
-	}
+	*/
 
         return p;
 }
 
-/** Check for next message from the remote UI.
- *  @return a packet number with a formatted control packet on success,
- *  0 on failure
+/** Send packet to Forest router.
  */
-int NetMgr::readFromUi() { 
-	if (connSock < 0) {
-		connSock = Np4d::accept4d(extSock);
-		if (connSock < 0) return;
-	}
-
-	if (!Np4d::hadData(connSock)) return;
-
-	uint32_t numPairs;
-	if (!Np4d::readWord32(connSock, numPairs))
-		fatal("NetMgr::readFromUi: cannot process message from UI");
-	uint32_t target;
-	if (!Np4d::readWord32(connSock, target))
-		fatal("NetMgr::readFromUi: cannot process message from UI");
-	uint32_t cpTypCode;
-	if (!Np4d::readWord32(connSock, cpTypCode))
-		fatal("NetMgr::readFromUi: cannot process message from UI");
-	if (!Forest::ucastAdr(target)) 
-		fatal("NetMgr::readFromUi: misformatted target address");
-	CpTypeIndex cpTypIndex = CpType::getIndexByCode(cpTypCode);
-	if (cpTypIndex == 0) 
-		fatal("NetMgr::readFromUi: invalid control message code");
-	
-	int p = ps->alloc();
-	if (p == 0) fatal("NetMgr::readFromUi: out of packets");
-
-	PacketHeader& h = ps->getHeader(p);
-	buffer_t& b = ps->getBuffer(p);
-	uint32_t* payload = ps->getPayload(p);
-	CtlPkt cp(payload);
-
-	h.setLength(Forest::HDR_LENG + 4 + 4*(4+2*numPairs));
-	h.setType(NET_SIG); h.setFlags(0);
-	h.setComtree(100); h.setDestAdr(target); h.setSrcAdr(myAdr);
-
-	cp.setRrType(REQUEST); cp.setCpType(cpTypIndex);
-	cp.setSeqNum(nextSeqNum++);
-
-	for (int i = 0; i < numPairs; i++) {
-		uint32_t attr, val;
-		if (!Np4d::readWord32(connSock, attr))
-			fatal("NetMgr::readFromUi: cannot read attribute");
-		if (!Np4d::readWord32(connSock, val))
-			fatal("NetMgr::readFromUi: cannot read value");
-		CpAttrIndex attrIndex;
-	
-
-        int nbytes = read(connSock, (char *) &length, sizeof(uint32_t));
-        if (nbytes < 0) {
-                if (errno == EAGAIN) return;
-                fatal("NetMgr::readFromUi: error in read call");
-        } else if (nbytes < sizeof(uint32_t)) {
-		fatal("NetMgr::readFromUi: misformated message");
-	}
-
-
-        return;
-}
-
-/** Send packet to Forest router (connect, disconnect, sub_unsub).
- */
-void NetMgr::send2router(int p) {
-	static sockaddr_in sa;
+void NetMgr::sendToForest(int p) {
+	buffer_t& buf = ps->getBuffer(p);
 	int leng = ps->getHeader(p).getLength();
 	ps->pack(p);
-	int rv = Np4d::sendto4d(intSock,(void *) ps->getBuffer(p),leng,
+	int rv = Np4d::sendto4d(intSock,(void *) &buf,leng,
 		    	      	rtrIp,Forest::ROUTER_PORT);
-	if (rv == -1) fatal("NetMgr::send2router: failure in sendto");
-}
+	if (rv == -1) fatal("NetMgr::sendToForest: failure in sendto");
 
-/** Send status packet to remote GUI, assuming the comt value is non-zero.
- */
-void NetMgr::send2gui() {
-
-	if (comt == 0) return;
-
-	int nbytes = repCnt*NUMITEMS*sizeof(uint32_t);
-	char* p = (char *) statPkt;
-	while (nbytes > 0) {
-		int n = write(connSock, (void *) p, nbytes);
-		if (n < 0) fatal("NetMgr::send2gui: failure in write");
-		p += n; nbytes -= n;
-	}
-}
-
-/** Return the multicast group number associated with a virtual world positon.
- *  Assumes that SIZE is an integer multiple of GRID
- *  @param x1 is x coordinate
- *  @param y1 is y coordinate
- *  @return the group number for the grid square containing (x1,y1)
- */
-int NetMgr::groupNum(int x1, int y1) {
-	return 1 + (x1/GRID) + (y1/GRID)*(SIZE/GRID);
-}
-
-/** If oldcomt != 0, send a packet to unsubscribe from all multicasts
- *  in oldcomt. if newcomt != 0 send a packet to subscribe to all
- *  multicasts in newcomt.
- */
-void NetMgr::updateSubscriptions(comt_t oldcomt, comt_t newcomt) {
-	packet p = ps->alloc();
-	PacketHeader& h = ps->getHeader(p);
-	uint32_t *pp = ps->getPayload(p);
-
-	// unsubscriptions
-	if (oldcomt != 0) {
-		int nunsub = 0;
-		for (int x = 0; x < SIZE; x += GRID) {
-			for (int y = 0; y < SIZE; y += GRID) {
-				if (nunsub > 350) fatal("too many subscriptions");
-				pp[++nunsub+1] = htonl(-groupNum(x,y));
-			}
-		}
-		pp[0] = 0; pp[1] = htonl(nunsub);
-	
-		h.setLength(4*(8+nunsub)); h.setPtype(SUB_UNSUB); h.setFlags(0);
-		h.setComtree(oldcomt); h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
-	
-		send2router(p);
-	}
-
-	// subscriptions
-	if (newcomt != 0) {
-		int nsub = 0;
-		for (int x = 0; x < SIZE; x += GRID) {
-			for (int y = 0; y < SIZE; y += GRID) {
-				if (nsub > 350) fatal("too many subscriptions");
-				pp[++nsub] = htonl(-groupNum(x,y));
-			}
-		}
-		pp[0] = htonl(nsub); pp[nsub+1] = 0;
-	
-		h.setLength(4*(8+nsub)); h.setPtype(SUB_UNSUB); h.setFlags(0);
-		h.setComtree(newcomt); h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
-	
-		send2router(p);
-	}
-	ps->free(p);
-}
-
-/** If the given packet is a status report, track the sender.
- *  Add to our set of watchedAvatars if not already there.
- *  sending avatar is visible. If it is visible, but not in our
- *  set of nearby avatars, then add it. If it is not visible
- *  but is in our set of nearby avatars, then delete it.
- *  Note: we assume that the visibility range and avatar speeds
- *  are such that we will get at least one report from a newly
- *  invisible avatar.
- */
-void NetMgr::updateStatus(int p, int now) {
-
-	PacketHeader& h = ps->getHeader(p);
-	uint32_t *pp = ps->getPayload(p);
-
-	uint64_t key = h.getSrcAdr(); key = (key << 32) | h.getSrcAdr();
-	int avNum = watchedAvatars->lookup(key);
-	if (avNum == 0) {
-		watchedAvatars->insert(key, nextAvatar);
-		avNum = nextAvatar++;
-	}
-
-	avData[avNum].adr = h.getSrcAdr();
-	avData[avNum].ts = ntohl(pp[1]);
-	avData[avNum].x = ntohl(pp[2]);
-	avData[avNum].y = ntohl(pp[3]);
-	avData[avNum].dir = ntohl(pp[4]);
-	avData[avNum].speed = ntohl(pp[5]);
-	avData[avNum].numVisible = ntohl(pp[6]);
-	avData[avNum].numNear = ntohl(pp[7]);
-	avData[avNum].comt = h.getComtree();
-
-	if (h.getComtree() != comt) return;
-
-	// if no room in statusPkt buffer for another report,
-	// send current buffer
-	if (repCnt + 1 > MAX_REPORTS) {
-		send2gui(); repCnt = 0;
-	}
-	// add new report to the outgoing status packet
-	statPkt[NUMITEMS*repCnt]   = htonl(now);
-	statPkt[NUMITEMS*repCnt+1] = htonl(avData[avNum].adr);
-	statPkt[NUMITEMS*repCnt+2] = htonl(avData[avNum].x);
-	statPkt[NUMITEMS*repCnt+3] = htonl(avData[avNum].y);
-	statPkt[NUMITEMS*repCnt+4] = htonl(avData[avNum].dir);
-	statPkt[NUMITEMS*repCnt+5] = htonl(avData[avNum].speed);
-	statPkt[NUMITEMS*repCnt+6] = htonl(avData[avNum].numVisible);
-	statPkt[NUMITEMS*repCnt+7] = htonl(avData[avNum].numNear);
-	statPkt[NUMITEMS*repCnt+8] = htonl(h.getComtree());
-	repCnt++;
-
-	return;
+	/* add later
+	save packet in re-send heap with timer set to
+	retransmission time
+	*/
 }
 
 /** Send initial connect packet to forest router
@@ -343,39 +222,22 @@ void NetMgr::updateStatus(int p, int now) {
  */
 void NetMgr::connect() {
 	packet p = ps->alloc();
-
 	PacketHeader& h = ps->getHeader(p);
+
 	h.setLength(4*(5+1)); h.setPtype(CONNECT); h.setFlags(0);
 	h.setComtree(1); h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
 
-	send2router(p); ps->free(p);
+	sendToForest(p);
 }
 
-/** Send final disconnect packet to forest router, after unsubscribing.
+/** Send final disconnect packet to forest router.
  */
 void NetMgr::disconnect() {
-	updateSubscriptions(comt, 0);
-	comt = 0;
-
 	packet p = ps->alloc();
 	PacketHeader& h = ps->getHeader(p);
 
 	h.setLength(4*(5+1)); h.setPtype(DISCONNECT); h.setFlags(0);
 	h.setComtree(1); h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
 
-	send2router(p); ps->free(p);
+	sendToForest(p);
 }
-
-void NetMgr::writeStatus(int now) {
-	if (comt == 0 || logging == false) return;
-	for (int i = 1; i < nextAvatar; i++) {
-		struct avatarData *ad = & avData[i];
-		if (ad->comt != comt) continue;
-		string s; Forest::addFadr2string(s,ad->adr);
-		logFile << now << " " << s << " " << ad->ts << " "
-			<< ad->x << " " << ad->y << " "
-			<< ad->dir << " " << ad->speed << " "
-			<< ad->numNear << endl;
-	}
-}
-

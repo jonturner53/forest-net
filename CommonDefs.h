@@ -97,7 +97,7 @@ public:
 	static const uint32_t BUF_SIZ = 1600;	///< size of a packet buffer
 
 	/** methods for manipulating addresses */
-	static bool ucastAdr(fAdr_t);
+	static bool validUcastAdr(fAdr_t);
 	static bool mcastAdr(fAdr_t);
 	static int zipCode(fAdr_t);
 	static int localAdr(fAdr_t);
@@ -118,7 +118,7 @@ typedef uint32_t buffer_t[Forest::BUF_SIZ/sizeof(uint32_t)];
  *  @return true if it is a valid unicast address (is greater than
  *  zero and both the zip code and local part of the address are >0)
  */
-inline bool Forest::ucastAdr(fAdr_t adr) {
+inline bool Forest::validUcastAdr(fAdr_t adr) {
 	return adr > 0 && zipCode(adr) != 0 && localAdr(adr) != 0;
 }
 
