@@ -67,10 +67,6 @@ Avatar::Avatar(ipa_t mipa, ipa_t ripa, fAdr_t ma, fAdr_t ra, comt_t ct)
 	ps = new PacketStore(nPkts+1, nPkts+1);
 
 	// initialize avatar to random position
-	struct timeval tv;
-	if (gettimeofday(&tv, NULL) < 0)
-		fatal("Avatar::Avatar: gettimeofday failure");
-	//srand(tv.tv_usec);
 	srand(myAdr);
 	x = randint(0,SIZE-1); y = randint(0,SIZE-1);
 	direction = (double) randint(0,359);
