@@ -100,6 +100,8 @@ bool UiHashTbl::insert(uint64_t key, uint32_t val) {
 	int i, j0, j1, n0, n1;
 	uint32_t b0, b1, fp0, fp1;
 
+	if (val > n) fatal("UiHashTbl::insert: value out of range");
+
 	// Count the number of unused items in each bucket
 	// and find an unused item in each (if there is one)
 	hashit(key,0,b0,fp0);
