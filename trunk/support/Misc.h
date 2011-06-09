@@ -24,6 +24,7 @@ public:
 	static bool readNum(istream&, uint32_t&);	
 	static bool readWord(istream&, string&);
 	static void addNum2string(string&, int);
+	static void addNum2string(string&, uint64_t);
 
 	// functions to facilitate use of single character 
 	// node names in small data structures
@@ -63,6 +64,12 @@ inline int Misc::num(char c) { return int(c - ('a'-1)); }
 inline void Misc::addNum2string(string& s, int i) {
         char buf[16];
         sprintf(buf,"%d",i);
+        s += buf;
+}
+
+inline void Misc::addNum2string(string& s, uint64_t i) {
+        char buf[32];
+        sprintf(buf,"%lld",i);
         s += buf;
 }
 
