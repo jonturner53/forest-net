@@ -33,9 +33,12 @@ public:
 		~UiHashTbl();
 
 	int	lookup(uint64_t); 		
+	uint64_t getKey(int) const;
+
 	bool	insert(uint64_t, uint32_t); 
 	void	remove(uint64_t); 	
 	void	clear(); 	
+
 	void	dump();		
 private:
 	static const int BKT_SIZ = 8;		///< # of items per bucket
@@ -52,5 +55,12 @@ private:
 
 	void hashit(uint64_t,int,uint32_t&,uint32_t&);
 };
+
+/** Get the key associated with a given value.
+ *  @param i is the value whose key is being retrieved
+ *  @return the corresponding key; assumes that i is the value for
+ *  some key
+ */
+inline uint64_t UiHashTbl::getKey(int i) const { return keyVec[i]; }
 
 #endif
