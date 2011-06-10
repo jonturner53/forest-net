@@ -1,0 +1,32 @@
+Network topology file format
+
+nodes: # starts section that defines nodes
+
+# name nodeType forestAdr x-coord y-coord
+router1 router 1.1000  22 33
+r2 router 2.1000  40 60
+
+# ifaceNum ifaceIp ifaceLinks
+1 193.168.3.4 1,2,3,4
+2 193.168.3.4 5,6
+. # line starting with . ends interface list
+
+
+# name nodeType ipAdr forestAdr x-coord y-coord
+netMgr netController 192.168.3.2 2.900 40 37
+
+links: # starts section that defines links
+
+# name.link#:name.link# packetRate bitRate
+router1.1:router3.3 20000 40000
+router1.2:router2.1 30000 50000
+. # line starting with . ends list
+
+comtrees: # starts section that defines comtrees
+
+1001 			# comtree number
+router2			# root node
+router1, router3	# other core nodes
+router1.1:router3.1	# comtree link
+router2.3:router3.1	# another comtree link
+.			# line starting with . ends list
