@@ -31,6 +31,7 @@
 #include <sys/time.h>
 #include <stdlib.h>
 #include <memory.h>
+#include <poll.h>
 
 using namespace std;
 

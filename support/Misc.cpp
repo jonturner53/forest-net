@@ -105,7 +105,7 @@ bool Misc::readWord(istream& in, string& s) {
 		in.get(c); if (!in.good()) return false;
 		if (c == '\n') { in.putback(c); return inword; }
 		if (isspace(c)) {
-			if (inword) return true;
+			if (inword) { in.putback(c); return true; }
 			else continue;
 		}
 		if (!isalpha(c) && !isdigit(c) && c != '_' && c != '/') {
@@ -202,7 +202,7 @@ void Misc::genPerm(int n, int p[]) {
  */
 int Misc::strnlen(char* s, int n) {
 	for (int i = 0; i < n; i++) 
-		if (*s++ == '\0') return i+1;
+		if (*s++ == '\0') return i;
 	return n;
 }
 

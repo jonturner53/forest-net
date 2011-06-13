@@ -221,35 +221,82 @@ int Np4d::recvfrom4d(int sock, void* buf, int leng, ipa_t& ipa, ipp_t& ipp) {
 	return nbytes;
 }
 
-/** Read a 32 bit word from a stream socket.
+/** Read a 32 bit integer from a stream socket.
+ *  Uses recv() system call but hides the ugliness.
  *  @param sock is socket number
  *  @param val is a reference argument; on return it will have the value read
  *  @return true on success, false on failure
  */
-int Np4d::readWord32(int sock, uint32_t& val) {
+bool Np4d::recvInt(int sock, uint32_t& val) {
+	int nbAvail; int nbaSize = sizeof(nbAvail);
+	if (getsockopt(sock, SOL_SOCKET, SO_NREAD, &nbAvail, &nbaSiz) != 0)
+		return false;
+	if (nbAvail < sizeof(uint32_t)) return false;
 	uint32_t temp;
-	int nbytes = read(sock, (char *) &temp, sizeof(uint32_t));
+	int nbytes = recv(sock, (void *) &temp, sizeof(uint32_t), 0);
 	if (nbytes != sizeof(uint32_t)) return false;
-	val = temp;
+	val = ntohl(temp);
 	return true;
 }
 
+/** Send a 32 bit integer on a stream socket.
+ *  Uses send() system call but hides the ugliness.
+ *  @param sock is socket number
+ *  @param val is value to be sent
+ *  @return true on success, false on failure
+ */
+bool Np4d::sendInt(int sock, uint32_t val) {
+	val = htonl(val);
+	int nbytes = send(sock, (void *) &val, sizeof(uint32_t), 0);
+	if (nbytes != sizeof(uint32_t)) return false;
+	return true;
+}
+
+/** Receive a vector of 32 bit integers on a stream socket.
+ *  @param sock is socket number
+ *  @param vec is an array in which values are to be stored
+ *  @param length is the number of elements in vec
+ *  @return true if all expected values are received, else false
+ *
+ *  After a successful return, vec will contain the received
+ *  integers on host byte order. After an unsuccessful return,
+ *  the value of vec is undefined.
+ */
+bool Np4d::recvIntVec(int sock, uint32_t vec[], int length) {
+	int nbAvail; int nbaSize = sizeof(nbAvail);
+	if (getsockopt(sock, SOL_SOCKET, SO_NREAD, &nbAvail, &nbaSiz) != 0)
+		return false;
+	int vecSiz = length * sizeof(uint32_t);
+	if (nbAvail < vecSiz) return false;
+	uint32_t buf[length];
+	int nbytes = recv(sock,(void *) buf, vecSiz, 0);
+	if (nbytes != vecSize) return false;
+	for (int i = 0; i < length; i++) vec[i] = ntohl(buf[i]);
+	return true;
+}
+
+/** Send a vector of 32 bit integers on a stream socket.
+ *  Uses send() system call but hides the ugliness.
+ *  @param sock is socket number
+ *  @param vec is array of values to be sent
+ *  @param length is number of elements in vec
+ *  @return true on success, false on failure
+ */
+bool Np4d::sendIntVec(int sock, uint32_t vec[], int length) {
+	int vecSiz = length * sizeof(uint32_t);
+	uint32_t buf[length];
+	for (int i = 0; i < length; i++) buf[i] = htonl(vec[i]);
+	int nbytes = send(sock, (void *) &buf, vecSiz, 0);
+
+}
+
 /** Test a socket to see if it has data to be read.
- *  Uses the select system call but hides the ugliness.
+ *  Uses the poll system call.
  *  @param sock is the socket to be tested
  *  @return true if the socket has data to be read, else false
  */
 bool Np4d::hasData(int sock) {
-	static bool firstTime = true;
-	static fd_set sockVec;
-	static struct timeval zero;
-
-	if (firstTime) {
-		FD_ZERO(&sockVec);
-		zero.tv_sec = zero.tv_usec = 0;
-	}
-	FD_SET(sock,&sockVec);
-	int n = select(sock+1, &sockVec, (fd_set*) NULL, (fd_set*) NULL, &zero);
-	FD_CLR(sock,&sockVec);
-	return n == 1;
+	struct pollfd ps;
+	ps.fd = sock; ps.events = POLLIN;
+	return poll(&ps, 1, 0) == 1;
 }
