@@ -57,6 +57,9 @@ public:
 
 	// reading data from stream sockets
 	static bool recvInt(int, uint32_t&);
+	static bool sendInt(int, uint32_t);
+	static bool recvIntVec(int, uint32_t*, int);
+	static bool sendIntVec(int, uint32_t*, int);
 	static bool hasData(int);
 };
 
