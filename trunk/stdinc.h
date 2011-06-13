@@ -49,7 +49,10 @@ inline int abs(int x) { return x < 0 ? -x : x; }
 inline double abs(double x) { return x < 0 ? -x : x; }
 
 inline void warning(string msg) { cerr << "Warning: " << msg << endl; }
-inline void fatal(string msg) {cerr << "Fatal: " << msg << endl; exit(1);}
+inline void fatal(string msg) {
+	cerr << "Fatal: " << msg << endl;
+	perror(""); exit(1);
+}
 
 double pow(double,double);
 double log(double);
