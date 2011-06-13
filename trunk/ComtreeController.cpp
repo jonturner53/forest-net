@@ -84,12 +84,13 @@ int ComtreeController::readFromDisplay() {
 	if (connSock < 0) {
 		connSock = Np4d::accept4d(extSock);
 		if (connSock < 0) return 0;
+		if (!nonblock(connSock))
+			fatal("ComtreeController::readFromDisplay: cannot "
+			      "configure connection socket to be nonblocking");
 	}
 
-	if (!Np4d::hasData(connSock)) return 0;
-
 	uint32_t length;
-	if (!Np4d::readWord32(connSock, length))
+	if (!Np4d::readInt32(connSock, length))
 		fatal("ComtreeController::readFromDisplay: cannot read "
 		      "packet length from remote display");
 

@@ -83,15 +83,17 @@ bool NetMgr::init() {
 		Np4d::nonblock(extSock);
 }
 
-/** Run the NetMgr until killed by some external signal.
+/** Run the NetMgr.
+ *  @param finishTime is the number of seconds to run before halting;
+ *  if zero, run forever
  */
-void NetMgr::run() {
+void NetMgr::run(int finishTime) {
 
 	int idleCount = 0;
 
 	uint32_t now = Misc::getTime();
 
-	while (true) {
+	while (finishTime == 0 || now <= finishTime) {
 
 		idleCount++;
 
@@ -131,9 +133,9 @@ int NetMgr::readFromUi() {
 	if (connSock < 0) {
 		connSock = Np4d::accept4d(extSock);
 		if (connSock < 0) return 0;
+		if (!nonblock(connSock))
+			fatal("can't make connection socket nonblocking");
 	}
-
-	if (!Np4d::hasData(connSock)) return 0;
 
 	uint32_t length;
 	if (!Np4d::readWord32(connSock, length))

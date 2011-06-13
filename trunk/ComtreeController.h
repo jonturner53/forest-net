@@ -25,10 +25,8 @@
  *  messages to actually configure comtrees at routers.
  *
  *  The controller also opens a stream socket for use by a remote
- *  display program. When the remote display connects, the controller
- *  sends it the information read from the topology file. As the
- *  controller gets join/leave messages, it forwards this information
- *  to the remote display as well.
+ *  display program.  As the controller gets join/leave messages,
+ *  it forwards this information to the remote display as well.
  *  
  *  The remote display shows the network topology allows the user
  *  to request display of any comtree. The requested comtree is shown
