@@ -223,18 +223,21 @@ int Np4d::recvfrom4d(int sock, void* buf, int leng, ipa_t& ipa, ipp_t& ipp) {
 
 /** Read a 32 bit integer from a stream socket.
  *  Uses recv() system call but hides the ugliness.
+ *  Intended for use with nonblocking socket.
+ *  Will fail if the socket buffer has less than 4 bytes available to read.
  *  @param sock is socket number
  *  @param val is a reference argument; on return it will have the value read
  *  @return true on success, false on failure
  */
 bool Np4d::recvInt(int sock, uint32_t& val) {
-	int nbAvail; int nbaSize = sizeof(nbAvail);
-	if (getsockopt(sock, SOL_SOCKET, SO_NREAD, &nbAvail, &nbaSiz) != 0)
+	int nbAvail; socklen_t nbaSize = sizeof(nbAvail);
+	if (getsockopt(sock, SOL_SOCKET, SO_NREAD, &nbAvail, &nbaSize) != 0)
 		return false;
 	if (nbAvail < sizeof(uint32_t)) return false;
 	uint32_t temp;
 	int nbytes = recv(sock, (void *) &temp, sizeof(uint32_t), 0);
-	if (nbytes != sizeof(uint32_t)) return false;
+	if (nbytes != sizeof(uint32_t)) 
+		fatal("Np4d::recvInt: can't read integer");
 	val = ntohl(temp);
 	return true;
 }
@@ -246,6 +249,13 @@ bool Np4d::recvInt(int sock, uint32_t& val) {
  *  @return true on success, false on failure
  */
 bool Np4d::sendInt(int sock, uint32_t val) {
+	int nbQueued; socklen_t nbqSize = sizeof(nbQueued);
+	if (getsockopt(sock, SOL_SOCKET, SO_NWRITE, &nbQueued, &nbqSize) != 0)
+		return false;
+	int sbSize; socklen_t sbSize2 = sizeof(sbSize);
+	if (getsockopt(sock, SOL_SOCKET, SO_SNDBUF, &sbSize, &sbSize2) != 0)
+		return false;
+	if (sizeof(uint32_t) > (sbSize - nbQueued)) return false;
 	val = htonl(val);
 	int nbytes = send(sock, (void *) &val, sizeof(uint32_t), 0);
 	if (nbytes != sizeof(uint32_t)) return false;
@@ -263,14 +273,15 @@ bool Np4d::sendInt(int sock, uint32_t val) {
  *  the value of vec is undefined.
  */
 bool Np4d::recvIntVec(int sock, uint32_t vec[], int length) {
-	int nbAvail; int nbaSize = sizeof(nbAvail);
-	if (getsockopt(sock, SOL_SOCKET, SO_NREAD, &nbAvail, &nbaSiz) != 0)
+	int nbAvail; socklen_t nbaSize = sizeof(nbAvail);
+	if (getsockopt(sock, SOL_SOCKET, SO_NREAD, &nbAvail, &nbaSize) != 0)
 		return false;
 	int vecSiz = length * sizeof(uint32_t);
 	if (nbAvail < vecSiz) return false;
 	uint32_t buf[length];
 	int nbytes = recv(sock,(void *) buf, vecSiz, 0);
-	if (nbytes != vecSize) return false;
+	if (nbytes != vecSiz)
+		fatal("Np4d::recvIntVec: can't read vector");
 	for (int i = 0; i < length; i++) vec[i] = ntohl(buf[i]);
 	return true;
 }
@@ -283,11 +294,18 @@ bool Np4d::recvIntVec(int sock, uint32_t vec[], int length) {
  *  @return true on success, false on failure
  */
 bool Np4d::sendIntVec(int sock, uint32_t vec[], int length) {
-	int vecSiz = length * sizeof(uint32_t);
+	int nbQueued; socklen_t nbqSize = sizeof(nbQueued);
+	if (getsockopt(sock, SOL_SOCKET, SO_NWRITE, &nbQueued, &nbqSize) != 0)
+		return false;
+	int sbSize; socklen_t sbSize2 = sizeof(sbSize);
+	if (getsockopt(sock, SOL_SOCKET, SO_SNDBUF, &sbSize, &sbSize2) != 0)
+		return false;
+	socklen_t vecSiz = length * sizeof(uint32_t);
+	if (vecSiz > (sbSize - nbQueued)) return false;
 	uint32_t buf[length];
 	for (int i = 0; i < length; i++) buf[i] = htonl(vec[i]);
 	int nbytes = send(sock, (void *) &buf, vecSiz, 0);
-
+	if (nbytes != vecSiz) return false;
 }
 
 /** Test a socket to see if it has data to be read.
