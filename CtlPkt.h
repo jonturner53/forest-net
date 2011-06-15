@@ -15,28 +15,52 @@
 
 enum CpRrType { REQUEST=1, POS_REPLY=2, NEG_REPLY=3 };
 
-/** This class provides a simple mechanism for handling forest control packets.
- *  The basic structure contains various named fields, all of type int32.
- *  To format a control packet, construct a new CtlPkt and set the
- *  desired fields to non-zero values. For the few fields for which
- *  0 is valid value, use -1. This includes flag fields, such as coreFlag,
- *  where 0 would normally denote false.
+/** This class provides a mechanism for handling forest signalling packets.
+ *  Signalling packets have a packet type of CLIENT_SIG or NET_SIG in the
+ *  first word of the forest head. The payload identifies the specific
+ *  type of packet. Every control packet includes the following three fields.
  *
- *  Format of control packets.
+ *  request/response type	specifies that this is a request packet,
+ *				a positive reply, or a negative reply
+ *  control packet type		identifies the specific type of packet
+ *  sequence number		this field is set by the originator of any
+ *				request packet, and the same value is returned
+ *				in the reply packet; this allows the requestor
+ *				to match repies with earlier requests; the
+ *				target of the request does not use or interpret
+ *				the value, so the requestor can use it however
+ *				it finds most convenient
  *
- *  The packet type in the first word of the forest header must be
- *  CLIENT_SIG or NET_SIG.
+ *  The remainder of a control packet payload consists of (attribute,value)
+ *  pairs. Each attribute is identified by a 32 bit code and each value
+ *  is a 32 bit integer.
  *
- *  The first word of the payload contains the packet's request/return
- *  type in its two high order bits. The next 14 bits are the type code
- *  for the packet. The remainder of the first payload word, plus the
- *  second payload word form a sequence number field. This is not used
- *  by the target of a control packet, but is returned as part of the
- *  reply, so that control packet senders can easily associate replies
- *  with control packets sent earlier.
- *  The remainder of the payload contains the body of the control
- *  packet in the form of a set of (attribute code, value) pairs;
- *  both attribute codes and values are encoded as 32 bit integer values.
+ *  To format a control packet, a requestor creates a new control packet
+ *  object, sets the three fields listed above using the provided
+ *  set methods, and sets the appropriate attriutes using the setAttr()
+ *  method. For any specific control packets, some attributes are
+ *  required, others are optional. Once the control packet object has
+ *  been initialized, the information is transferred to a packet using
+ *  the pack() method; the argument to the pack method is a pointer to
+ *  the start of the packet payload.
+ *
+ *  To extract information from a control packet, the receiver first
+ *  uses the unpack() method to transfer the information from the packet
+ *  payload to a control packet object. The provided get methods can then
+ *  be used to extract field values and attributes from the control packet.
+ *
+ *  There are two support classes used by CtlPkt: CpType and CpAttr.
+ *  CpType defines all the control packet types. For each type, it defines
+ *  four quantities, an index, a code, a command phrase and an abbreviation.
+ *  Control packet indices are sequential integers and are generally used
+ *  with programs to access type information. The control packet code is the
+ *  value that is actually sent in a control packet to identify what type
+ *  of packet it is. The command phrase is a descriptive phrase such as
+ *  "get comtree" or "modify route" and the abbreviation is a corresponding
+ *  short form (gc for "get comtree" for example).
+ *
+ *  The CpAttr class is similar. For each attribute it defines an index
+ *  a code and a name.
  */
 class CtlPkt {
 public:
