@@ -221,6 +221,43 @@ int Np4d::recvfrom4d(int sock, void* buf, int leng, ipa_t& ipa, ipp_t& ipp) {
 	return nbytes;
 }
 
+/** Test a socket to see if it has data to be read.
+ *  Uses the poll system call.
+ *  @param sock is the socket to be tested
+ *  @return true if the socket has data to be read, else false
+ */
+bool Np4d::hasData(int sock) {
+	struct pollfd ps;
+	ps.fd = sock; ps.events = POLLIN;
+	return poll(&ps, 1, 0) == 1;
+}
+
+/** Determine the amount of data available for reading from socket.
+ *  @param is the socket number
+ *  @return the number of bytes available for reading or -1 on an error
+ */
+int Np4d::dataAvail(int sock) {
+	int dAvail; socklen_t daSize = sizeof(dAvail);
+        if (getsockopt(sock, SOL_SOCKET, SO_NREAD, &dAvail, &daSize) != 0)
+                return -1;
+	return dAvail;
+}
+
+/** Determine the space available for writing on a socket.
+ *  @param is the socket number
+ *  @return the number of bytes that can be written before the socket
+ *  buffer becomes full, or -1 on error
+ */
+int Np4d::spaceAvail(int sock) {
+	int sbSize; socklen_t sbSizeSize = sizeof(sbSize);
+	if (getsockopt(sock, SOL_SOCKET, SO_SNDBUF, &sbSize, &sbSizeSize) != 0)
+		return -1;
+	int dQueued; socklen_t dqSize = sizeof(dQueued);
+	if (getsockopt(sock, SOL_SOCKET, SO_NWRITE, &dQueued, &dqSize) != 0)
+		return -1;
+	return sbSize - dQueued;
+}
+
 /** Read a 32 bit integer from a stream socket.
  *  Uses recv() system call but hides the ugliness.
  *  Intended for use with nonblocking socket.
@@ -230,14 +267,11 @@ int Np4d::recvfrom4d(int sock, void* buf, int leng, ipa_t& ipa, ipp_t& ipp) {
  *  @return true on success, false on failure
  */
 bool Np4d::recvInt(int sock, uint32_t& val) {
-	int nbAvail; socklen_t nbaSize = sizeof(nbAvail);
-	if (getsockopt(sock, SOL_SOCKET, SO_NREAD, &nbAvail, &nbaSize) != 0)
-		return false;
-	if (nbAvail < sizeof(uint32_t)) return false;
+	if (dataAvail(sock) < sizeof(uint32_t)) return false;
 	uint32_t temp;
 	int nbytes = recv(sock, (void *) &temp, sizeof(uint32_t), 0);
 	if (nbytes != sizeof(uint32_t)) 
-		fatal("Np4d::recvInt: can't read integer");
+		fatal("Np4d::recvInt: can't receive integer");
 	val = ntohl(temp);
 	return true;
 }
@@ -249,16 +283,11 @@ bool Np4d::recvInt(int sock, uint32_t& val) {
  *  @return true on success, false on failure
  */
 bool Np4d::sendInt(int sock, uint32_t val) {
-	int nbQueued; socklen_t nbqSize = sizeof(nbQueued);
-	if (getsockopt(sock, SOL_SOCKET, SO_NWRITE, &nbQueued, &nbqSize) != 0)
-		return false;
-	int sbSize; socklen_t sbSize2 = sizeof(sbSize);
-	if (getsockopt(sock, SOL_SOCKET, SO_SNDBUF, &sbSize, &sbSize2) != 0)
-		return false;
-	if (sizeof(uint32_t) > (sbSize - nbQueued)) return false;
+	if (spaceAvail(sock) < sizeof(uint32_t)) return false;
 	val = htonl(val);
 	int nbytes = send(sock, (void *) &val, sizeof(uint32_t), 0);
-	if (nbytes != sizeof(uint32_t)) return false;
+	if (nbytes != sizeof(uint32_t))
+		fatal("Np4d::sendInt: can't send integer");
 	return true;
 }
 
@@ -273,15 +302,12 @@ bool Np4d::sendInt(int sock, uint32_t val) {
  *  the value of vec is undefined.
  */
 bool Np4d::recvIntVec(int sock, uint32_t vec[], int length) {
-	int nbAvail; socklen_t nbaSize = sizeof(nbAvail);
-	if (getsockopt(sock, SOL_SOCKET, SO_NREAD, &nbAvail, &nbaSize) != 0)
-		return false;
 	int vecSiz = length * sizeof(uint32_t);
-	if (nbAvail < vecSiz) return false;
+	if (dataAvail(sock) < vecSiz) return false;
 	uint32_t buf[length];
 	int nbytes = recv(sock,(void *) buf, vecSiz, 0);
 	if (nbytes != vecSiz)
-		fatal("Np4d::recvIntVec: can't read vector");
+		fatal("Np4d::recvIntVec: can't receive vector");
 	for (int i = 0; i < length; i++) vec[i] = ntohl(buf[i]);
 	return true;
 }
@@ -294,27 +320,35 @@ bool Np4d::recvIntVec(int sock, uint32_t vec[], int length) {
  *  @return true on success, false on failure
  */
 bool Np4d::sendIntVec(int sock, uint32_t vec[], int length) {
-	int nbQueued; socklen_t nbqSize = sizeof(nbQueued);
-	if (getsockopt(sock, SOL_SOCKET, SO_NWRITE, &nbQueued, &nbqSize) != 0)
-		return false;
-	int sbSize; socklen_t sbSize2 = sizeof(sbSize);
-	if (getsockopt(sock, SOL_SOCKET, SO_SNDBUF, &sbSize, &sbSize2) != 0)
-		return false;
 	socklen_t vecSiz = length * sizeof(uint32_t);
-	if (vecSiz > (sbSize - nbQueued)) return false;
+	if (spaceAvail(sock) < vecSiz) return false;
 	uint32_t buf[length];
 	for (int i = 0; i < length; i++) buf[i] = htonl(vec[i]);
-	int nbytes = send(sock, (void *) &buf, vecSiz, 0);
-	if (nbytes != vecSiz) return false;
+	int nbytes = send(sock, (void *) buf, vecSiz, 0);
+	if (nbytes != vecSiz) 
+		fatal("Np4d::sendIntVec: can't send vector");
+	return true;
 }
 
-/** Test a socket to see if it has data to be read.
- *  Uses the poll system call.
- *  @param sock is the socket to be tested
- *  @return true if the socket has data to be read, else false
- */
-bool Np4d::hasData(int sock) {
-	struct pollfd ps;
-	ps.fd = sock; ps.events = POLLIN;
-	return poll(&ps, 1, 0) == 1;
+int Np4d::recvBuf(int sock, char* buf, int buflen) {
+	uint32_t length;
+	int nbytes = recv(sock,(void *) &length, sizeof(uint32_t), MSG_PEEK);
+	if (nbytes != sizeof(uint32_t)) return -1;
+	if (dataAvail(sock) < length) return -1;
+	length = min(length, buflen);
+	nbytes = recv(sock,(void *) &length, sizeof(uint32_t), 0);
+	nbytes = recv(sock,(void *) buf, length - sizeof(uint32_t), 0);
+	return nbytes;
+}
+
+int Np4d::sendBuf(int sock, char* buf, int buflen) {
+	if (spaceAvail(sock) < buflen + sizeof(uint32_t))
+		return -1;
+	int nbytes = send(sock, (void *) &buflen, sizeof(uint32_t), 0);
+	if (nbytes != sizeof(uint32_t))
+		fatal("Np4d::sendBuf: can't send buffer");
+	nbytes = send(sock, (void *) buf, buflen, 0);
+	if (nbytes != buflen)
+		fatal("Np4d::sendBuf: can't send buffer");
+	return buflen;
 }

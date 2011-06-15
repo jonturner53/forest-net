@@ -24,7 +24,7 @@ public:
 		~NetMgr();
 
 	bool	init();
-	void	run(); 
+	void	run(int); 
 private:
 	const static short NM_PORT = 30125; ///< port# for used by remote UI
 	
@@ -40,13 +40,12 @@ private:
 
 	PacketStore *ps;		///< pointer to packet store
 
-
 	// private helper methods
 	void	connect();		
 	void	disconnect();	
 
-	void	writeToUi(int);	
-	int	readFromUi();
+	void	sendToUi(int);	
+	int	recvFromUi();
 
 	void	sendToForest(int);
 	int 	rcvFromForest();

@@ -41,26 +41,30 @@ public:
 	static void extractSockAdr(sockaddr_in*, ipa_t&, ipp_t&); 
 
 	// setting up sockets
-	static int datagramSocket();
-	static int streamSocket();
+	static int  datagramSocket();
+	static int  streamSocket();
 	static bool bind4d(int, ipa_t, ipp_t);
 	static bool listen4d(int);
-	static int accept4d(int);
-	static int accept4d(int, ipa_t&, ipp_t&);
+	static int  accept4d(int);
+	static int  accept4d(int, ipa_t&, ipp_t&);
 	static bool connect4d(int, ipa_t, ipp_t);
 	static bool nonblock(int);
 
 	// sending and receiving datagrams
-	static int sendto4d(int, void*, int, ipa_t, ipp_t);
-	static int recv4d(int, void*, int);
-	static int recvfrom4d(int, void*, int, ipa_t&, ipp_t&);
+	static int  sendto4d(int, void*, int, ipa_t, ipp_t);
+	static int  recv4d(int, void*, int);
+	static int  recvfrom4d(int, void*, int, ipa_t&, ipp_t&);
 
-	// reading data from stream sockets
+	// sending and receiving data on stream sockets
+	static bool hasData(int);
+	static int  dataAvail(int);
+	static int  spaceAvail(int);
 	static bool recvInt(int, uint32_t&);
 	static bool sendInt(int, uint32_t);
 	static bool recvIntVec(int, uint32_t*, int);
 	static bool sendIntVec(int, uint32_t*, int);
-	static bool hasData(int);
+	static int  recvBuf(int, char*, int);
+	static int  sendBuf(int, char*, int);
 };
 
 #endif

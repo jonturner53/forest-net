@@ -45,6 +45,11 @@ enum CpTypeIndex {
 	CPT_END			///< marker following last CtlPktType
 };
 
+/** This class provides information about control packet types.
+ *  It provides methods to access information about types using
+ *  their index and identifies which attributes are relevant
+ *  for which types.
+ */
 class CpType {
 private:
 	struct CpTypeInfo {
