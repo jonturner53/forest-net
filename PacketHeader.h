@@ -14,13 +14,15 @@
 
 class PacketHeader {
 public:
+		PacketHeader();
+		~PacketHeader();
+
 	void	unpack(buffer_t&);
 	void	pack(buffer_t&);
 
 	/** getters */ 
 	int 	getVersion() const;
 	int 	getLength() const;	
-	int 	getHdrLength() const;
         ptyp_t  getPtype() const;
         flgs_t  getFlags() const;
         comt_t 	getComtree() const;
@@ -34,7 +36,6 @@ public:
 	/** setters */ 
 	void 	setVersion(int);
 	void 	setLength(int);	
-	void 	setHdrLength(int);
         void  	setPtype(ptyp_t);
         void  	setFlags(flgs_t);
         void 	setComtree(comt_t);

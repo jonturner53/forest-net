@@ -27,28 +27,25 @@
 #include "CtlPkt.h"
 
 /** Constructor for CtlPkt.
- *  @param pl is pointer to the packet payload
  */
-CtlPkt::CtlPkt(uint32_t* pl) {
-	reset(pl);
-}
-
-/** Clears CtlPkt fields for re-use with a new buffer.
- *  @param pl is a pointer to the start of the payload
- */
-void CtlPkt::reset(uint32_t* pl) {
-	for (int i = CPA_START; i < CPA_END; i++) aSet[i] = false;
-	payload = pl;
-}
+CtlPkt::CtlPkt() { payload = 0; reset(); }
 
 /** Destructor for CtlPkt. */
 CtlPkt::~CtlPkt() { } 
 
+/** Clears CtlPkt fields for re-use with a new buffer.
+ */
+void CtlPkt::reset() {
+	for (int i = CPA_START; i < CPA_END; i++) aSet[i] = false;
+}
+
 /** Pack CtlPkt fields into buffer.
+ *  @param pl is pointer to start of payload
  *  @return the length of the packed payload in bytes.
  *  or 0 if an error was detected.
  */
-int CtlPkt::pack() {
+int CtlPkt::pack(uint32_t* pl) {
+	payload = pl;
 	if (!CpType::validIndex(cpType))
 		return 0;
 	if (rrType != REQUEST && rrType != POS_REPLY && rrType != NEG_REPLY)
@@ -91,10 +88,12 @@ int CtlPkt::pack() {
 }
 
 /** Unpack CtlPkt fields from the packet payload.
+ *  @param pl is pointer to start of payload
  *  @param pleng is the length of the payload in bytes
  *  @return true on success, 0 on failure
  */
-bool CtlPkt::unpack(int pleng) {
+bool CtlPkt::unpack(uint32_t* pl, int pleng) {
+	payload = pl;
 	pleng /= 4; // to get length in 32 bit words
 	if (pleng < 4) return false; // too short for control packet
 
@@ -138,6 +137,25 @@ bool CtlPkt::unpack(int pleng) {
 	return true;
 }
 
+void CtlPkt::writeAvPair(ostream& out, CpAttrIndex ii) {
+	out << CpAttr::getName(ii) << "=";
+	if (!isSet(ii)) {
+		cout << "(missing)";
+		return;
+	}
+	int32_t val = getAttr(ii);
+	if (ii == COMTREE_OWNER || ii == LEAF_ADR ||
+	    ii == PEER_ADR || ii == PEER_DEST ||
+	    ii == DEST_ADR) {
+		Forest::writeForestAdr(out,(fAdr_t) val);
+	} else if (ii == LOCAL_IP || ii == PEER_IP) {
+		string s; Np4d::addIp2string(s,val);
+		out << s;
+	} else {
+		out << val;
+	}
+}
+
 void CtlPkt::write(ostream& out) {
 // Prints CtlPkt content.
 	bool reqPkt = (rrType == REQUEST);
@@ -159,43 +177,13 @@ void CtlPkt::write(ostream& out) {
 			if (!CpType::isReqAttr(cpType,ii)) continue;
 			if (!CpType::isReqReqAttr(cpType,ii) && !isSet(ii))
 				continue;
-			out << " " << CpAttr::getName(ii) << "=";
-			if (isSet(ii)) {
-				int32_t val = getAttr(ii);
-				if (ii == COMTREE_OWNER || ii == LEAF_ADR ||
-				    ii == PEER_ADR || ii == PEER_DEST ||
-				    ii == DEST_ADR) {
-					Forest::writeForestAdr(out,(fAdr_t) val);
-				} else if (ii == LOCAL_IP || ii == PEER_IP) {
-					string s; Np4d::addIp2string(s,val);
-					out << s;
-				} else {
-					out << val;
-				}
-			} else {
-			     out << "(missing)";
-			}
+			out << " "; writeAvPair(out, ii);
 		}
 	} else if (rrType == POS_REPLY) {
 		for (int i = CPA_START+1; i < CPA_END; i++) {
 			CpAttrIndex ii = CpAttrIndex(i);
 			if (!CpType::isRepAttr(cpType,ii)) continue;
-			out << " " << CpAttr::getName(ii) << "=";
-			if (isSet(ii)) {
-				int32_t val = getAttr(ii);
-				if (ii == COMTREE_OWNER || ii == LEAF_ADR ||
-				    ii == PEER_ADR || ii == PEER_DEST ||
-				    ii == DEST_ADR) {
-					Forest::writeForestAdr(out,(fAdr_t) val);
-				} else if (ii == LOCAL_IP || ii == PEER_IP) {
-					string s; Np4d::addIp2string(s,val);
-					out << s;
-				} else {
-					out << val;
-				}
-			} else {
-			      out << "(missing)";
-			}
+			out << " "; writeAvPair(out, ii);
 		}
 	} else {
 		out << " errMsg=" << errMsg;

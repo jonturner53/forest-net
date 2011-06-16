@@ -527,7 +527,7 @@ void RouterCore::handleCtlPkt(int p) {
 	PacketHeader& h = ps->getHeader(p);
 	int inL = h.getInLink();
 	buffer_t& b = ps->getBuffer(p);
-	CtlPkt cp(ps->getPayload(p));
+	CtlPkt cp;
 
 	// first handle special cases of CONNECT/DISCONNECT
 	if (h.getPtype() == CONNECT) {
@@ -543,7 +543,7 @@ void RouterCore::handleCtlPkt(int p) {
 
 	// then onto normal signalling packets
 	int len = h.getLength() - (Forest::HDR_LENG + 4);
-	if (!cp.unpack(len)) {
+	if (!cp.unpack(ps->getPayload(p), len)) {
 		cerr << "misformatted control packet";
 		cp.write(cerr);
 		errReply(p,cp,"misformatted control packet");
@@ -556,7 +556,7 @@ void RouterCore::handleCtlPkt(int p) {
 	}
 		
 	// Prepare positive reply packet for use where appropriate
-	CtlPkt cp1(ps->getPayload(p));
+	CtlPkt cp1;
 	cp1.setCpType(cp.getCpType());
 	cp1.setRrType(POS_REPLY);
 	cp1.setSeqNum(cp.getSeqNum());
@@ -568,14 +568,14 @@ void RouterCore::handleCtlPkt(int p) {
 				  cp.getAttr(LOCAL_IP),
 		     		  cp.getAttr(MAX_BIT_RATE),
 				  cp.getAttr(MAX_PKT_RATE))) {
-			returnToSender(p,cp1.pack());
+			returnToSender(p,cp1.pack(ps->getPayload(p)));
 		} else {
 			errReply(p,cp1,"add iface: cannot add interface");
 		}
 		break;
         case DROP_IFACE:
 		iop->removeEntry(cp.getAttr(IFACE_NUM));
-		returnToSender(p,cp1.pack());
+		returnToSender(p,cp1.pack(ps->getPayload(p)));
 		break;
         case GET_IFACE: {
 		int32_t iface = cp.getAttr(IFACE_NUM);
@@ -584,7 +584,7 @@ void RouterCore::handleCtlPkt(int p) {
 			cp1.setAttr(LOCAL_IP,iop->getIpAdr(iface));
 			cp1.setAttr(MAX_BIT_RATE,iop->getMaxBitRate(iface));
 			cp1.setAttr(MAX_PKT_RATE,iop->getMaxPktRate(iface));
-			returnToSender(p,cp1.pack());
+			returnToSender(p,cp1.pack(ps->getPayload(p)));
 		} else errReply(p,cp1,"get iface: invalid interface");
 		break;
 	}
@@ -600,7 +600,7 @@ void RouterCore::handleCtlPkt(int p) {
 				iop->setMaxPktRate(iface,
 						   cp.getAttr(MAX_PKT_RATE));
 			if (iop->checkEntry(iface)) {
-				returnToSender(p,cp1.pack());
+				returnToSender(p,cp1.pack(ps->getPayload(p)));
 			} else { // undo changes
 				iop->setMaxBitRate(iface, br);
 				iop->setMaxPktRate(iface, pr);
@@ -613,12 +613,12 @@ void RouterCore::handleCtlPkt(int p) {
 		if (lt->addEntry(cp.getAttr(LINK_NUM), cp.getAttr(IFACE_NUM),
 		    (ntyp_t) cp.getAttr(PEER_TYPE), cp.getAttr(PEER_IP),
 		    cp.getAttr(PEER_ADR)))
-			returnToSender(p,cp1.pack());
+			returnToSender(p,cp1.pack(ps->getPayload(p)));
 		else errReply(p,cp1,"add link: cannot add link");
 		break;
         case DROP_LINK:
 		if (lt->removeEntry(cp.getAttr(LINK_NUM)))
-			returnToSender(p,cp1.pack());
+			returnToSender(p,cp1.pack(ps->getPayload(p)));
 		else errReply(p,cp1,"drop link: cannot drop link");
         case GET_LINK: {
 		uint32_t link = cp.getAttr(LINK_NUM);
@@ -632,7 +632,7 @@ void RouterCore::handleCtlPkt(int p) {
 			cp1.setAttr(PEER_ADR, lt->getPeerAdr(link));
 			cp1.setAttr(BIT_RATE, lt->getBitRate(link));
 			cp1.setAttr(PKT_RATE, lt->getPktRate(link));
-			returnToSender(p,cp1.pack());
+			returnToSender(p,cp1.pack(ps->getPayload(p)));
 		} else errReply(p,cp1,"get link: invalid link number");
 		break;
 	}
@@ -669,18 +669,18 @@ void RouterCore::handleCtlPkt(int p) {
 				lt->setBitRate(link, cp.getAttr(BIT_RATE));
 			if (cp.isSet(PKT_RATE) != 0)
 				lt->setPktRate(link, cp.getAttr(PKT_RATE));
-			returnToSender(p,cp1.pack());
+			returnToSender(p,cp1.pack(ps->getPayload(p)));
 		} else errReply(p,cp1,"get link: invalid link number");
 		break; }
         case ADD_COMTREE:
 		if (ctt->addEntry(cp.getAttr(COMTREE_NUM)) != 0)
-			returnToSender(p,cp1.pack());
+			returnToSender(p,cp1.pack(ps->getPayload(p)));
 		else errReply(p,cp1,"add comtree: cannot add comtree");
 		break;
         case DROP_COMTREE:
 		ctte = ctt->lookup(cp.getAttr(COMTREE_NUM));
 		if (ctte != 0 && ctt->removeEntry(ctte) != 0)
-			returnToSender(p,cp1.pack());
+			returnToSender(p,cp1.pack(ps->getPayload(p)));
 		else
 			errReply(p,cp1,"drop comtree: cannot drop comtree");
 		break;
@@ -694,7 +694,7 @@ void RouterCore::handleCtlPkt(int p) {
 			cp1.setAttr(CORE_FLAG,ctt->getCoreFlag(ctte));
 			cp1.setAttr(PARENT_LINK,ctt->getPlink(ctte));
 			cp1.setAttr(QUEUE_NUM,ctt->getQnum(ctte));
-			returnToSender(p,cp1.pack());
+			returnToSender(p,cp1.pack(ps->getPayload(p)));
 		}
 		break;
 	}
@@ -708,7 +708,7 @@ void RouterCore::handleCtlPkt(int p) {
 				ctt->setPlink(ctte,cp.getAttr(PARENT_LINK));
 			if (cp.isSet(QUEUE_NUM) != 0)
 				ctt->setQnum(ctte,cp.getAttr(QUEUE_NUM));
-			returnToSender(p,cp1.pack());
+			returnToSender(p,cp1.pack(ps->getPayload(p)));
 		} else errReply(p,cp1,"modify comtree: invalid comtree");
 		break;
 	}
@@ -718,14 +718,14 @@ void RouterCore::handleCtlPkt(int p) {
 				 cp.getAttr(DEST_ADR),
 				 cp.getAttr(LINK_NUM),
 				 cp.getAttr(QUEUE_NUM)) != 0) {
-			returnToSender(p,cp1.pack());
+			returnToSender(p,cp1.pack(ps->getPayload(p)));
 		} else errReply(p,cp1,"add route: cannot add route");
 		break;
         case DROP_ROUTE:
 		rte = rt->lookup(cp.getAttr(COMTREE_NUM),cp.getAttr(DEST_ADR));
 		if (rte != 0) {
 			rt->removeEntry(rte);
-			returnToSender(p,cp1.pack());
+			returnToSender(p,cp1.pack(ps->getPayload(p)));
 		} else errReply(p,cp1,"drop route: invalid route");
 		break;
         case GET_ROUTE: {
@@ -737,7 +737,7 @@ void RouterCore::handleCtlPkt(int p) {
 			cp1.setAttr(DEST_ADR,da);
 			cp1.setAttr(LINK_NUM,rt->getLink(rte));
 			cp1.setAttr(QUEUE_NUM,rt->getQnum(rte));
-			returnToSender(p,cp1.pack());
+			returnToSender(p,cp1.pack(ps->getPayload(p)));
 		} else errReply(p,cp1,"get route: invalid route");
 		break;
 	}
@@ -748,7 +748,7 @@ void RouterCore::handleCtlPkt(int p) {
 				rt->setLink(rte, cp.getAttr(LINK_NUM));
 			if (cp.isSet(QUEUE_NUM))
 				rt->setQnum(rte, cp.getAttr(QUEUE_NUM));
-			returnToSender(p,cp1.pack());
+			returnToSender(p,cp1.pack(ps->getPayload(p)));
 		} else errReply(p,cp1,"mod route: invalid route");
 		break;
 	default:
@@ -784,6 +784,6 @@ void RouterCore::returnToSender(packet p, int paylen) {
  */
 void RouterCore::errReply(packet p, CtlPkt& cp, const char *s) {
 	cp.setRrType(NEG_REPLY); cp.setErrMsg(s);
-	returnToSender(p,4*cp.pack());
+	returnToSender(p,4*cp.pack(ps->getPayload(p)));
 }
 
