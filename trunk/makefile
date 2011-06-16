@@ -1,4 +1,4 @@
-CXXFLAGS = -O2 -m64 -I . -I support
+CXXFLAGS = -O2 -m64 -I /usr/include/c++/4.2.1 -I . -I support
 
 LIBS = lib support/lib
 
@@ -9,7 +9,7 @@ LIBFILES = CommonDefs.o IoProcessor.o LinkTable.o ComtreeTable.o \
 	   RouteTable.o StatsModule.o CpAttr.o CpType.o CtlPkt.o \
 	   QuManager.o PacketHeader.o PacketStore.o 
 
-all : supportLib fHost fRouter fAvatar fMonitor fNetMgr
+all : supportLib fHost fRouter fAvatar fMonitor fNetMgr fCli
 
 supportLib:
 	${MAKE} -C support
@@ -31,6 +31,10 @@ fMonitor : Monitor.o ${LIBS}
 	cp $@ ${HOME}/bin
 
 fNetMgr : NetMgr.o ${LIBS}
+	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
+	cp $@ ${HOME}/bin
+
+fCli : NetMgrCli.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
 	cp $@ ${HOME}/bin
 

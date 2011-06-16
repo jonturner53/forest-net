@@ -8,6 +8,10 @@
 
 #include "PacketHeader.h"
 
+PacketHeader::PacketHeader() { setVersion(1); }
+
+PacketHeader::~PacketHeader() {}
+
 void PacketHeader::unpack(buffer_t& b) {
 // Unpack PacketHeader fields from buffer.
 	uint32_t x = ntohl(b[0]);
@@ -23,7 +27,7 @@ void PacketHeader::unpack(buffer_t& b) {
 
 void PacketHeader::pack(buffer_t& b) {
 // Pack PacketHeader fields into buffer.
-        uint32_t x = (Forest::FOREST_VERSION << 28)
+        uint32_t x = (getVersion() << 28)
                      | ((getLength() & 0xfff) << 16) 
                      | ((getPtype() & 0xff) << 8)
                      | (getFlags() & 0xff);
@@ -103,8 +107,9 @@ void PacketHeader::write(ostream& out, buffer_t& b) const {
 	}
         out << endl;
 	if (getPtype() == CLIENT_SIG || getPtype() == NET_SIG) {
-		CtlPkt cp(&b[Forest::HDR_LENG/4]);
-		cp.unpack(getLength()-(Forest::HDR_LENG+4));
+		CtlPkt cp;
+		cp.unpack(&b[Forest::HDR_LENG/4],
+			  getLength()-(Forest::HDR_LENG+4));
 		cp.write(out);
 	}
 }

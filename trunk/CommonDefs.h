@@ -102,7 +102,7 @@ public:
 	static int zipCode(fAdr_t);
 	static int localAdr(fAdr_t);
 	static fAdr_t forestAdr(int,int);
-	static fAdr_t forestAdr(char*);
+	static fAdr_t forestAdr(const char*);
 	static void addFadr2string(string&, fAdr_t);
 	static bool readForestAdr(istream&, fAdr_t&);
 	static void writeForestAdr(ostream&, fAdr_t);
@@ -162,7 +162,7 @@ inline fAdr_t Forest::forestAdr(int zip, int local ) {
  *  @return the corresponding forest address, or 0 if the input
  *  is not a valid address
  */
-inline fAdr_t Forest::forestAdr(char *fas) {
+inline fAdr_t Forest::forestAdr(const char *fas) {
 	int zip, local, mcAdr;
 	if (sscanf(fas,"%d.%d", &zip, &local) == 2 && zip > 0 && local > 0)
 		return forestAdr(zip,local);
