@@ -11,7 +11,7 @@
 #include "PacketHeader.h"
 #include "CtlPkt.h"
 
-const short NM_PORT = 30125; 		///< server port# for NetMgr
+const short NM_PORT = 30124; 		///< server port# for NetMgr
 
 // various helper routines
 bool sendReqPkt(int, CtlPkt&, fAdr_t, CtlPkt&);
@@ -27,16 +27,26 @@ void processTokenList(list<string>, fAdr_t&, CpTypeIndex&, CtlPkt&);
 main(int argc, char *argv[]) {
 	ipa_t nmIp;
 
-/*
-	if (argc != 2 || (nmIp = Np4d::ipAddress(argv[1])) == 0)
+	if (argc != 2 || (nmIp = Np4d::getIpAdr(argv[1])) == 0)
 		fatal("usage: NetMgrCli netMgrIp");
 
 	int sock = Np4d::streamSocket();
+cout << "got socket " << sock << endl;
+	if (sock < 0) fatal("sock<0");
+cout << "connecting to "; Np4d::writeIpAdr(cout,nmIp); cout <<  ":" << NM_PORT << endl;
+	if (!Np4d::connect4d(sock,nmIp,NM_PORT))
+		fatal("can't connect");
+	if (!Np4d::nonblock(sock))
+		fatal("can't make it nonblocking");
+
+/*
 	if (sock < 0 ||
-	    !Np4d::nonblock(sock) ||
-	    !Np4d::connect4d(sock,nmIp,0))
+	    !Np4d::connect4d(sock,nmIp,NM_PORT) ||
+	    !Np4d::nonblock(sock))
 		fatal("can't connect to NetMgr");
 */
+
+cout << "connection to NetMgr is setup\n";
 
 	// start processing command line input
 
@@ -106,8 +116,6 @@ main(int argc, char *argv[]) {
 				}
 				seqNum++;
 			} 
-			cout << "sending packet\n";
-			reqPkt.write(cout);
 		} else {
 			cout << "cannot recognize command\n";
 		}
@@ -140,17 +148,24 @@ bool sendReqPkt(int sock, CtlPkt& reqPkt,
 
 	reqHdr.pack(reqBuf);
 
+cout << "sending to NetMgr\n";
 	if (Np4d::sendBuf(sock, (char *) &reqBuf[0], pleng) != pleng)
 		fatal("can't send control packet to NetMgr");
 
+cout << "done sending to NetMgr\n";
 	for (int i = 0; i < 5; i++) {
 		usleep(1000000);
 		// if there is a reply, unpack and return true
+cout << "checking for reply\n";
 		int nbytes = Np4d::recvBuf(sock, (char *) &replyBuf[0],
 			        	  	 Forest::BUF_SIZ);
+cout << "got " << nbytes << " bytes\n";
 		if (nbytes <= 0) {
+cout << "a\n";
 			cout << ".";
+cout << "b\n";
 			Np4d::sendBuf(sock, (char *) &reqBuf[0], pleng);
+cout << "c\n";
 			continue;
 		}
 		replyHdr.unpack(replyBuf);

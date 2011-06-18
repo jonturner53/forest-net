@@ -165,8 +165,7 @@ inline uint64_t RouteTable::hashkey(comt_t ct, fAdr_t fa) {
 		if (zip != Forest::zipCode(myAdr))
 			fa = Forest::forestAdr(zip,0);
 	}
-	return (uint64_t(ct) << 32) | fa;
-
+	return (uint64_t(ct) << 32) | (uint64_t(fa) & 0xffffffff);
 }
 
 #endif

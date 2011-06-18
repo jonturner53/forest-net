@@ -20,6 +20,7 @@
 #include <cassert>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/ioctl.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
@@ -32,6 +33,10 @@
 #include <stdlib.h>
 #include <memory.h>
 #include <poll.h>
+
+#ifdef linux
+#include <linux/sockios.h>
+#endif
 
 using namespace std;
 
