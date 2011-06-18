@@ -142,6 +142,7 @@ public class ShowWorld {
 	private static boolean processArgs(String[] args) {
 		try {
 			monSockAdr = new InetSocketAddress(args[0], MON_PORT);
+System.out.println(monSockAdr);
 		} catch (Exception e) {
 			System.out.println("usage: ShowWorldNet monIp");
 			System.out.println(e);

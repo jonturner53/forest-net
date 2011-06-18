@@ -11,6 +11,9 @@ LIBFILES = CommonDefs.o IoProcessor.o LinkTable.o ComtreeTable.o \
 
 all : supportLib fHost fRouter fAvatar fMonitor fNetMgr fCli
 
+NetMgrCli.o: NetMgrCli.cpp stdinc.h
+	${CXX} ${CXXFLAGS} -c $<
+
 supportLib:
 	${MAKE} -C support
 
