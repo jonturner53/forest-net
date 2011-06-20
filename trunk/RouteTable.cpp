@@ -31,7 +31,20 @@ int RouteTable::lookup(comt_t comt, fAdr_t adr) {
 // Perform a lookup in the routing table. Comt is the comtree number,
 // adr is the destination address. Returned value is the index
 // of the table entry, or 0 if there is no match.
-	return ht->lookup(hashkey(comt,adr));
+	//return ht->lookup(hashkey(comt,adr));
+
+	uint64_t x = hashkey(comt,adr);
+	int te = ht->lookup(x);
+	uint64_t z = ht->getKey(te);
+	if (te == 0) return 0;
+	if (x != z)
+		cerr << "hash lookup on " << x << " returns " << te
+		     << " for which stored key is " << z << endl;
+	else if (tbl[te].ct != comt)
+		cerr << "hash is ok but stored comtree value " << tbl[te].ct
+		     << " does not match " << comt << endl;
+	return te;
+
 }
 
 int RouteTable::getLinks(int te, uint16_t lnks[], int limit) const {

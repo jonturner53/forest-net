@@ -20,6 +20,7 @@ void parseLine(string, list<string>&);
 void buildWordList(string, list<string>&);
 bool validTokenList(list<string>);
 void processTokenList(list<string>, fAdr_t&, CpTypeIndex&, CtlPkt&);
+void posResponse(CtlPkt&);
 
 /** usage:
  *       NetMgrCli NetMgrIp
@@ -31,22 +32,10 @@ main(int argc, char *argv[]) {
 		fatal("usage: NetMgrCli netMgrIp");
 
 	int sock = Np4d::streamSocket();
-cout << "got socket " << sock << endl;
-	if (sock < 0) fatal("sock<0");
-cout << "connecting to "; Np4d::writeIpAdr(cout,nmIp); cout <<  ":" << NM_PORT << endl;
-	if (!Np4d::connect4d(sock,nmIp,NM_PORT))
-		fatal("can't connect");
-	if (!Np4d::nonblock(sock))
-		fatal("can't make it nonblocking");
-
-/*
 	if (sock < 0 ||
 	    !Np4d::connect4d(sock,nmIp,NM_PORT) ||
 	    !Np4d::nonblock(sock))
 		fatal("can't connect to NetMgr");
-*/
-
-cout << "connection to NetMgr is setup\n";
 
 	// start processing command line input
 
@@ -91,7 +80,6 @@ cout << "connection to NetMgr is setup\n";
 				continue;
 			}
 
-
 			CtlPkt reqPkt, replyPkt;
 			reqPkt.reset();
 			reqPkt.setCpType(reqType);
@@ -109,7 +97,8 @@ cout << "connection to NetMgr is setup\n";
 				if (replyPkt.getSeqNum() != seqNum) {
 					cout << "received invalid reply\n";
 				} else if (replyPkt.getRrType() == POS_REPLY) {
-					cout << "success\n";
+					posResponse(replyPkt);
+					//cout << "success\n";
 				} else {
 					cout << "error reported: "
 					     << replyPkt.getErrMsg() << endl;
@@ -120,6 +109,28 @@ cout << "connection to NetMgr is setup\n";
 			cout << "cannot recognize command\n";
 		}
 	}
+}
+
+void posResponse(CtlPkt& cp) {
+	CpTypeIndex cpType = cp.getCpType();
+	for (int i = CPA_START+1; i < CPA_END; i++) {
+		CpAttrIndex ii = CpAttrIndex(i);
+		if (!CpType::isRepAttr(cpType,ii)) continue;
+		cout << CpAttr::getName(ii) << "=";
+		int32_t val = cp.getAttr(ii);
+		if (ii == COMTREE_OWNER || ii == LEAF_ADR ||
+		    ii == PEER_ADR || ii == PEER_DEST ||
+		    ii == DEST_ADR) {
+			Forest::writeForestAdr(cout,(fAdr_t) val);
+		} else if (ii == LOCAL_IP || ii == PEER_IP) {
+			string s; Np4d::addIp2string(s,val);
+			cout << s;
+		} else {
+			cout << val;
+		}
+		cout << " ";
+	}
+	cout << endl;
 }
 
 /** Send a request packet, then wait for and return reply.
@@ -148,29 +159,23 @@ bool sendReqPkt(int sock, CtlPkt& reqPkt,
 
 	reqHdr.pack(reqBuf);
 
-cout << "sending to NetMgr\n";
 	if (Np4d::sendBuf(sock, (char *) &reqBuf[0], pleng) != pleng)
 		fatal("can't send control packet to NetMgr");
 
-cout << "done sending to NetMgr\n";
 	for (int i = 0; i < 5; i++) {
 		usleep(1000000);
 		// if there is a reply, unpack and return true
-cout << "checking for reply\n";
 		int nbytes = Np4d::recvBuf(sock, (char *) &replyBuf[0],
 			        	  	 Forest::BUF_SIZ);
-cout << "got " << nbytes << " bytes\n";
 		if (nbytes <= 0) {
-cout << "a\n";
 			cout << ".";
-cout << "b\n";
 			Np4d::sendBuf(sock, (char *) &reqBuf[0], pleng);
-cout << "c\n";
 			continue;
 		}
 		replyHdr.unpack(replyBuf);
-		replyPkt.unpack(&replyBuf[Forest::HDR_LENG/sizeof(uint32_t)],
-				nbytes);
+		if (!replyPkt.unpack(&replyBuf[Forest::HDR_LENG/sizeof(uint32_t)],
+				nbytes-(Forest::HDR_LENG + sizeof(uint32_t))))
+			return false;
 		return replyHdr.getSrcAdr() == target;
 	}
 	return false;
@@ -231,7 +236,7 @@ void parseLine(string line, list<string>& tokenList) {
 		p = wordList.begin();
 		for (int i = 0; i <= last; i++) {
 			s += (*p++);
-			if (i < pos-2) s += " ";
+			if (i < last) s += " ";
 		}
 		tokenList.push_back(s);
 		s.clear();

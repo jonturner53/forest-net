@@ -216,6 +216,8 @@ void RouterCore::run(uint32_t finishTime, int numData) {
 				subUnsub(p,ctte);
 			} else if (ptype == RTE_REPLY) {
 				handleRteReply(p,ctte);
+			} else if (h.getDstAdr() != myAdr) {
+				forward(p,ctte);
 			} else {
 				ctlQ.push(p);
 			}
@@ -511,7 +513,6 @@ void RouterCore::subUnsub(int p, int ctte) {
 	ps->free(p); return;
 }
 
-
 /** Handle all control packets addressed to the router.
  *  with the exception of SUB_UNSUB and RTE_REPLY which
  *  are handled "inline".
@@ -766,7 +767,7 @@ void RouterCore::handleCtlPkt(int p) {
  */
 void RouterCore::returnToSender(packet p, int paylen) {
 	PacketHeader& h = ps->getHeader(p);
-	h.setLength(Forest::HDR_LENG + paylen + 4);
+	h.setLength(Forest::HDR_LENG + paylen + sizeof(uint32_t));
 
 	fAdr_t temp = h.getDstAdr();
 	h.setDstAdr(h.getSrcAdr());
