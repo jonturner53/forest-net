@@ -9,8 +9,7 @@
 
 #include "stdinc.h"
 #include "CommonDefs.h"
-#include "Avatar2.h"
-
+#include "MazeAvatar.h"
 /** usage:
  *       Avatar myIpAdr rtrIpAdr myAdr rtrAdr comt finTime
  * 
@@ -35,19 +34,21 @@
  */
 main(int argc, char *argv[]) {
 	ipa_t myIpAdr, rtrIpAdr; fAdr_t myAdr, rtrAdr;
-	int comt, finTime;
+	int comt, finTime, gridSize;
+	char * walls = argv[8];
 
-	if (argc != 7 ||
+	if (argc != 9 ||
 	    (myIpAdr  = Np4d::ipAddress(argv[1])) == 0 ||
 	    (rtrIpAdr = Np4d::ipAddress(argv[2])) == 0 ||
 	    (myAdr  = Forest::forestAdr(argv[3])) == 0 ||
 	    (rtrAdr = Forest::forestAdr(argv[4])) == 0 ||
 	    sscanf(argv[5],"%d", &comt) != 1 ||
-	    sscanf(argv[6],"%d", &finTime) != 1)
+	    sscanf(argv[6],"%d", &finTime) != 1 ||
+	    sscanf(argv[7],"%d", &gridSize) != 1)
 		fatal("usage: Avatar myIpAdr rtrIpAdr myAdr rtrAdr "
 		      		    "comtree finTime");
 
-	Avatar avatar(myIpAdr,rtrIpAdr,myAdr,rtrAdr, comt);
+	Avatar avatar(myIpAdr,rtrIpAdr,myAdr,rtrAdr, comt, gridSize, walls);
 	if (!avatar.init()) fatal("Avatar:: initialization failure");
 	avatar.run(1000000*finTime);
 }
@@ -60,9 +61,9 @@ main(int argc, char *argv[]) {
  *  @param ra is the forest address for the access router
  *  @param ct is the comtree used for the virtual world
  */
-Avatar::Avatar(ipa_t mipa, ipa_t ripa, fAdr_t ma, fAdr_t ra, comt_t ct)
+Avatar::Avatar(ipa_t mipa, ipa_t ripa, fAdr_t ma, fAdr_t ra, comt_t ct, int gridSize, char * walls)
 		: myIpAdr(mipa), rtrIpAdr(ripa), myAdr(ma), rtrAdr(ra),
-		  comt(ct) {
+		  comt(ct), SIZE(GRID*gridSize), WALLS(walls) {
 	int nPkts = 10000;
 	ps = new PacketStore(nPkts+1, nPkts+1);
 
@@ -77,13 +78,26 @@ Avatar::Avatar(ipa_t mipa, ipa_t ripa, fAdr_t ma, fAdr_t ra, comt_t ct)
 	deltaDir = 0;
 	speed = MEDIUM;
 
-	mcGroups = new UiDlist(MAXGROUPS);
+	mcGroups = new UiDlist((SIZE/GRID)*(SIZE/GRID));
 	nearAvatars = new UiHashTbl(MAXNEAR);
 	visibleAvatars = new UiHashTbl(MAXNEAR);
+	
+	//set up bitset
+	if((SIZE/GRID)*(SIZE/GRID) >= 10000)
+		fatal("AvatarController::AvatarController bitset too small; hex string too large");
+	for(int i = 0; i < (SIZE/GRID)*(SIZE/GRID); i++) {
+		char s = WALLS[i];
+		int x;
+		sscanf(&s,"%x",&x);
+		wallsSet[i*4] = x&8;
+		wallsSet[i*4+1] = x&4;
+		wallsSet[i*4+2] = x&2;
+		wallsSet[i*4+3] = x&1;
+	}
+	
 	visibility = new bool*[(SIZE/GRID)*(SIZE/GRID)];
 	for(int i = 0; i < (SIZE/GRID)*(SIZE/GRID); i++)
 		visibility[i] = new bool[(SIZE/GRID)*(SIZE/GRID)];
-	WALLS = "0010100101110100100101101";
 	for(int i = 0; i < (SIZE/GRID)*(SIZE/GRID); i++) {
 		for(int j = i; j < (SIZE/GRID)*(SIZE/GRID); j++) {
 			if(i==j) {
@@ -147,6 +161,7 @@ void Avatar::run(int finishTime) {
 		sendStatus(now);
 
 		nextTime += 1000*UPDATE_PERIOD;
+		cerr << nextTime << endl;
 		useconds_t delay = nextTime - now;
 		if (delay > 0) usleep(delay);
 	}
@@ -257,16 +272,16 @@ void Avatar::updateStatus(int now) {
 	int postRegion = groupNum(x,y);
 	//bounce off walls
 	if(postRegion!=prevRegion) {
-		if(prevRegion==postRegion+1 && WALLS[prevRegion-1]=='1') {
+		if(prevRegion==postRegion+1 && wallsSet[prevRegion-1]==1) {
 			direction = -direction;
 			x = (prevRegion-1)%(SIZE/GRID)*GRID+1;
-		} else if(prevRegion==postRegion-1 && WALLS[postRegion-1]=='1') {
+		} else if(prevRegion==postRegion-1 && wallsSet[postRegion-1]==1) {
 			direction = -direction;
 			x = (postRegion-1)%(SIZE/GRID)*GRID-1;
-		} else if(prevRegion==postRegion+(SIZE/GRID) && WALLS[prevRegion-1]=='0') {
+		} else if(prevRegion==postRegion+(SIZE/GRID) && wallsSet[prevRegion-1]==0) {
 			direction = 180-direction;
 			y = ((prevRegion-1)/(SIZE/GRID))*GRID+1;
-		} else if(prevRegion==postRegion-(SIZE/GRID) && WALLS[postRegion-1]=='0') {
+		} else if(prevRegion==postRegion-(SIZE/GRID) && wallsSet[postRegion-1]==0) {
 			direction = 180-direction;
 			y = ((postRegion-1)/(SIZE/GRID))*GRID-1;
 		}
@@ -328,7 +343,7 @@ bool Avatar::isVis(int region1, int region2) {
 		for(size_t j = 0; j < 4; j++) {
 			bool temp = true;
 			for(size_t k = 0; k < (SIZE/GRID)*(SIZE/GRID); k++) {
-				if(WALLS[k] == '0') {
+				if(wallsSet[k] == 0) {
 					if(linesIntersect((double)region1xs[i],(double)region1ys[i],(double)region2xs[j],(double)region2ys[j],(double)(k % (SIZE/GRID)) * GRID,(double)(k/(SIZE/GRID)) * GRID,(double)(k % (SIZE/GRID)) * GRID + GRID,(double) (k/(SIZE/GRID)) * GRID))
 						temp = false;
 				} else {
@@ -374,11 +389,12 @@ void Avatar::updateSubscriptions() {
 	const double SQRT2 = 1.41421356;
 	
 	int myGroup = groupNum(x,y);
-	UiDlist *newGroups = new UiDlist(MAXGROUPS);
+	UiDlist *newGroups = new UiDlist((SIZE/GRID)*(SIZE/GRID));
 	newGroups->addLast(myGroup);
 	for(size_t i = 1; i <= (SIZE/GRID)*(SIZE/GRID); i++) {
-		if(visibility[myGroup-1][i-1] && !newGroups->member(i))
+		if(visibility[myGroup-1][i-1] && !newGroups->member(i)) {
 			newGroups->addLast(i);
+		}
 	}
 
 	packet p = ps->alloc();
@@ -439,9 +455,9 @@ void Avatar::updateNearby(int p) {
 	bool canSee = true;
 	for(size_t i = 0; i < (SIZE/GRID)*(SIZE/GRID); i++) {
 		int l2x1 = (i % (SIZE/GRID)) * GRID;
-		int l2x2 = WALLS[i] == '0' ? l2x1 + GRID : l2x1;
+		int l2x2 = wallsSet[i] == 0 ? l2x1 + GRID : l2x1;
 		int l2y1 = (i / (SIZE/GRID)) * GRID;
-		int l2y2 = WALLS[i] == '1' ? l2y1 + GRID : l2y1;
+		int l2y2 = wallsSet[i] == 1 ? l2y1 + GRID : l2y1;
 		if(linesIntersect(x1,y1,x,y,l2x1,l2y1,l2x2,l2y2))
 			canSee = false;
 	}
@@ -453,5 +469,4 @@ void Avatar::updateNearby(int p) {
 			}
 		}
 	}
-	return;
 }
