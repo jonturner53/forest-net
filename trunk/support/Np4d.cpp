@@ -254,10 +254,8 @@ int Np4d::dataAvail(int sock) {
  */
 int Np4d::spaceAvail(int sock) {
 	int sbSize; socklen_t sbSizeSize = sizeof(sbSize);
-cout << "x\n";
 	if (getsockopt(sock, SOL_SOCKET, SO_SNDBUF, &sbSize, &sbSizeSize) != 0)
 		return -1;
-cout << "y\n";
 	int dQueued; socklen_t dqSize = sizeof(dQueued);
 #ifdef SO_NWRITE
 	if (getsockopt(sock, SOL_SOCKET, SO_NWRITE, &dQueued, &dqSize) != 0)
@@ -265,7 +263,6 @@ cout << "y\n";
         if (ioctl(sock, SIOCOUTQ, &dQueued ) == -1)
 #endif
 		return -1;
-cout << "z\n";
 	return sbSize - dQueued;
 }
 
@@ -345,27 +342,21 @@ int Np4d::recvBuf(int sock, char* buf, int buflen) {
 	uint32_t length;
 	int nbytes = recv(sock,(void *) &length, sizeof(uint32_t), MSG_PEEK);
 	if (nbytes != sizeof(uint32_t)) return -1;
-	if (dataAvail(sock) < length) return -1;
+	if (dataAvail(sock) < length + sizeof(uint32_t)) return -1;
 	length = min(length, buflen);
 	nbytes = recv(sock,(void *) &length, sizeof(uint32_t), 0);
-	nbytes = recv(sock,(void *) buf, length - sizeof(uint32_t), 0);
+	nbytes = recv(sock,(void *) buf, length, 0);
 	return nbytes;
 }
 
 int Np4d::sendBuf(int sock, char* buf, int buflen) {
-cout << "p\n";
 	if (spaceAvail(sock) < buflen + sizeof(uint32_t))
 		return -1;
-cout << "q\n";
 	int nbytes = send(sock, (void *) &buflen, sizeof(uint32_t), 0);
-cout << "r\n";
 	if (nbytes != sizeof(uint32_t))
 		fatal("Np4d::sendBuf: can't send buffer");
-cout << "s\n";
 	nbytes = send(sock, (void *) buf, buflen, 0);
-cout << "t\n";
 	if (nbytes != buflen)
 		fatal("Np4d::sendBuf: can't send buffer");
-cout << "w\n";
 	return buflen;
 }
