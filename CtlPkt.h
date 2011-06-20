@@ -197,7 +197,7 @@ inline void CtlPkt::packAttrCond(CpAttrIndex i) {
 }
 
 /** Unpacks a single (attribute, value) pair starting at word pp in payload.
- *  The unpacked value is stored in within the CtlPkt object and can
+ *  The unpacked value is stored in the CtlPkt object and can
  *  be retrieved using the getAttr() method.
  *  @returns attribute index of unpacked pair, or 0 for invalid index
  */

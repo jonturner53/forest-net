@@ -264,7 +264,8 @@ inline int ComtreeTable::getClinks(int entry, uint16_t* lnks, int limit) const {
  *  @return a 64 bit hash key
  */
 inline uint64_t ComtreeTable::hashkey(comt_t ct) const {
-        return (uint64_t(ct) << 32) | ct;
+	uint64_t x = (ct & 0xffffffff);
+        return (x << 32) | x;
 }
 
 /** Lookup the table entry number for a given comtree.

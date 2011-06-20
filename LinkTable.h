@@ -155,7 +155,7 @@ inline void LinkTable::postOcnt(int i, int leng) {
 /** Compute key for hash lookup
  */
 inline uint64_t LinkTable::hashkey(ipa_t x, uint32_t y) const {
-	return (uint64_t(x) << 32) | y;
+	return (uint64_t(x) << 32) | (uint64_t(y) & 0xffffffff);
 }
 
 /** Return index of link for a packet received on specified interface,

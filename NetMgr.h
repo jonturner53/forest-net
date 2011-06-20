@@ -26,7 +26,7 @@ public:
 	bool	init();
 	void	run(int); 
 private:
-	const static short NM_PORT = 30125; ///< port# for used by remote UI
+	const static short NM_PORT = 30124; ///< port# for used by remote UI
 	
 	ipa_t	extIp;			///< IP address for remote UI
 	ipa_t	intIp;			///< IP address for Forest net

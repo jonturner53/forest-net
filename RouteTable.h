@@ -145,6 +145,9 @@ inline bool RouteTable::addLink(int te, int lnk) {
 // false if entry is not a multicast entry.
 	assert(valid(te));
 	if (Forest::mcastAdr(tbl[te].adr)) {
+if (lnk == 17) {
+cout << "adding link 17 to entry " << te << " with comtree=" << tbl[te].ct << endl;
+}
 		tbl[te].lnks |= (1 << lnk); return true;
 	} else return false;
 }
@@ -166,6 +169,7 @@ inline uint64_t RouteTable::hashkey(comt_t ct, fAdr_t fa) {
 			fa = Forest::forestAdr(zip,0);
 	}
 	return (uint64_t(ct) << 32) | (uint64_t(fa) & 0xffffffff);
+
 }
 
 #endif

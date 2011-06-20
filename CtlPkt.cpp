@@ -114,7 +114,7 @@ bool CtlPkt::unpack(uint32_t* pl, int pleng) {
 	}
 
 	// unpack all attribute/value pairs
-	while (pp < pleng-1) { unpackAttr(); }
+	while (pp < pleng-1) { if (unpackAttr() == 0) return false; }
 
 	if (rrType == REQUEST) {
 		// confirm that required attributes are present
