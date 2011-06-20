@@ -14,7 +14,7 @@
 #include "PacketStore.h"
 #include "UiDlist.h"
 #include "UiHashTbl.h"
-
+#include <bitset>
 /** Class that implements a simulated avatar in a virtual world.
  *  
  *  This class implements an avatar in a very simple virtual world.
@@ -29,16 +29,17 @@
  */ 
 class Avatar {
 public:
-		Avatar(ipa_t, ipa_t, fAdr_t, fAdr_t, comt_t);
+		Avatar(ipa_t, ipa_t, fAdr_t, fAdr_t, comt_t, int,char *);
 		~Avatar();
 
 	bool	init();			
 	void	run(int); 	
 	const static int STATUS_REPORT = 1; ///< status report payload
 private:
-	const static int SIZE = 1000000;   ///< xy extent of virtual world
-	const static int GRID = 200000;	   ///< xy extent of one grid square
+	const int SIZE;		   	///< xy extent of virtual world
+	const static int GRID = 200000;	///< xy extent of one grid square
 	char* WALLS; 			///< list of walls
+	bitset<10000> wallsSet;		///< bitset of the walls
 	const static int UNIT = 1;	///< basic length unit
 	const static int SLOW = 8000;	///< slow avatar speed in UNITS/sec
 	const static int MEDIUM =25000;	///< medium avatar speed
@@ -62,8 +63,6 @@ private:
 	double	deltaDir;		///< change in direction per period
 	double	speed;			///< speed moving in UNITS/sec
 
-	// info on groups and nearby avatars 
-	const static int MAXGROUPS = (SIZE/GRID)*(SIZE/GRID);
 					///< maximum # of multicast groups
 	const static int MAXNEAR = 1000;///< max # of nearby avatars
 	UiDlist	*mcGroups;		///< multicast groups subscribed to
