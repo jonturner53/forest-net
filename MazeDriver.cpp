@@ -9,7 +9,7 @@
 
 #include "stdinc.h"
 #include "CommonDefs.h"
-#include "Avatar2Controller.h"
+#include "MazeDriver.h"
 #include <netinet/tcp.h>
 /** usage:
  *       Avatar myIpAdr rtrIpAdr myAdr rtrAdr comt finTime

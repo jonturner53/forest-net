@@ -9,7 +9,7 @@
 
 #include "stdinc.h"
 #include "CommonDefs.h"
-#include "Avatar3.h"
+#include "McmAvatar.h"
 /** usage:
  *       Avatar myIpAdr rtrIpAdr myAdr rtrAdr comt finTime
  * 
