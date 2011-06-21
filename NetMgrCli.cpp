@@ -11,7 +11,7 @@
 #include "PacketHeader.h"
 #include "CtlPkt.h"
 
-const short NM_PORT = 30124; 		///< server port# for NetMgr
+const short NM_PORT = 30122; 		///< server port# for NetMgr
 
 // various helper routines
 bool sendReqPkt(int, CtlPkt&, fAdr_t, CtlPkt&);
@@ -70,6 +70,14 @@ main(int argc, char *argv[]) {
 
 		list<string> tokenList;
 		parseLine(line, tokenList);
+/*
+list<string>::iterator pp = tokenList.begin();
+while (pp != tokenList.end()) {
+cout << (*pp) << "|";
+pp++;
+}
+cout << endl;
+*/
 		if (validTokenList(tokenList)) {
 			CpTypeIndex reqType = CPT_START;
 			processTokenList(tokenList,target,reqType,cpTemplate);
@@ -112,10 +120,12 @@ main(int argc, char *argv[]) {
 }
 
 void posResponse(CtlPkt& cp) {
+	bool printedSomething = false;
 	CpTypeIndex cpType = cp.getCpType();
 	for (int i = CPA_START+1; i < CPA_END; i++) {
 		CpAttrIndex ii = CpAttrIndex(i);
 		if (!CpType::isRepAttr(cpType,ii)) continue;
+		printedSomething = true;
 		cout << CpAttr::getName(ii) << "=";
 		int32_t val = cp.getAttr(ii);
 		if (ii == COMTREE_OWNER || ii == LEAF_ADR ||
@@ -125,12 +135,15 @@ void posResponse(CtlPkt& cp) {
 		} else if (ii == LOCAL_IP || ii == PEER_IP) {
 			string s; Np4d::addIp2string(s,val);
 			cout << s;
+		} else if (ii == PEER_TYPE) {
+			string s; Forest::addNodeType2string(s,(ntyp_t) val);
+			cout << s;
 		} else {
 			cout << val;
 		}
 		cout << " ";
 	}
-	cout << endl;
+	if (printedSomething) cout << endl;
 }
 
 /** Send a request packet, then wait for and return reply.
@@ -393,6 +406,12 @@ void processTokenList(list<string> tokenList, fAdr_t& target,
 				ipa_t ipa;
 				ipa = Np4d::ipAddress(rightSide.c_str());
 				if (ipa != 0) cpTemplate.setAttr(attr, ipa);
+				break;
+			case PEER_TYPE:
+				ntyp_t nt;
+				nt = Forest::getNodeType(rightSide);
+				if (nt != UNDEF_NODE)
+					cpTemplate.setAttr(attr, nt);
 				break;
 			default: // remaining attributes have integer values
 				uint32_t value = atoi(rightSide.c_str());

@@ -109,6 +109,8 @@ public:
 
 	/** miscellaneous */
 	static int truPktLeng(int);
+	static void addNodeType2string(string&, ntyp_t);
+	static ntyp_t getNodeType(string&);
 };
 
 typedef uint32_t buffer_t[Forest::BUF_SIZ/sizeof(uint32_t)];
