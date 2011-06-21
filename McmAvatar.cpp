@@ -11,7 +11,7 @@
 #include "CommonDefs.h"
 #include "McmAvatar.h"
 /** usage:
- *       Avatar myIpAdr rtrIpAdr ccIpAdr myAdr rtrAdr ccAdr comt finTime comt1 comt2 gridSize walls
+ *       Avatar myIpAdr rtrIpAdr ccIpAdr myAdr rtrAdr ccAdr comt finTime gridSize comt1 comt2 walls
  * 
  *  Command line arguments include the ip address of the
  *  avatar's machine, the router's IP address, the forest
@@ -35,7 +35,6 @@
 main(int argc, char *argv[]) {
 	ipa_t myIpAdr, rtrIpAdr, ccIpAdr; fAdr_t myAdr, rtrAdr, ccAdr;
 	int comt, comt1, comt2, finTime, gridSize;
-	char * walls = argv[12];
 
 	if (argc != 13 ||
 	    (myIpAdr  = Np4d::ipAddress(argv[1])) == 0 ||
@@ -51,7 +50,8 @@ main(int argc, char *argv[]) {
 	    sscanf(argv[11], "%d", &comt2) != 1)
 		fatal("usage: Avatar myIpAdr rtrIpAdr myAdr rtrAdr "
 		      		    "comtree finTime");
-
+	
+	char * walls = argv[12];
 	Avatar avatar(myIpAdr,rtrIpAdr,ccIpAdr,ccAdr,myAdr,rtrAdr, comt, comt1, comt2, gridSize, walls);
 	if (!avatar.init()) fatal("Avatar:: initialization failure");
 	avatar.run(1000000*finTime);
@@ -135,7 +135,7 @@ bool Avatar::init() {
         	Np4d::nonblock(sock)))
 		return false;
 	CC_sock = Np4d::datagramSocket();
-	return CC_sock >=0 && Np4d::bind4d(CC_sock,CC_IpAdr,0) && Np4d::nonblock(CC_sock);
+	return CC_sock >=0 && Np4d::bind4d(CC_sock,myIpAdr,0) && Np4d::nonblock(CC_sock);
 }
 
 /** Main Avatar processing loop.
