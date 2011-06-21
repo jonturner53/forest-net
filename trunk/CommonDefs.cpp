@@ -35,3 +35,20 @@ void Forest::writeForestAdr(ostream& out, fAdr_t fa) {
 	if (fa < 0) out << fa;
 	else out << zipCode(fa) << "." << localAdr(fa);
 }
+
+void Forest::addNodeType2string(string& s, ntyp_t nt) {
+	if (nt == CLIENT) s += "client";
+	else if (nt == SERVER) s += "server";
+	else if (nt == ROUTER) s += "router";
+	else if (nt == CONTROLLER) s += "controller";
+	else s += "unknown node type";
+}
+
+ntyp_t Forest::getNodeType(string& s) {
+	if (s.compare("client") == 0) return CLIENT;
+	if (s.compare("server") == 0) return SERVER;
+	if (s.compare("router") == 0) return ROUTER;
+	if (s.compare("controller") == 0) return CONTROLLER;
+	return UNDEF_NODE;
+}
+
