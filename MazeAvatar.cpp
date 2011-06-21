@@ -60,6 +60,8 @@ main(int argc, char *argv[]) {
  *  @param ma is the forest address for this host
  *  @param ra is the forest address for the access router
  *  @param ct is the comtree used for the virtual world
+ *  @param gridSize is the unit size of one square in the virtual world
+ *  @param walls is a hex representation of the walls in the maze
  */
 Avatar::Avatar(ipa_t mipa, ipa_t ripa, fAdr_t ma, fAdr_t ra, comt_t ct, int gridSize, char * walls)
 		: myIpAdr(mipa), rtrIpAdr(ripa), myAdr(ma), rtrAdr(ra),

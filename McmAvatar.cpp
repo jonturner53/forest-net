@@ -11,7 +11,7 @@
 #include "CommonDefs.h"
 #include "McmAvatar.h"
 /** usage:
- *       Avatar myIpAdr rtrIpAdr myAdr rtrAdr comt finTime
+ *       Avatar myIpAdr rtrIpAdr ccIpAdr myAdr rtrAdr ccAdr comt finTime comt1 comt2 gridSize walls
  * 
  *  Command line arguments include the ip address of the
  *  avatar's machine, the router's IP address, the forest
@@ -61,9 +61,14 @@ main(int argc, char *argv[]) {
  * 
  *  @param mipa is this host's IP address
  *  @param ripa is the IP address of the access router for this host
+ *  @param ccIpAdr is the IP address of the comtreecontroller
  *  @param ma is the forest address for this host
  *  @param ra is the forest address for the access router
  *  @param ct is the comtree used for the virtual world
+ *  @param ct1 is the lower bound on the range of comtrees to jump to
+ *  @param ct2 is the upper bound on the range of comtrees to jump to
+ *  @param gridSize is the size of one grid space
+ *  @param walls a hex representation of the walls in the maze
  */
 Avatar::Avatar(ipa_t mipa, ipa_t ripa, ipa_t ccIpAdr, fAdr_t ccAdr, fAdr_t ma, fAdr_t ra, comt_t ct, comt_t ct1, comt_t ct2, int gridSize, char * walls)
 		: myIpAdr(mipa), rtrIpAdr(ripa), CC_IpAdr(ccIpAdr), CC_Adr(ccAdr), myAdr(ma), rtrAdr(ra),
@@ -201,9 +206,14 @@ void Avatar::sendStatus(int now) {
 
 	send(p);
 }
-
+/*Send a control packet to the ComtreeController indicating joining or leaving a comtree
+ *@param join is true if the avatar wishes to join the comtree, false otherwise
+ *@param comtree is the comtree number that the avatar wishes to join or leave
+ */
 void Avatar::sendCtlPkt(bool join, int comtree) {
 	packet p = ps->alloc();
+	if(p==0)
+		fatal("McmAvatar::sendCtlPkt: Not enough space to alloc packet");
 	CtlPkt cp(ps->getPayload(p));
 	cp.setAttr(COMTREE_NUM,comtree);
 	if(join)
@@ -221,6 +231,9 @@ void Avatar::sendCtlPkt(bool join, int comtree) {
 
 	send2CC(p);
 }
+/*sends a packet to the ComtreeController
+ *@param p is the packet to be sent
+ */
 void Avatar::send2CC(int p) {
 	int length = ps->getHeader(p).getLength();
 	ps->pack(p);
@@ -270,6 +283,9 @@ int Avatar::receive() {
 	int p = ps->alloc();
 	if (p == 0) return 0;
 	PacketHeader& h = ps->getHeader(p);
+	//check if this is a control packet response
+	if(h.getComtree()==1)
+		return 0;
         buffer_t& b = ps->getBuffer(p);
 
 	ipa_t remoteIp; ipp_t remotePort;
@@ -393,7 +409,16 @@ bool Avatar::isVis(int region1, int region2) {
 	}
 	return false;
 }
-
+/*Returns true if lines intersect
+ *@param ax is the x of the first point of the first line
+ *@param ay is the y of the first point of the first line
+ *@param bx is the x of the second point of the first line
+ *@param by is the y of the second point of the first line
+ *@param cx is the x of the first point of the second line
+ *@param cy is the y of the first point of the second line
+ *@param dx is the x of the second point of the second line
+ *@param dy is the y of the seocnd point of the second line
+ */
 bool Avatar::linesIntersect(double ax, double ay, double bx, double by , double cx ,double cy, double dx,double dy) {
 	double distAB;
 	double theCos;
