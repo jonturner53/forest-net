@@ -338,9 +338,29 @@ bool Np4d::sendIntVec(int sock, uint32_t vec[], int length) {
 	return true;
 }
 
+/** Receive a "chunk" of data on a stream socket.
+ *  This method is intended for use on nonblocking sockets.
+ *  It expects the host on the other end of the socket to send a 32 bit integer,
+ *  which represents the size of the next chunk of data to expect, followed
+ *  by the chunk of data. The method reads the size information, then reads
+ *  the specified amount of data into the provided buffer. For example,
+ *  to send 20 bytes of data, the remote host sends the 32 bit integer 20,
+ *  followed by the 20 bytes of data, for a total of 24 bytes.
+ *
+ *  @param sock is the number of the socket
+ *  @param is a pointer to a buffer
+ *  @param buflen specifies the size of the buffer
+ *  @return the number of bytes actually read on success; 0 if the underlying
+ *  recv call returned 0, or -1 on an error or if the next complete chunk
+ *  is not available
+ *
+ *  If the chunk size specified in the input stream exceeds buflen,
+ *  the method will only read and return buflen bytes.
+ */
 int Np4d::recvBuf(int sock, char* buf, int buflen) {
 	uint32_t length;
 	int nbytes = recv(sock,(void *) &length, sizeof(uint32_t), MSG_PEEK);
+	if (nbytes <= 0) return nbytes;
 	if (nbytes != sizeof(uint32_t)) return -1;
 	if (dataAvail(sock) < length + sizeof(uint32_t)) return -1;
 	length = min(length, buflen);
