@@ -130,12 +130,9 @@ Avatar::~Avatar() { delete mcGroups; delete nearAvatars; delete ps; }
 bool Avatar::init() {
 	sock = Np4d::datagramSocket();
 
-	if(!(sock >= 0 &&
+	return (sock >= 0 &&
         	Np4d::bind4d(sock, myIpAdr, 0) &&
-        	Np4d::nonblock(sock)))
-		return false;
-	CC_sock = Np4d::datagramSocket();
-	return CC_sock >=0 && Np4d::bind4d(CC_sock,myIpAdr,0) && Np4d::nonblock(CC_sock);
+        	Np4d::nonblock(sock));
 }
 
 /** Main Avatar processing loop.
@@ -237,7 +234,7 @@ void Avatar::sendCtlPkt(bool join, int comtree) {
 void Avatar::send2CC(int p) {
 	int length = ps->getHeader(p).getLength();
 	ps->pack(p);
-	int rv = Np4d::sendto4d(CC_sock,(void *) ps->getBuffer(p),length,CC_IpAdr, CC_PORT);
+	int rv = Np4d::sendto4d(sock,(void *) ps->getBuffer(p),length,CC_IpAdr, CC_PORT);
 	if (rv == -1) fatal("Avatar::send: failure in sendto");
 	ps->free(p);
 }
@@ -284,8 +281,7 @@ int Avatar::receive() {
 	if (p == 0) return 0;
 	PacketHeader& h = ps->getHeader(p);
 	//check if this is a control packet response
-	if(h.getComtree()==1)
-		return 0;
+	if(h.getComtree()==1) return 0;
         buffer_t& b = ps->getBuffer(p);
 
 	ipa_t remoteIp; ipp_t remotePort;
