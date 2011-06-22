@@ -11,7 +11,7 @@
 #include "CommonDefs.h"
 #include "McmAvatar.h"
 /** usage:
- *       Avatar myIpAdr rtrIpAdr ccIpAdr myAdr rtrAdr ccAdr comt finTime gridSize comt1 comt2 walls
+ *       Avatar myIpAdr rtrIpAdr myAdr rtrAdr ccAdr comt finTime gridSize comt1 comt2 walls
  * 
  *  Command line arguments include the ip address of the
  *  avatar's machine, the router's IP address, the forest
@@ -33,26 +33,25 @@
  *  packet length of 52 bytes. 
  */
 main(int argc, char *argv[]) {
-	ipa_t myIpAdr, rtrIpAdr, ccIpAdr; fAdr_t myAdr, rtrAdr, ccAdr;
+	ipa_t myIpAdr, rtrIpAdr; fAdr_t myAdr, rtrAdr, ccAdr;
 	int comt, comt1, comt2, finTime, gridSize;
 
-	if (argc != 13 ||
+	if (argc != 12 ||
 	    (myIpAdr  = Np4d::ipAddress(argv[1])) == 0 ||
 	    (rtrIpAdr = Np4d::ipAddress(argv[2])) == 0 ||
-	    (ccIpAdr = Np4d::ipAddress(argv[3])) == 0 ||
-	    (myAdr  = Forest::forestAdr(argv[4])) == 0 ||
-	    (rtrAdr = Forest::forestAdr(argv[5])) == 0 ||
-	    (ccAdr = Forest::forestAdr(argv[6])) == 0 ||
-	    sscanf(argv[7],"%d", &comt) != 1 ||
-	    sscanf(argv[8],"%d", &finTime) != 1 ||
-	    sscanf(argv[9],"%d", &gridSize) != 1 ||
-	    sscanf(argv[10],"%d", &comt1) != 1 ||
-	    sscanf(argv[11], "%d", &comt2) != 1)
+	    (myAdr  = Forest::forestAdr(argv[3])) == 0 ||
+	    (rtrAdr = Forest::forestAdr(argv[4])) == 0 ||
+	    (ccAdr = Forest::forestAdr(argv[5])) == 0 ||
+	    sscanf(argv[6],"%d", &comt) != 1 ||
+	    sscanf(argv[7],"%d", &finTime) != 1 ||
+	    sscanf(argv[8],"%d", &gridSize) != 1 ||
+	    sscanf(argv[9],"%d", &comt1) != 1 ||
+	    sscanf(argv[10], "%d", &comt2) != 1)
 		fatal("usage: Avatar myIpAdr rtrIpAdr myAdr rtrAdr "
 		      		    "comtree finTime");
 	
-	char * walls = argv[12];
-	Avatar avatar(myIpAdr,rtrIpAdr,ccIpAdr,ccAdr,myAdr,rtrAdr, comt, comt1, comt2, gridSize, walls);
+	char * walls = argv[11];
+	Avatar avatar(myIpAdr,rtrIpAdr,ccAdr,myAdr,rtrAdr, comt, comt1, comt2, gridSize, walls);
 	if (!avatar.init()) fatal("Avatar:: initialization failure");
 	avatar.run(1000000*finTime);
 }
@@ -61,7 +60,6 @@ main(int argc, char *argv[]) {
  * 
  *  @param mipa is this host's IP address
  *  @param ripa is the IP address of the access router for this host
- *  @param ccIpAdr is the IP address of the comtreecontroller
  *  @param ma is the forest address for this host
  *  @param ra is the forest address for the access router
  *  @param ct is the comtree used for the virtual world
@@ -70,8 +68,8 @@ main(int argc, char *argv[]) {
  *  @param gridSize is the size of one grid space
  *  @param walls a hex representation of the walls in the maze
  */
-Avatar::Avatar(ipa_t mipa, ipa_t ripa, ipa_t ccIpAdr, fAdr_t ccAdr, fAdr_t ma, fAdr_t ra, comt_t ct, comt_t ct1, comt_t ct2, int gridSize, char * walls)
-		: myIpAdr(mipa), rtrIpAdr(ripa), CC_IpAdr(ccIpAdr), CC_Adr(ccAdr), myAdr(ma), rtrAdr(ra),
+Avatar::Avatar(ipa_t mipa, ipa_t ripa, fAdr_t ccAdr, fAdr_t ma, fAdr_t ra, comt_t ct, comt_t ct1, comt_t ct2, int gridSize, char * walls)
+		: myIpAdr(mipa), rtrIpAdr(ripa), CC_Adr(ccAdr), myAdr(ma), rtrAdr(ra),
 		  comt(ct), comt1(ct1), comt2(ct2), SIZE(GRID*gridSize), WALLS(walls) {
 	int nPkts = 10000;
 	ps = new PacketStore(nPkts+1, nPkts+1);
@@ -211,7 +209,7 @@ void Avatar::sendCtlPkt(bool join, int comtree) {
 	packet p = ps->alloc();
 	if(p==0)
 		fatal("McmAvatar::sendCtlPkt: Not enough space to alloc packet");
-	CtlPkt cp(ps->getPayload(p));
+	CtlPkt cp;
 	cp.setAttr(COMTREE_NUM,comtree);
 	if(join)
 		cp.setCpType(CLIENT_JOIN_COMTREE);
@@ -219,7 +217,7 @@ void Avatar::sendCtlPkt(bool join, int comtree) {
 		cp.setCpType(CLIENT_LEAVE_COMTREE);
 	cp.setRrType(REQUEST);
 	cp.setSeqNum(1);
-	int len = cp.pack();
+	int len = cp.pack(ps->getPayload(p));
 	PacketHeader& h = ps->getHeader(p); h.setLength(Forest::HDR_LENG + len + sizeof(uint32_t));
 	h.setPtype(CLIENT_SIG);	h.setFlags(0);
 	h.setComtree(1); h.setSrcAdr(myAdr);
@@ -234,7 +232,7 @@ void Avatar::sendCtlPkt(bool join, int comtree) {
 void Avatar::send2CC(int p) {
 	int length = ps->getHeader(p).getLength();
 	ps->pack(p);
-	int rv = Np4d::sendto4d(sock,(void *) ps->getBuffer(p),length,CC_IpAdr, CC_PORT);
+	int rv = Np4d::sendto4d(sock,(void *) ps->getBuffer(p),length,rtrIpAdr, Forest::ROUTER_PORT);
 	if (rv == -1) fatal("Avatar::send: failure in sendto");
 	ps->free(p);
 }
