@@ -29,7 +29,7 @@
  */ 
 class Avatar {
 public:
-		Avatar(ipa_t, ipa_t, ipa_t, fAdr_t, fAdr_t, fAdr_t, comt_t,comt_t,comt_t, int,char *);
+		Avatar(ipa_t, ipa_t, fAdr_t, fAdr_t, fAdr_t, comt_t,comt_t,comt_t, int,char *);
 		~Avatar();
 
 	bool	init();			
@@ -44,7 +44,6 @@ private:
 	const static int SLOW = 8000;	///< slow avatar speed in UNITS/sec
 	const static int MEDIUM =25000;	///< medium avatar speed
 	const static int FAST = 80000;	///< fast avatar speed
-	const static int CC_PORT = 30131;///< port to ComtreeController
 
 	const static int UPDATE_PERIOD = 50;  ///< # ms between status updates
 	
@@ -52,7 +51,6 @@ private:
 	ipa_t	myIpAdr;		///< IP address of interface
 	uint16_t myPort;		///< port number for all io
 	ipa_t	rtrIpAdr;		///< IP address of router
-	ipa_t	CC_IpAdr;		///< IP address of ComtreeController
 	fAdr_t	myAdr;			///< forest address of host
 	fAdr_t	rtrAdr;			///< forest address of router
 	fAdr_t	CC_Adr;			///< forest address of ComtreeController
