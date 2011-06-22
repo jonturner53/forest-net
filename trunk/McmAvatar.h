@@ -57,7 +57,6 @@ private:
 	fAdr_t	rtrAdr;			///< forest address of router
 	fAdr_t	CC_Adr;			///< forest address of ComtreeController
 	int	sock;			///< socket number
-	int	CC_sock;		///< socket number of ComtreeController
 	comt_t	comt;			///< comtree number
 	comt_t comt1;			///< lower range of comtrees
 	comt_t comt2;			///< upper range of comtrees
