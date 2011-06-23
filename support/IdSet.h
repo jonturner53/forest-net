@@ -19,6 +19,12 @@
 
 
 /** Data structure that assigns small integer identifiers to large keys.
+ *  This is useful in contexts where the "natural identifiers"
+ *  in an application can vary over a large range, but the number
+ *  of distinct identifiers that are in use at one time is relatively
+ *  small. This data structure can be used to map the "natural identfiers"
+ *  into integers in a restricted range 1..max, where max is specified
+ *  when the data structure is initialized.
  */
 class IdSet {
 public:
@@ -51,20 +57,42 @@ private:
 	UiDlist *idList;		///< in-use identifiers
 };
 
+/** Get the first assigned identifier, in some arbitrary order.
+ *  @return number of the first identfier
+ */
 inline int IdSet::firstId() const { return idList->first(); }
 
+/** Get the last assigned identifier, in some arbitrary order.
+ *  @return number of the last identfier
+ */
 inline int IdSet::lastId() const { return idList->last(); }
 
-inline int IdSet::nextId(int i) const { return idList->next(i); }
+/** Get the next assigned identifier, in some arbitrary order.
+ *  @param id is an identifer in the set
+ *  @return number of the next identfier
+ */
+inline int IdSet::nextId(int id) const { return idList->next(id); }
 
+/** Determine if a given key has been mapped to an identfier.
+ *  @param key is the key to be checked
+ *  @return true if the key has been mapped, else false
+ */
 inline bool isMapped(uint64_t key) { return (ht->lookup(key) != 0); }
 
-inline bool isAssigned(int val) {
-	return (1 <= val && val <= n && idList->member(val));
+/** Determine if a given identifier has been assigned to a key.
+ *  @param id is the identifier to be checked
+ *  @return true if the key has been mapped, else false
+ */
+inline bool isAssigned(int id) {
+	return (1 <= id && id <= n && idList->member(id));
 }
 
-inline uint64_t getKey(int val) {
-	return (1 <= val && val <= n && ht->getKey(val));
+/** Get the key that was mapped to the given identifier */
+ *  @param id is the identifier whose key is to be returned
+ *  @return the key that maps to id, or 0 if there is none
+ */
+inline uint64_t getKey(int id) {
+	return (isAssigned(id) ? ht->getKey(id) : 0); 
 }
 
 #endif
