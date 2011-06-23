@@ -32,18 +32,23 @@ public:
 
 	// define/retrieve/remove (key,id) pairs
 	int	getId(uint64_t); 		
+	uint64_t getKey(int);
 	void	releaseId(uint64_t); 
 	void	clear(); 	
+
+	// predicates
+	bool	isMapped(uint64_t);
+	bool	isAssigned(int);
 
 	// produce readable IdSets
 	void	add2string(string&) const;
 	void	write(ostream&) const;		
 private:
-	static const int MAXID = (1 << 20)-1;  ///! largest possible identifier
-	int n;				///! largest identifier in this set
-	UiHashTbl *ht;			///! hash table to compute mapping
-	UiList	*free;			///! available identifiers
-	UiDlist *idList;		///! in-use identifiers
+	static const int MAXID = (1 << 20)-1;  ///< largest possible identifier
+	int n;				///< largest identifier in this set
+	UiHashTbl *ht;			///< hash table to compute mapping
+	UiList	*free;			///< available identifiers
+	UiDlist *idList;		///< in-use identifiers
 };
 
 inline int IdSet::firstId() const { return idList->first(); }
@@ -51,5 +56,15 @@ inline int IdSet::firstId() const { return idList->first(); }
 inline int IdSet::lastId() const { return idList->last(); }
 
 inline int IdSet::nextId(int i) const { return idList->next(i); }
+
+inline bool isMapped(uint64_t key) { return (ht->lookup(key) != 0); }
+
+inline bool isAssigned(int val) {
+	return (1 <= val && val <= n && idList->member(val));
+}
+
+inline uint64_t getKey(int val) {
+	return (1 <= val && val <= n && ht->getKey(val));
+}
 
 #endif
