@@ -98,7 +98,7 @@ void Np4d::extractSockAdr(sockaddr_in *sap, ipa_t& ipa, ipp_t& ipp) {
  */
 ipp_t Np4d::getSockPort(int sock) {
 	sockaddr_in sa; socklen_t len = sizeof(sa);
-	if (getsockname(sock, (sock_addr *) &sa, &len) < 0)
+	if (getsockname(sock, (struct sockaddr *) &sa, &len) < 0)
 		return 0;
 	return ntohs(sa.sin_port);
 }
@@ -109,9 +109,9 @@ ipp_t Np4d::getSockPort(int sock) {
  */
 ipa_t Np4d::getSockIp(int sock) {
 	sockaddr_in sa; socklen_t len = sizeof(sa);
-	if (getsockname(sock, (sock_addr *) &sa, &len) < 0)
+	if (getsockname(sock, (struct sockaddr *) &sa, &len) < 0)
 		return 0;
-	return = ntohl(sa.sin_addr.s_addr);
+	return ntohl(sa.sin_addr.s_addr);
 }
 
 /** Configure a socket to be nonblocking.
