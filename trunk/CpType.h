@@ -41,6 +41,9 @@ enum CpTypeIndex {
 	/** packet types to manage routes at routers */
 	ADD_ROUTE, DROP_ROUTE, GET_ROUTE, MOD_ROUTE,
 	ADD_ROUTE_LINK, DROP_ROUTE_LINK,
+
+	/** packet types used by client manager */
+	NEW_CLIENT,
 	
 	CPT_END			///< marker following last CtlPktType
 };

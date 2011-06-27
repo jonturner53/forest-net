@@ -30,3 +30,47 @@ router1, router3	# other core nodes
 router1.1:router3.1	# comtree link
 router2.3:router3.1	# another comtree link
 .			# line starting with . ends list
+
+
+
+Alternate format using ; and ;; as delimiters,
+instead of line boundaries
+
+General structure:
+series of labeled sections - end with ;;;
+sections have lists of items - end with ;;
+some items may have sub lists - separate list items with ;
+
+nodes: # starts section that defines nodes
+
+# name nodeType forestAdr x-coord y-coord
+router1 router 1.1000  22 33 ;
+# ifaceNum ifaceIp ifaceLinks
+1 193.168.3.4 1,2,3,4 ; # maybe add support for ranges like 3-20
+2 193.168.3.4 5,6 ;;
+
+r2 router 2.1000  40 60 ;
+1 193.168.5.4 1,2,3,4 ;; 
+
+# name nodeType ipAdr forestAdr x-coord y-coord
+netMgr controller 192.168.3.2 2.900 40 37 ;
+comtMgr controller 192.168.3.5 2.902 50 22 ;;;
+
+links: # starts section that defines links
+
+# name.link#:name.link# packetRate bitRate
+router1.1:router3.3 20000 40000 ;
+router1.2:r2.1 30000 50000 ;;;
+
+comtrees: # starts section that defines comtrees
+
+1001 r2 		# comtree number and root node
+router1, router3 ;	# list of other core nodes
+# list of comtree links
+router1.1:router3.1, r2.3:router3.1,
+r2.3:router3.1 ;;
+
+1002 router1 ;
+r2 ;
+router1.2:router3.2 
+;;;

@@ -17,6 +17,8 @@ const CpAttr::CpAttrInfo CpAttr::attrInfo[CPA_END+1] = {
 	{ BIT_RATE,		1,	"bitRate" },
 	{ BIT_RATE_DOWN,	2,	"bitRateUp" },
 	{ BIT_RATE_UP,		3,	"bitRateDown" },
+	{ CLIENT_ADR,		33,	"clientAdr" },
+	{ CLIENT_IP,		34,	"clientIp" },
 	{ COMTREE_NUM,		4,	"comtree" },
 	{ COMTREE_OWNER,	5,	"comtreeOwner" },
 	{ CORE_FLAG,		6,	"coreFlag" },
@@ -46,6 +48,8 @@ const CpAttr::CpAttrInfo CpAttr::attrInfo[CPA_END+1] = {
 	{ PKT_RATE_DOWN,	30,	"pktRateDown" },
 	{ PKT_RATE_UP,		31,	"pktRateUp" },
 	{ QUEUE_NUM,		32,	"queue" },
+	{ RTR_ADR,		35,	"rtrAdr" },
+	{ RTR_IP,		36,	"rtrIp" },
 
 	{ CPA_END,	 	255,	"cp attr end" }
 };
@@ -55,7 +59,6 @@ void CpAttr::check() {
 	firstCall = false;
 	for (int i = CPA_START+1; i < CPA_END; i++) {
 		if (attrInfo[i].index != CpAttrIndex(i)) {
-cerr << "---- " << attrInfo[i].index << " " << i << " " << CpAttrIndex(i) << " -----\n";
 			fatal("CpAttr::check: mismatched index values");
 		}
 	}
