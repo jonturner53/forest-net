@@ -13,6 +13,8 @@
 #include "PacketHeader.h"
 #include "PacketStore.h"
 #include "UiHashTbl.h"
+#include <string>
+#include <vector>
 
 /** ComtreeController processes comtree control messages from Forest clients.
  *  The controller starts by reading a topology file that defines
@@ -38,14 +40,16 @@
  */
 class ComtreeController {
 public:
-		ComtreeController();
+		ComtreeController(ipa_t, ipa_t, ipa_t, fAdr_t, fAdr_t);
 		~ComtreeController();
 
 	bool	init();
+	void	parse(string);
 	void	run(int); 
 private:
-	const static short CC_PORT = xxx; ///< port# for used by remote display
-	
+	const static short NM_PORT = 30133; ///< port# for used by remote display
+	vector< vector<string> > * topology;
+		
 	ipa_t	extIp;			///< IP address for remote UI
 	ipa_t	intIp;			///< IP address for Forest net
 	ipa_t	rtrIp;			///< IP address of router
@@ -62,7 +66,7 @@ private:
 	void	connect();		
 	void	disconnect();	
 
-	void	writeToDisplay(int);	
+	void	writeToDisplay();	
 	int	readFromDisplay();
 
 	void	sendToForest(int);
