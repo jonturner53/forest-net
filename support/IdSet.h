@@ -77,21 +77,21 @@ inline int IdSet::nextId(int id) const { return idList->next(id); }
  *  @param key is the key to be checked
  *  @return true if the key has been mapped, else false
  */
-inline bool isMapped(uint64_t key) { return (ht->lookup(key) != 0); }
+inline bool IdSet::isMapped(uint64_t key) { return (ht->lookup(key) != 0); }
 
 /** Determine if a given identifier has been assigned to a key.
  *  @param id is the identifier to be checked
  *  @return true if the key has been mapped, else false
  */
-inline bool isAssigned(int id) {
+inline bool IdSet::isAssigned(int id) {
 	return (1 <= id && id <= n && idList->member(id));
 }
 
-/** Get the key that was mapped to the given identifier */
+/** Get the key that was mapped to the given identifier
  *  @param id is the identifier whose key is to be returned
  *  @return the key that maps to id, or 0 if there is none
  */
-inline uint64_t getKey(int id) {
+inline uint64_t IdSet::getKey(int id) {
 	return (isAssigned(id) ? ht->getKey(id) : 0); 
 }
 
