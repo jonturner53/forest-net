@@ -23,7 +23,7 @@ import princeton.StdDraw;
  *  in in the form of a simple animation
  *  @author Jon Turner
  */
-public class ShowWorld {
+public class MazeWorld {
 	private static Map<Integer, MazeAvatarGraphic> status; // avatar status
 	private static final int INTERVAL = 50;	// time between updates (in ms)
 	private static int comtree;	// number of comtree to be monitored
@@ -109,7 +109,7 @@ public class ShowWorld {
 			}
 			MazeAvatarGraphic m = status.get(rep.id);
 			if (m == null) {
-				m = new AvatarGraphic(rep);		
+				m = new MazeAvatarGraphic(rep);		
 				status.put(rep.id, m);
 			} else {
 				m.update(rep);
@@ -310,7 +310,6 @@ public class ShowWorld {
 		MazeAvatarStatus firstRep;
 		while ((firstRep = getReport()) == null) {}
 		int monTime = firstRep.when + 3000; // build in some delay
-		
 		long localTime = System.nanoTime()/1000000;
 		long targetLocalTime = localTime;
 

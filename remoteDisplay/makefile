@@ -1,5 +1,5 @@
 
-CLASSFILES = ShowWorld.class AvatarGraphic.class AvatarStatus.class
+CLASSFILES = MazeWorld.class MazeAvatarGraphic.class MazeAvatarStatus.class
 
 %.class: %.java
 	echo $$CLASSPATH $$HOME
