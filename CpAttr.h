@@ -21,6 +21,8 @@ enum CpAttrIndex {
 	BIT_RATE,		///< bit rate in Kb/s
 	BIT_RATE_DOWN,		///< downstream bit rate in Kb/s
 	BIT_RATE_UP,		///< upstream bit rate in Kb/s
+	CLIENT_ADR,		///< forest address assigned to a client
+	CLIENT_IP,		///< IP address of a client
 	COMTREE_NUM,		///< a comtree number
 	COMTREE_OWNER,		///< the comtree owner
 	CORE_FLAG,		///< core flag for a comtree
@@ -50,6 +52,8 @@ enum CpAttrIndex {
 	PKT_RATE_DOWN,		///< downstream packet rate in p/s
 	PKT_RATE_UP,		///< upstream packet rate in p/s
 	QUEUE_NUM,		///< queue number
+	RTR_ADR,		///< forest address of a router
+	RTR_IP,			///< IP address of a router
 
 	CPA_END			///< marker following last attribute
 };

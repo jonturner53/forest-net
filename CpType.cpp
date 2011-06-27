@@ -185,6 +185,12 @@ CpType::CpTypeInfo CpType::typeInfo[] = {
 									   (1ull << DEST_ADR)|
 									   (1ull << COMTREE_NUM)|
 									   (1ull << LINK_NUM), 0},
+
+	{ NEW_CLIENT,		100,	"new client",		   "ncl",  (1ull << CLIENT_IP),
+									   (1ull << CLIENT_IP),
+								           (1ull << CLIENT_ADR)|
+								           (1ull << RTR_IP)|
+								           (1ull << RTR_ADR)},
 	
 	{ CPT_END,	 	255,	"ctl pkt end",	   	   "cpe",  0,0,0 }
 };
