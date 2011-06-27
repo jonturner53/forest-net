@@ -39,6 +39,8 @@ public:
 	// socket address structure utilities
 	static void initSockAdr(ipa_t, ipp_t, sockaddr_in*);
 	static void extractSockAdr(sockaddr_in*, ipa_t&, ipp_t&); 
+	static ipp_t getSockPort(int);
+	static ipa_t getSockIp(int);
 
 	// setting up sockets
 	static int  datagramSocket();

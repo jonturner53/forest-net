@@ -92,6 +92,28 @@ void Np4d::extractSockAdr(sockaddr_in *sap, ipa_t& ipa, ipp_t& ipp) {
         ipp = ntohs(sap->sin_port);
 }
 
+/** Get the local port number associated with a given socket.
+ *  @param sock is the number of an open socket
+ *  @return the port number of the socket, or 0 on failure
+ */
+ipp_t Np4d::getSockPort(int sock) {
+	sockaddr_in sa; socklen_t len = sizeof(sa);
+	if (getsockname(sock, (sock_addr *) &sa, &len) < 0)
+		return 0;
+	return ntohs(sa.sin_port);
+}
+
+/** Get the local IP address associated with a given socket.
+ *  @param sock is the number of an open socket
+ *  @return the address of the socket, or 0 on failure
+ */
+ipa_t Np4d::getSockIp(int sock) {
+	sockaddr_in sa; socklen_t len = sizeof(sa);
+	if (getsockname(sock, (sock_addr *) &sa, &len) < 0)
+		return 0;
+	return = ntohl(sa.sin_addr.s_addr);
+}
+
 /** Configure a socket to be nonblocking.
  *  @param sock is the socket number
  *  @return true on success, false on failure
