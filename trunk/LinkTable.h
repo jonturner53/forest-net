@@ -21,6 +21,7 @@ public:
 
 	/** access methods */
 	int	lookup(int,ipa_t,ipp_t,fAdr_t);
+	int 	lookupAccess(ipa_t, fAdr_t);
 	int	getInterface(int) const;	
 	ipa_t	getPeerIpAdr(int) const;	
 	ipp_t 	getPeerPort(int) const;	
@@ -169,6 +170,15 @@ inline int LinkTable::lookup(int intf, ipa_t pipa, ipp_t pipp, fAdr_t srcAdr) {
             (pipp == getPeerPort(te) || getPeerPort(te) == 0))
                 return te;
         return 0;
+}
+
+/** Get the link number for an access link.
+ *  @param pipa is the IP address of the peer at the far end of the link
+ *  @param padr is the Forest address of the peer at the far end of the link
+ *  @return the matching link number or 0 if no match
+ */
+inline int LinkTable::lookupAccess(ipa_t pipa, fAdr_t padr) {
+        return ht->lookup(hashkey(pipa,padr));
 }
 
 #endif
