@@ -14,6 +14,7 @@
 #include "CommonDefs.h"
 #include "stdinc.h"
 #include "support/UiHashTbl.h"
+
 /** usage:
  *       ComtreeController extIp intIp rtrIp myAdr rtrAdr topology finTime
  * 
@@ -190,6 +191,7 @@ void ComtreeController::run(int finishTime) {
 			vector<string> routers;
 			int comtree;
 			int nextCounter = 1;
+// jst - what about 0???
 			string nums = "123456789";
 			int j;
 			for(j = 1; j < temp.size(); j+=4){
@@ -261,6 +263,7 @@ void ComtreeController::run(int finishTime) {
 			PacketHeader& h = ps->getHeader(p);
 			int zipcode = Forest::zipCode(h.getSrcAdr());
 			CtlPkt cp;
+// jst - second arg needs to be payload length, not buffer length
 			cp.unpack(ps->getPayload(p), 1500);
 			//h.write(cerr, ps->getBuffer(p));
 			int comtree = 0;
@@ -285,6 +288,7 @@ void ComtreeController::run(int finishTime) {
         					statPkt[0] = htonl(comtree); //comtree num 
         					statPkt[1] = htonl(zipcode); //router
 						statPkt[2] = htonl(counter[index]); //num clients on router
+// jst - what's this supposed to be doing???
 						while(readFromDisplay() == 0)
 							readFromDisplay();
 						writeToDisplay();

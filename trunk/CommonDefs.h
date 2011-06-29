@@ -84,6 +84,7 @@ public:
 	/** constants related to packet formats */
 	static const uint8_t FOREST_VERSION = 1;///< version of forest protocol
 	static const int HDR_LENG = 20;		///< header length in bytes
+	static const int OVERHEAD = 24;		///< total overhead
 	static const flgs_t RTE_REQ = 0x01;	///< route request flag
 	static const ipp_t ROUTER_PORT = 30123; ///< port # used by routers
 

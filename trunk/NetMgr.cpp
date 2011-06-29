@@ -9,7 +9,7 @@
 #include "NetMgr.h"
 
 /** usage:
- *       NetMgr extIp intIp rtrIp myAdr rtrAdr finTime
+ *       NetMgr extIp intIp rtrIp myAdr rtrAdr finTime clientInfo
  * 
  *  Command line arguments include two ip addresses for the
  *  NetMgr. The first is the IP address that a remote UI can
@@ -18,28 +18,34 @@
  *  IP address used by the NetMgr within the Forest overlay. RtrIp
  *  is the router's IP address, myAdr is the NetMgr's Forest
  *  address, rtrAdr is the Forest address of the router.
+ *  ClientInfo is a file containing address information relating
+ *  clients and routers. This is a temporary expedient.
  */
 main(int argc, char *argv[]) {
 	ipa_t intIp, extIp, rtrIp; fAdr_t myAdr, rtrAdr;
 	int comt, finTime;
 
-	if (argc != 7 ||
+	if (argc != 8 ||
   	    (extIp  = Np4d::ipAddress(argv[1])) == 0 ||
   	    (intIp  = Np4d::ipAddress(argv[2])) == 0 ||
 	    (rtrIp  = Np4d::ipAddress(argv[3])) == 0 ||
 	    (myAdr  = Forest::forestAdr(argv[4])) == 0 ||
 	    (rtrAdr = Forest::forestAdr(argv[5])) == 0 ||
 	     sscanf(argv[6],"%d", &finTime) != 1)
-		fatal("usage: NetMgr extIp intIp rtrIpAdr myAdr rtrAdr");
+		fatal("usage: NetMgr extIp intIp rtrIpAdr myAdr rtrAdr "
+		      "clientInfo");
+
 
 	if (extIp == Np4d::ipAddress("127.0.0.1")) extIp = Np4d::myIpAddress(); 
 	if (extIp == 0) fatal("can't retrieve default IP address");
 
-	NetMgr mon(extIp,intIp,rtrIp,myAdr,rtrAdr);
-	if (!mon.init()) {
+	NetMgr nm(extIp,intIp,rtrIp,myAdr,rtrAdr);
+	if (!nm.init()) {
 		fatal("NetMgr: initialization failure");
 	}
-	mon.run(finTime);
+	if (!nm.readClientInfo(argv[7]))
+		fatal("can't read client address info");
+	nm.run(finTime);
 	exit(0);
 }
 
@@ -106,9 +112,38 @@ void NetMgr::run(int finishTime) {
 		}
 
 		p = rcvFromForest();
-		if (p != 0) {
-			sendToUi(p);
-			idleCount = 0;
+		PacketHeader& h = ps->getHeader(p);
+		if (p != 0 && (h.getPtype() == NET_SIG ||
+			       h.getPtype() == CLIENT_SIG)) { 
+			// this is temporary version
+			// ultimately, we'll need to send control packets
+			// to configure router
+			CtlPkt cp;
+			cp.unpack(ps->getPayload(p),
+				  h.getLength() - Forest::OVERHEAD);
+			if (cp.getCpType() == NEW_CLIENT &&
+			    cp.getRrType() == REQUEST) {
+				ipa_t rtrIp; fAdr_t cliAdr, rtrAdr;
+				ipa_t cliIp = cp.getAttr(CLIENT_IP);
+				if (setupClient(cliIp, cliAdr, rtrIp, rtrAdr)) {
+					cp.setRrType(POS_REPLY);
+					cp.setAttr(CLIENT_ADR, cliAdr);
+					cp.setAttr(RTR_IP, rtrIp);
+					cp.setAttr(RTR_ADR, rtrAdr);
+				} else {
+					cp.setRrType(NEG_REPLY);
+					cp.setErrMsg("cannot configure client");
+				}
+				int plen = cp.pack(ps->getPayload(p));	
+				h.setLength(plen + Forest::OVERHEAD);
+			        h.setDstAdr(h.getSrcAdr());
+        			h.setSrcAdr(myAdr);
+				ps->pack(p);
+				sendToForest(p);
+			} else { // it's a reply to previous request from CLI
+				sendToUi(p);
+				idleCount = 0;
+			}
 		} 
 
 		/* add later
@@ -123,6 +158,45 @@ void NetMgr::run(int finishTime) {
 
 		now = Misc::getTime();
 	}
+}
+
+bool NetMgr::setupClient(ipa_t  cliIp, fAdr_t& cliAdr,
+			 ipa_t& rtrIp, fAdr_t& rtrAdr) {
+	for (int i = 0; i < numClients; i++) {
+		if (cliIp == clientInfo[i].cliIp &&
+		    clientInfo[i].inUse == false) {
+			cliAdr = clientInfo[i].cliAdr;
+			rtrIp  = clientInfo[i].rtrIp;
+			rtrAdr = clientInfo[i].rtrAdr;
+			clientInfo[i].inUse = true;
+			return true;
+		}
+	}
+	return false;
+}
+
+bool NetMgr::readClientInfo(char fileName[]) {
+	ifstream in; in.open(fileName);
+	if (in.fail()) return false;
+	int i = 0;
+	while (!in.eof()) {
+		ipa_t  cliIp,  rtrIp;
+		fAdr_t cliAdr, rtrAdr;
+		if (!Np4d::readIpAdr(in, cliIp) || 
+		    !Forest::readForestAdr(in, cliAdr) ||
+		    !Np4d::readIpAdr(in, rtrIp) || 
+		    !Forest::readForestAdr(in, rtrAdr))
+			break;
+		if (i >= MAX_CLIENTS) break;
+		clientInfo[i].cliIp  = cliIp;
+		clientInfo[i].cliAdr = cliAdr;
+		clientInfo[i].rtrIp  = rtrIp;
+		clientInfo[i].rtrAdr = rtrAdr;
+		clientInfo[i].inUse = false;
+	}
+	numClients = i;
+	cout << "read address information for " << numClients << " clients\n";
+	return true;
 }
 
 /** Check for next packet from the remote UI.

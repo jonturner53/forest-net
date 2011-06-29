@@ -25,6 +25,8 @@ public:
 
 	bool	init();
 	void	run(int); 
+
+	bool readClientInfo(char*);
 private:
 	const static short NM_PORT = 30122; ///< port# for used by remote UI
 	
@@ -40,6 +42,19 @@ private:
 
 	PacketStore *ps;		///< pointer to packet store
 
+	// Information relating client addresses and router addresses
+	// This is a temporary expedient and will be replaced later
+	static const int MAX_CLIENTS = 1000;
+	int	numClients;
+	struct clientAdrInfo {
+		ipa_t	cliIp;
+		fAdr_t	cliAdr;
+		ipa_t	rtrIp;
+		fAdr_t	rtrAdr;
+		bool	inUse;
+	};
+	clientAdrInfo clientInfo[MAX_CLIENTS];
+
 	// private helper methods
 	void	connect();		
 	void	disconnect();	
@@ -50,6 +65,8 @@ private:
 	void	sendToForest(int);
 	int 	rcvFromForest();
 
+	bool setupClient(ipa_t , fAdr_t&, ipa_t&, fAdr_t&);
 };
+
 
 #endif
