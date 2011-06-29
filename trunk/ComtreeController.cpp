@@ -14,7 +14,6 @@
 #include "CommonDefs.h"
 #include "stdinc.h"
 #include "support/UiHashTbl.h"
-
 /** usage:
  *       ComtreeController extIp intIp rtrIp myAdr rtrAdr topology finTime
  * 
@@ -191,8 +190,7 @@ void ComtreeController::run(int finishTime) {
 			vector<string> routers;
 			int comtree;
 			int nextCounter = 1;
-// jst - what about 0???
-			string nums = "123456789";
+			string nums = "1234567890";
 			int j;
 			for(j = 1; j < temp.size(); j+=4){
 				comtree = atoi(temp.at(j).c_str());
@@ -263,18 +261,18 @@ void ComtreeController::run(int finishTime) {
 			PacketHeader& h = ps->getHeader(p);
 			int zipcode = Forest::zipCode(h.getSrcAdr());
 			CtlPkt cp;
-// jst - second arg needs to be payload length, not buffer length
-			cp.unpack(ps->getPayload(p), 1500);
-			//h.write(cerr, ps->getBuffer(p));
+			int payload_ln = h.getLength()-(Forest::HDR_LENG+sizeof(uint32_t));
+			cp.unpack(ps->getPayload(p), payload_ln);
+			h.write(cerr, ps->getBuffer(p));
 			int comtree = 0;
 			//deconstruct comtree/router key
 			if(CLIENT_JOIN_COMTREE == cp.getCpType() || 
 				CLIENT_LEAVE_COMTREE == cp.getCpType()){
 					comtree = cp.getAttr(COMTREE_NUM);
 					if(CLIENT_JOIN_COMTREE == cp.getCpType())
-						cerr<<"JOIN @ "<<now<<endl;
+						cerr<<"JOIN @ "<<now;
 					else
-						cerr<<"LEAVE @ "<<now<<endl;
+						cerr<<"LEAVE @ "<<now;
 				if(comtree!= 0){	
 					uint64_t key = (uint64_t(comtree) << 32) | (uint64_t(zipcode) & 0xffffffff);
 					int index = cr_tbl.lookup(key);
@@ -284,14 +282,14 @@ void ComtreeController::run(int finishTime) {
 						if(CLIENT_LEAVE_COMTREE == cp.getCpType() && counter[index]>0)
         						counter[index]--;
 						// add new report to the outgoing status packet
-						cerr<<"statpkt: "<<comtree<<" "<<zipcode<<" "<<counter[index]<<endl;	
+						cerr<<" statpkt: "<<comtree<<" "<<zipcode<<" "<<counter[index]<<endl;	
         					statPkt[0] = htonl(comtree); //comtree num 
         					statPkt[1] = htonl(zipcode); //router
 						statPkt[2] = htonl(counter[index]); //num clients on router
-// jst - what's this supposed to be doing???
-						while(readFromDisplay() == 0)
-							readFromDisplay();
-						writeToDisplay();
+						if(connSock >= 0)
+							writeToDisplay();
+						else
+							connect2display();
 					}
 				}
 			}
@@ -305,40 +303,13 @@ void ComtreeController::run(int finishTime) {
  *  @return a packet number with a formatted control packet on success,
  *  0 on failure
  */
-int ComtreeController::readFromDisplay() { 
+void ComtreeController::connect2display() { 
 	if (connSock < 0) {
 		connSock = Np4d::accept4d(extSock);
-		if (connSock < 0) return 0;
-		/**
-		if (!nonblock(connSock))
-			fatal("ComtreeController::readFromDisplay: cannot "
-			      "configure connection socket to be nonblocking");
-		*/
+		if (connSock < 0) return;
+		if(!Np4d::nonblock(connSock)) return;
+
 	}
-	return 1;
-	/*
-	uint32_t length;
-	
-	if (!Np4d::readInt32(connSock, length))
-		fatal("ComtreeController::readFromDisplay: cannot read "
-		      "packet length from remote display");
-	
-	int p = ps->alloc();
-	if (p == 0) fatal("ComtreeController::readFromDisplay: out of packets");
-
-	PacketHeader& h = ps->getHeader(p);
-	buffer_t& b = ps->getBuffer(p);
-
-	int nbytes = read(connSock, (char *) &b, length);
-	if (nbytes != length)
-		fatal("ComtreeController::readFromDisplay: cannot read "
-		      "message from remote display");
-
-	h.setSrcAdr(myAdr);
-
-        return p;
-	*/
-	
 }
 
 /** Write a packet to the socket for the user interface.
