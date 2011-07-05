@@ -66,7 +66,7 @@ bool Misc::prefix(string s1, string s2) {
 	return s1.length() > 0 && s2.find(s1) == 0;
 }
 
-/** Read the next non-whitespace character from is.
+/** Read the next non-whitespace character from in.
  *  If it is a lower case letter c, make x = (c+1) - 'a'. 
  *  Otherwise return false. If reach the end of line
  *  before finding a non-whitespace character,

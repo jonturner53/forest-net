@@ -149,7 +149,7 @@ inline int64_t CtlPkt::getSeqNum() { return seqNum; }
  *  Assumes that specified attribute has a valid value.
  */
 inline int32_t CtlPkt::getAttr(CpAttrIndex i) {
-	return aVal[i];
+	return (isSet(i) ? aVal[i] : 0);
 }
 
 /** Set value of specified attribute

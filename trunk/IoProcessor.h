@@ -22,6 +22,7 @@ public:
 	ipa_t	getIpAdr(int) const;	
 	int	getMaxBitRate(int) const;
 	int	getMaxPktRate(int) const;
+	int	getDefaultIface() const;
 
 	/** predicates */
 	bool 	valid(int) const;	

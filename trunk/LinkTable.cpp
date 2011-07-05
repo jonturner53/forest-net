@@ -22,11 +22,26 @@ LinkTable::LinkTable(int nlnk1) : nlnk(nlnk1) {
 	
 LinkTable::~LinkTable() { delete [] ld; delete ht; }
 
+/** Allocate an unused link number.
+ *  The allocated link number is left in a "disabled" state.
+ *  The caller is expected to call addEntry() to initialize the
+ *  the essential fields in the link table entry, after which the
+ *  entry will be enabled.
+ *  @return first unused link number or 0 if all are in use
+ */
+int LinkTable::alloc() {
+	for (int i = 1; i <= nlnk; i++) {
+		if (!valid(i)) return i;
+	}
+	return 0;
+}
+
 bool LinkTable::addEntry(int lnk, int intf, ntyp_t pTyp, ipa_t pipa, fAdr_t pfa) {
 // Add a link table entry for the specified lnk on the specified interface.
 // PTyp is the peer's node type, pipa is the peer's IP address,
 // and pfa is the peer's forest address.
 // Return true on success, false on failure.
+	if (lnk == 0 || lnk > nlnk) return false;
         uint32_t x = (pTyp != ROUTER ? pfa : pipa); 
         if (!ht->insert(hashkey(pipa,x),lnk)) return false;
         ld[lnk].intf = intf;
