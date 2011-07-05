@@ -21,6 +21,14 @@ IoProcessor::~IoProcessor() {
 	delete sockets;
 }
 
+/** Get the default interface.
+ *  @return the first valid interface in the interface table
+ */
+int IoProcessor::getDefaultIface() const {
+	for (int i = 1; i <= Forest::MAXINTF; i++)
+		if (valid(i)) return i;
+}
+
 bool IoProcessor::setup(int i) {
 // Setup an interface. Return true on success, false on failure.
 
@@ -88,10 +96,14 @@ int IoProcessor::receive() {
 	if (nbytes < 0) fatal("IoProcessor::receive: error in recvfrom call");
 
 	ps->unpack(p);
-        if (!ps->hdrErrCheck(p) ||
-            (lnk = lt->lookup(cIf,sIpAdr,sPort,h.getSrcAdr())) == 0) {
-                ps->free(p); return 0;
-        }
+        if (!ps->hdrErrCheck(p)) { ps->free(p); return 0; }
+	lnk = (sPort == Forest::ROUTER_PORT ?
+	       lt->lookup(sIpAdr) : lt->lookup(sIpAdr,h.getSrcAdr()));
+        if (lnk == 0 || cIf != lt->getInterface(lnk) ||
+	    (sPort != lt->getPeerPort(lnk) && lt->getPeerPort(lnk) != 0)) {
+		ps->free(p); return 0;
+	}
+        
         h.setIoBytes(nbytes);
         h.setInLink(lnk);
         h.setTunSrcIp(sIpAdr);

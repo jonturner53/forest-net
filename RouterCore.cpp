@@ -610,13 +610,25 @@ void RouterCore::handleCtlPkt(int p) {
 		} else errReply(p,cp1,"mod iface: invalid interface");
 		break;
 	}
-        case ADD_LINK:
-		if (lt->addEntry(cp.getAttr(LINK_NUM), cp.getAttr(IFACE_NUM),
-		    (ntyp_t) cp.getAttr(PEER_TYPE), cp.getAttr(PEER_IP),
-		    cp.getAttr(PEER_ADR)))
+        case ADD_LINK: {
+		if (!cp.isSet(PEER_ADR) || !cp.isSet(PEER_IP) || !cp.isSet(PEER_TYPE)) {
+			errReply(p,cp1,"add link: missing required attributes");
+			break;
+		}
+		ipa_t  pipa = cp.getAttr(PEER_IP);
+		fAdr_t padr = cp.getAttr(PEER_ADR);
+		ntyp_t ntyp = (ntyp_t) cp.getAttr(PEER_TYPE);
+		int lnk = (cp.isSet(LINK_NUM) ? cp.getAttr(LINK_NUM) :
+						lt->alloc());
+		int iface = (cp.isSet(IFACE_NUM) ? cp.getAttr(IFACE_NUM) :
+					  	   iop->getDefaultIface());
+		if (lt->addEntry(lnk,iface,ntyp,pipa,padr)) {
+			cp1.setAttr(LINK_NUM,lnk);
 			returnToSender(p,cp1.pack(ps->getPayload(p)));
+		}
 		else errReply(p,cp1,"add link: cannot add link");
 		break;
+	}
         case DROP_LINK:
 		if (lt->removeEntry(cp.getAttr(LINK_NUM)))
 			returnToSender(p,cp1.pack(ps->getPayload(p)));
@@ -726,7 +738,7 @@ void RouterCore::handleCtlPkt(int p) {
 		} else if (cp.isSet(PEER_ADR) && cp.isSet(PEER_IP)) {
 			pipa = cp.getAttr(PEER_IP);
 			padr = cp.getAttr(PEER_ADR);
-			lnk = lt->lookupAccess(pipa, padr);
+			lnk = lt->lookup(pipa, padr);
 		}
 		if (lt->valid(lnk)) {
 			errReply(p,cp1,"add comtree link: invalid link");
@@ -748,7 +760,7 @@ void RouterCore::handleCtlPkt(int p) {
 		} else if (cp.isSet(PEER_ADR) && cp.isSet(PEER_IP)) {
 			pipa = cp.getAttr(PEER_IP);
 			padr = cp.getAttr(PEER_ADR);
-			lnk = lt->lookupAccess(pipa, padr);
+			lnk = lt->lookup(pipa, padr);
 		}
 		if (lt->valid(lnk)) {
 			errReply(p,cp1,"drop comtree link: invalid link");

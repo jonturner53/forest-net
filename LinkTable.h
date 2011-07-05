@@ -20,8 +20,8 @@ public:
 		~LinkTable();
 
 	/** access methods */
-	int	lookup(int,ipa_t,ipp_t,fAdr_t);
-	int 	lookupAccess(ipa_t, fAdr_t);
+	int 	lookup(ipa_t);
+	int 	lookup(ipa_t, fAdr_t);
 	int	getInterface(int) const;	
 	ipa_t	getPeerIpAdr(int) const;	
 	ipp_t 	getPeerPort(int) const;	
@@ -37,6 +37,7 @@ public:
 	bool	checkEntry(int);
 
 	/** modifiers */
+	int	alloc();
 	bool	addEntry(int,int,ntyp_t,ipa_t,fAdr_t);
 	bool	removeEntry(int);		
 	void	enable(int);		
@@ -159,25 +160,20 @@ inline uint64_t LinkTable::hashkey(ipa_t x, uint32_t y) const {
 	return (uint64_t(x) << 32) | (uint64_t(y) & 0xffffffff);
 }
 
-/** Return index of link for a packet received on specified interface,
- *  with specified source IP (address,port) pair and the given
- *  Forest source address. If no match, return Null.
+/** Get the link number for a link to another router.
+ *  @param pipa is the IP address of the router at the far end of the link
+ *  @return the matching link number or 0 if no match
  */
-inline int LinkTable::lookup(int intf, ipa_t pipa, ipp_t pipp, fAdr_t srcAdr) {
-        ipa_t x = (pipp != Forest::ROUTER_PORT ? srcAdr : pipa);
-        int te = ht->lookup(hashkey(pipa,x));
-        if (te !=0 && intf == getInterface(te) &&
-            (pipp == getPeerPort(te) || getPeerPort(te) == 0))
-                return te;
-        return 0;
+inline int LinkTable::lookup(ipa_t pipa) {
+        return ht->lookup(hashkey(pipa,pipa));
 }
 
-/** Get the link number for an access link.
+/** Get the link number for a link to a non-router node.
  *  @param pipa is the IP address of the peer at the far end of the link
  *  @param padr is the Forest address of the peer at the far end of the link
  *  @return the matching link number or 0 if no match
  */
-inline int LinkTable::lookupAccess(ipa_t pipa, fAdr_t padr) {
+inline int LinkTable::lookup(ipa_t pipa, fAdr_t padr) {
         return ht->lookup(hashkey(pipa,padr));
 }
 
