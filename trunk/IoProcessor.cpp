@@ -98,7 +98,7 @@ int IoProcessor::receive() {
 	ps->unpack(p);
         if (!ps->hdrErrCheck(p)) { ps->free(p); return 0; }
 	lnk = (sPort == Forest::ROUTER_PORT ?
-	       lt->lookup(sIpAdr) : lt->lookup(sIpAdr,h.getSrcAdr()));
+	       lt->lookup(sIpAdr,false) : lt->lookup(h.getSrcAdr(),true));
         if (lnk == 0 || cIf != lt->getInterface(lnk) ||
 	    (sPort != lt->getPeerPort(lnk) && lt->getPeerPort(lnk) != 0)) {
 		ps->free(p); return 0;

@@ -20,8 +20,7 @@ public:
 		~LinkTable();
 
 	/** access methods */
-	int 	lookup(ipa_t);
-	int 	lookup(ipa_t, fAdr_t);
+	int 	lookup(uint32_t, bool);
 	int	getInterface(int) const;	
 	ipa_t	getPeerIpAdr(int) const;	
 	ipp_t 	getPeerPort(int) const;	
@@ -92,7 +91,7 @@ private:
 	UiHashTbl *ht;			///< hash table for fast lookup
 
 	// helper functions
-	uint64_t hashkey(ipa_t,uint32_t) const;
+	uint64_t hashkey(uint32_t,bool) const;
 	int	readEntry(istream&);	 	
 	void	writeEntry(ostream&, int) const;
 };
@@ -156,25 +155,25 @@ inline void LinkTable::postOcnt(int i, int leng) {
 
 /** Compute key for hash lookup
  */
-inline uint64_t LinkTable::hashkey(ipa_t x, uint32_t y) const {
-	return (uint64_t(x) << 32) | (uint64_t(y) & 0xffffffff);
+inline uint64_t LinkTable::hashkey(uint32_t x, bool leafLink) const {
+	return ((leafLink ? 0x12345678ull : 0x89ABCDEFull) << 32) | x;
 }
 
-/** Get the link number for a link to another router.
- *  @param pipa is the IP address of the router at the far end of the link
+/** Get the link number associated with a given peer address.
+ *  @param leafLink is true if the peer is a leaf (not a router);
+ *  if leafLink is false, the peer is assumed to be a router
+ *  @param x if leafLink is true, x is the forest address of the
+ *  peer, if leafLink is false, x is the IP address of the peer
  *  @return the matching link number or 0 if no match
  */
-inline int LinkTable::lookup(ipa_t pipa) {
-        return ht->lookup(hashkey(pipa,pipa));
+inline int LinkTable::lookup(uint32_t x, bool leafLink) {
+        int lnk = ht->lookup(hashkey(x,leafLink));
+	if (lnk == 0) return 0;
+	if ((leafLink && ld[lnk].ptyp == ROUTER) ||
+	    (!leafLink && ld[lnk].ptyp != ROUTER))
+		return 0;
+	return lnk;
 }
 
-/** Get the link number for a link to a non-router node.
- *  @param pipa is the IP address of the peer at the far end of the link
- *  @param padr is the Forest address of the peer at the far end of the link
- *  @return the matching link number or 0 if no match
- */
-inline int LinkTable::lookup(ipa_t pipa, fAdr_t padr) {
-        return ht->lookup(hashkey(pipa,padr));
-}
 
 #endif

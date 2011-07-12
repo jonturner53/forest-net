@@ -732,16 +732,14 @@ void RouterCore::handleCtlPkt(int p) {
 			errReply(p,cp1,"add comtree link: invalid comtree");
 			break;
 		}
-		int lnk; ipa_t pipa; fAdr_t padr;
+		int lnk = 0; 
 		if (cp.isSet(LINK_NUM)) {
 			lnk = cp.getAttr(LINK_NUM);
-		} else if (cp.isSet(PEER_ADR) && cp.isSet(PEER_IP)) {
-			pipa = cp.getAttr(PEER_IP);
-			padr = cp.getAttr(PEER_ADR);
-			lnk = lt->lookup(pipa, padr);
+		} else if (cp.isSet(PEER_ADR)) {
+			lnk = lt->lookup(cp.getAttr(PEER_ADR), true);
 		}
 		if (lt->valid(lnk)) {
-			errReply(p,cp1,"add comtree link: invalid link");
+			errReply(p,cp1,"add comtree link: invalid link or peer address");
 			break;
 		}
 		ctt->addLink(ctte,lnk,false,false);
@@ -754,16 +752,14 @@ void RouterCore::handleCtlPkt(int p) {
 			errReply(p,cp1,"drop comtree link: invalid comtree");
 			break;
 		}
-		int lnk; ipa_t pipa; fAdr_t padr;
+		int lnk = 0;
 		if (cp.isSet(LINK_NUM)) {
 			lnk = cp.getAttr(LINK_NUM);
-		} else if (cp.isSet(PEER_ADR) && cp.isSet(PEER_IP)) {
-			pipa = cp.getAttr(PEER_IP);
-			padr = cp.getAttr(PEER_ADR);
-			lnk = lt->lookup(pipa, padr);
+		} else if (cp.isSet(PEER_ADR)) {
+			lnk = lt->lookup(cp.getAttr(PEER_ADR), true);
 		}
 		if (lt->valid(lnk)) {
-			errReply(p,cp1,"drop comtree link: invalid link");
+			errReply(p,cp1,"drop comtree link: invalid link or peer address");
 			break;
 		}
 		ctt->removeLink(ctte,lnk);

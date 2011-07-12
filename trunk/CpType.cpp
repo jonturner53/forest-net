@@ -133,12 +133,10 @@ CpType::CpTypeInfo CpType::typeInfo[] = {
 									   (1ull << COMTREE_NUM), 0},
 	{ ADD_COMTREE_LINK,	54,	"add comtree link",	   "acl",  (1ull << COMTREE_NUM)|
 									   (1ull << LINK_NUM)|
-									   (1ull << PEER_IP)|
 									   (1ull << PEER_ADR),
 									   (1ull << COMTREE_NUM), 0},
 	{ DROP_COMTREE_LINK,	55,	"drop comtree link",	   "dcl",  (1ull << COMTREE_NUM)|
 									   (1ull << LINK_NUM)|
-									   (1ull << PEER_IP)|
 									   (1ull << PEER_ADR),
 									   (1ull << COMTREE_NUM), 0},
 	{ RESIZE_COMTREE_LINK,	56,	"resize comtree link",	   "rcl",  (1ull << COMTREE_NUM)|

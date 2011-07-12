@@ -109,7 +109,7 @@ void Avatar::run(int finishTime) {
 	uint32_t now;    	// free-running microsecond time
 	uint32_t nextTime;	// time of next operational cycle
 	now = nextTime = 0;
-	while (now <= finishTime) {
+	while (finishTime == 0 || now <= finishTime) {
 		//reset hashtables and report
 		nearAvatars->clear();
 		visibleAvatars->clear();
@@ -129,7 +129,8 @@ void Avatar::run(int finishTime) {
 
 		nextTime += 1000*UPDATE_PERIOD;
 		useconds_t delay = nextTime - now;
-		if (delay > 0) usleep(delay);
+		if (delay < (1 << 31)) usleep(delay);
+		else nextTime = now + 1000*UPDATE_PERIOD;
 	}
 	disconnect(); 		// send final disconnect packet
 }
@@ -327,7 +328,7 @@ void Avatar::updateSubscriptions() {
 	h.setLength(4*(8+nsub+nunsub)); h.setPtype(SUB_UNSUB); h.setFlags(0);
 	h.setComtree(comt); h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
 
-	send(p); ps->free(p);
+	send(p); 
 }
 
 /** Update the set of nearby Avatars.

@@ -45,7 +45,7 @@ main(int argc, char *argv[]) {
 	}
 	if (!nm.readClientInfo(argv[7]))
 		fatal("can't read client address info");
-	nm.run(finTime);
+	nm.run(1000000*finTime);
 	exit(0);
 }
 

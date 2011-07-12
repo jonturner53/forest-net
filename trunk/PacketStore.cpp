@@ -43,8 +43,7 @@ void PacketStore::free(packet p) {
 	assert(1 <= p && p <= N);
 	int b = pb[p]; pb[p] = 0;
 	freePkts->addFirst(p); n--;
-	if ((--ref[b]) == 0) {
-	freeBufs->addFirst(b); m--; }
+	if ((--ref[b]) == 0) { freeBufs->addFirst(b); m--; }
 }
 
 packet PacketStore::clone(packet p) {

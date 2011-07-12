@@ -161,6 +161,7 @@ System.out.println(monSockAdr);
 		//  send comtree # to remote monitor
 		try { 		
 			sendBuf.putInt(comtree);
+System.out.println("Sending " + comtree + " to Monitor");
 			sendBuf.flip();
 			do {
 				monChan.write(sendBuf);
@@ -228,6 +229,7 @@ System.out.println(monSockAdr);
 		AvatarStatus firstRep;
 		while ((firstRep = getReport()) == null) {}
 		int monTime = firstRep.when - 200; // build in some delay
+System.out.println("Got first report back");
 		
 		long localTime = System.nanoTime()/1000000;
 		long targetLocalTime = localTime;
