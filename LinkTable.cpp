@@ -42,8 +42,12 @@ bool LinkTable::addEntry(int lnk, int intf, ntyp_t pTyp, ipa_t pipa, fAdr_t pfa)
 // and pfa is the peer's forest address.
 // Return true on success, false on failure.
 	if (lnk == 0 || lnk > nlnk) return false;
-        uint32_t x = (pTyp != ROUTER ? pfa : pipa); 
-        if (!ht->insert(hashkey(pipa,x),lnk)) return false;
+
+	bool status;
+	if (pTyp != ROUTER) status = ht->insert(hashkey(pfa,true),lnk);
+	else 		    status = ht->insert(hashkey(pipa,false),lnk);
+	if (!status) return false;
+
         ld[lnk].intf = intf;
 	ld[lnk].pipa = pipa; ld[lnk].padr = pfa;
         ld[lnk].ptyp = pTyp;
@@ -55,9 +59,10 @@ bool LinkTable::addEntry(int lnk, int intf, ntyp_t pTyp, ipa_t pipa, fAdr_t pfa)
 bool LinkTable::removeEntry(int lnk) {
 // Remove the table entry for lnk. Return true on success, false on failure.
 	if (!valid(lnk)) return false;
-	uint32_t x = (ld[lnk].ptyp != ROUTER ?
-                       ld[lnk].padr : ld[lnk].pipa);
-	ht->remove(hashkey(ld[lnk].pipa,x));
+
+	if (ld[lnk].ptyp != ROUTER) ht->remove(hashkey(ld[lnk].padr,true));
+	else 		    	    ht->remove(hashkey(ld[lnk].pipa,false));
+
 	disable(lnk);  // mark entry as invalid
 }
 
