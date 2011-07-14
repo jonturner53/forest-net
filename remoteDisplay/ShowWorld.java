@@ -75,7 +75,6 @@ public class ShowWorld {
 		rep.numNear = repBuf.getInt();
 		rep.comtree = repBuf.getInt();
 		if (repBuf.remaining() < 36) needData = true;
-			
 		return rep;		
 	}
 

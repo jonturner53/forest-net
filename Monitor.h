@@ -21,15 +21,15 @@
  */
 class Monitor {
 public:
-		Monitor(ipa_t, ipa_t , ipa_t, fAdr_t, fAdr_t);
+		Monitor(ipa_t, ipa_t , ipa_t, fAdr_t, fAdr_t, int);
 		~Monitor();
 
 	bool	init(char*);		///< open and setup socket
 	void	run(int); 		///< run avatar
 private:
 	const static short MON_PORT = 30124;///< port# for connection to GUI
-	const static int NUMITEMS = 9;///<number of distinct items in a status packet
-	const static int SIZE = 1000000;///< xy extent of virtual world
+	const static int NUMITEMS = 9;	///<number of distinct items in a status packet
+	int SIZE;			///< xy extent of virtual world
 	const static int GRID = 200000;	///< xy extent of one grid square
 
 	const static int UPDATE_PERIOD = 50;	///< # ms between status updates
@@ -49,7 +49,7 @@ private:
 	bool	logging;		///< true if logging requested
 	ofstream logFile;		///< output stream for optional log file
 
-	const static int MAX_REPORTS = 40; ///< max # of reports per status pkt
+	const static int MAX_REPORTS = 5; ///< max # of reports per status pkt
 	uint32_t *statPkt;		///< pointer to buffer for status packet
 	int	repCnt;			///< number of reports in status packet
 

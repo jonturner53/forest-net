@@ -67,11 +67,11 @@ private:
 	void	disconnect();	
 
 	void	writeToDisplay();	
-	int	readFromDisplay();
+	void	connect2display();
 
 	void	sendToForest(int);
 	int 	rcvFromForest();
-
+	void	returnToSender(packet, int);
 };
 
 #endif

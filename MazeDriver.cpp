@@ -133,8 +133,12 @@ bool Avatar::init() {
 	}
 	extSock = Np4d::streamSocket();
 	if (extSock < 0)  return false;
-	bool status = Np4d::bind4d(extSock,extIpAdr,AV_PORT);
+	bool status = Np4d::bind4d(extSock,extIpAdr,0);
 	if (!status)  return false;
+	cout << "Forest address: ";
+	Forest::writeForestAdr(cout,myAdr);
+	cout << ", port number: " << Np4d::getSockPort(extSock) << endl;
+	cout.flush();
 	return Np4d::listen4d(extSock) && Np4d::nonblock(extSock);
 }
 

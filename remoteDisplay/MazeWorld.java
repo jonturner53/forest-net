@@ -13,9 +13,7 @@ import java.net.*;
 import java.io.*;
 import java.nio.*;
 import java.nio.channels.*;
-
 import princeton.StdDraw;
-
 /**
  *  ShowWorld provides a visual display of the avatars moving around
  *  within a virtual world. It connects to a remote monitor that
@@ -24,19 +22,17 @@ import princeton.StdDraw;
  *  @author Jon Turner
  */
 public class MazeWorld {
-	private static Map<Integer, MazeAvatarGraphic> status; // avatar status
+	private static Map<Integer, AvatarGraphic> status; // avatar status
 	private static final int INTERVAL = 50;	// time between updates (in ms)
 	private static int comtree;	// number of comtree to be monitored
 	private static int SIZE;	//size of full map
 	private static int gridSize;	//number of squares in map (x or y direction)
 	private static final int MON_PORT = 30124; // port number used by monitor
-	private static final int AV_PORT = 30130; // port number used by AvatarController.cpp
 	private static String WALLS; // list of solid walls in hex
 	private static BitSet wallsSet; // list of walls in bitset form
 	private static SocketChannel monChan = null;	// channel to remote monitor
-	private static SocketChannel avaChan = null;
 	private static ByteBuffer repBuf = null; 	// buffer for report packets
-	private static MazeAvatarStatus rep = null;		// most recent report
+	private static AvatarStatus rep = null;		// most recent report
 	private static int GRID = 200000;		// size of one grid space
 	private static boolean needData = true;		// true when getReport() needs
 							// more data to process
@@ -48,9 +44,9 @@ public class MazeWorld {
 	 * @return the AvatarStatus object for the most recent status report
 	 * or null if there is no report available
 	 */
-	private static MazeAvatarStatus getReport() {
+	private static AvatarStatus getReport() {
 		if (repBuf == null) {
-			repBuf = ByteBuffer.allocate(1000*40);
+			repBuf = ByteBuffer.allocate(1000*36);
 			repBuf.clear();
 		}
 		
@@ -59,9 +55,9 @@ public class MazeWorld {
 				repBuf.clear();
 			while (needData) {
 				try {					
-					if (avaChan.read(repBuf) == 0)
+					if (monChan.read(repBuf) == 0)
 						return null;
-					if (repBuf.position() >= 40) {
+					if (repBuf.position() >= 36) {
 						repBuf.flip(); needData = false;
 					}
 				} catch(Exception x) {
@@ -72,7 +68,7 @@ public class MazeWorld {
 				}    	    	   
 			}
 		}		
-		if (rep == null) rep = new MazeAvatarStatus();
+		if (rep == null) rep = new AvatarStatus();
 		rep.when = repBuf.getInt()/1000;
 		rep.id = repBuf.getInt();
 		rep.x = repBuf.getInt()/(double)SIZE;
@@ -82,14 +78,14 @@ public class MazeWorld {
 		rep.numVisible = repBuf.getInt();
 		rep.numNear = repBuf.getInt();
 		rep.comtree = repBuf.getInt();
-		rep.type = repBuf.getInt();
-		if (repBuf.remaining() < 40) needData = true;
+		//rep.type = repBuf.getInt();
+		if (repBuf.remaining() < 36) needData = true;
 
 		recentIds.add(rep.id);
 		return rep;
 	}
 
-	private static MazeAvatarStatus lastRep = null; // used by processFrame
+	private static AvatarStatus lastRep = null; // used by processFrame
 	
 	/**
 	 * Process reports for which the timestamp is <= bound
@@ -100,23 +96,23 @@ public class MazeWorld {
 	 * or -1 if there are no reports
 	 */
 	private static int processFrame(int bound) {
-		MazeAvatarStatus rep;
+		AvatarStatus rep;
 		rep = (lastRep != null ? lastRep : getReport());
 		int firstTimeStamp = (rep != null ? rep.when : -1);
 		while (rep != null) {
 			if (rep.when > bound) {		
 				lastRep = rep; return firstTimeStamp;
 			}
-			MazeAvatarGraphic m = status.get(rep.id);
+			AvatarGraphic m = status.get(rep.id);
 			if (m == null) {
-				m = new MazeAvatarGraphic(rep);		
+				m = new AvatarGraphic(rep);		
 				status.put(rep.id, m);
 			} else {
 				m.update(rep);
 			}
 			rep = getReport();
-			idCounter = (++idCounter)%25;
-			if(idCounter==24) {
+			idCounter = (++idCounter)%50;
+			if(idCounter==49) {
 				Set<Integer> temp = new HashSet<Integer>();
 				for(Iterator<Integer> iter = status.keySet().iterator();iter.hasNext();) {
 					Integer i = iter.next();
@@ -156,7 +152,6 @@ public class MazeWorld {
 	}
 	
 	private static InetSocketAddress monSockAdr;
-	private static InetSocketAddress avaSockAdr;
 	
 	/**
 	 *  Process command line arguments
@@ -165,7 +160,6 @@ public class MazeWorld {
 	private static boolean processArgs(String[] args) {
 		try {
 			monSockAdr = new InetSocketAddress(args[0], MON_PORT);
-			avaSockAdr = new InetSocketAddress(args[0], AV_PORT);
 			WALLS = args[1];
 			wallsSet = new BitSet();
 			for(int i = 0; i < WALLS.length(); i++) {
@@ -208,28 +202,6 @@ public class MazeWorld {
 			System.out.println(e);
 			System.exit(1); 
 		}	
-	}
-	/** Take in keystroke and send movements to AvatarController.cpp
-	*/
-	private static void sendMovements(int c) throws IOException {
-		ByteBuffer buff = ByteBuffer.allocate(4);
-		switch(c) {
-			case KeyEvent.VK_LEFT:
-				buff.putInt(1);
-				break;
-			case KeyEvent.VK_UP:
-				buff.putInt(2);
-				break;
-			case KeyEvent.VK_RIGHT:
-				buff.putInt(3);
-				break;
-			case KeyEvent.VK_DOWN:
-				buff.putInt(4);
-				break;
-		}
-		buff.flip();
-		avaChan.write(buff);
-		avaChan.socket().getOutputStream().flush();
 	}
 
 
@@ -278,16 +250,6 @@ public class MazeWorld {
 			System.out.println(e);
 			System.exit(1);
 		}
-		//Open socket to avatar
-		try {
-			avaChan = SocketChannel.open(avaSockAdr);
-			avaChan.configureBlocking(false);
-			avaChan.socket().setTcpNoDelay(true);
-		} catch(Exception e) {
-			System.out.println("Can't open channel to AvatarController");
-			System.out.println(e);
-			System.exit(1);
-		}
 
 		// setup canvas
 		comtree = 0;
@@ -298,7 +260,7 @@ public class MazeWorld {
 		StdDraw.show(INTERVAL);
 
 		// setup hashmap for reports from each host
-		status = new HashMap<Integer, MazeAvatarGraphic>();
+		status = new HashMap<Integer, AvatarGraphic>();
 
 		// setup hashset for recent ids
 		recentIds = new HashSet<Integer>();
@@ -307,7 +269,7 @@ public class MazeWorld {
 		comtree = readComtree();
 		sendComtree(comtree);
 
-		MazeAvatarStatus firstRep;
+		AvatarStatus firstRep;
 		while ((firstRep = getReport()) == null) {}
 		int monTime = firstRep.when + 3000; // build in some delay
 		long localTime = System.nanoTime()/1000000;
@@ -318,7 +280,7 @@ public class MazeWorld {
 			Set<Integer> idSet = status.keySet();
 			drawGrid(c);
 			for (Integer id : idSet) {
-				MazeAvatarGraphic m = status.get(id);
+				AvatarGraphic m = status.get(id);
 				if (m.getComtree() == comtree)
 					m.draw();
 			}
@@ -333,18 +295,10 @@ public class MazeWorld {
 
 			monTime += INTERVAL; targetLocalTime += INTERVAL;
 			
+			//StdDraw.show(INTERVAL);
 			int newComtree = readComtree();
 			if (newComtree >= 0 && newComtree != comtree) {
 				comtree = newComtree; sendComtree(comtree);
-			}
-			//write movement commands to avaChan socket
-			try {
-				if(StdDraw.hasNextKeyPressed())
-					sendMovements(StdDraw.nextKeyPressed());
-			} catch(Exception e) {
-				System.out.println("Could not connect to AvatarController.cpp");
-				System.out.println(e);
-				System.exit(1);
 			}
 		}
 	}

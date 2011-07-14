@@ -14,8 +14,7 @@
 #include "CommonDefs.h"
 #include "stdinc.h"
 #include "support/UiHashTbl.h"
-/** usage:
- *       ComtreeController extIp intIp rtrIp myAdr rtrAdr topology finTime
+/** usagstring lnk = temp.at(j+3);:
  * 
  *  Command line arguments include two ip addresses for the
  *  ComtreeController. The first is the IP address that a remote display can
@@ -39,6 +38,7 @@ int main(int argc, char *argv[]) {
         ipa_t   rtrIp;                  ///< IP address of router
         fAdr_t  myAdr;                  ///< forest address of this host
         fAdr_t  rtrAdr;  	
+
 	if(argc ==  8){	
 		extIp  = Np4d::ipAddress(argv[1]);
         	intIp  = Np4d::ipAddress(argv[2]);
@@ -51,16 +51,16 @@ int main(int argc, char *argv[]) {
 		fatal("ComtreeController extIp intIp rtrIp myAdr rtrAdr topology finTime");
 	if (extIp == Np4d::ipAddress("127.0.0.1")) extIp = Np4d::myIpAddress();
         if (extIp == 0) fatal("can't retrieve default IP address");
-	cerr<<"arg 2: "<<argv[2]<<endl;
-	cerr<<"intIp: ";
-	 Np4d::writeIpAdr(cerr, intIp);
-	cerr<<endl;
+	
+	//cerr<<"arg 2: "<<argv[2]<<endl;
+	//cerr<<"intIp: ";
+	//Np4d::writeIpAdr(cerr, intIp);
 	ComtreeController* cc=new ComtreeController(extIp, intIp, rtrIp, myAdr, rtrAdr);
-	cerr<<"cc built"<<endl;
+	//cerr<<"cc built"<<endl;
 	if(!cc->init())
 		fatal("Init Failure");	
-	cerr<<"initalized..."<<endl;
-	cerr<<path<<endl;
+	//cerr<<"initalized..."<<endl;
+	//cerr<<path<<endl;
 	cc->parse(path);
 	cerr<<"parsed..."<<endl;
 	cc->run(finTime*1000000);
@@ -75,7 +75,7 @@ ComtreeController::ComtreeController(ipa_t eIp, ipa_t iIp, ipa_t rIp, fAdr_t myA
         rtrIp = rIp;                  ///< IP address of router
         myAdr = myA;                  ///< forest address of this host
         rtrAdr= frIp;  
-	NUMITEMS=3;
+	NUMITEMS=4;
 	repCnt = 0;
 	statPkt= new uint32_t[500];
 	topology = new vector< vector<string> >();
@@ -154,7 +154,8 @@ void ComtreeController::parse(string filename){
 					size_t head=0;
 					size_t tail=0;
 					while(tail < str.size()){
-						head = str.find_first_not_of(whitespaces, tail);											tail = str.find_first_of(whitespaces, head);
+						head = str.find_first_not_of(whitespaces, tail);
+						tail = str.find_first_of(whitespaces, head);
 						if(tail != string::npos)
 							builder.push_back(str.substr(head, tail-head));
 						else
@@ -167,6 +168,13 @@ void ComtreeController::parse(string filename){
 	ifs.close();
 	if(wasOpened == 0)
 		fatal("topology.txt not found");
+/*
+	int n;
+	int o;
+	for(n = 0; n < topology->size(); n++)
+		for(o = 0; o < topology->at(n).size(); o++)
+		cerr<<topology->at(n).at(o)<<endl;
+*/
 }
 
 /** Run the ComtreeController.
@@ -181,16 +189,30 @@ void ComtreeController::run(int finishTime) {
         
 	uint32_t now = Misc::getTime();       // free-running microsecond time
 	now = Misc::getTime();
+	string nums = "1234567890";
 	UiHashTbl cr_tbl(100);
+	string fAdr[1000];
 	int counter[1000];
 	int i;
         for(i = 0; i < topology->size(); i++){
+		if(topology->at(i).at(0).compare("nodes:")==0){
+			int n;
+			for(n = 1; n < topology->at(i).size(); n+=5){
+				//map zipcodes of all routers to their forest addresses
+				string rname = topology->at(i).at(n);
+				if(rname.find_last_of(nums) == rname.length())
+					rname = rname.substr(rname.find_first_of(nums));
+				else
+					rname = rname.substr(rname.find_first_of(nums), rname.find_last_of(nums));
+				int zip=atoi(rname.c_str());
+				fAdr[zip]=topology->at(i).at(n+2);
+			}
+		}
 		if(topology->at(i).at(0).compare("comtrees:")==0){
 			vector<string> temp = topology->at(i);
-			vector<string> routers;
+			vector<string> zips;
 			int comtree;
 			int nextCounter = 1;
-			string nums = "1234567890";
 			int j;
 			for(j = 1; j < temp.size(); j+=4){
 				comtree = atoi(temp.at(j).c_str());
@@ -199,61 +221,43 @@ void ComtreeController::run(int finishTime) {
                                 size_t tail=0;
                                         
 				head = root.find_first_of(nums);
-                                routers.push_back(root.substr(head).c_str());
+                                zips.push_back(root.substr(head).c_str());
 				//get core routers
 				head = 0;
 				tail = 0;
 				string core = temp.at(j+2);
-				while(head != string::npos){
-					head = core.find_first_of(nums, tail);
-					tail = core.find_first_not_of(nums, head);
-					if(tail != string::npos)
-						routers.push_back(core.substr(head, tail-head).c_str());
-					else if(head != string::npos)
-						routers.push_back(core.substr(head).c_str());
-				}
+				
 				//get linked routers
-				head = 0;
-				tail = 0;
 				string lnk = temp.at(j+3);
-					vector<string> nodes;
-					while(head != string::npos){
-                                        	head = lnk.find_first_of(",", tail);
-						tail = lnk.find_first_of(",", head+1);
-						if(tail == 0)
-							nodes.push_back(lnk.substr(0, head));
-						if(tail != string::npos)
-							nodes.push_back(lnk.substr(head+1, tail));
-						else
-							nodes.push_back(lnk.substr(head + 1));
-					}
-					head = 0;
-					tail = 0;
-					int n;
-					for(n = 0; n < nodes.size(); n++){
-						string ln = nodes.at(n);
-						while(tail != string::npos){
-							head = ln.find_first_of(nums, tail);		
-							int period = ln.find_first_of(".", head);
-							tail = ln.find_first_of(":", head);
-                                        		if( head != string::npos)
-                                                		routers.push_back(nodes.at(n).substr(head, period-head).c_str());
-                               			}	 
-					}
-			
-				int r;
-                        	for(r = 0; r < routers.size(); r++){
-					int zip = atoi(routers.at(r).c_str());
-                                	uint64_t num = (uint64_t(comtree) << 32) | (uint64_t(zip) & 0xffffffff);
-					if(cr_tbl.lookup(num) == 0){
-						cr_tbl.insert(num,nextCounter);
-						counter[nextCounter++] = 0;
-					}
+				head = 0;
+				size_t period = 0;
+				size_t comma = 0;
+				tail = 0;
+				cerr<<lnk<<endl;
+				while(head != string::npos){
+					if(comma < tail)
+						head = lnk.find_first_of(nums, comma);
+					else
+						head = lnk.find_first_of(nums, tail);
+					if(head != string::npos && period != string::npos || tail == lnk.find_last_of(":", period)){
+                                                 string s=lnk.substr(head, period-head+1);
+                                                 int zip = atoi(s.c_str());
+                                                 uint64_t num = (uint64_t(comtree) << 32) | (uint64_t(zip) & 0xffffffff);
+                                                 if(cr_tbl.lookup(num) == 0){
+                                                         cr_tbl.insert(num,nextCounter);
+                                                 	cerr<<"comtree: " <<comtree<<" zip: "<<zip<<endl;
+                                                         counter[nextCounter++] = 0;
+                                   		}
+                                        }
+					period = lnk.find_first_of(".", head);
+					comma = lnk.find_first_of(",", period);
+					tail = lnk.find_first_of(":", period);
 				}
-				routers.clear();
+				zips.clear();
 			}
         	}
-	}	
+	}
+	
 	while(now <= finishTime){
 		now = Misc::getTime();	
 		int p = rcvFromForest();
@@ -263,41 +267,60 @@ void ComtreeController::run(int finishTime) {
 			CtlPkt cp;
 			int payload_ln = h.getLength()-(Forest::HDR_LENG+sizeof(uint32_t));
 			cp.unpack(ps->getPayload(p), payload_ln);
-			h.write(cerr, ps->getBuffer(p));
 			int comtree = 0;
 			//deconstruct comtree/router key
 			if(CLIENT_JOIN_COMTREE == cp.getCpType() || 
 				CLIENT_LEAVE_COMTREE == cp.getCpType()){
 					comtree = cp.getAttr(COMTREE_NUM);
+					CtlPkt cp1, cp2;
+        				cp1.setCpType(cp.getCpType());
+        				cp1.setRrType(POS_REPLY);
+        				cp1.setSeqNum(cp.getSeqNum());
+
+					//send positive reply packet back to the client
+					returnToSender(p,cp1.pack(ps->getPayload(p)));	
+					
+					cp2.setCpType(cp.getCpType());
+					cp2.setRrType(REQUEST);
 					if(CLIENT_JOIN_COMTREE == cp.getCpType())
-						cerr<<"JOIN @ "<<now;
+						cp2.setCpType(CLIENT_ADD_COMTREE);
 					else
-						cerr<<"LEAVE @ "<<now;
-				if(comtree!= 0){	
-					uint64_t key = (uint64_t(comtree) << 32) | (uint64_t(zipcode) & 0xffffffff);
-					int index = cr_tbl.lookup(key);
-					if(index != 0){
-						if(CLIENT_JOIN_COMTREE == cp.getCpType())
-							counter[index]++;
-						if(CLIENT_LEAVE_COMTREE == cp.getCpType() && counter[index]>0)
-        						counter[index]--;
-						// add new report to the outgoing status packet
-						cerr<<" statpkt: "<<comtree<<" "<<zipcode<<" "<<counter[index]<<endl;	
-        					statPkt[0] = htonl(comtree); //comtree num 
-        					statPkt[1] = htonl(zipcode); //router
-						statPkt[2] = htonl(counter[index]); //num clients on router
-						if(connSock >= 0)
-							writeToDisplay();
-						else
-							connect2display();
+						cp2.setCpType(CLIENT_DROP_COMTREE);
+					cp2.pack(ps->getPayload(p));
+					fAdr_t temp = h.getDstAdr();
+					h.setDstAdr(Forest::forestAdr(fAdr[zipcode].c_str()));
+					h.setSrcAdr(temp);		
+		
+					//send join or drop comtree packet to router of the client
+					sendToForest(p);
+		
+					if(comtree!= 0){	
+						uint64_t key = (uint64_t(comtree) << 32) | (uint64_t(zipcode) & 0xffffffff);
+						int index = cr_tbl.lookup(key);
+						if(index != 0){
+							if(CLIENT_JOIN_COMTREE == cp.getCpType()) {
+								counter[index]++;
+							}
+							else if(CLIENT_LEAVE_COMTREE == cp.getCpType() && counter[index] > 0) {
+        							counter[index]--;
+							}
+							// add new report to the outgoing status packet
+							//cerr<<" statpkt: "<<comtree<<" "<<zipcode<<" "<<counter[index]<<endl;	
+        						statPkt[0] = htonl(comtree); //comtree num 
+        						statPkt[1] = htonl(zipcode); //router
+							statPkt[2] = htonl(counter[index]); //num clients on router
+							statPkt[3] = htonl(now);
+							if(connSock >= 0)
+								writeToDisplay();
+							else
+								connect2display();
+						}
 					}
-				}
 			}
 		}
 	}
 	disconnect();           // send final disconnect packet
 }
-
 
 /** Check for next message from the remote UI.
  *  @return a packet number with a formatted control packet on success,
@@ -346,7 +369,8 @@ int ComtreeController::rcvFromForest() {
 
 /** Send packet to Forest router.
  */
-void ComtreeController::sendToForest(int p) {
+void ComtreeController::sendToForest(packet p) {
+	PacketHeader& h = ps->getHeader(p);
 	buffer_t& buf = ps->getBuffer(p);
 	int leng = ps->getHeader(p).getLength();
 	ps->pack(p);
@@ -358,6 +382,28 @@ void ComtreeController::sendToForest(int p) {
 	save packet in re-send heap with timer set to
 	retransmission time
 	*/
+}
+
+/** Send packet back to sender.
+ *  Update the length, flip the addresses and pack the buffer.
+ *  @param p is the packet number
+ *  @param paylen is the length of the payload in bytes
+ */
+void ComtreeController::returnToSender(packet p, int paylen) {
+        PacketHeader& h = ps->getHeader(p);
+        h.setLength(Forest::HDR_LENG + paylen + sizeof(uint32_t));
+	
+	buffer_t& buf = ps->getBuffer(p);
+	int leng = ps->getHeader(p).getLength();
+        
+	fAdr_t temp = h.getDstAdr();
+        h.setDstAdr(h.getSrcAdr());
+        h.setSrcAdr(temp);
+
+        ps->pack(p);
+	
+	int rv = Np4d::sendto4d(intSock,(void *) &buf,leng, rtrIp,Forest::ROUTER_PORT);
+	if (rv == -1) fatal("ComtreeController::sendToForest: failure in sendto");
 }
 
 /** Send initial connect packet to forest router

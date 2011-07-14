@@ -37,24 +37,24 @@
  */
 main(int argc, char *argv[]) {
 	ipa_t intIp, extIp, rtrIp; fAdr_t myAdr, rtrAdr;
-	int comt, finTime;
+	int comt, finTime, gridSize;
 
-	if (argc < 7 || argc > 8 ||
+	if (argc < 8 || argc > 9 ||
   	    (extIp  = Np4d::ipAddress(argv[1])) == 0 ||
   	    (intIp  = Np4d::ipAddress(argv[2])) == 0 ||
 	    (rtrIp  = Np4d::ipAddress(argv[3])) == 0 ||
 	    (myAdr  = Forest::forestAdr(argv[4])) == 0 ||
 	    (rtrAdr = Forest::forestAdr(argv[5])) == 0 ||
-	     sscanf(argv[6],"%d", &finTime) != 1)
+	    (sscanf(argv[6],"%d", &gridSize) != 1) ||
+	     sscanf(argv[7],"%d", &finTime) != 1)
 		fatal("usage: Monitor extIp intIp rtrIpAdr myAdr rtrAdr "
 		      		    "finTime [logfile]");
-
 	if (extIp == Np4d::ipAddress("127.0.0.1")) extIp = Np4d::myIpAddress(); 
 	if (extIp == 0) fatal("can't retrieve default IP address");
 
-	Monitor mon(extIp,intIp,rtrIp,myAdr,rtrAdr);
+	Monitor mon(extIp,intIp,rtrIp,myAdr,rtrAdr,gridSize);
 	char logFileName[101];
-	strncpy(logFileName,(argc == 8 ? argv[7] : ""),100);
+	strncpy(logFileName,(argc == 9 ? argv[8] : ""),100);
 	if (!mon.init(logFileName)) {
 		perror("perror");
 		fatal("Monitor: initialization failure");
@@ -64,8 +64,8 @@ main(int argc, char *argv[]) {
 }
 
 // Constructor for Monitor, allocates space and initializes private data
-Monitor::Monitor(ipa_t xipa, ipa_t iipa, ipa_t ripa, fAdr_t ma, fAdr_t ra)
-		: extIp(xipa), intIp(iipa), rtrIp(ripa), myAdr(ma), rtrAdr(ra) {
+Monitor::Monitor(ipa_t xipa, ipa_t iipa, ipa_t ripa, fAdr_t ma, fAdr_t ra, int gs)
+		: extIp(xipa), intIp(iipa), rtrIp(ripa), myAdr(ma), rtrAdr(ra), SIZE(GRID*gs) {
 	int nPkts = 10000;
 	ps = new PacketStore(nPkts+1, nPkts+1);
 
@@ -189,7 +189,6 @@ void Monitor::check4comtree() {
 		if (!Np4d::nonblock(connSock))
 			fatal("can't make connection socket nonblocking");
 	}
-
 	comt_t newComt;
         int nbytes = read(connSock, (char *) &newComt, sizeof(uint32_t));
         if (nbytes < 0) {
