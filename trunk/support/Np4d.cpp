@@ -306,6 +306,14 @@ bool Np4d::recvInt(int sock, uint32_t& val) {
 	return true;
 }
 
+bool Np4d::recvIntBlock(int sock, uint32_t& val) {
+	uint32_t temp;
+	int nbytes = recv(sock, (void *) &temp, sizeof(uint32_t), 0);
+	if (nbytes != sizeof(uint32_t)) 
+		fatal("Np4d::recvInt: can't receive integer");
+	val = ntohl(temp);
+	return true;
+}
 /** Send a 32 bit integer on a stream socket.
  *  Uses send() system call but hides the ugliness.
  *  @param sock is socket number
@@ -321,6 +329,13 @@ bool Np4d::sendInt(int sock, uint32_t val) {
 	return true;
 }
 
+bool Np4d::sendIntBlock(int sock, uint32_t val) {
+	val = htonl(val);
+	int nbytes = send(sock, (void *) &val, sizeof(uint32_t), 0);
+	if (nbytes != sizeof(uint32_t))
+		fatal("Np4d::sendInt: can't send integer");
+	return true;
+}
 /** Receive a vector of 32 bit integers on a stream socket.
  *  @param sock is socket number
  *  @param vec is an array in which values are to be stored
@@ -390,10 +405,32 @@ int Np4d::recvBuf(int sock, char* buf, int buflen) {
 	nbytes = recv(sock,(void *) buf, length, 0);
 	return nbytes;
 }
-
+int Np4d::recvBufBlock(int sock, char* buf, int buflen) {
+	int rem = sizeof(uint32_t); char lenBuf[sizeof(uint32_t)]; int nbytes;
+	while(true) {
+		nbytes = recv(sock,&lenBuf[sizeof(uint32_t)-rem],sizeof(uint32_t),0);
+		if(nbytes < 0) return nbytes;
+		rem -= nbytes;
+		if(rem == 0) break;
+	}
+	uint32_t length = *((uint32_t *) lenBuf);
+	length = min(length, buflen);
+	nbytes = recv(sock,(void *) buf, length, 0);
+	return nbytes;
+}
 int Np4d::sendBuf(int sock, char* buf, int buflen) {
 	if (spaceAvail(sock) < buflen + sizeof(uint32_t))
 		return -1;
+	int nbytes = send(sock, (void *) &buflen, sizeof(uint32_t), 0);
+	if (nbytes != sizeof(uint32_t))
+		fatal("Np4d::sendBuf: can't send buffer");
+	nbytes = send(sock, (void *) buf, buflen, 0);
+	if (nbytes != buflen)
+		fatal("Np4d::sendBuf: can't send buffer");
+	return buflen;
+}
+
+int Np4d::sendBufBlock(int sock, char* buf, int buflen) {
 	int nbytes = send(sock, (void *) &buflen, sizeof(uint32_t), 0);
 	if (nbytes != sizeof(uint32_t))
 		fatal("Np4d::sendBuf: can't send buffer");

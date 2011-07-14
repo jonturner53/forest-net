@@ -170,7 +170,8 @@ void Avatar::run(int finishTime) {
 		nextTime += 1000*UPDATE_PERIOD;
 		if(nextTime % 10000000 == 0) {
 			sendCtlPkt(false,comt); //leave current
-			sendCtlPkt(true,comt==comt1 ? comt2 : comt1); //join other
+			comt = comt==comt1 ? comt2 : comt1;
+			sendCtlPkt(true,comt); //join other
 		}
 		useconds_t delay = nextTime - now;
 		if (delay > 0) usleep(delay);

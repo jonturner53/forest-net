@@ -1,5 +1,5 @@
 
-CLASSFILES = MazeWorld.class MazeAvatarGraphic.class MazeAvatarStatus.class
+CLASSFILES = Pair.class ComtreeDisplay.class Comtree.class Controller.class Interface.class Link.class NetObj.class Router.class MazeWorld.class AvatarGraphic.class AvatarStatus.class MazeAvatarStatus.class MazeAvatarGraphic.class MazeWorld2.class
 
 %.class: %.java
 	echo $$CLASSPATH $$HOME
@@ -7,10 +7,6 @@ CLASSFILES = MazeWorld.class MazeAvatarGraphic.class MazeAvatarStatus.class
 	cp $@ ~/bin/java/remoteDisplay
 
 all : ${CLASSFILES}
-
-AvatarGraphic.class : AvatarStatus.class
-
-ShowWorld.class : AvatarGraphic.class
 
 clean :
 	rm -f *.class

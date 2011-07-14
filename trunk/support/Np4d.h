@@ -63,10 +63,15 @@ public:
 	static int  spaceAvail(int);
 	static bool recvInt(int, uint32_t&);
 	static bool sendInt(int, uint32_t);
+	static bool recvIntBlock(int, uint32_t&);
+	static bool sendIntBlock(int, uint32_t);
 	static bool recvIntVec(int, uint32_t*, int);
 	static bool sendIntVec(int, uint32_t*, int);
 	static int  recvBuf(int, char*, int);
 	static int  sendBuf(int, char*, int);
+	static int  recvBufBlock(int, char*, int);
+	static int  sendBufBlock(int, char*, int);
+
 };
 
 #endif

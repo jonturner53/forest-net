@@ -80,11 +80,6 @@ void IdSet::add2string(string& s) const {
 	s += "}";
 }
 
-/** Write a representation of the IdSet to a file.
- *  This version does no multiline formatting, making it problematical
- *  for large IdSets.
- *  @param out is the output stream on which the IdSet is to be written
- */
 void IdSet::write(ostream& out) const {
 	string s; add2string(s); out << s;
 }

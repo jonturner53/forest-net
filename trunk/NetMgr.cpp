@@ -45,7 +45,7 @@ main(int argc, char *argv[]) {
 	}
 	if (!nm.readClientInfo(argv[7]))
 		fatal("can't read client address info");
-	nm.run(1000000*finTime);
+	nm.run(finTime*1000000);
 	exit(0);
 }
 
@@ -107,6 +107,7 @@ void NetMgr::run(int finishTime) {
 			PacketHeader& h = ps->getHeader(p);
 			h.setSrcAdr(myAdr);
 			ps->pack(p);
+			cerr << "sending packet to router" << endl;
 			sendToForest(p);
 			idleCount = 0;
 		}
@@ -114,7 +115,7 @@ void NetMgr::run(int finishTime) {
 		p = rcvFromForest();
 		PacketHeader& h = ps->getHeader(p);
 		if (p != 0 && (h.getPtype() == NET_SIG ||
-			       h.getPtype() == CLIENT_SIG)) { 
+			       h.getPtype() == CLIENT_SIG)) {
 			// this is temporary version
 			// ultimately, we'll need to send control packets
 			// to configure router
@@ -141,6 +142,7 @@ void NetMgr::run(int finishTime) {
 				ps->pack(p);
 				sendToForest(p);
 			} else { // it's a reply to previous request from CLI
+				cerr << "got a reply from router" << endl;
 				sendToUi(p);
 				idleCount = 0;
 			}
@@ -178,6 +180,7 @@ bool NetMgr::setupClient(ipa_t  cliIp, fAdr_t& cliAdr,
 bool NetMgr::readClientInfo(char fileName[]) {
 	ifstream in; in.open(fileName);
 	if (in.fail()) return false;
+	Misc::skipBlank(in);
 	int i = 0;
 	while (!in.eof()) {
 		ipa_t  cliIp,  rtrIp;
@@ -193,6 +196,8 @@ bool NetMgr::readClientInfo(char fileName[]) {
 		clientInfo[i].rtrIp  = rtrIp;
 		clientInfo[i].rtrAdr = rtrAdr;
 		clientInfo[i].inUse = false;
+		Misc::skipBlank(in);
+		i++;
 	}
 	numClients = i;
 	cout << "read address information for " << numClients << " clients\n";
