@@ -221,7 +221,9 @@ void Avatar::run(int finishTime) {
 			}
 		}
 		useconds_t delay = nextTime - now;
-		if (delay > 0) usleep(delay);
+		if (delay < (1 << 31)) usleep(delay);
+		else nextTime = now + 1000*UPDATE_PERIOD;
+
 	}
 	disconnect(); 		// send final disconnect packet
 }
