@@ -30,6 +30,7 @@ public:
 	bool	getCoreFlag(int) const;
 	int	getPlink(int) const;
 	int	getQnum(int) const;
+	int 	getLinkCount(int) const;
 	int	getLinks(int,uint16_t*,int) const;	
 	int	getRlinks(int,uint16_t*,int) const;
 	int	getLlinks(int,uint16_t*,int) const;
@@ -185,6 +186,17 @@ inline bool ComtreeTable::isLink(int entry, int lnk) const {
 	return (tbl[entry].links & (1 << lnk)) ? true : false;
 }
 
+/** Get the number of links in a specific comtree.
+ *  @param entry is the entry number for the comgtree
+ *  @return the number of links in this comtree
+ */
+inline int ComtreeTable::getLinkCount(int entry) const {
+	int cnt = 0;
+	for (uint32_t i = 1; i != 0; i <<= 1)
+		if (tbl[entry].links & i) cnt++;
+	return cnt;
+}
+
 /** Determine if a given link connects to another router.
  *  @param entry is the entry number
  *  @param lnk is the link number
@@ -264,8 +276,7 @@ inline int ComtreeTable::getClinks(int entry, uint16_t* lnks, int limit) const {
  *  @return a 64 bit hash key
  */
 inline uint64_t ComtreeTable::hashkey(comt_t ct) const {
-	uint64_t x = (ct & 0xffffffff);
-        return (x << 32) | x;
+        return (uint64_t(ct) << 32) | ct;
 }
 
 /** Lookup the table entry number for a given comtree.
