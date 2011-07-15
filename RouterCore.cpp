@@ -176,8 +176,7 @@ void RouterCore::dump(ostream& out) {
  */
 void RouterCore::run(uint32_t finishTime, int numData) {
 	// record of first packet receptions, transmissions for debugging
-	const int MAXEVENTS = 5000;
-	numData = 3000;
+	const int MAXEVENTS = 500;
 	struct { int sendFlag; uint32_t time; int link, pkt;} events[MAXEVENTS];
 	int evCnt = 0;
 	int statsTime = 0;		// time statistics were last processed
@@ -210,7 +209,6 @@ void RouterCore::run(uint32_t finishTime, int numData) {
 			}
 			int ctte = ctt->lookup(h.getComtree());
 			if (!pktCheck(p,ctte)) {
-				if(h.getSrcAdr()==Forest::forestAdr(2,900)) {cerr << "pktCheck failed" << endl; h.write(cerr,ps->getBuffer(p)); cerr << endl;}
 				ps->free(p);
 			} else if (ptype == CLIENT_DATA) {
 				forward(p,ctte);
@@ -552,6 +550,7 @@ void RouterCore::handleCtlPkt(int p) {
 		errReply(p,cp,"misformatted control packet");
 		return;
 	}
+
 	if (h.getPtype() != NET_SIG ||
 	    h.getComtree() < 100 || h.getComtree() > 999) {
 		// reject signalling packets on comtrees outside 100-999 range
@@ -708,6 +707,7 @@ void RouterCore::handleCtlPkt(int p) {
 			cp1.setAttr(COMTREE_NUM,comt);
 			cp1.setAttr(CORE_FLAG,ctt->getCoreFlag(ctte));
 			cp1.setAttr(PARENT_LINK,ctt->getPlink(ctte));
+			cp1.setAttr(LINK_COUNT,ctt->getLinkCount(ctte));
 			cp1.setAttr(QUEUE_NUM,ctt->getQnum(ctte));
 			returnToSender(p,cp1.pack(ps->getPayload(p)));
 		}
@@ -740,12 +740,13 @@ void RouterCore::handleCtlPkt(int p) {
 		} else if (cp.isSet(PEER_ADR)) {
 			lnk = lt->lookup(cp.getAttr(PEER_ADR), true);
 		}
-		if (lt->valid(lnk)) {
+		if (!lt->valid(lnk)) {
 			errReply(p,cp1,"add comtree link: invalid link or peer address");
 			break;
 		}
 		ctt->addLink(ctte,lnk,false,false);
 		returnToSender(p,cp1.pack(ps->getPayload(p)));
+		break;
 	}
 	case DROP_COMTREE_LINK: {
 		comt_t comt = cp.getAttr(COMTREE_NUM);
@@ -760,12 +761,13 @@ void RouterCore::handleCtlPkt(int p) {
 		} else if (cp.isSet(PEER_ADR)) {
 			lnk = lt->lookup(cp.getAttr(PEER_ADR), true);
 		}
-		if (lt->valid(lnk)) {
+		if (!lt->valid(lnk)) {
 			errReply(p,cp1,"drop comtree link: invalid link or peer address");
 			break;
 		}
 		ctt->removeLink(ctte,lnk);
 		returnToSender(p,cp1.pack(ps->getPayload(p)));
+		break;
 	}
         case ADD_ROUTE:
 		if (rt->addEntry(cp.getAttr(COMTREE_NUM),

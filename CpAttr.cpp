@@ -34,6 +34,7 @@ const CpAttr::CpAttrInfo CpAttr::attrInfo[CPA_END+1] = {
 	{ INT_PKT_RATE_UP,	16,	"intPktRateUp" },
 	{ LEAF_ADR,		17,	"leafAdr" },
 	{ LEAF_COUNT,		18,	"leafCount" },
+	{ LINK_COUNT,		37,	"linkCount" },
 	{ LINK_NUM,		19,	"link" },
 	{ LOCAL_IP,		20,	"localIp" }, 		
 	{ MAX_BIT_RATE,		21,	"maxBitRate" },
@@ -51,7 +52,7 @@ const CpAttr::CpAttrInfo CpAttr::attrInfo[CPA_END+1] = {
 	{ RTR_ADR,		35,	"rtrAdr" },
 	{ RTR_IP,		36,	"rtrIp" },
 
-	{ CPA_END,	 	255,	"cp attr end" }
+	{ CPA_END,	 	64,	"cp attr end" }
 };
 
 void CpAttr::check() {

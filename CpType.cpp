@@ -125,6 +125,7 @@ CpType::CpTypeInfo CpType::typeInfo[] = {
 									   (1ull << COMTREE_NUM)|
 									   (1ull << CORE_FLAG)|
 									   (1ull << PARENT_LINK)|
+									   (1ull << LINK_COUNT)|
 									   (1ull << QUEUE_NUM)},
 	{ MOD_COMTREE,		53,	"modify comtree",	   "mc",   (1ull << COMTREE_NUM)|
 									   (1ull << CORE_FLAG)|

@@ -38,6 +38,7 @@ enum CpAttrIndex {
 	INT_PKT_RATE_UP,	///< packet rate of an internal link in p/s
 	LEAF_ADR,		///< address of a leaf node in a comtree
 	LEAF_COUNT,		///< number of leaves in a comtree
+	LINK_COUNT,		///< number of links
 	LINK_NUM,		///< link number
 	LOCAL_IP, 		///< ip address of a local interface 
 	MAX_BIT_RATE,		///< max bit rate of an interface in Kb/s
