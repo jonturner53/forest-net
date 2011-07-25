@@ -37,6 +37,7 @@ public:
 	static void addNode2string(string&, int, int);
 
 	// other stuff
+	static string& toString(int, string&);
 	static bool prefix(string, string);	
 	static void genPerm(int, int*);	
 	static int strnlen(char*, int);
@@ -71,6 +72,15 @@ inline void Misc::addNum2string(string& s, uint64_t i) {
         char buf[32];
         sprintf(buf,"%lld",i);
         s += buf;
+}
+
+/** Create a string representation of an integer.
+ *  @param s points to the string to be extended
+ *  @param i is the integer whose value is to be appended to *s
+ */
+inline string& Misc::toString(int i, string& s) {
+        char buf[16]; sprintf(buf,"%d",i); s = buf;
+	return s;
 }
 
 /** Add the string representation of a data structure node to the
