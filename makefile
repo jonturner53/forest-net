@@ -7,7 +7,7 @@ LIBS = lib support/lib
 
 LIBFILES = CommonDefs.o IoProcessor.o LinkTable.o ComtreeTable.o \
 	   RouteTable.o StatsModule.o CpAttr.o CpType.o CtlPkt.o \
-	   QuManager.o PacketHeader.o PacketStore.o 
+	   QuManager.o PacketHeader.o PacketStore.o  NetInfo.o
 
 all : supportLib fHost fRouter fAvatar fMonitor fCliMgr fNetMgr fComtreeController fCli
 
