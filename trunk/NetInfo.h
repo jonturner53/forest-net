@@ -9,30 +9,36 @@
 #ifndef NETINFO_H
 #define NETINFO_H
 
+#include <list>
+#include <map>
 #include "CommonDefs.h"
 #include "UiHashTbl.h"
+#include "UiDlist.h"
+#include "Graph.h"
 
 /** Maintains information about a Forest network.
  */
 class NetInfo {
 public:
-		NetInfo(int,int,int,int,int,int);
+		NetInfo(int,int,int,int);
 		~NetInfo();
 
 	// access methods
 	string& getNodeName(int);
 	int	getNodeNum(string&);
 	ntyp_t	getNodeType(int);
-	ipa_t	getLeafIpAdr(int);
 	fAdr_t	getNodeAdr(int);
 	double	getNodeLat(int);
 	double	getNodeLong(int);
+	// leaf only
+	ipa_t	getLeafIpAdr(int);
+	int	getLeafBitRate(int);
+	int	getLeafPktRate(int);
+	// router only
 	int	getNumIf(int);
 	fAdr_t	getFirstCliAdr(int);
 	fAdr_t	getLastCliAdr(int);
-	int	getLeafBitRate(int);
-	int	getLeafPktRate(int);
-
+	// router interfaces
 	ipa_t	getIfIpAdr(int,int);
 	int	getIfBitRate(int,int);
 	int	getIfPktRate(int,int);
@@ -43,8 +49,9 @@ public:
 	int	getLnkR(int);
 	int	getLocLnkL(int);
 	int	getLocLnkR(int);
-	int	getLnkBitRate(int);
-	int	getLnkPktRate(int);
+	int	getLinkBitRate(int);
+	int	getLinkPktRate(int);
+	int	getLinkLength(int);
 	int	getLinkNum(int,int);
 
 	// predicates
@@ -57,16 +64,18 @@ public:
 	// modifiers
 	void	setNodeName(int, string&);
 	void	setNodeType(int, ntyp_t);
-	void	setNodeIpAdr(int, ipa_t);
 	void	setNodeAdr(int, fAdr_t);
 	void	setNodeLat(int, double);
 	void	setNodeLong(int, double);
+	// leaf only
+	void	setLeafIpAdr(int, ipa_t);
 	void	setLeafBitRate(int, int);
 	void	setLeafPktRate(int, int);
+	// router only
 	void	setNumIf(int, int);
 	void	setFirstCliAdr(int, fAdr_t);
 	void	setLastCliAdr(int, fAdr_t);
-
+	// router interfaces
 	void	setIfIpAdr(int,int,ipa_t);
 	void	setIfIpAdr(int,ipa_t);
 	void	setIfBitRate(int,int,int);
@@ -74,24 +83,27 @@ public:
 	void	setIfFirstLink(int,int,int);
 	void	setIfLastLink(int,int,int);
 
-	int	setLocLnkL(int,int);
-	int	setLocLnkR(int,int);
-	int	setLnkBitRate(int,int);
-	int	setLnkPktRate(int,int);
+	void	setLocLnkL(int,int);
+	void	setLocLnkR(int,int);
+	void	setLinkBitRate(int,int);
+	void	setLinkPktRate(int,int);
+	void	setLinkLength(int,int);
 
 	// io routines
 	bool read(istream&);
-	void write(ostream&) const;
+	void write(ostream&);
 
 private:
 	int maxRtr;		///< max node number for a router;
 				///< leaf nodes all have larger node numbers
 	int maxNode;		///< max node number in netTopo graph
 	int maxLink;		///< max link number in netTopo graph
+	int maxLeaf;		///< max number of leafs
+	int maxCtl;		///< maximum number of controllers
 
 	/** NetTopo is a weighted graph defining the network topology.
 	 *  Weights represent link costs */
-	Wgraph	*netTopo;
+	Graph	*netTopo;
 
 	struct IfInfo {
 	ipa_t	ipAdr;		///< ip address of forest interface
@@ -106,35 +118,38 @@ private:
 	string	name;		///< leaf name
 	ntyp_t	nType;		///< leaf type
 	ipa_t	ipAdr;		///< IP address used to initialize node
-	fadr_t	fAdr;		///< leaf's forest address
+	fAdr_t	fAdr;		///< leaf's forest address
 	int	latitude;	///< latitude of leaf (in micro-degrees, + or -)
 	int	longitude;	///< latitude of leaf (in micro-degrees, + or -)
 	int	bitRate;	///< max bit rate for interface (Kb/s)
 	int	pktRate;	///< max pkt rate (packets/s)
 	};
-	LeafNodeInfo leaf[];
+	LeafNodeInfo *leaf;
+
+	static int const UNDEF_LAT = 91;	// invalid latitude
+	static int const UNDEF_LONG = 361;	// invalid longitude
 
 	/** structure holding information used by all nodes */
 	struct RtrNodeInfo {
 	string	name;		///< node name
 	ntyp_t	nType;		///< node type
-	fadr_t	fAdr;		///< node's forest address
+	fAdr_t	fAdr;		///< node's forest address
 	int	latitude;	///< latitude of node (in micro-degrees, + or -)
 	int	longitude;	///< latitude of node (in micro-degrees, + or -)
-	fadr_t	firstCliAdr;	///< router's first assignable forest address
-	fadr_t  lastCliAdr;	///< router's last assignable forest address
+	fAdr_t	firstCliAdr;	///< router's first assignable forest address
+	fAdr_t  lastCliAdr;	///< router's last assignable forest address
 	int	numIf;		///< number of interfaces
-	ifInfo	iface[];	///< interface information
+	IfInfo	*iface;		///< interface information
 	};
-	RtrNodeInfo rtr[];
+	RtrNodeInfo *rtr;
 
 	string	tmpBuffer;	///< used to return strings to callers
 
 	/** maps a node name back to corresponding node number */
-	map<string, int> *nodeNum;
+	map<string, int> *nodeNumMap;
 
-	UiHashTbl *locLnk2lnk;	///< maps node/local link# to global link#
-	uint64_t ll2l_key(int,int) ///< returns key used with locLnk2lnk
+	UiHashTbl *locLnk2lnk;	///< maps router/local link# to global link#
+	uint64_t ll2l_key(int,int); ///< returns key used with locLnk2lnk
 
 	struct LinkInfo {
 	int	leftLnum;	///< local link number used by "left endpoint"
@@ -142,13 +157,11 @@ private:
 	int	bitRate;	///< max bit rate for link
 	int	pktRate;	///< max packet rate for link
 	};
-	LinkInfo link[];
+	LinkInfo *link;
 
 	UiDlist	*freeNodes;	///< unused node numbers
 	UiDlist	*freeLinks;	///< unused link numbers
 
-	int maxRtr;		///< maximum number of routers in network
-	int maxCtl;		///< maximum number of controllers
 	list<int> *routers;	///< list of routers (by node #) in network
 	list<int> *controllers;	///< list of controllers (by node #)
 };
@@ -162,16 +175,16 @@ inline bool NetInfo::isRouter(int n) {
 }
 
 inline bool NetInfo::isLeaf(int n) {
-	return (1 < maxRtr && n <= maxNode && leaf[n].fAdr != 0);
+	return (maxRtr < n && n <= maxNode && leaf[n-maxRtr].fAdr != 0);
 }
 
 inline bool NetInfo::validLink(int lnk) {
 	return (1 <= lnk && lnk <= netTopo->m() && netTopo->left(lnk) > 0);
 }
 
-inline bool NetInfo::validIf(int n, int if) {
-	return isRouter(n) && (1 <= if && if <= rtr[n].numIf &&
-					  rtr[n].iface[if].ipAdr != 0);
+inline bool NetInfo::validIf(int n, int iface) {
+	return isRouter(n) && (1 <= iface && iface <= rtr[n].numIf &&
+					  rtr[n].iface[iface].ipAdr != 0);
 }
 
 /** Get the name for a given node number.
@@ -183,14 +196,14 @@ inline bool NetInfo::validIf(int n, int if) {
  *  is called on this NetInfo object
  */
 inline string& NetInfo::getNodeName(int n) {
-	tmpBuffer = (isLeaf(n) ? leaf[n].name : 
+	tmpBuffer = (isLeaf(n) ? leaf[n-maxRtr].name : 
 		     (isRouter(n) ? rtr[n].name : ""));
 	return tmpBuffer;
 }
 
 inline int NetInfo::getNodeNum(string& s) {
-	map<string,int>::iterator p = nodeNum.find(s);
-	return (p != nodeNum::end ? *p : 0);
+	map<string,int>::iterator p = nodeNumMap->find(s);
+	return ((p != nodeNumMap->end()) ? p->second : 0);
 }
 
 inline ntyp_t NetInfo::getNodeType(int n) {
@@ -200,6 +213,14 @@ inline ntyp_t NetInfo::getNodeType(int n) {
 
 inline ipa_t NetInfo::getLeafIpAdr(int n) {
 	return (isLeaf(n) ? leaf[n-maxRtr].ipAdr : 0);
+}
+
+inline int NetInfo::getLeafBitRate(int n) {
+	return (isLeaf(n) ? leaf[n-maxRtr].bitRate : 0);
+}
+
+inline int NetInfo::getLeafPktRate(int n) {
+	return (isLeaf(n) ? leaf[n-maxRtr].pktRate : 0);
 }
 
 inline fAdr_t NetInfo::getNodeAdr(int n) {
@@ -227,28 +248,28 @@ inline double NetInfo::getNodeLat(int n) {
 
 inline double NetInfo::getNodeLong(int n) {
 	double x = (isLeaf(n) ? leaf[n-maxRtr].longitude :
-		    (isRouter(n) ? rtr[n].longitude : UNDEF_LAT));
+		    (isRouter(n) ? rtr[n].longitude : UNDEF_LONG));
 	return x/1000000;
 }
 
-inline ipa_t NetInfo::getIfIpAdr(int n, int if) {
-	return (validIf(n,if) ? rtr[n].iface[if].ipAdr : 0);
+inline ipa_t NetInfo::getIfIpAdr(int n, int iface) {
+	return (validIf(n,iface) ? rtr[n].iface[iface].ipAdr : 0);
 }
 
-inline int NetInfo::getIfFirstLink(int n, int if) {
-	return (validIf(n,if) ? rtr[n].iface[if].firstLink : 0);
+inline int NetInfo::getIfFirstLink(int n, int iface) {
+	return (validIf(n,iface) ? rtr[n].iface[iface].firstLink : 0);
 }
 
-inline int NetInfo::getIfLastLink(int n, int if) {
-	return (validIf(n,if) ? rtr[n].iface[if].lastLink : 0);
+inline int NetInfo::getIfLastLink(int n, int iface) {
+	return (validIf(n,iface) ? rtr[n].iface[iface].lastLink : 0);
 }
 
-inline int NetInfo::getIfBitRate(int n, int if) {
-	return (validIf(n,if) ? rtr[n].iface[if].bitRate : 0);
+inline int NetInfo::getIfBitRate(int n, int iface) {
+	return (validIf(n,iface) ? rtr[n].iface[iface].bitRate : 0);
 }
 
-inline int NetInfo::getIfPktRate(int n, int if) {
-	return (validIf(n,if) ? rtr[n].iface[if].pktRate : 0);
+inline int NetInfo::getIfPktRate(int n, int iface) {
+	return (validIf(n,iface) ? rtr[n].iface[iface].pktRate : 0);
 }
 
 inline int NetInfo::getLnkL(int lnk) {
@@ -267,18 +288,22 @@ inline int NetInfo::getLocLnkR(int lnk) {
 	return (validLink(lnk) ? link[lnk].rightLnum : 0);
 }
 
-inline int NetInfo::getLnkBitRate(int lnk) {
+inline int NetInfo::getLinkBitRate(int lnk) {
 	return (validLink(lnk) ? link[lnk].bitRate : 0);
 }
 
-inline int NetInfo::getLnkPktRate(int lnk) {
+inline int NetInfo::getLinkPktRate(int lnk) {
 	return (validLink(lnk) ? link[lnk].pktRate : 0);
+}
+
+inline int NetInfo::getLinkLength(int lnk) {
+	return (validLink(lnk) ? netTopo->length(lnk) : 0);
 }
 
 inline int NetInfo::getLinkNum(int n, int llnk) {
 	uint64_t key = n; key <<= 32; key |= (llnk & 0xffffffff);
 
-	return locLnk2Lnk.lookup(key);
+	return locLnk2lnk->lookup(key);
 }
 
 inline void NetInfo::setNodeName(int n, string& nam) {
@@ -293,29 +318,9 @@ inline void NetInfo::setNodeType(int n, ntyp_t typ) {
 	return;
 }
 
-inline void NetInfo::setLeafIpAdr(int n, ipa_t ip) {
-	if (isLeaf(n)) leaf[n-maxRtr].ipAdr = ip;
-	return;
-}
-
 inline void NetInfo::setNodeAdr(int n, fAdr_t adr) {
 	if (isLeaf(n)) leaf[n-maxRtr].fAdr = adr;
 	else if (isRouter(n)) rtr[n].fAdr = adr;
-	return;
-}
-
-inline void NetInfo::setFirstCliAdr(int n, fAdr_t adr) {
-	if (isRouter(n)) rtr[n].firstCliFadr = adr;
-	return;
-}
-
-inline void NetInfo::setLastCliAdr(int n, fAdr_t adr) {
-	if (isRouter(n)) rtr[n].lastCliFadr = adr;
-	return;
-}
-
-inline void NetInfo::setNumIf(int n, int num) {
-	if (isRouter(n)) rtr[n].numIf = num;
 	return;
 }
 
@@ -331,14 +336,14 @@ inline void NetInfo::setNodeLong(int n, double longg) {
 	return;
 }
 
-inline void NetInfo::setIfIpAdr(int n, int if, ipa_t ip) {
-	if (isRouter(if)) rtr[n].iface[if].ipAdr = ip;
+inline void NetInfo::setIfIpAdr(int n, int iface, ipa_t ip) {
+	if (isRouter(iface)) rtr[n].iface[iface].ipAdr = ip;
 	return;
 }
 
 inline void NetInfo::setLeafIpAdr(int n, ipa_t ip) {
 	if (isLeaf(n)) leaf[n-maxRtr].ipAdr = ip;
-	return
+	return;
 }
 
 inline void NetInfo::setLeafBitRate(int n, int br) {
@@ -351,22 +356,37 @@ inline void NetInfo::setLeafPktRate(int n, int pr) {
 	return;
 }
 
-inline void NetInfo::setIfBitRate(int n, int if, int br) {
-	if (validIf(n,if)) rtr[n].iface[if].bitRate = br;
+inline void NetInfo::setFirstCliAdr(int n, fAdr_t adr) {
+	if (isRouter(n)) rtr[n].firstCliAdr = adr;
 	return;
 }
 
-inline void NetInfo::setIfPktRate(int n, int if, int pr) {
-	if (validIf(n,if)) rtr[n].iface[if].pktRate = pr;
-}
-
-inline void NetInfo::setIfFirstLink(int n, int if, int lnk) {
-	if (validIf(n,if)) rtr[n].iface[if].firstLink = lnk;
+inline void NetInfo::setLastCliAdr(int n, fAdr_t adr) {
+	if (isRouter(n)) rtr[n].lastCliAdr = adr;
 	return;
 }
 
-inline void NetInfo::setIfLastLink(int n, int if, int lnk) {
-	if (validIf(n,if)) rtr[n].iface[if].lastLink = lnk;
+inline void NetInfo::setNumIf(int n, int num) {
+	if (isRouter(n)) rtr[n].numIf = num;
+	return;
+}
+
+inline void NetInfo::setIfBitRate(int n, int iface, int br) {
+	if (validIf(n,iface)) rtr[n].iface[iface].bitRate = br;
+	return;
+}
+
+inline void NetInfo::setIfPktRate(int n, int iface, int pr) {
+	if (validIf(n,iface)) rtr[n].iface[iface].pktRate = pr;
+}
+
+inline void NetInfo::setIfFirstLink(int n, int iface, int lnk) {
+	if (validIf(n,iface)) rtr[n].iface[iface].firstLink = lnk;
+	return;
+}
+
+inline void NetInfo::setIfLastLink(int n, int iface, int lnk) {
+	if (validIf(n,iface)) rtr[n].iface[iface].lastLink = lnk;
 	return;
 }
 
@@ -380,13 +400,18 @@ inline void NetInfo::setLocLnkR(int lnk, int loc) {
 	return;
 }
 
-inline void NetInfo::setLnkBitRate(int lnk, int br) {
+inline void NetInfo::setLinkBitRate(int lnk, int br) {
 	if (validLink(lnk)) link[lnk].bitRate = br;
 	return;
 }
 
-inline void NetInfo::setLnkPktRate(int lnk, int pr) {
+inline void NetInfo::setLinkPktRate(int lnk, int pr) {
 	if (validLink(lnk)) link[lnk].pktRate = pr;
+	return;
+}
+
+inline void NetInfo::setLinkLength(int lnk, int len) {
+	if (validLink(lnk)) netTopo->setLength(lnk,len);
 	return;
 }
 
@@ -467,3 +492,5 @@ Statistics Collector
   and maybe even analyzed. Could send processed data to remote GUI
   for display, but not clear if it's worth duplicating RLI functionality.
 */
+
+#endif
