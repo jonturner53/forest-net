@@ -53,6 +53,7 @@ public:		UiList(int=26);
 	// input/output
 	// bool	read(istream&);
 	void	add2string(string&) const;
+	string&	toString(string&) const;
 	void	write(ostream&);
 
 protected:
