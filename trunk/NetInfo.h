@@ -21,7 +21,7 @@
  */
 class NetInfo {
 public:
-		NetInfo(int,int,int,int);
+		NetInfo(int,int,int,int,int);
 		~NetInfo();
 
 	// predicates
@@ -55,11 +55,11 @@ public:
 	int	getIfFirstLink(int,int) const;
 	int	getIfLastLink(int,int) const;
 	// link attributes
-	int	getLnkL(int) const;
-	int	getLnkR(int) const;
-	int	getLocLnk(int,int) const;
-	int	getLocLnkL(int) const;
-	int	getLocLnkR(int) const;
+	int	getLinkL(int) const;
+	int	getLinkR(int) const;
+	int	getLocLink(int,int) const;
+	int	getLocLinkL(int) const;
+	int	getLocLinkR(int) const;
 	int	getLinkBitRate(int) const;
 	int	getLinkPktRate(int) const;
 	int	getLinkLength(int) const;
@@ -77,10 +77,10 @@ public:
 	int	getComtLeafBrUp(int) const;
 	int	getComtLeafPrDown(int) const;
 	int	getComtLeafPrUp(int) const;
-	set<int>::iterator getFirstCore(int) const;
-	set<int>::iterator getLastCore(int) const;
-	set<int>::iterator getFirstComtLink(int) const;
-	set<int>::iterator getLastComtLink(int) const;
+	set<int>::iterator beginCore(int) const;
+	set<int>::iterator endCore(int) const;
+	set<int>::iterator beginComtLink(int) const;
+	set<int>::iterator endComtLink(int) const;
 
 	// modifiers
 	void	setNodeName(int, string&);
@@ -102,8 +102,8 @@ public:
 	void	setIfFirstLink(int,int,int);
 	void	setIfLastLink(int,int,int);
 	// links
-	void	setLocLnkL(int,int);
-	void	setLocLnkR(int,int);
+	void	setLocLinkL(int,int);
+	void	setLocLinkR(int,int);
 	void	setLinkBitRate(int,int);
 	void	setLinkPktRate(int,int);
 	void	setLinkLength(int,int);
@@ -334,25 +334,25 @@ inline int NetInfo::getIfPktRate(int n, int iface) const {
 	return (validIf(n,iface) ? rtr[n].iface[iface].pktRate : 0);
 }
 
-inline int NetInfo::getLnkL(int lnk) const {
+inline int NetInfo::getLinkL(int lnk) const {
 	return (validLink(lnk) ? netTopo->left(lnk) : 0);
 }
 
-inline int NetInfo::getLnkR(int lnk) const {
+inline int NetInfo::getLinkR(int lnk) const {
 	return (validLink(lnk) ? netTopo->right(lnk) : 0);
 }
 
-inline int NetInfo::getLocLnk(int lnk, int n) const {
+inline int NetInfo::getLocLink(int lnk, int n) const {
 	return (!validLink(lnk) ? 0 :
-		(n == netTopo->left(lnk) ? getLocLnkL(lnk) :
-		(n == netTopo->right(lnk) ? getLocLnkR(lnk) : 0)));
+		(n == netTopo->left(lnk) ? getLocLinkL(lnk) :
+		(n == netTopo->right(lnk) ? getLocLinkR(lnk) : 0)));
 }
 
-inline int NetInfo::getLocLnkL(int lnk) const {
+inline int NetInfo::getLocLinkL(int lnk) const {
 	return (validLink(lnk) ? link[lnk].leftLnum : 0);
 }
 
-inline int NetInfo::getLocLnkR(int lnk) const {
+inline int NetInfo::getLocLinkR(int lnk) const {
 	return (validLink(lnk) ? link[lnk].rightLnum : 0);
 }
 
@@ -373,7 +373,7 @@ inline int NetInfo::getLinkNum(int n) const {
 }
 
 inline int NetInfo::getLinkNum(int n, int llnk) const {
-	return (isRouter(n) ? locLnk2lnk->lookup(ll2l_key(n,llnk)) : 0);
+	return (isRouter(n) ? locLnk2lnk->lookup(ll2l_key(n,llnk))/2 : 0);
 }
 
 inline int NetInfo::lookupComtree(int comt) const {
@@ -420,22 +420,24 @@ inline int NetInfo::getComtLeafPrUp(int c) const {
 	return (validComtIndex(c) ? comtree[c].leafPktRateUp : 0);
 }
 
-inline set<int>::iterator NetInfo::getFirstCore(int c) const {
-	if (validComtIndex(c)) return comtree[c].coreSet->begin();
-	else return 0;
-	//return (validComtIndex(c) ? comtree[c].coreSet->begin() : 0);
+inline set<int>::iterator NetInfo::beginCore(int c) const {
+	return (validComtIndex(c) ? comtree[c].coreSet->begin() :
+				      (set<int>::iterator) 0);
 }
 
-inline set<int>::iterator NetInfo::getLastCore(int c) const {
-	return (validComtIndex(c) ? comtree[c].coreSet->end() : 0);
+inline set<int>::iterator NetInfo::endCore(int c) const {
+	return (validComtIndex(c) ? comtree[c].coreSet->end() : 
+				    (set<int>::iterator) 0);
 }
 
-inline set<int>::iterator NetInfo::getFirstComtLink(int c) const {
-	return (validComtIndex(c) ? comtree[c].linkSet->begin() : 0);
+inline set<int>::iterator NetInfo::beginComtLink(int c) const {
+	return (validComtIndex(c) ? comtree[c].linkSet->begin() :
+				      (set<int>::iterator) 0);
 }
 
-inline set<int>::iterator NetInfo::getLastComtLink(int c) const {
-	return (validComtIndex(c) ? comtree[c].linkSet->end() : 0);
+inline set<int>::iterator NetInfo::endComtLink(int c) const {
+	return (validComtIndex(c) ? comtree[c].linkSet->end() :
+				      (set<int>::iterator) 0);
 }
 
 inline void NetInfo::setNodeName(int n, string& nam) {
@@ -512,12 +514,12 @@ inline void NetInfo::setIfLastLink(int n, int iface, int lnk) {
 	return;
 }
 
-inline void NetInfo::setLocLnkL(int lnk, int loc) {
+inline void NetInfo::setLocLinkL(int lnk, int loc) {
 	if (validLink(lnk)) link[lnk].leftLnum = loc;
 	return;
 }
 
-inline void NetInfo::setLocLnkR(int lnk, int loc) {
+inline void NetInfo::setLocLinkR(int lnk, int loc) {
 	if (validLink(lnk)) link[lnk].rightLnum = loc;
 	return;
 }
