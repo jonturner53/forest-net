@@ -125,7 +125,20 @@ void UiList::add2string(string& s) const {
 	s += "]";
 }
 
+/** Create a string representation of a given string.
+ *
+ *  @param s is string used to return value
+ */
+string& UiList::toString(string& s) const {
+	s.clear(); s += "[ ";
+	for (item i = first(); i != 0; i = next(i)) {
+		Misc::addNode2string(s,i,n()); s += " ";
+	}
+	s += "]";
+	return s;
+}
+
 /** Write the contents of the list. */
 void UiList::write(ostream& os) {
-	string s; add2string(s); os << s;
+	string s; os << toString(s);
 }
