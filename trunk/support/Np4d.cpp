@@ -28,6 +28,19 @@ void Np4d::addIp2string(string& s, ipa_t ipa) {
 	s += inet_ntoa(ipa_struct);
 }
 
+/** Create a string representation of an IP address.
+ *  @param ipa is the IP address in host byte order
+ *  @param s is a string in which the result is returned
+ *  @return a reference to the modified string
+ */
+string& Np4d::ip2string(ipa_t ipa, string& s) {
+	// ugly code thanks to inet_ntoa's dreadful interface
+	struct in_addr ipa_struct;
+	ipa_struct.s_addr = htonl(ipa);
+	s = inet_ntoa(ipa_struct);
+	return s;
+}
+
 /** If next thing on the current line is an ip address,
  *  return it in ipa and return true. Otherwise, return false.
  *  The expected format is dotted-decimal.

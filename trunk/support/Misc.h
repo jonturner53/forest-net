@@ -25,6 +25,8 @@ public:
 	static bool readWord(istream&, string&);
 	static void addNum2string(string&, int);
 	static void addNum2string(string&, uint64_t);
+	static string& num2string(int, string&);
+	static string& num2string(uint64_t, string&);
 
 	// functions to facilitate use of single character 
 	// node names in small data structures
@@ -35,9 +37,9 @@ public:
 	static bool readAlpha(istream&, int&);	
 	static void writeAlpha(ostream&, int);
 	static void addNode2string(string&, int, int);
+	static string& node2string(int, int, string&);
 
 	// other stuff
-	static string& toString(int, string&);
 	static bool prefix(string, string);	
 	static void genPerm(int, int*);	
 	static int strnlen(char*, int);
@@ -74,12 +76,17 @@ inline void Misc::addNum2string(string& s, uint64_t i) {
         s += buf;
 }
 
-/** Create a string representation of an integer.
- *  @param s points to the string to be extended
- *  @param i is the integer whose value is to be appended to *s
+/** Create a string representation of a numeric value.
+ *  @param i is the integer whose value to be converted to a string
+ *  @param s is the string in which the value is returned
+ *  @return a reference to the string
  */
-inline string& Misc::toString(int i, string& s) {
+inline string& Misc::num2string(int i, string& s) {
         char buf[16]; sprintf(buf,"%d",i); s = buf;
+	return s;
+}
+inline string& Misc::num2string(uint64_t i, string& s) {
+        char buf[16]; sprintf(buf,"%lld",i); s = buf;
 	return s;
 }
 
@@ -96,5 +103,18 @@ inline void Misc::addNode2string(string& s, int u, int n) {
         else addNum2string(s,u);
 }
 
+/** Create a string representation of a data structure node.
+ *  @param u is the node
+ *  @param n is the number of nodes in the data structure;
+ *  if 1 <= n <= 26, a single lower case character is returned
+ *  as the string; otherwise, the numeric value of u is added
+ *  @param s points to the string to be in which the value is returned
+ *  @param return a reference to the modified string
+ */
+inline string& Misc::node2string(int u, int n, string& s) {
+        if (1 <= n && n <= 26) s = nam(u);
+        else num2string(u,s);
+	return s;
+}
 
 #endif
