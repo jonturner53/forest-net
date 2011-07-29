@@ -105,12 +105,14 @@ public:
 	static fAdr_t forestAdr(int,int);
 	static fAdr_t forestAdr(const char*);
 	static void addFadr2string(string&, fAdr_t);
+	static string& fAdr2string(fAdr_t, string&);
 	static bool readForestAdr(istream&, fAdr_t&);
 	static void writeForestAdr(ostream&, fAdr_t);
 
 	/** miscellaneous */
 	static int truPktLeng(int);
 	static void addNodeType2string(string&, ntyp_t);
+	static string& nodeType2string(ntyp_t, string&);
 	static ntyp_t getNodeType(string&);
 };
 
@@ -185,6 +187,20 @@ inline void Forest::addFadr2string(string& s, fAdr_t fAdr) {
 	if (mcastAdr(fAdr)) sprintf(fas, "%d", fAdr);
 	else sprintf(fas, "%d.%d", zipCode(fAdr), localAdr(fAdr));
 	s += fas;
+}
+
+/** Create a string representation of a forest address.
+ *  
+ *  @param fAdr is the forest address which is to be appended to the end of s
+ *  @param s is the string to be extended
+ *  @return a reference to the modified string
+ */
+inline string& Forest::fAdr2string(fAdr_t fAdr, string& s) {
+	char fas[16];
+	if (mcastAdr(fAdr)) sprintf(fas, "%d", fAdr);
+	else sprintf(fas, "%d.%d", zipCode(fAdr), localAdr(fAdr));
+	s = fas;
+	return s;
 }
 
 /** Compute link packet length for a given forest packet length.

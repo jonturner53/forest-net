@@ -11,7 +11,8 @@
 
 #include "stdinc.h"
 #include "Misc.h"
-#include "clist.h"
+#include "Clist.h"
+#include "UiSetPair.h"
 
 typedef int vertex;
 typedef int edge;
@@ -65,12 +66,10 @@ protected:
 	vertex	l;			///< l is left endpoint of edge
 	vertex	r;			///< r is right endpoint of edge
 	int	len;			///< length of the edge
-	} *edges;
+	};
+	EdgeInfo *evec;			///< array of edge structures
 
-	Clist   *activeFree;		///< holds list of in-use edges
-					///< and list of free edges
-	edge	firstEdge;		///< first edge in active list
-	edge	freeEdge;		///< first edge in free edge list
+	UiSetPair *edges;		///< sets of in-use and free edges
 
 	Clist	*adjLists;		///< collection of edge adjacency lists
 					///< stores edge e as both 2e and 2e+1
@@ -89,19 +88,14 @@ inline int Graph::m() const { return M; }
 /** Get the first edge in the overall list of edges.
  *  @return the first edge in the list
  */
-inline edge Graph::first() const { return firstEdge; }
+inline edge Graph::first() const { return edges->firstIn(); }
 
 /** Get the next edge in the overall list of edges.
  *  @param e is the edge whose successor is requested
  *  @return the next edge in the list, or 0 if e is not in the list
  *  or it has no successor
  */
-inline edge Graph::next(edge e) const {
-	assert(1 <= e && e <= maxEdge);
-	if (edges[e].l == 0) return 0;
-	edge f = activeFree->suc(e);
-	return (f == firstEdge ? 0 : f);
-}
+inline edge Graph::next(edge e) const { return edges->nextIn(e); }
 
 /** Get the first edge incident to a vertex.
  *  @param v is the the vertex of interest
@@ -120,8 +114,8 @@ inline edge Graph::first(vertex v) const {
  */
 inline edge Graph::next(vertex v, edge e) const {
 	assert(1 <= v && v <= N && 1 <= e && e <= maxEdge);
-	if (v != edges[e].l && v != edges[e].r) return 0;
-	int ee = (v == edges[e].l ? 2*e : 2*e+1);
+	if (v != evec[e].l && v != evec[e].r) return 0;
+	int ee = (v == evec[e].l ? 2*e : 2*e+1);
 	int ff = adjLists->suc(ee);
 	return (fe[v] == ff ? 0 : ff/2);
 }
@@ -132,7 +126,7 @@ inline edge Graph::next(vertex v, edge e) const {
  */
 inline vertex Graph::left(edge e) const {
 	assert(0 <= e && e <= maxEdge);
-	return edges[e].l;
+	return evec[e].l;
 }
 
 /** Get the right endpoint of an edge.
@@ -141,7 +135,7 @@ inline vertex Graph::left(edge e) const {
  */
 inline vertex Graph::right(edge e) const {
 	assert(0 <= e && e <= maxEdge);
-	return (edges[e].l == 0 ? 0 : edges[e].r);
+	return (evec[e].l == 0 ? 0 : evec[e].r);
 }
 
 /** Get the other endpoint of an edge.
@@ -153,9 +147,9 @@ inline vertex Graph::right(edge e) const {
 // Return other endpoint of e.
 inline vertex Graph::mate(vertex v, edge e) const {
 	assert(1 <= v && v <= N && 1 <= e && e <= maxEdge);
-	return (edges[e].l == 0 ?
-		0 : (v == edges[e].l ?
-		     edges[e].r : (v == edges[e].r ? edges[e].l : 0)));
+	return (evec[e].l == 0 ?
+		0 : (v == evec[e].l ?
+		     evec[e].r : (v == evec[e].r ? evec[e].l : 0)));
 }
 
 /** Get the length of an edge.
@@ -164,7 +158,7 @@ inline vertex Graph::mate(vertex v, edge e) const {
  */
 inline int Graph::length(edge e) const {
 	assert(0 <= e && e <= maxEdge);
-	return (edges[e].l == 0 ? 0 : edges[e].len);
+	return (evec[e].l == 0 ? 0 : evec[e].len);
 }
 
 /** Set the length of an edge.
@@ -173,7 +167,7 @@ inline int Graph::length(edge e) const {
  */
 inline void Graph::setLength(edge e, int lng) {
 	assert(0 <= e && e <= maxEdge);
-	edges[e].len = lng;
+	evec[e].len = lng;
 }
 
 #endif

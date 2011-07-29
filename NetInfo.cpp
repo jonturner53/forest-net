@@ -17,32 +17,27 @@ NetInfo::NetInfo(int maxNode1, int maxLink1,
 	netTopo = new Graph(maxNode, maxLink);
 
 	rtr = new RtrNodeInfo[maxRtr+1];
-	freeRouters = new UiList(maxRtr);
-	for (int i = 1; i <= maxRtr; i++) freeRouters->addLast(i);
-	routers = new list<int>();
+	routers = new UiSetPair(maxRtr);
 
 	leaf = new LeafNodeInfo[maxLeaf+1];
-	freeLeaves = new UiList(maxLeaf);
-	for (int i = 1; i <= maxLeaf; i++) freeLeaves->addLast(i);
+	leaves = new UiSetPair(maxLeaf);
 	nodeNumMap = new map<string,int>;
-	controllers = new list<int>();
+	controllers = new set<int>();
 
 	link = new LinkInfo[maxLink+1];
 	locLnk2lnk = new UiHashTbl(2*min(maxLink,maxRtr*(maxRtr-1)/2)+1);
 
 	comtree = new ComtreeInfo[maxComtree+1];
-	comtreeMap = new UiHashTbl(maxComtree);
-	freeComtIndices = new UiList(maxComtree);
-	for (int i = 1; i <= maxComtree; i++) freeComtIndices->addLast(i);
+	comtreeMap = new IdSet(maxComtree);
 }
 
 NetInfo::~NetInfo() {
 	delete netTopo;
-	delete [] rtr; delete freeRouters; delete routers;
-	delete [] leaf; delete freeLeaves; delete nodeNumMap;
-	delete controllers;
+	delete [] rtr; delete routers;
+	delete [] leaf; delete leaves; delete controllers;
+	delete nodeNumMap;
 	delete [] link; delete locLnk2lnk;
-	delete [] comtree; delete comtreeMap; delete freeComtIndices;
+	delete [] comtree; delete comtreeMap;
 }
 
 /* Exampe of NetInfo input file format
@@ -110,7 +105,7 @@ bool NetInfo::read(istream& in) {
 	LinkInfo cLink;		// hods data for link being parsed
 	IfInfo iface[Forest::MAXINTF+1]; // holds data for router interfaces
 	ComtreeInfo cComt;	// holds data comtree being parsed
-	cComt.coreSet = cComt.linkSet = 0;
+	cComt.coreSet = 0; cComt.linkMap = 0;
 
 	int rtrNum = 1;		// rtrNum = i for i-th router in file
 	int ifNum = 1;		// interface number for current interface
@@ -233,13 +228,13 @@ bool NetInfo::read(istream& in) {
 					return false;
 				}
 				// get an unused router number
-				int r = freeRouters->first();
+				int r = routers->firstOut();
 				if (r == 0) {
-					cerr << "NetInfo::read: too many "
-						"routers" << endl;
+					cerr << "NetInfo::read: no unused "
+						"router numbers" << endl;
 					return false;
 				}
-				freeRouters->removeFirst();
+				routers->swap(r);
 				(*nodeNumMap)[cRtr.name] = r;
 
 				rtr[r].name = cRtr.name;
@@ -255,7 +250,6 @@ bool NetInfo::read(istream& in) {
 					rtr[r].iface[i] = iface[i];
 				}
 				maxIfNum = 0;
-				routers->push_back(r);
 				rtrNum++;
 				context = ROUTER_SEC; break;
 			}
@@ -473,13 +467,13 @@ bool NetInfo::read(istream& in) {
 					return false;
 				}
 				// get unused leaf number
-				int ln = freeLeaves->first();
+				int ln = leaves->firstOut();
 				if (ln == 0) {
-					cerr << "NetInfo::read: too many "
-						"leaves" << endl;
+					cerr << "NetInfo::read: no unused "
+						"leaf numbers" << endl;
 					return false;
 				}
-				freeLeaves->removeFirst();
+				leaves->swap(ln);
 				(*nodeNumMap)[cLeaf.name] = ln + maxRtr;
 				leaf[ln].name = cLeaf.name;
 				leaf[ln].nType = cLeaf.nType;
@@ -488,7 +482,7 @@ bool NetInfo::read(istream& in) {
 				leaf[ln].latitude = cLeaf.latitude;
 				leaf[ln].longitude = cLeaf.longitude;
 				if (cLeaf.nType == CONTROLLER)
-					controllers->push_back(leafNum+maxRtr);
+					controllers->insert(leafNum);
 				leafNum++;
 				context = LEAF_SEC; break;
 			}
@@ -762,7 +756,7 @@ bool NetInfo::read(istream& in) {
 			cComt.leafBitRateDown = 0; cComt.leafBitRateUp = 0;
 			cComt.leafPktRateDown = cComt.leafPktRateUp = 0;
 			cComt.coreSet = new set<int>;
-			cComt.linkSet = new set<int>;
+			cComt.linkMap = new map<int,RateSpec>;
 			context = COMTREE_CTXT;
 			// falling through to COMTREE_CTXT context
 		case COMTREE_CTXT: {
@@ -846,30 +840,29 @@ bool NetInfo::read(istream& in) {
 				}
 				
 				// get unused comtree index 
-				int comt = freeComtIndices->first();
-				if (comt == 0) {
+				int i = comtreeMap->addId(cComt.comtreeNum);
+				if (i == 0) {
 					cerr << "NetInfo::read: too many "
 						"comtrees" << endl;
 					return false;
 				}
-				freeComtIndices->removeFirst();
-				comtree[comt].comtreeNum = cComt.comtreeNum;
-				comtree[comt].root = cComt.root;
-				comtree[comt].bitRateDown = cComt.bitRateDown;
-				comtree[comt].bitRateUp = cComt.bitRateUp;
-				comtree[comt].pktRateDown = cComt.pktRateDown;
-				comtree[comt].pktRateUp = cComt.pktRateUp;
-				comtree[comt].leafBitRateDown =
+				comtree[i].comtreeNum = cComt.comtreeNum;
+				comtree[i].root = cComt.root;
+				comtree[i].bitRateDown = cComt.bitRateDown;
+				comtree[i].bitRateUp = cComt.bitRateUp;
+				comtree[i].pktRateDown = cComt.pktRateDown;
+				comtree[i].pktRateUp = cComt.pktRateUp;
+				comtree[i].leafBitRateDown =
 							cComt.leafBitRateDown;
-				comtree[comt].leafBitRateUp =
+				comtree[i].leafBitRateUp =
 							cComt.leafBitRateUp;
-				comtree[comt].leafPktRateDown =
+				comtree[i].leafPktRateDown =
 							cComt.leafPktRateDown;
-				comtree[comt].leafPktRateUp =
+				comtree[i].leafPktRateUp =
 							cComt.leafPktRateUp;
-				comtree[comt].coreSet = cComt.coreSet;
-				comtree[comt].linkSet = cComt.linkSet;
-				cComt.coreSet = cComt.linkSet = 0;
+				comtree[i].coreSet = cComt.coreSet;
+				comtree[i].linkMap = cComt.linkMap;
+				cComt.coreSet = 0; cComt.linkMap = 0;
 				comtNum++;
 				context = COMTREE_SEC; break;
 			}
@@ -1089,9 +1082,6 @@ bool NetInfo::read(istream& in) {
 						    getLinkNum(left,leftNum));
 				lr = (isLeaf(right) ? getLinkNum(right) :
 						    getLinkNum(right,rightNum));
-
-
-
 				if (ll != lr ) {
 					cerr << "NetInfo::read: reference to "
 					     << "a non-existent link in "
@@ -1099,7 +1089,13 @@ bool NetInfo::read(istream& in) {
 					     << endl;
 					return false;
 				}
-				cComt.linkSet->insert(ll);
+				pair<int,RateSpec> mv;
+        			mv.first = ll;
+        			mv.second.bitRateLeft = 0;
+				mv.second.bitRateRight = 0;
+        			mv.second.pktRateLeft = 0;
+				mv.second.pktRateRight = 0;
+				cComt.linkMap->insert(mv);
 			} else {
 				cerr << "NetInfo::read: syntax error while "
 				     << "reading comtree "
@@ -1113,31 +1109,28 @@ bool NetInfo::read(istream& in) {
 		}
 	}
 	if (cComt.coreSet != 0) delete cComt.coreSet;
-	if (cComt.linkSet != 0) delete cComt.linkSet;
+	if (cComt.linkMap != 0) delete cComt.linkMap;
 	return in.eof() && context == TOP;
 }
 
 void NetInfo::write(ostream& out) {
+	string s1, s2, s3; // temp strings used with xx2string methods below
 	out << "Routers\n\n";
-	list<int>::iterator rp = routers->begin();
-	while (rp != routers->end()) {
-		int r = *rp; rp++;
-		ntyp_t nt = getNodeType(r);
-		string ntString; Forest::addNodeType2string(ntString, nt);
+	for (int r = firstRouter(); r != 0; r = nextRouter(r)) {
 		out << "name=" << getNodeName(r) << " "
-		    << "type=" << ntString;
-		out  << " fAdr="; Forest::writeForestAdr(out,getNodeAdr(r));
-		out << " clientAdrRange=(";
-		Forest::writeForestAdr(out,getFirstCliAdr(r)); out << "-";
-		Forest::writeForestAdr(out,getLastCliAdr(r)); out << ")";
+		    << "type=" << Forest::nodeType2string(getNodeType(r),s1)
+		    << " fAdr=" << Forest::fAdr2string(getNodeAdr(r),s2);
+		out << " clientAdrRange=("
+		    << Forest::fAdr2string(getFirstCliAdr(r),s1) << "-"
+		    << Forest::fAdr2string(getLastCliAdr(r),s2) << ")";
 		out << "\n\tlocation=(" << getNodeLat(r) << ","
 		    		     << getNodeLong(r) << ")\n";
 		out << "interfaces\n"
 		    << "# iface#   ipAdr  linkRange  bitRate  pktRate\n";
 		for (int i = 1; i <= getNumIf(r); i++) {
 			if (!validIf(r,i)) continue;
-			out << "   " << i << "  ";
-			Np4d::writeIpAdr(out, getIfIpAdr(r,i)); 
+			out << "   " << i << "  "
+			    << Np4d::ip2string(getIfIpAdr(r,i),s1); 
 			if (getIfFirstLink(r,i) == getIfLastLink(r,i)) 
 				out << " " << getIfFirstLink(r,i) << " ";
 			else
@@ -1150,35 +1143,28 @@ void NetInfo::write(ostream& out) {
 	}
 	out << ";\n\n";
 	out << "LeafNodes\n\n";
-	list<int>::iterator cp = controllers->begin();
 	// print controllers first
-	while (cp != controllers->end()) {
-		int c = *cp; cp++;
-		ntyp_t nt = getNodeType(c);
-		string ntString; Forest::addNodeType2string(ntString, nt);
+	for (int c = firstController(); c != 0; c = nextController(c)) {
 		out << "name=" << getNodeName(c) << " "
-		    << "type=" << ntString << " "
-		    << "ipAdr=";  Np4d::writeIpAdr(out,getLeafIpAdr(c));
-		out  << " fAdr="; Forest::writeForestAdr(out,getNodeAdr(c));
+		    << "type=" << Forest::nodeType2string(getNodeType(c),s1)
+		    << " ipAdr=" << Np4d::ip2string(getLeafIpAdr(c),s2) 
+		    << " fAdr=" << Forest::fAdr2string(getNodeAdr(c),s3);
 		out << "\n\tlocation=(" << getNodeLat(c) << ","
 		    		     << getNodeLong(c) << ");\n";
 	}
 	// then any other leaf nodes
-	for (int c = maxRtr+1; c <= netTopo->n(); c++) {
-		if (!isLeaf(c) || getNodeType(c) == CONTROLLER) continue;
-		ntyp_t nt = getNodeType(c);
-		string ntString; Forest::addNodeType2string(ntString, nt);
+	for (int c = firstLeaf(); c != 0; c = nextLeaf(c)) {
+		if (getNodeType(c) == CONTROLLER) continue;
 		out << "name=" << getNodeName(c) << " "
-		    << "type=" << ntString << " "
-		    << "ipAdr=";  Np4d::writeIpAdr(out,getLeafIpAdr(c));
-		out  << " fAdr="; Forest::writeForestAdr(out,getNodeAdr(c));
+		    << "type=" << Forest::nodeType2string(getNodeType(c),s1)
+		    << " ipAdr=" << Np4d::ip2string(getLeafIpAdr(c),s2) 
+		    << " fAdr=" << Forest::fAdr2string(getNodeAdr(c),s3);
 		out << "\n\tlocation=(" << getNodeLat(c) << ","
 		    		     << getNodeLong(c) << ");\n";
 	}
 	out << ";\n\n";
 	out << "Links\n\n";
-	for (int lnk = 1; lnk <= netTopo->m(); lnk++) {
-		if (!validLink(lnk)) continue;
+	for (int lnk = firstLink(); lnk != 0; lnk = nextLink(lnk)) {
 		int ln = getLinkL(lnk); int rn = getLinkR(lnk);
 		out << "link=(" << getNodeName(ln);
 		if (isRouter(ln)) out << "." << getLocLinkL(lnk);
@@ -1191,36 +1177,36 @@ void NetInfo::write(ostream& out) {
 	}
 	out << ";\n\n";
 	out << "Comtrees\n\n";
-	for (int comt = 1; comt <= maxComtree; comt++) {
-		if (!validComtIndex(comt)) continue;
+	for (int ctx = firstComtIndex(); ctx != 0; ctx = nextComtIndex(ctx)) {
+		if (!validComtIndex(ctx)) continue;
 
-		out << "comtree=" << getComtree(comt)
-		    << " root=" << getNodeName(getComtRoot(comt))
-		    << "\nbitRateDown=" << getComtBrDown(comt)
-		    << " bitRateUp=" << getComtBrUp(comt)
-		    << " pktRateDown=" << getComtPrDown(comt)
-		    << " pktRateUp=" << getComtPrUp(comt)
-		    << "\nleafBitRateDown=" << getComtLeafBrDown(comt)
-		    << " leafBitRateUp=" << getComtLeafBrUp(comt)
-		    << " leafPktRateDown=" << getComtLeafPrDown(comt)
-		    << " leafPktRateUp=" << getComtLeafPrUp(comt);
+		out << "comtree=" << getComtree(ctx)
+		    << " root=" << getNodeName(getComtRoot(ctx))
+		    << "\nbitRateDown=" << getComtBrDown(ctx)
+		    << " bitRateUp=" << getComtBrUp(ctx)
+		    << " pktRateDown=" << getComtPrDown(ctx)
+		    << " pktRateUp=" << getComtPrUp(ctx)
+		    << "\nleafBitRateDown=" << getComtLeafBrDown(ctx)
+		    << " leafBitRateUp=" << getComtLeafBrUp(ctx)
+		    << " leafPktRateDown=" << getComtLeafPrDown(ctx)
+		    << " leafPktRateUp=" << getComtLeafPrUp(ctx);
 
 		// iterate through core nodes and print
 		out << "\n";
-		set<int>::iterator cp;
-		for (cp = beginCore(comt); cp != endCore(comt); cp++) {
-			if (*cp != getComtRoot(comt)) 
-				out << "core=" << getNodeName(*cp) << " ";
+		for (int c = firstCore(ctx); c != 0; c = nextCore(c,ctx)) {
+			if (c != getComtRoot(ctx)) 
+				out << "core=" << getNodeName(c) << " ";
 		}
 		out << "\n";
 		// iterate through links and print
-		set<int>::iterator lp;
-		for (lp = beginComtLink(comt); lp != endComtLink(comt); lp++) {
-			int left = getLinkL(*lp); int right = getLinkR(*lp);
+		for (int lnk = firstComtLink(ctx); lnk != 0;
+		         lnk = nextComtLink(lnk,ctx)) {
+
+			int left = getLinkL(lnk); int right = getLinkR(lnk);
 			out << "link=(" << getNodeName(left);
-			if (isRouter(left)) out << "." << getLocLinkL(*lp);
+			if (isRouter(left)) out << "." << getLocLinkL(lnk);
 			out << "," << getNodeName(right);
-			if (isRouter(right)) out << "." << getLocLinkR(*lp);
+			if (isRouter(right)) out << "." << getLocLinkR(lnk);
 			out << ") ";
 		}
 		out << "\n;\n";
