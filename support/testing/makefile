@@ -20,5 +20,8 @@ TestClist: TestClist.o ../lib
 TestGraph: TestGraph.o ../lib
 	${CXX} ${CXXFLAGS} $< ../lib -o $@
 
+TestUiSetPair: TestUiSetPair.o ../lib
+	${CXX} ${CXXFLAGS} $< ../lib -o $@
+
 clean :
 	rm -f *.o

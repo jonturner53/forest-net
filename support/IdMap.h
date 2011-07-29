@@ -13,10 +13,10 @@
 #include "stdinc.h"
 
 #include "Misc.h"
-#include "UiList.h"
-#include "UiDlist.h"
+#include "UiSetPair.h"
 #include "UiHashTbl.h"
 
+Re-name: IdMap
 
 /** Data structure that assigns small integer identifiers to large keys.
  *  This is useful in contexts where the "natural identifiers"
@@ -35,63 +35,73 @@ public:
 	int	firstId() const; 	
 	int	lastId() const; 	
 	int	nextId(int) const; 	
+	int	getId(uint64_t) const; 		
+	uint64_t getKey(int) const;
 
 	// define/retrieve/remove (key,id) pairs
-	int	getId(uint64_t); 		
-	uint64_t getKey(int);
+	int	addId(uint64_t); 
+change to addMap and add version that specifies both values
 	void	releaseId(uint64_t); 
 	void	clear(); 	
 
 	// predicates
-	bool	isMapped(uint64_t);
-	bool	isAssigned(int);
+	bool	isMapped(uint64_t) const;
+	bool	isAssigned(int) const;
 
 	// produce readable IdSets
-	void	add2string(string&) const;
+	string&	toString(string&) const;
 	void	write(ostream&) const;		
 private:
 	static const int MAXID = (1 << 20)-1;  ///< largest possible identifier
 	int n;				///< largest identifier in this set
 	UiHashTbl *ht;			///< hash table to compute mapping
-	UiList	*free;			///< available identifiers
-	UiDlist *idList;		///< in-use identifiers
+	UiSetPair *ids;			///< in-use and free ids
 };
 
 /** Get the first assigned identifier, in some arbitrary order.
  *  @return number of the first identfier
  */
-inline int IdSet::firstId() const { return idList->first(); }
+inline int IdSet::firstId() const { return ids->firstIn(); }
 
 /** Get the last assigned identifier, in some arbitrary order.
  *  @return number of the last identfier
  */
-inline int IdSet::lastId() const { return idList->last(); }
+inline int IdSet::lastId() const { return ids->lastIn(); }
 
 /** Get the next assigned identifier, in some arbitrary order.
  *  @param id is an identifer in the set
  *  @return number of the next identfier
  */
-inline int IdSet::nextId(int id) const { return idList->next(id); }
+inline int IdSet::nextId(int id) const { return ids->nextIn(id); }
 
 /** Determine if a given key has been mapped to an identfier.
  *  @param key is the key to be checked
  *  @return true if the key has been mapped, else false
  */
-inline bool IdSet::isMapped(uint64_t key) { return (ht->lookup(key) != 0); }
+inline bool IdSet::isMapped(uint64_t key) const { return (ht->lookup(key) != 0); }
 
 /** Determine if a given identifier has been assigned to a key.
  *  @param id is the identifier to be checked
  *  @return true if the key has been mapped, else false
  */
-inline bool IdSet::isAssigned(int id) {
-	return (1 <= id && id <= n && idList->member(id));
+inline bool IdSet::isAssigned(int id) const {
+	return (1 <= id && id <= n && ids->isIn(id));
+}
+
+/** Get the id for a given key.
+ *  @param key is the key for which the id is required
+ *  @return the corresponding id or 0 if the key is not
+ *  mapped or the operation fails
+ */
+inline int IdSet::getId(uint64_t key) const {
+        return ht->lookup(key);
 }
 
 /** Get the key that was mapped to the given identifier
  *  @param id is the identifier whose key is to be returned
  *  @return the key that maps to id, or 0 if there is none
  */
-inline uint64_t IdSet::getKey(int id) {
+inline uint64_t IdSet::getKey(int id) const {
 	return (isAssigned(id) ? ht->getKey(id) : 0); 
 }
 
