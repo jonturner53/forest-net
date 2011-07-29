@@ -14,8 +14,16 @@
 #include <set>
 #include "CommonDefs.h"
 #include "UiHashTbl.h"
-#include "UiDlist.h"
+#include "IdSet.h"
+#include "UiSetPair.h"
 #include "Graph.h"
+
+struct RateSpec {	///< used in linkMap of ComtreeInfo
+	int	bitRateLeft;
+	int	bitRateRight;
+	int	pktRateLeft;
+	int	pktRateRight;
+};
 
 /** Maintains information about a Forest network.
  */
@@ -42,21 +50,33 @@ public:
 	fAdr_t	getNodeAdr(int) const;
 	double	getNodeLat(int) const;
 	double	getNodeLong(int) const;
+	int	firstNode() const;
+	int	nextNode(int) const;
+	int	firstLinkAt(int) const;
+	int	nextLinkAt(int,int) const;
 	// leaf only
 	ipa_t	getLeafIpAdr(int) const;
+	int	firstLeaf() const;
+	int	nextLeaf(int) const;
 	// router only
 	int	getNumIf(int) const;
 	fAdr_t	getFirstCliAdr(int) const;
 	fAdr_t	getLastCliAdr(int) const;
+	int	firstRouter() const;
+	int	nextRouter(int) const;
 	// router interfaces
 	ipa_t	getIfIpAdr(int,int) const;
 	int	getIfBitRate(int,int) const;
 	int	getIfPktRate(int,int) const;
 	int	getIfFirstLink(int,int) const;
 	int	getIfLastLink(int,int) const;
+	// controllers only
+	int	firstController() const;
+	int	nextController(int) const;
 	// link attributes
 	int	getLinkL(int) const;
 	int	getLinkR(int) const;
+	int	getPeer(int) const;
 	int	getLocLink(int,int) const;
 	int	getLocLinkL(int) const;
 	int	getLocLinkR(int) const;
@@ -65,6 +85,8 @@ public:
 	int	getLinkLength(int) const;
 	int	getLinkNum(int) const;
 	int	getLinkNum(int,int) const;
+	int	firstLink() const;
+	int	nextLink(int) const;
 	// comtree attributes
 	int	lookupComtree(int) const;
 	int	getComtree(int) const;
@@ -77,10 +99,12 @@ public:
 	int	getComtLeafBrUp(int) const;
 	int	getComtLeafPrDown(int) const;
 	int	getComtLeafPrUp(int) const;
-	set<int>::iterator beginCore(int) const;
-	set<int>::iterator endCore(int) const;
-	set<int>::iterator beginComtLink(int) const;
-	set<int>::iterator endComtLink(int) const;
+	int	firstCore(int) const;
+	int	nextCore(int, int) const;
+	int	firstComtLink(int) const;
+	int	nextComtLink(int,int) const;
+	int	firstComtIndex() const;
+	int	nextComtIndex(int) const;
 
 	// modifiers
 	void	setNodeName(int, string&);
@@ -159,7 +183,8 @@ private:
 	int	longitude;	///< latitude of leaf (in micro-degrees, + or -)
 	};
 	LeafNodeInfo *leaf;
-	UiList	*freeLeaves;	///< unused leaf numbers
+	UiSetPair *leaves;	///< unused leaf numbers
+	set<int> *controllers;	///< set of controllers (by node #)
 
 	static int const UNDEF_LAT = 91;	// invalid latitude
 	static int const UNDEF_LONG = 361;	// invalid longitude
@@ -171,13 +196,13 @@ private:
 	fAdr_t	fAdr;		///< node's forest address
 	int	latitude;	///< latitude of node (in micro-degrees, + or -)
 	int	longitude;	///< latitude of node (in micro-degrees, + or -)
-	fAdr_t	firstCliAdr;	///< router's first assignable forest address
-	fAdr_t  lastCliAdr;	///< router's last assignable forest address
+	fAdr_t	firstCliAdr;	///< router's first assignable client address
+	fAdr_t  lastCliAdr;	///< router's last assignable client address
 	int	numIf;		///< number of interfaces
 	IfInfo	*iface;		///< interface information
 	};
 	RtrNodeInfo *rtr;
-	UiList	*freeRouters;	///< unused router numbers
+	UiSetPair *routers;	///< tracks routers and unused router numbers
 
 	string	tmpBuffer;	///< used to return strings to callers
 
@@ -195,9 +220,6 @@ private:
 	};
 	LinkInfo *link;
 
-	list<int> *routers;	///< list of routers (by node #) in network
-	list<int> *controllers;	///< list of controllers (by node #)
-
 	struct ComtreeInfo {
 	int	comtreeNum;	///< number of comtree
 	int	root;		///< root node of comtree
@@ -210,12 +232,10 @@ private:
 	int	leafPktRateDown;///< downstream packet rate for leaf links
 	int	leafPktRateUp;	///< upstream packet rate for leaf links
 	set<int> *coreSet;	///< set of core nodes in comtree
-	set<int> *linkSet;	///< set of links in comtree
+	map<int,RateSpec> *linkMap; ///< map for links in comtree
 	};
 	ComtreeInfo *comtree;	///< array of comtrees
-	UiList	*freeComtIndices;///< unused indices in table of comtrees
-	UiHashTbl *comtreeMap;	///< maps comtree numbers to indices in array
-	uint64_t comtreeMapKey(int) const; ///< returns key used with comtreeMap
+	IdSet *comtreeMap;	///< maps comtree numbers to indices in array
 };
 
 inline bool NetInfo::validNode(int n) const {
@@ -240,7 +260,7 @@ inline bool NetInfo::validIf(int n, int iface) const {
 }
 
 inline bool NetInfo::validComtree(int comt) const {
-	return comtreeMap->lookup(comtreeMapKey(comt)) != 0;
+	return comtreeMap->isMapped(comt);
 }
 
 inline bool NetInfo::validComtIndex(int i) const {
@@ -254,7 +274,7 @@ inline bool NetInfo::isComtCoreNode(int i, int x) const {
 
 inline bool NetInfo::isComtLink(int i, int lnk) const {
 	return validComtIndex(i) &&
-		comtree[i].linkSet->find(lnk) != comtree[i].linkSet->end();
+		comtree[i].linkMap ->find(lnk) != comtree[i].linkMap->end();
 }
 
 /** Get the name for a given node number.
@@ -314,6 +334,25 @@ inline double NetInfo::getNodeLong(int n) const {
 	return x/1000000;
 }
 
+inline int NetInfo::firstNode() const { return 1; }
+inline int NetInfo::nextNode(int u) const {
+	return (u < netTopo->n() ? u+1 : 0);
+}
+
+inline int NetInfo::firstLeaf() const { return maxRtr + leaves->firstIn(); }
+inline int NetInfo::nextLeaf(int n) const {
+	return (isLeaf(n) ? maxRtr+leaves->nextIn(n-maxRtr) : 0);
+}
+
+inline int NetInfo::firstLink() const { return netTopo->first(); }
+inline int NetInfo::nextLink(int lnk) const { return netTopo->next(lnk); }
+inline int NetInfo::firstLinkAt(int u) const {
+	return netTopo->first(u);
+}
+inline int NetInfo::nextLinkAt(int u, int lnk) const {
+	return netTopo->next(u,lnk);
+}
+
 inline ipa_t NetInfo::getIfIpAdr(int n, int iface) const {
 	return (validIf(n,iface) ? rtr[n].iface[iface].ipAdr : 0);
 }
@@ -336,6 +375,10 @@ inline int NetInfo::getIfPktRate(int n, int iface) const {
 
 inline int NetInfo::getLinkL(int lnk) const {
 	return (validLink(lnk) ? netTopo->left(lnk) : 0);
+}
+
+inline int NetInfo::getPeer(int rtr, int lnk) const {
+	return (validLink(lnk) ? netTopo->mate(rtr,lnk) : 0);
 }
 
 inline int NetInfo::getLinkR(int lnk) const {
@@ -376,8 +419,26 @@ inline int NetInfo::getLinkNum(int n, int llnk) const {
 	return (isRouter(n) ? locLnk2lnk->lookup(ll2l_key(n,llnk))/2 : 0);
 }
 
+inline int NetInfo::firstRouter() const {
+	return routers->firstIn();
+}
+inline int NetInfo::nextRouter(int r) const {
+	return (isRouter(r) ? routers->nextIn(r) : 0);
+}
+
+inline int NetInfo::firstController() const {
+	set<int>::iterator p = controllers->begin();
+	return (p != controllers->end() ? (*p)+maxRtr : 0);
+}
+inline int NetInfo::nextController(int r) const {
+	set<int>::iterator p = controllers->find(r-maxRtr);
+	if (p == controllers->end()) return 0;
+	p++;
+	return (p != controllers->end() ? (*p)+maxRtr : 0);
+}
+
 inline int NetInfo::lookupComtree(int comt) const {
-	return comtreeMap->lookup(comt);
+	return comtreeMap->getId(comt);
 }
 
 inline int NetInfo::getComtree(int c) const {
@@ -420,24 +481,40 @@ inline int NetInfo::getComtLeafPrUp(int c) const {
 	return (validComtIndex(c) ? comtree[c].leafPktRateUp : 0);
 }
 
-inline set<int>::iterator NetInfo::beginCore(int c) const {
-	return (validComtIndex(c) ? comtree[c].coreSet->begin() :
-				      (set<int>::iterator) 0);
+inline int NetInfo::firstCore(int c) const {
+	if (!validComtIndex(c)) return 0;
+	set<int>::iterator p = comtree[c].coreSet->begin();
+	return (p != comtree[c].coreSet->end() ? *p : 0);
 }
 
-inline set<int>::iterator NetInfo::endCore(int c) const {
-	return (validComtIndex(c) ? comtree[c].coreSet->end() : 
-				    (set<int>::iterator) 0);
+inline int NetInfo::nextCore(int r, int c) const {
+	if (!validComtIndex(c)) return 0;
+	set<int>::iterator p = comtree[c].coreSet->find(r);
+	if (p == comtree[c].coreSet->end()) return 0;
+	p++;
+	return (p != comtree[c].coreSet->end() ? *p : 0);
 }
 
-inline set<int>::iterator NetInfo::beginComtLink(int c) const {
-	return (validComtIndex(c) ? comtree[c].linkSet->begin() :
-				      (set<int>::iterator) 0);
+inline int NetInfo::firstComtIndex() const {
+	return comtreeMap->firstId();
 }
 
-inline set<int>::iterator NetInfo::endComtLink(int c) const {
-	return (validComtIndex(c) ? comtree[c].linkSet->end() :
-				      (set<int>::iterator) 0);
+inline int NetInfo::nextComtIndex(int c) const {
+	return comtreeMap->nextId(c);
+}
+
+inline int NetInfo::firstComtLink(int c) const {
+	if (!validComtIndex(c)) return 0;
+	map<int,RateSpec>::iterator p = comtree[c].linkMap->begin();
+	return (p != comtree[c].linkMap->end() ? (*p).first : 0);
+}
+
+inline int NetInfo::nextComtLink(int lnk, int c) const {
+	if (!validComtIndex(c)) return 0;
+	map<int,RateSpec>::iterator p = comtree[c].linkMap->find(lnk);
+	if (p == comtree[c].linkMap->end()) return 0;
+	p++;
+	return (p != comtree[c].linkMap->end() ? (*p).first : 0);
 }
 
 inline void NetInfo::setNodeName(int n, string& nam) {
@@ -538,22 +615,18 @@ inline void NetInfo::setLinkLength(int lnk, int len) {
 	if (validLink(lnk)) netTopo->setLength(lnk,len);
 	return;
 }
+
 inline bool NetInfo::addComtree(int comt) {
-	int i = freeComtIndices->first();
+	int i = comtreeMap->addId(comt);
 	if (i == 0) return false;
-	if (comtreeMap->insert(comtreeMapKey(comt),i)) {
-		comtree[i].comtreeNum = comt;
-		return true;
-	}
-	freeComtIndices->addFirst(i);
-	return false;
+	comtree[i].comtreeNum = comt;
+	return true;
 }
 
 inline bool NetInfo::removeComtree(int i) {
 	if (!validComtIndex(i)) return false;
-	comtreeMap->remove(comtreeMapKey(comtree[i].comtreeNum));
+	comtreeMap->releaseId(comtree[i].comtreeNum);
 	comtree[i].comtreeNum = 0;
-	freeComtIndices->addFirst(i);
 	return true;
 }
 
@@ -625,22 +698,23 @@ inline bool NetInfo::removeComtCoreNode(int i, int n) {
 
 inline bool NetInfo::addComtLink(int i, int lnk) {
 	if (!validComtIndex(i) || !validLink(lnk)) return false;
-	comtree[i].linkSet->insert(lnk);
+	//pair<int,RateSpec> mv = { lnk , { 0, 0, 0, 0 }};
+	pair<int,RateSpec> mv;
+	mv.first = lnk;
+	mv.second.bitRateLeft = mv.second.bitRateRight = 0;
+	mv.second.pktRateLeft = mv.second.pktRateRight = 0;
+	comtree[i].linkMap->insert(mv);
 	return true;
 }
 
 inline bool NetInfo::removeComtLink(int i, int lnk) {
 	if (!validComtIndex(i) || !validLink(lnk)) return false;
-	comtree[i].linkSet->erase(lnk);
+	comtree[i].linkMap->erase(lnk);
 	return true;
 }
 
 inline uint64_t NetInfo::ll2l_key(int n, int llnk) const {
 	return (uint64_t(n) << 32) | (uint64_t(llnk) & 0xffffffff);
-}
-
-inline uint64_t NetInfo::comtreeMapKey(int comtree) const {
-	return (uint64_t(comtree) << 32) | (uint64_t(comtree) & 0xffffffff);
 }
 
 

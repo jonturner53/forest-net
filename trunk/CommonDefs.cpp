@@ -44,6 +44,15 @@ void Forest::addNodeType2string(string& s, ntyp_t nt) {
 	else s += "unknown node type";
 }
 
+string& Forest::nodeType2string(ntyp_t nt, string& s) {
+	if (nt == CLIENT) s = "client";
+	else if (nt == SERVER) s = "server";
+	else if (nt == ROUTER) s = "router";
+	else if (nt == CONTROLLER) s = "controller";
+	else s = "unknown node type";
+	return s;
+}
+
 ntyp_t Forest::getNodeType(string& s) {
 	if (s.compare("client") == 0) return CLIENT;
 	if (s.compare("server") == 0) return SERVER;

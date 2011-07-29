@@ -15,23 +15,17 @@
  */
 Graph::Graph(int N1, int maxEdge1) : N(N1), maxEdge(maxEdge1) {
 	assert(N > 0 && maxEdge > 0);
-	fe = new edge[N+1];
-	edges = new EdgeInfo[maxEdge+1];
-	activeFree = new Clist(maxEdge);
-	adjLists = new Clist(2*maxEdge+1);
-
-	for (vertex u = 1; u <= N; u++) fe[u] = 0;
-	for (edge e = 1; e <= maxEdge; e++) {
-		edges[e].l = 0; if (e > 1) activeFree->join(e,1);
-	}
-	firstEdge = 0; freeEdge = 1;
 	M = 0;
+	fe = new edge[N+1];
+	evec = new EdgeInfo[maxEdge+1];
+	edges = new UiSetPair(maxEdge);
+	adjLists = new Clist(2*maxEdge+1);
+	for (vertex u = 1; u <= N; u++) fe[u] = 0;
 }
 
 /** Free space used by Graph */
 Graph::~Graph() {
-	delete [] fe; delete [] edges;
-	delete activeFree; delete adjLists;
+	delete [] fe; delete [] evec; delete edges; delete adjLists;
 }
 
 /** Join two vertices with an edge.
@@ -44,15 +38,12 @@ Graph::~Graph() {
 edge Graph::join(vertex u, vertex v, int lng) {
 	assert(1 <= u && u <= N && 1 <= v && v <= N);
 
-	if (freeEdge == 0) return 0;
-
-	// select a free edge and move it to the list of active edges
-	edge e = freeEdge;
-	freeEdge = (activeFree->suc(e) == e ?  0 : activeFree->suc(e));
-	activeFree->remove(e); activeFree->join(e,firstEdge); 
+	edge e = edges->firstOut();
+	if (e == 0) return 0;
+	edges->swap(e);
 
 	// initialize edge information
-	edges[e].l = u; edges[e].r = v; edges[e].len = lng;
+	evec[e].l = u; evec[e].r = v; evec[e].len = lng;
 
 	// add edge to the adjacency lists
 	// in the adjLists data structure, each edge appears twice,
@@ -73,23 +64,20 @@ edge Graph::join(vertex u, vertex v, int lng) {
  */
 bool Graph::remove(edge e) {
 	assert(1 <= e && e <= maxEdge);
-	if (edges[e].l == 0) return false;
+	if (edges->isOut(e)) return false;
+	edges->swap(e);
 
-	if (firstEdge == e)
-		firstEdge = (activeFree->suc(e) == e ? 0 : activeFree->suc(e));
-	activeFree->remove(e); activeFree->join(e, freeEdge);
-
-	vertex u = edges[e].l;
+	vertex u = evec[e].l;
 	if (fe[u] == 2*e)
 		fe[u] = (adjLists->suc(2*e) == 2*e ? 0 : adjLists->suc(2*e));
-	u = edges[e].r;
+	u = evec[e].r;
 	if (fe[u] == 2*e+1)
 		fe[u] = (adjLists->suc(2*e+1) == 2*e+1 ?
 				0 : adjLists->suc(2*e+1));
 
 	adjLists->remove(2*e); adjLists->remove(2*e+1);
 
-	edges[e].l = 0;
+	evec[e].l = 0;
 
 	M--;
 	return true;
@@ -113,11 +101,11 @@ string& Graph::toString(string& s) const {
 			if (n() <= 26)
 				s = s + ((char) ('a'+(u-1))) + ","
 				      + ((char) ('a'+(mate(u,e)-1))) + ","
-				      + Misc::toString(length(e),s1);
+				      + Misc::num2string(length(e),s1);
 			else 
-				s = s + Misc::toString(u,s1) + ","
-				      + Misc::toString(mate(u,e),s2) + ","
-				      + Misc::toString(length(e),s3);
+				s = s + Misc::num2string(u,s1) + ","
+				      + Misc::num2string(mate(u,e),s2) + ","
+				      + Misc::num2string(length(e),s3);
 			s += ")"; if (next(u,e) != 0) s += " ";
 		}
 		s += "\n";
