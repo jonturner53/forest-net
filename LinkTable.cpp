@@ -50,6 +50,8 @@ bool LinkTable::addEntry(int lnk, int intf, ntyp_t pTyp, ipa_t pipa, fAdr_t pfa)
 
         ld[lnk].intf = intf;
 	ld[lnk].pipa = pipa; ld[lnk].padr = pfa;
+	ld[lnk].pktrate = Forest::MINPKTRATE;
+	ld[lnk].bitrate = Forest::MINBITRATE;
         ld[lnk].ptyp = pTyp;
 	ld[lnk].pipp = (pTyp != ROUTER ? 0 : Forest::ROUTER_PORT);
         enable(lnk); // mark as valid entry (even tho some fields not yet set)
