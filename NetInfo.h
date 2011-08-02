@@ -25,7 +25,20 @@ struct RateSpec {	///< used in linkMap of ComtreeInfo
 	int	pktRateRight;
 };
 
-/** Maintains information about a Forest network.
+/** Maintains information about an entire Forest network.
+ *  The NetInfo data structure is intended for use by network
+ *  control elements that require a global view of the network.
+ *  Currently, this includes the NetMgr and the ComtreeController
+ *  components.
+ *
+ *  Internally, a NetInfo object uses a Graph to represent the
+ *  network topology. It also has tables of attributes for all
+ *  nodes, links and comtrees. It provides a large number of
+ *  methods for accessing the internal representation in a
+ *  convenient way, It also has a read() method to read in a network
+ *  description from a file and build the corresponding internal
+ *  data structure. And it has a write() method that will write
+ *  out a network description.
  */
 class NetInfo {
 public:
@@ -110,17 +123,19 @@ public:
 	int	nextComtIndex(int) const;
 
 	// modifiers
-	void	setNodeName(int, string&);
-	void	setNodeType(int, ntyp_t);
+	bool	setNodeName(int, string&);
 	void	setNodeAdr(int, fAdr_t);
 	void	setNodeLat(int, double);
 	void	setNodeLong(int, double);
 	// leaf only
+	void	setLeafType(int, ntyp_t);
 	void	setLeafIpAdr(int, ipa_t);
+	int	addLeaf(const string&, ntyp_t);
 	// router only
-	void	setNumIf(int, int);
 	void	setFirstCliAdr(int, fAdr_t);
 	void	setLastCliAdr(int, fAdr_t);
+	int	addRouter(const string&);
+	bool	addInterfaces(int, int);
 	// router interfaces
 	void	setIfIpAdr(int,int,ipa_t);
 	void	setIfIpAdr(int,ipa_t);
@@ -129,6 +144,7 @@ public:
 	void	setIfFirstLink(int,int,int);
 	void	setIfLastLink(int,int,int);
 	// links
+	int	addLink(int,int,int,int);
 	void	setLocLinkL(int,int);
 	void	setLocLinkR(int,int);
 	void	setLinkBitRate(int,int);
@@ -180,13 +196,13 @@ private:
 	struct LeafNodeInfo {
 	string	name;		///< leaf name
 	ntyp_t	nType;		///< leaf type
-	ipa_t	ipAdr;		///< IP address used to initialize node
+	ipa_t	ipAdr;		///< IP address of leaf
 	fAdr_t	fAdr;		///< leaf's forest address
 	int	latitude;	///< latitude of leaf (in micro-degrees, + or -)
 	int	longitude;	///< latitude of leaf (in micro-degrees, + or -)
 	};
 	LeafNodeInfo *leaf;
-	UiSetPair *leaves;	///< unused leaf numbers
+	UiSetPair *leaves;	///< in-use and free leaf numbers
 	set<int> *controllers;	///< set of controllers (by node #)
 
 	static int const UNDEF_LAT = 91;	// invalid latitude
@@ -196,7 +212,7 @@ private:
 	struct RtrNodeInfo {
 	string	name;		///< node name
 	ntyp_t	nType;		///< node type
-	fAdr_t	fAdr;		///< node's forest address
+	fAdr_t	fAdr;		///< router's forest address
 	int	latitude;	///< latitude of node (in micro-degrees, + or -)
 	int	longitude;	///< latitude of node (in micro-degrees, + or -)
 	fAdr_t	firstCliAdr;	///< router's first assignable client address
@@ -254,7 +270,7 @@ inline bool NetInfo::isLeaf(int n) const {
 }
 
 inline bool NetInfo::validLink(int lnk) const {
-	return (1 <= lnk && lnk <= netTopo->m() && netTopo->left(lnk) > 0);
+	return netTopo->validEdge(lnk);
 }
 
 inline bool NetInfo::validIf(int n, int iface) const {
@@ -348,7 +364,9 @@ inline int NetInfo::nextNode(int u) const {
 
 inline int NetInfo::firstLeaf() const { return maxRtr + leaves->firstIn(); }
 inline int NetInfo::nextLeaf(int n) const {
-	return (isLeaf(n) ? maxRtr+leaves->nextIn(n-maxRtr) : 0);
+	if (!isLeaf(n)) return 0;
+	int nxt = leaves->nextIn(n-maxRtr);
+	return (nxt != 0 ? maxRtr + nxt : 0);
 }
 
 inline int NetInfo::firstLink() const { return netTopo->first(); }
@@ -524,16 +542,13 @@ inline int NetInfo::nextComtLink(int lnk, int c) const {
 	return (p != comtree[c].linkMap->end() ? (*p).first : 0);
 }
 
-inline void NetInfo::setNodeName(int n, string& nam) {
-	if (isLeaf(n)) leaf[n-maxRtr].name = nam;
-	else if (isRouter(n)) rtr[n-maxRtr].name = nam;
-	return;
-}
-
-inline void NetInfo::setNodeType(int n, ntyp_t typ) {
-	if (isLeaf(n)) leaf[n-maxRtr].nType = typ;
-	else if (isRouter(n)) rtr[n].nType = typ;
-	return;
+inline bool NetInfo::setNodeName(int n, string& nam) {
+	if (!validNode(n)) return false;
+	if (isRouter(n)) rtr[n].name = nam;
+	else 		 leaf[n-maxRtr].name = nam;
+	nodeNumMap->erase(getNodeName(n));
+	(*nodeNumMap)[nam] = n;
+	return true;
 }
 
 inline void NetInfo::setNodeAdr(int n, fAdr_t adr) {
@@ -559,6 +574,11 @@ inline void NetInfo::setIfIpAdr(int n, int iface, ipa_t ip) {
 	return;
 }
 
+inline void NetInfo::setLeafType(int n, ntyp_t typ) {
+	if (isLeaf(n)) leaf[n-maxRtr].nType = typ;
+	return;
+}
+
 inline void NetInfo::setLeafIpAdr(int n, ipa_t ip) {
 	if (isLeaf(n)) leaf[n-maxRtr].ipAdr = ip;
 	return;
@@ -571,11 +591,6 @@ inline void NetInfo::setFirstCliAdr(int n, fAdr_t adr) {
 
 inline void NetInfo::setLastCliAdr(int n, fAdr_t adr) {
 	if (isRouter(n)) rtr[n].lastCliAdr = adr;
-	return;
-}
-
-inline void NetInfo::setNumIf(int n, int num) {
-	if (isRouter(n)) rtr[n].numIf = num;
 	return;
 }
 
@@ -723,60 +738,5 @@ inline bool NetInfo::removeComtLink(int i, int lnk) {
 inline uint64_t NetInfo::ll2l_key(int n, int llnk) const {
 	return (uint64_t(n) << 32) | (uint64_t(llnk) & 0xffffffff);
 }
-
-
-/* Notes
-
-Use cases:
-
-Initialization
-- read network topology information and populate NetInfo data
-- perform consistency checks
-- contact each listed node and initialize it; nodes listen on
-  bootstrap address; use blocking TCP connections
-- start routers, then controllers, then clients (if any)
-
-Adding/removing access links
-- get request from client controller with ip address of a new client
-- select a router and unused link
-- send router an add link message - let router assign link#
-  update netTopo and anything else that requires it
-- send ack back to client controller
-- when client sends connect, we should have router send informational
-  message to NetMgr, then back to client manager
-- when client sends disconnect to router, we should have router
-  send informational update to NetMgr; NetMgr should also
-  inform client manager when this happens, so client manager can
-  maintain accounting information; could have router record
-  data counters for access links and send this to NetMgr on close
-
-Log updates to NetInfo?
-
-Process control messages from CLI
-- control messages can be directed to NetMgr; these are checked,
-  then we issue required updates to routers; then we update internal data
-  and send ack
-  - messages for the NetMgr include things like adding new nodes,
-    and adding or modifying links
-  - in general, could also get information about nodes from NetMgr
-  - should NetMgr send router names/forest addresses back to CLI?
-    would allow users to refer to routers by name rather than address
-  - might want to do same thing for controllers and even clients
-- for messages to routers, forward and then update NetInfo when
-  ack is received
-
-Interactions with comtree controller(s)
-
-- Initialize comtree controllers on startup; includes sending them
-  topology information
-- As links are added/removed/modified, let comtree controllers know,
-  so that they can take this into account when selecting comtree routes
-
-Statistics Collector
-- Statistics collector consolidates data from routers (instead of routers
-  writing these to files). Might have data combined in some fashion
-  and maybe even analyzed. Could send processed data to remote GUI
-  for display, but not clear if it's worth duplicating RLI functionality.
-*/
 
 #endif

@@ -40,6 +40,65 @@ NetInfo::~NetInfo() {
 	delete [] comtree; delete comtreeMap;
 }
 
+int NetInfo::addRouter(const string& name) {
+	int r = routers->firstOut();
+	if (r == 0) return 0;
+	if (nodeNumMap->find(name) != nodeNumMap->end()) return 0;
+	routers->swap(r);
+
+	rtr[r].name = name; (*nodeNumMap)[name] = r;
+	rtr[r].nType = ROUTER;
+	rtr[r].fAdr = -1;
+
+	setNodeLat(r,UNDEF_LAT); setNodeLong(r,UNDEF_LONG);
+	setFirstCliAdr(r,-1); setLastCliAdr(r,-1);
+	rtr[r].numIf = 0; rtr[r].iface = 0;
+	return r;
+}
+
+bool NetInfo::addInterfaces(int r, int numIf) {
+	if (getNumIf(r) != 0) return false;
+	rtr[r].iface = new IfInfo[numIf+1];
+	rtr[r].numIf = numIf;
+	return true;
+}
+
+int NetInfo::addLeaf(const string& name, ntyp_t nTyp) {
+	int ln = leaves->firstOut();
+	if (ln == 0) return 0;
+	if (nodeNumMap->find(name) != nodeNumMap->end()) return 0;
+	leaves->swap(ln);
+
+	int nodeNum = ln + maxRtr;
+	leaf[ln].name = name;
+	(*nodeNumMap)[name] = nodeNum;
+	if (nTyp == CONTROLLER) controllers->insert(ln);
+	leaf[ln].fAdr = -1;
+
+	setLeafType(nodeNum,CLIENT); setLeafIpAdr(nodeNum,0); 
+	setNodeLat(nodeNum,UNDEF_LAT); setNodeLong(nodeNum,UNDEF_LONG);
+	return nodeNum;
+}
+
+int NetInfo::addLink(int u, int v, int uln, int vln ) {
+        int lnk = netTopo->join(u,v,0);
+        if (lnk == 0) return 0;
+	if (getNodeType(u) == ROUTER) {
+		if (!locLnk2lnk->insert(ll2l_key(u,uln),2*lnk)) {
+			netTopo->remove(lnk); return 0;
+		}
+		setLocLinkL(lnk,uln);
+	}
+	if (getNodeType(v) == ROUTER) {
+		if (!locLnk2lnk->insert(ll2l_key(v,vln),2*lnk+1)) {
+			locLnk2lnk->remove(ll2l_key(u,uln));
+			netTopo->remove(lnk); return 0;
+		}
+		setLocLinkR(lnk,vln);
+	}
+        return lnk;
+}
+
 /* Exampe of NetInfo input file format
  * 
  * Routers # starts section that defines routers
@@ -220,35 +279,22 @@ bool NetInfo::read(istream& in) {
 					     << cRtr.name << endl;
 					return false;
 				}
-				if (nodeNumMap->find(cRtr.name)
-				    != nodeNumMap->end()) {
-					cerr << "NetInfo::read: attempting "
-					     << "to re-define router "
+				// add new router and initialize attributes
+				int r = addRouter(cRtr.name);
+				if (r == 0) {
+					cerr << "NetInfo::read: cannot add "
+					     << "router "
 					     << cRtr.name << endl;
 					return false;
 				}
-				// get an unused router number
-				int r = routers->firstOut();
-				if (r == 0) {
-					cerr << "NetInfo::read: no unused "
-						"router numbers" << endl;
-					return false;
-				}
-				routers->swap(r);
-				(*nodeNumMap)[cRtr.name] = r;
-
-				rtr[r].name = cRtr.name;
-				rtr[r].nType = cRtr.nType;
-				rtr[r].fAdr = cRtr.fAdr;
-				rtr[r].latitude = cRtr.latitude;
-				rtr[r].longitude = cRtr.longitude;
-				rtr[r].firstCliAdr = cRtr.firstCliAdr;
-				rtr[r].lastCliAdr = cRtr.lastCliAdr;
-				rtr[r].numIf = cRtr.numIf;
-				rtr[r].iface = new IfInfo[cRtr.numIf+1];
-				for (int i = 1; i <= cRtr.numIf; i++) {
+				setNodeAdr(r,cRtr.fAdr);
+				setNodeLat(r,cRtr.latitude/1000000.0);
+				setNodeLong(r,cRtr.longitude/1000000.0);
+				setFirstCliAdr(r,cRtr.firstCliAdr);
+				setLastCliAdr(r,cRtr.lastCliAdr);
+				addInterfaces(r,cRtr.numIf);
+				for (int i = 1; i <= getNumIf(r); i++)
 					rtr[r].iface[i] = iface[i];
-				}
 				maxIfNum = 0;
 				rtrNum++;
 				context = ROUTER_SEC; break;
@@ -322,7 +368,7 @@ bool NetInfo::read(istream& in) {
 			}
 			break;
 		case IFACES:
-			for (int i = 1; i < Forest::MAXINTF; i++) {
+			for (int i = 1; i <= Forest::MAXINTF; i++) {
 				iface[i].ipAdr = 0;
 				iface[i].bitRate = 0; iface[i].pktRate = 0;
 				iface[i].firstLink = 0; iface[i].lastLink = 0;
@@ -459,30 +505,19 @@ bool NetInfo::read(istream& in) {
 					     << cLeaf.name << endl;
 					return false;
 				}
-				if (nodeNumMap->find(cLeaf.name)
-				    != nodeNumMap->end()) {
-					cerr << "NetInfo::read: attempting "
-					     << "to re-define leaf "
+				// add new leaf and initialize attributes
+				int nodeNum = addLeaf(cLeaf.name,cLeaf.nType);
+				if (nodeNum == 0) {
+					cerr << "NetInfo::read: cannot add "
+					     << "leaf "
 					     << cLeaf.name << endl;
 					return false;
 				}
-				// get unused leaf number
-				int ln = leaves->firstOut();
-				if (ln == 0) {
-					cerr << "NetInfo::read: no unused "
-						"leaf numbers" << endl;
-					return false;
-				}
-				leaves->swap(ln);
-				(*nodeNumMap)[cLeaf.name] = ln + maxRtr;
-				leaf[ln].name = cLeaf.name;
-				leaf[ln].nType = cLeaf.nType;
-				leaf[ln].ipAdr = cLeaf.ipAdr;
-				leaf[ln].fAdr = cLeaf.fAdr;
-				leaf[ln].latitude = cLeaf.latitude;
-				leaf[ln].longitude = cLeaf.longitude;
-				if (cLeaf.nType == CONTROLLER)
-					controllers->insert(leafNum);
+				setLeafType(nodeNum,cLeaf.nType);
+				setLeafIpAdr(nodeNum,cLeaf.ipAdr);
+				setNodeAdr(nodeNum,cLeaf.fAdr);
+				setNodeLat(nodeNum,cLeaf.latitude/1000000.0);
+				setNodeLong(nodeNum,cLeaf.longitude/1000000.0);
 				leafNum++;
 				context = LEAF_SEC; break;
 			}
@@ -597,41 +632,22 @@ bool NetInfo::read(istream& in) {
 					return false;
 				}
 				
+				// add new link and set attributes
 				int u = (*nodeNumMap)[leftName];
 				int v = (*nodeNumMap)[rightName];
-				int lnk = netTopo->join(u,v,linkLength);
+				int lnk = addLink(u,v,cLink.leftLnum,
+						      cLink.rightLnum);
 				if (lnk == 0) {
-					cerr << "NetInfo::read: too many "
-						"links" << endl;
+					cerr << "NetInfo::read: can't add "
+						"link (" << leftName << "."
+					     << cLink.leftLnum << ","
+					     << rightName << "."
+					     << cLink.rightLnum << ")" << endl;
 					return false;
 				}
-				link[lnk].leftLnum  = cLink.leftLnum;
-				link[lnk].rightLnum = cLink.rightLnum;
-				if (getNodeType(u) == ROUTER) {
-					if (!locLnk2lnk->insert(
-					   ll2l_key(u,cLink.leftLnum),2*lnk)) {
-						cerr << "NetInfo::read: attempt"
-						     << " to re-use local link "
-						     << " number for router "
-						     << leftName << " in link "
-						     << linkNum << endl;
-						return false;
-					}
-				}
-				if (getNodeType(v) == ROUTER) {
-					if (!locLnk2lnk->insert(
-					     ll2l_key(v,cLink.rightLnum),
-						    2*lnk+1)) {
-						cerr << "NetInfo::read: attempt"
-						     << " to re-use local link "
-						     << " number for router "
-						     << rightName << " in link "
-						     << linkNum << endl;
-						return false;
-					}
-				}
-				link[lnk].bitRate = cLink.bitRate;
-				link[lnk].pktRate = cLink.pktRate;
+				setLinkBitRate(lnk, cLink.bitRate);
+				setLinkPktRate(lnk, cLink.pktRate);
+				setLinkLength(lnk, linkLength);
 				linkNum++;
 				context = LINK_SEC; break;
 			}

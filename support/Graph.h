@@ -34,6 +34,9 @@ public:		Graph(int,int);
 	int	n() const;		
 	int	m() const;	
 
+	// predicates
+	bool	validEdge(int) const;
+
 	// methods for iterating through overall edge list, adjacency lists
 	edge	first() const;
 	edge	next(edge) const;
@@ -84,6 +87,12 @@ inline int Graph::n() const { return N; }
  *  @return the number of edges in the graph.
  */
 inline int Graph::m() const { return M; }
+
+/** Determine if an edge number corresponds to a valid edge.
+ *  @param e is the edge number to be verified
+ *  @return true if e is a valid edge number, else false.
+ */
+inline bool Graph::validEdge(int e) const { return edges->isIn(e); }
 
 /** Get the first edge in the overall list of edges.
  *  @return the first edge in the list
