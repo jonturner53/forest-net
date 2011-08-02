@@ -30,6 +30,7 @@ public:
 	bool	getCoreFlag(int) const;
 	int	getPlink(int) const;
 	int	getQnum(int) const;
+	int	getQuant(int) const;
 	int 	getLinkCount(int) const;
 	int	getLinks(int,uint16_t*,int) const;	
 	int	getRlinks(int,uint16_t*,int) const;
@@ -52,6 +53,7 @@ public:
 	void	setCoreFlag(int, bool);
 	void	setPlink(int, int);
 	void	setQnum(int, int);
+	void	setQuant(int, int);
 
 	/** input/output of table contents */
 	bool 	readTable(istream&);
@@ -63,6 +65,7 @@ private:
 		int plnk;		///< parent link in comtree
 		bool cFlag;		///< true if this router is in core
 		int qn;			///< number of comtree queue
+		int quant;		///< quantum associated with queue
 		int links;		///< bit vector of links
 		int rlinks;		///< bit vec of links to other routers
 		int llinks;		///< bit vec of links to local routers
@@ -145,6 +148,14 @@ inline int ComtreeTable::getQnum(int entry) const {
 	assert(valid(entry)); return tbl[entry].qn;
 }
 
+/** Get the quantum for this comtree.
+ *  @param entry is the entry number
+ *  @return the quantum associated with the comtree's queue
+ */
+inline int ComtreeTable::getQuant(int entry) const {
+	assert(valid(entry)); return tbl[entry].quant;
+}
+
 /** Set the parent link for a given table entry.
  *  @param entry is the entry number
  *  @param p is the number of the link to this router's parent in the comtree
@@ -167,6 +178,14 @@ inline void ComtreeTable::setCoreFlag(int entry, bool f) {
  */
 inline void ComtreeTable::setQnum(int entry, int q) {
 	assert(valid(entry)); tbl[entry].qn = q;
+}
+
+/** Set the quantum for a given table entry.
+ *  @param entry is the entry number
+ *  @param q is the quantum for the comtree's queue
+ */
+inline void ComtreeTable::setQuant(int entry, int q) {
+	assert(valid(entry)); tbl[entry].quant = q;
 }
 
 /** Determine if an entry number is valid or not.

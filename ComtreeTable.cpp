@@ -40,6 +40,7 @@ int ComtreeTable::addEntry(comt_t ct) {
 	if (!ht->insert(hashkey(ct),entry)) {
 		free = entry; return 0;
 	}
+	tbl[entry].comt = ct;
 	tbl[entry].links = tbl[entry].rlinks = 0;
 	tbl[entry].llinks = tbl[entry].clinks = 0;
 	tbl[entry].cFlag = false; tbl[entry].plnk = 0;
@@ -167,8 +168,8 @@ bool ComtreeTable::readEntry(istream& is) {
 
 	int entry = addEntry(ct);
 	if (entry == 0) return false;
-	tbl[entry].comt = ct; setCoreFlag(entry,cFlg);
-	setPlink(entry,plnk); setQnum(entry,qn);
+	setCoreFlag(entry,cFlg);
+	setPlink(entry,plnk); setQnum(entry,qn); setQuant(entry,quant);
 	tbl[entry].links = lnks;   tbl[entry].rlinks = rlnks;
 	tbl[entry].llinks = llnks; tbl[entry].clinks = clnks;
 
@@ -203,13 +204,13 @@ bool ComtreeTable::readTable(istream& is) {
 }
 
 /** Helper function for writeComt. Prints list of links. */
-void ComtreeTable::writeLinks(ostream& os, int lnks) const {
+void ComtreeTable::writeLinks(ostream& out, int lnks) const {
 	int i = 1; lnks >>= 1;
-	if (lnks == 0) { os << "-"; return; }
+	if (lnks == 0) { out << "-"; return; }
 	while (lnks != 0) {
 		if (lnks & 1) {
-			os << i;
-			if ((lnks>>1) != 0) os << ",";
+			out << i;
+			if ((lnks>>1) != 0) out << ",";
 		}
 		i++; lnks >>= 1;
 	}
@@ -217,20 +218,25 @@ void ComtreeTable::writeLinks(ostream& os, int lnks) const {
 
 /** Write entry for link i
  */
-void ComtreeTable::writeEntry(ostream& os, int entry) const {
-	os << setw(3) << getComtree(entry) << " "  
-	   << (getCoreFlag(entry) ? "true  " : "false ")
-	   << setw(2) << getPlink(entry) << " "
-	   << setw(3) << getQnum(entry) << " ";
-	writeLinks(os,tbl[entry].links); os << " ";
-	writeLinks(os,tbl[entry].rlinks); os << " ";
-	writeLinks(os,tbl[entry].clinks); os << "\n";
+void ComtreeTable::writeEntry(ostream& out, int entry) const {
+	out << setw(9) << getComtree(entry) << " "  
+	   << setw(6) << getCoreFlag(entry)
+	   << setw(8) << getPlink(entry) << " "
+	   << setw(6) << getQnum(entry) << " "
+	   << setw(6) << getQuant(entry) << "   ";
+	writeLinks(out,tbl[entry].links); out << "     ";
+	writeLinks(out,tbl[entry].clinks); out << "\n";
 }
 
 /** Output human readable representation of comtree table.
  */
-void ComtreeTable::writeTable(ostream& os) const {
-        for (int i = 1; i <= maxte; i++) {
-                if (valid(i)) writeEntry(os,i);
-	}
+void ComtreeTable::writeTable(ostream& out) const {
+	int cnt = 0;
+        for (int i = 1; i <= maxte; i++)
+                if (valid(i)) cnt++;
+	out << cnt << endl;
+	out << "# comtree  coreFlag  pLink  qNum  quant  links"
+	    << "            coreLinks" << endl;
+        for (int i = 1; i <= maxte; i++)
+                if (valid(i)) writeEntry(out,i);
 }

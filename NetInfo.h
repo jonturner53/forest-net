@@ -14,7 +14,7 @@
 #include <set>
 #include "CommonDefs.h"
 #include "UiHashTbl.h"
-#include "IdSet.h"
+#include "IdMap.h"
 #include "UiSetPair.h"
 #include "Graph.h"
 
@@ -44,6 +44,9 @@ public:
 	bool	isComtLink(int,int) const;
 
 	// access methods
+	int	getMaxNode() const;
+	int	getMaxRouter() const;
+	int	getMaxLink() const;
 	string& getNodeName(int);
 	int	getNodeNum(string&) const;
 	ntyp_t	getNodeType(int) const;
@@ -76,7 +79,7 @@ public:
 	// link attributes
 	int	getLinkL(int) const;
 	int	getLinkR(int) const;
-	int	getPeer(int) const;
+	int	getPeer(int,int) const;
 	int	getLocLink(int,int) const;
 	int	getLocLinkL(int) const;
 	int	getLocLinkR(int) const;
@@ -235,7 +238,7 @@ private:
 	map<int,RateSpec> *linkMap; ///< map for links in comtree
 	};
 	ComtreeInfo *comtree;	///< array of comtrees
-	IdSet *comtreeMap;	///< maps comtree numbers to indices in array
+	IdMap *comtreeMap;	///< maps comtree numbers to indices in array
 };
 
 inline bool NetInfo::validNode(int n) const {
@@ -260,7 +263,7 @@ inline bool NetInfo::validIf(int n, int iface) const {
 }
 
 inline bool NetInfo::validComtree(int comt) const {
-	return comtreeMap->isMapped(comt);
+	return comtreeMap->validKey(comt);
 }
 
 inline bool NetInfo::validComtIndex(int i) const {
@@ -276,6 +279,10 @@ inline bool NetInfo::isComtLink(int i, int lnk) const {
 	return validComtIndex(i) &&
 		comtree[i].linkMap ->find(lnk) != comtree[i].linkMap->end();
 }
+
+inline int NetInfo::getMaxNode() const { return maxNode; }
+inline int NetInfo::getMaxRouter() const { return maxRtr; }
+inline int NetInfo::getMaxLink() const { return maxLink; }
 
 /** Get the name for a given node number.
  *  @param n is a node number
@@ -617,7 +624,7 @@ inline void NetInfo::setLinkLength(int lnk, int len) {
 }
 
 inline bool NetInfo::addComtree(int comt) {
-	int i = comtreeMap->addId(comt);
+	int i = comtreeMap->addPair(comt);
 	if (i == 0) return false;
 	comtree[i].comtreeNum = comt;
 	return true;
@@ -625,7 +632,7 @@ inline bool NetInfo::addComtree(int comt) {
 
 inline bool NetInfo::removeComtree(int i) {
 	if (!validComtIndex(i)) return false;
-	comtreeMap->releaseId(comtree[i].comtreeNum);
+	comtreeMap->dropPair(comtree[i].comtreeNum);
 	comtree[i].comtreeNum = 0;
 	return true;
 }

@@ -9,7 +9,8 @@ LIBFILES = CommonDefs.o IoProcessor.o LinkTable.o ComtreeTable.o \
 	   RouteTable.o StatsModule.o CpAttr.o CpType.o CtlPkt.o \
 	   QuManager.o PacketHeader.o PacketStore.o  NetInfo.o
 
-all : supportLib fHost fRouter fAvatar fMonitor fCliMgr fNetMgr fComtreeController fCli
+all : supportLib fHost fRouter fAvatar fMonitor fCliMgr fNetMgr \
+	fComtreeController fCli BuildRtables
 
 supportLib:
 	${MAKE} -C support
@@ -38,6 +39,9 @@ fCliMgr : ClientMgr.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
 	cp $@ ${HOME}/bin
 fComtreeController : ComtreeController.o ${LIBS}
+	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
+	cp $@ ${HOME}/bin
+BuildRtables : BuildRtables.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
 	cp $@ ${HOME}/bin
 

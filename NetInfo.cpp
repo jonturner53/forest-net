@@ -28,7 +28,7 @@ NetInfo::NetInfo(int maxNode1, int maxLink1,
 	locLnk2lnk = new UiHashTbl(2*min(maxLink,maxRtr*(maxRtr-1)/2)+1);
 
 	comtree = new ComtreeInfo[maxComtree+1];
-	comtreeMap = new IdSet(maxComtree);
+	comtreeMap = new IdMap(maxComtree);
 }
 
 NetInfo::~NetInfo() {
@@ -840,7 +840,7 @@ bool NetInfo::read(istream& in) {
 				}
 				
 				// get unused comtree index 
-				int i = comtreeMap->addId(cComt.comtreeNum);
+				int i = comtreeMap->addPair(cComt.comtreeNum);
 				if (i == 0) {
 					cerr << "NetInfo::read: too many "
 						"comtrees" << endl;

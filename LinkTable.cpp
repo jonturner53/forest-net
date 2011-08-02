@@ -157,30 +157,28 @@ bool LinkTable::read(istream& in) {
 
 void LinkTable::writeEntry(ostream& out, int i) const {
 // Print entry for link i
-	out << setw(2) << i << " " << getInterface(i) << " ";
+	out << setw(5) << right << i << setw(6) << getInterface(i) << "  ";
 	
-	Np4d::writeIpAdr(out,getPeerIpAdr(i));
-	out << ":" << getPeerPort(i);
+	string s;
+	out << setw(12) << Np4d::ip2string(getPeerIpAdr(i),s)
+	    << ":" << setw(5) << left << getPeerPort(i) << "  ";
+	out << setw(10) << left << Forest::nodeType2string(getPeerType(i),s);
 
-        switch (getPeerType(i)) {
-        case CLIENT: 	  out << " client    "; break;
-        case SERVER: 	  out << " server    "; break;
-        case ROUTER: 	  out << " router    "; break;
-        case CONTROLLER:  out << " controller"; break;
-        default: fatal("LinkTable::writeEntry: undefined type");
-        }
-
-	out << " "; Forest::writeForestAdr(out,getPeerAdr(i));
-	out << " "; Forest::writeForestAdr(out,getPeerDest(i));
+	out << " " << setw(10) << left << Forest::fAdr2string(getPeerAdr(i),s);
+	out << " " << setw(10) << left << Forest::fAdr2string(getPeerDest(i),s);
 	
-	out << " " << setw(6) << getBitRate(i)
-	    << " " << setw(6) << getPktRate(i)
-	    << " " << setw(6) << getMinDelta(i)
+	out << " " << setw(6) << right << getBitRate(i)
+	    << " " << setw(6) << right << getPktRate(i)
 	    << endl;
 }
 
 void LinkTable::write(ostream& out) const {
 // Output human readable representation of link table.
+	int cnt = 0;
+	for (int i = 1; i <= nlnk; i++) if (valid(i)) cnt++;
+	out << cnt << endl;
+	out << "# link  iface    peerIp:port     peerType  peerAdr   ";
+        out << "  peerDest  bitRate pktRate\n";
 	for (int i = 1; i <= nlnk; i++) 
 		if (valid(i)) writeEntry(out,i);
 }
