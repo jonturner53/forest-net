@@ -1,4 +1,3 @@
-package remoteDisplay;
 import java.util.regex.*;
 import java.util.ArrayList;
 import princeton.StdDraw;
