@@ -16,6 +16,7 @@ abstract class NetObj implements Comparable{
 		else
 			return 0;
 	}
+	
 	public abstract String toString();
 
 }

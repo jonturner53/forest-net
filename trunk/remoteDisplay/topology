@@ -1,0 +1,67 @@
+#Network topology file format
+
+nodes: # starts section that defines nodes
+
+# name		nodeType        forestAdr       x-coord		y-coord
+router1         router          1.900          	15		30
+router2         router          2.900          	10		20  
+router3         router          3.900          	20		20  
+router4		router		4.900		10		10
+
+.# line starting with . ends router list
+
+interfaces: # starts section that defines interfaces 
+#rtrNum		ifaceNum 	ifaceIp 	ifaceLinks
+router1 	1 		192.168.2.2	1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17
+router2		1		193.168.3.2	1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17
+router3		1		193.168.8.2     1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17
+router4		1		193.168.10.2	1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17
+. # line starting with . ends interface list
+
+controller: # netManager
+#name           nodeType                ipAdr           	forestAdr 	x-coord 	y-coord
+netMgr          netController   	192.168.3.2 		2.900        	5             	25
+cltMgr		clientManager		192.168.8.2		3.900		25		25
+mon		monitor			192.168.2.2		1.900		20		35
+cc 		comtreeController	192.168.10.2		4.900		5		15
+. # line starting with . ends list
+
+links: # starts section that defines links
+# name.link#:name.link# 			packetRate              bitRate
+router1.16:router2.18                           40000			40000
+router1.18:router3.16                           40000			40000
+router2.16:router3.19				40000			40000
+router2.19:router4.16				40000			40000
+. # line starting with . ends list
+
+comtrees: # starts section that defines comtrees
+
+#comtree number        
+#root node               
+#other core nodes 
+#comtree links
+1       
+router1    
+router1,router2    
+router1.18:router3.16,router1.16:router2.18,router2.19:router4.16
+
+100       
+router1    
+router1,router2    
+router1.18:router3.16,router1.16:router2.18,router2.19:router4.16
+
+1001    
+router1    
+router1,router2    
+router1.18:router3.16,router1.16:router2.18,router2.19:router4.16
+
+1002
+router2
+router2
+router1.16:router2.18,router2.16:router3.19,router2.19:router4.16
+
+1003
+router3
+router3,router2
+router1.18:router3.16,router2.16:router3.19,router2.19:router4.16
+.                       # line starting with . ends list
