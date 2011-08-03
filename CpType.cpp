@@ -92,9 +92,9 @@ CpType::CpTypeInfo CpType::typeInfo[] = {
 									   (1ull << PEER_IP)|
 									   (1ull << PEER_ADR),
 									   (1ull << PEER_TYPE)|
-									   (1ull << PEER_IP)|
-									   (1ull << PEER_ADR),
-									   (1ull << LINK_NUM) },
+									   (1ull << PEER_IP),
+									   (1ull << LINK_NUM)|
+									   (1ull << PEER_ADR) },
 	{ DROP_LINK,		41,	"drop link",		   "dl",   (1ull << LINK_NUM),
 									   (1ull << LINK_NUM), 0},
 	{ GET_LINK,		42,	"get link",		   "gl",   (1ull << LINK_NUM),
@@ -191,7 +191,16 @@ CpType::CpTypeInfo CpType::typeInfo[] = {
 								           (1ull << CLIENT_ADR)|
 								           (1ull << RTR_IP)|
 								           (1ull << RTR_ADR)},
-	
+	{ CLIENT_CONNECT,	101,	"client connected",	   "cc",   (1ull << CLIENT_ADR)|
+									   (1ull << RTR_ADR),
+									   (1ull << CLIENT_ADR)|
+									   (1ull << RTR_ADR),
+									   (1ull << RTR_ADR)},
+	{ CLIENT_DISCONNECT,	102,	"client disconnected",	   "cd",   (1ull << CLIENT_ADR)|
+									   (1ull << RTR_ADR),
+									   (1ull << CLIENT_ADR)|
+									   (1ull << RTR_ADR),
+									   (1ull << RTR_ADR)},
 	{ CPT_END,	 	255,	"ctl pkt end",	   	   "cpe",  0,0,0 }
 };
 

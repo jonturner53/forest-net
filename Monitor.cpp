@@ -318,7 +318,6 @@ void Monitor::updateStatus(int p, int now) {
 	avData[avNum].numVisible = ntohl(pp[6]);
 	avData[avNum].numNear = ntohl(pp[7]);
 	avData[avNum].comt = h.getComtree();
-
 	if (h.getComtree() != comt) return;
 
 	// if no room in statusPkt buffer for another report,

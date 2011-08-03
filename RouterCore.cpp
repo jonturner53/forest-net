@@ -25,17 +25,21 @@
 main(int argc, char *argv[]) {
 	int finTime;
 	int ip0, ip1, ip2, ip3;
-	ipa_t ipadr; fAdr_t fAdr;
+	int lBound, uBound;
+	ipa_t ipadr; fAdr_t fAdr, netMgrAdr;
 	int numData = 0;
-	if (argc < 8 || argc > 9 ||
+	if (argc < 11 || argc > 12 ||
 	    (fAdr = Forest::forestAdr(argv[1])) == 0 ||
-	    sscanf(argv[7],"%d", &finTime) != 1 ||
-	    (argc == 9 && sscanf(argv[8],"%d",&numData) != 1)) {
+	    sscanf(argv[7],"%d", &lBound) != 1 ||
+	    sscanf(argv[8],"%d", &uBound) != 1 ||
+	    sscanf(argv[9],"%d", &finTime) != 1 ||
+	    (netMgrAdr = Forest::forestAdr(argv[10])) == 0 ||
+	    (argc == 12 && sscanf(argv[11],"%d",&numData) != 1)) {
 		fatal("usage: fRouter fAdr ifTbl lnkTbl comtTbl "
 		      "rteTbl stats finTime");
 	}
 
-	RouterCore router(fAdr);
+	RouterCore router(fAdr,netMgrAdr,lBound,uBound);
 	if (!router.init(argv[2],argv[3],argv[4],argv[5],argv[6])) {
 		fatal("router: fRouter::init() failed");
 	}
@@ -47,10 +51,12 @@ main(int argc, char *argv[]) {
 }
 
 
-RouterCore::RouterCore(fAdr_t myAdr1) : myAdr(myAdr1) {
+RouterCore::RouterCore(fAdr_t myAdr1, fAdr_t nmAdr, int lBound, int uBound)
+    : myAdr(myAdr1), netMgrAdr(nmAdr), localLBound(lBound), localUBound(uBound) {
 	nLnks = 31; nComts = 5000; nRts = 10000;
 	nPkts = 200000; nBufs = 100000; nQus = 4000;
-
+	currClient = 0;
+	
 	lt = new LinkTable(nLnks);
 	ps = new PacketStore(nPkts, nBufs);
 	qm = new QuManager(nLnks+1, nPkts, nQus, nBufs-4*nLnks, ps, lt);
@@ -176,7 +182,8 @@ void RouterCore::dump(ostream& out) {
  */
 void RouterCore::run(uint32_t finishTime, int numData) {
 	// record of first packet receptions, transmissions for debugging
-	const int MAXEVENTS = 500;
+	const int MAXEVENTS = 5000;
+	numData = 3000;
 	struct { int sendFlag; uint32_t time; int link, pkt;} events[MAXEVENTS];
 	int evCnt = 0;
 	int statsTime = 0;		// time statistics were last processed
@@ -305,7 +312,6 @@ bool RouterCore::pktCheck(int p, int ctte) {
 
 	int inL = h.getInLink();
 	if (inL == 0) return false;
-
 	// extra checks for packets from untrusted peers
 	if (lt->getPeerType(inL) < TRUSTED) {
 		// check for spoofed source address
@@ -330,7 +336,6 @@ void RouterCore::forward(int p, int ctte) {
 // P is assumed to be a CLIENT_DATA packet.
 	PacketHeader& h = ps->getHeader(p);
 	int rte = rt->lookup(h.getComtree(),h.getDstAdr());
-
 	if (rte != 0) { // valid route case
 		// reply to route request
 		if ((h.getFlags() & Forest::RTE_REQ)) {
@@ -529,16 +534,51 @@ void RouterCore::handleCtlPkt(int p) {
 	int inL = h.getInLink();
 	buffer_t& b = ps->getBuffer(p);
 	CtlPkt cp;
-
 	// first handle special cases of CONNECT/DISCONNECT
 	if (h.getPtype() == CONNECT) {
 		if (lt->getPeerPort(inL) == 0)
 			lt->setPeerPort(inL,h.getTunSrcPort());
+		if(Forest::localAdr(h.getSrcAdr()) >= localLBound &&
+		    Forest::localAdr(h.getSrcAdr()) <= localUBound) {
+			int p1 = ps->alloc();
+			cp.reset();
+			cp.setCpType(CLIENT_CONNECT);
+			cp.setRrType(REQUEST);
+			cp.setAttr(CLIENT_ADR,h.getSrcAdr());
+			cp.setAttr(RTR_ADR,myAdr);
+			int paylen = cp.pack(ps->getPayload(p1));
+			PacketHeader& h1 = ps->getHeader(p1);
+			h1.setComtree(100);
+			h1.setFlags(0); h1.setInLink(0);
+			h1.setPtype(NET_SIG);
+			h1.setLength(Forest::OVERHEAD + paylen);
+			h1.setDstAdr(netMgrAdr); h1.setSrcAdr(myAdr);
+			ps->pack(p1);
+			forward(p1,ctt->lookup(100));
+		}
 		ps->free(p); return;
 	}
 	if (h.getPtype() == DISCONNECT) {
 		if (lt->getPeerPort(inL) == h.getTunSrcPort())
 			lt->setPeerPort(inL,0);
+		if(Forest::localAdr(h.getSrcAdr()) >= localLBound &&
+		    Forest::localAdr(h.getSrcAdr()) <= localUBound) {
+			int p1 = ps->alloc();
+			cp.reset();
+			cp.setCpType(CLIENT_DISCONNECT);
+			cp.setRrType(REQUEST);
+			cp.setAttr(CLIENT_ADR,h.getSrcAdr());
+			cp.setAttr(RTR_ADR,myAdr);
+			int paylen = cp.pack(ps->getPayload(p1));
+			PacketHeader& h1 = ps->getHeader(p1);
+			h1.setComtree(100);
+			h1.setFlags(0); h1.setInLink(0);
+			h1.setPtype(NET_SIG);
+			h1.setLength(Forest::OVERHEAD + paylen);
+			h1.setDstAdr(netMgrAdr); h1.setSrcAdr(myAdr);
+			ps->pack(p1);
+			forward(p1,ctt->lookup(100));
+		}
 		ps->free(p); return;
 	}
 
@@ -550,19 +590,17 @@ void RouterCore::handleCtlPkt(int p) {
 		errReply(p,cp,"misformatted control packet");
 		return;
 	}
-
 	if (h.getPtype() != NET_SIG ||
 	    h.getComtree() < 100 || h.getComtree() > 999) {
 		// reject signalling packets on comtrees outside 100-999 range
 		ps->free(p); return;
 	}
-		
+	
 	// Prepare positive reply packet for use where appropriate
 	CtlPkt cp1;
 	cp1.setCpType(cp.getCpType());
 	cp1.setRrType(POS_REPLY);
 	cp1.setSeqNum(cp.getSeqNum());
-
 	switch (cp.getCpType()) {
 	// Configuring logical interfaces
 	case ADD_IFACE:
@@ -612,12 +650,12 @@ void RouterCore::handleCtlPkt(int p) {
 		break;
 	}
         case ADD_LINK: {
-		if (!cp.isSet(PEER_ADR) || !cp.isSet(PEER_IP) || !cp.isSet(PEER_TYPE)) {
+		if (!cp.isSet(PEER_IP) || !cp.isSet(PEER_TYPE)) {
 			errReply(p,cp1,"add link: missing required attributes");
 			break;
 		}
 		ipa_t  pipa = cp.getAttr(PEER_IP);
-		fAdr_t padr = cp.getAttr(PEER_ADR);
+		fAdr_t padr = Forest::forestAdr(Forest::zipCode(myAdr),localLBound + (currClient++));
 		ntyp_t ntyp = (ntyp_t) cp.getAttr(PEER_TYPE);
 		int lnk = (cp.isSet(LINK_NUM) ? cp.getAttr(LINK_NUM) :
 						lt->alloc());
@@ -625,6 +663,7 @@ void RouterCore::handleCtlPkt(int p) {
 					  	   iop->getDefaultIface());
 		if (lt->addEntry(lnk,iface,ntyp,pipa,padr)) {
 			cp1.setAttr(LINK_NUM,lnk);
+			cp1.setAttr(PEER_ADR,padr);
 			returnToSender(p,cp1.pack(ps->getPayload(p)));
 		}
 		else errReply(p,cp1,"add link: cannot add link");
@@ -806,6 +845,10 @@ void RouterCore::handleCtlPkt(int p) {
 				rt->setQnum(rte, cp.getAttr(QUEUE_NUM));
 			returnToSender(p,cp1.pack(ps->getPayload(p)));
 		} else errReply(p,cp1,"mod route: invalid route");
+		break;
+	case CLIENT_CONNECT:
+		break;
+	case CLIENT_DISCONNECT:
 		break;
 	default:
 		cerr << "unrecognized control packet " << h.getPtype();

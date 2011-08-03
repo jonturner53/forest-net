@@ -43,7 +43,7 @@ enum CpTypeIndex {
 	ADD_ROUTE_LINK, DROP_ROUTE_LINK,
 
 	/** packet types used by client manager */
-	NEW_CLIENT,
+	NEW_CLIENT, CLIENT_CONNECT, CLIENT_DISCONNECT,
 	
 	CPT_END			///< marker following last CtlPktType
 };

@@ -7,7 +7,7 @@
 #include <map>
 class ClientMgr {
 public:
-	ClientMgr(fAdr_t,ipa_t,fAdr_t,fAdr_t,ipa_t,fAdr_t,char*); ///< Constructor
+	ClientMgr(fAdr_t,ipa_t,fAdr_t,fAdr_t,ipa_t,fAdr_t,char*,char*); ///< Constructor
 	~ClientMgr();		///< Destructor
 	bool init();		///< initialize sockets
 	void run(int);		///< main run method, takes in finTime
@@ -22,10 +22,23 @@ public:
 	int sock;		///< Forest socket
 	int extSock;		///< Listen for avatars socket
 	int avaSock;		///< Avatar connection socket
+	uint64_t lowLvlSeqNum;
+	uint64_t highLvlSeqNum;
 	map<string,string>* unames; ///< map of known usernames to pwords
+	struct clientStruct {
+		fAdr_t fa;//forest address
+		fAdr_t ra;//router forest address
+		fAdr_t rip;//router IP
+		string uname;
+		string pword;
+	};
+	map<uint32_t,clientStruct>* clients; ///< map from IP to clients with info
 	char * unamesFile;	///< filename of usernames file
+	ofstream acctFileStream; ///< stream to write accounting to file
 private:
+	void writeToAcctFile(CtlPkt); ///< write contents of ctlpkt to accounting file
 	void send(int);		///< send packet to forest router
+	void requestAvaInfo(ipa_t);///< send ctlpkt asking for client info
 	int recvFromForest();	///< receive packet from Forest
 	void connect();		///< connect to forest network
 	void disconnect();	///< disconnect from forest network
