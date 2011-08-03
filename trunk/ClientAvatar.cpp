@@ -73,7 +73,6 @@ void Avatar::setup() {
 	int nPkts = 10000;
 	ps = new PacketStore(nPkts+1, nPkts+1);
 	sendCtlPkt2CC(true,comt);
-	cerr << "1 "; Forest::writeForestAdr(cerr, myAdr); cerr << " " << comt << endl;
 	// initialize avatar to random position
 	struct timeval tv;
 	if (gettimeofday(&tv, NULL) < 0)
@@ -153,13 +152,14 @@ void Avatar::login(string uname, string pword, bool newuser) {
 		buf = "o " + uname + " " + pword;
 	}
 	Np4d::sendBufBlock(CM_sock,(char *) buf.c_str(),buf.size()+1);
-	//receive rtrAdr, myAdr,rtrIp
+	//receive rtrAdr, myAdr,rtrIp, CC_Adr
 	Np4d::recvIntBlock(CM_sock,(uint32_t&)rtrAdr);
 	Np4d::recvIntBlock(CM_sock,(uint32_t&)myAdr);
 	Np4d::recvIntBlock(CM_sock,(uint32_t&)rtrIpAdr);
 	Np4d::recvIntBlock(CM_sock,(uint32_t&)CC_Adr);
 	Forest::writeForestAdr(cerr,myAdr); cerr << endl;
 	close(CM_sock);
+	usleep(2000000);
 }
 /** Main Avatar processing loop.
  *  Operates on a cycle with a period of UPDATE_PERIOD milliseconds,
@@ -176,8 +176,9 @@ void Avatar::run(int finishTime) {
 
 	uint32_t now;    	// free-running microsecond time
 	uint32_t nextTime;	// time of next operational cycle
+	uint32_t lastComtSwitch;// time of the last time a comt switched
 	int comtSwitchTime = randint(5,15);
-	now = nextTime = 0;
+	now = nextTime = lastComtSwitch = 0;
 	while (now <= finishTime) {
 		//reset hashtables and report
 		nearAvatars->clear();
@@ -191,11 +192,12 @@ void Avatar::run(int finishTime) {
 		int p;
 		while ((p = receive()) != 0) {
 			updateNearby(p);
+
 			if(controllerConnSock > 0) {
 				PacketHeader& h = ps->getHeader(p);
 				uint32_t * pp = ps->getPayload(p);
 				uint64_t key = h.getSrcAdr(); key = (key << 32) | h.getSrcAdr();
-				statPkt[0]   = htonl(now);
+				statPkt[0] = htonl(now);
 				statPkt[1] = htonl(h.getSrcAdr());
 				statPkt[2] = pp[2];
 				statPkt[3] = pp[3];
@@ -213,13 +215,15 @@ void Avatar::run(int finishTime) {
 		sendStatus(now);
 
 		nextTime += 1000*UPDATE_PERIOD;
-		if(controllerConnSock  < 0 && nextTime %  (1000000*comtSwitchTime) == 0) {
+		if(controllerConnSock  < 0 && (now-lastComtSwitch) > (1000000*comtSwitchTime)) {
+			lastComtSwitch = now;
 			int newcomt = randint(comt1,comt2);
 			if(comt != newcomt) {
 				unsubAll();
 				switchComtree(newcomt);
 			}
 		}
+		now = Misc::getTime();
 		useconds_t delay = nextTime - now;
 		if (delay < (1 << 31)) usleep(delay);
 		else nextTime = now + 1000*UPDATE_PERIOD;
@@ -669,7 +673,6 @@ void Avatar::updateNearby(int p) {
 
 	uint64_t key = h.getSrcAdr(); key = (key << 32) | h.getSrcAdr();
 	if(nearAvatars->lookup(key) == 0) {
-//if(myAdr == Forest::forestAdr(3,10)) cerr << "numNear: " << numNear << endl;
 		numNear++;
 		nearAvatars->insert(key, nextAv++);
 	}
@@ -686,7 +689,6 @@ void Avatar::updateNearby(int p) {
 		if (visibleAvatars->lookup(key) == 0) {
 			if (nextAv <= MAXNEAR) {
 				visibleAvatars->insert(key, nextAv++);
-//if(myAdr == Forest::forestAdr(3,10)) cerr << "numVisible: "  << numVisible<< endl;
 				numVisible++;
 			}
 		}
