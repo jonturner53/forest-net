@@ -23,7 +23,7 @@
 int main(int argc, char ** argv) {
 	ipa_t rtrIp, myIp; fAdr_t rtrAdr, myAdr, CC_Adr, netMgrAdr;
 	uint32_t finTime;
-	if(argc != 9 ||
+	if(argc != 10 ||
 	    (netMgrAdr = Forest::forestAdr(argv[1])) == 0 ||
 	    (rtrAdr = Forest::forestAdr(argv[2])) == 0 ||
 	    (CC_Adr = Forest::forestAdr(argv[3])) == 0 ||
@@ -33,19 +33,24 @@ int main(int argc, char ** argv) {
 	    (sscanf(argv[7],"%d", &finTime)) != 1)
 		fatal("ClientMgr usage: fClientMgr netMgrAdr rtrAdr rtrIp myIp myAdr finTime usersFile");
 	char * unamesFile = argv[8];
-	ClientMgr climgr(netMgrAdr,rtrIp,rtrAdr,CC_Adr,myIp, myAdr, unamesFile);
+	char * acctFile = argv[9];
+	ClientMgr climgr(netMgrAdr,rtrIp,rtrAdr,CC_Adr,myIp, myAdr, unamesFile,acctFile);
 	if(!climgr.init()) fatal("ClientMgr::init: Failed to initialize ClientMgr");
 	climgr.run(1000000*finTime);
 	return 0;
 }
 // Constructor for ClientMgr, allocates space and initializes private data
-ClientMgr::ClientMgr(fAdr_t nma, ipa_t ri, fAdr_t ra, fAdr_t cca, ipa_t mi, fAdr_t ma, char * filename)
+ClientMgr::ClientMgr(fAdr_t nma, ipa_t ri, fAdr_t ra, fAdr_t cca, ipa_t mi, fAdr_t ma, char * filename, char * acctFile)
 	: netMgrAdr(nma), rtrIp(ri), rtrAdr(ra), CC_Adr(cca), myIp(mi), myAdr(ma), unamesFile(filename) {
 	sock = extSock = avaSock = -1;
 	unames = new map<string,string>;
 	readUsernames();
 	int nPkts = 10000;
 	ps = new PacketStore(nPkts+1,nPkts+1);
+	acctFileStream.open(acctFile);
+	clients = new map<uint32_t,clientStruct>;
+	highLvlSeqNum = 0;
+	lowLvlSeqNum = 0; 
 }
 
 ClientMgr::~ClientMgr() { delete unames; }
@@ -64,14 +69,13 @@ bool ClientMgr::init() {
 	connect();
 	usleep(1000000); //sleep for one second
 	return Np4d::listen4d(extSock)
-		&& Np4d::nonblock(extSock);
+		&& Np4d::nonblock(extSock)
+		&& Np4d::nonblock(sock);
 }
-
 void ClientMgr::initializeAvatar() {
 	ipa_t avIp; ipp_t avPort;
 	avaSock = Np4d::accept4d(extSock, avIp, avPort);
 	if(avaSock < 0) return;
-	//receive uname + pword
 	char buf[100];
 	Np4d::recvBufBlock(avaSock,buf,100);
 	string uname; string pword; string s(buf);
@@ -98,35 +102,51 @@ void ClientMgr::initializeAvatar() {
 		} else
 			fatal("couldn't write to file");
 	}
-	//send avIp to NetMgr
+	(*clients)[++highLvlSeqNum].uname = uname;
+	(*clients)[highLvlSeqNum].pword = pword;
+	requestAvaInfo(avIp);
+}
+
+void ClientMgr::requestAvaInfo(ipa_t aip) {
 	packet p = ps->alloc();
-	if(p == 0) fatal("ClientMgr::initializeAvatar failed to alloc packet");
+	if(p == 0) fatal("ClientMgr::requestAvaInfo failed to alloc packet");
 	CtlPkt cp;
-	cp.setRrType(REQUEST); cp.setSeqNum(1);
-	cp.setCpType(NEW_CLIENT); cp.setAttr(CLIENT_IP,avIp);
+	cp.setRrType(REQUEST); cp.setSeqNum(((++lowLvlSeqNum) << 32)|(highLvlSeqNum & 0xffffffff));
+	cp.setCpType(NEW_CLIENT); cp.setAttr(CLIENT_IP,aip);
 	int len = cp.pack(ps->getPayload(p));
 	PacketHeader &h = ps->getHeader(p); h.setLength(Forest::OVERHEAD + len);
-	h.setPtype(CLIENT_SIG); h.setFlags(0);
+	h.setPtype(NET_SIG); h.setFlags(0);
 	h.setComtree(100); h.setSrcAdr(myAdr);
 	h.setDstAdr(netMgrAdr); h.pack(ps->getBuffer(p));
 	send(p);
-	//receive information back from NetMgr
-	int rp = recvFromForest();
-	cp.unpack(ps->getPayload(rp),1500);
-	fAdr_t avaRtrAdr, avaAdr; ipa_t avaRtrIp;
-	if(cp.getCpType() == NEW_CLIENT) {
-		avaRtrAdr = cp.getAttr(RTR_ADR);
-		avaRtrIp = cp.getAttr(RTR_IP);
-		avaAdr = cp.getAttr(CLIENT_ADR);
-	}
-	
-	//send forest info to avatar
-	Np4d::sendIntBlock(avaSock,avaRtrAdr);
-	Np4d::sendIntBlock(avaSock,avaAdr);
-	Np4d::sendIntBlock(avaSock,avaRtrIp);
-	Np4d::sendIntBlock(avaSock,CC_Adr);
-	close(avaSock);
 }
+
+/*
+ *
+ */
+void ClientMgr::writeToAcctFile(CtlPkt cp) {
+	if(acctFileStream.good()) {
+		if(cp.getCpType() == NEW_CLIENT && cp.getRrType() == POS_REPLY) {
+			acctFileStream << Misc::getTime() << " Client "; Forest::writeForestAdr(acctFileStream,cp.getAttr(CLIENT_ADR));
+			acctFileStream << " added to router "; Forest::writeForestAdr(acctFileStream,cp.getAttr(RTR_ADR));
+			acctFileStream << endl;
+		} else if(cp.getCpType() == CLIENT_CONNECT) {
+			acctFileStream << Misc::getTime() << " Client "; Forest::writeForestAdr(acctFileStream,cp.getAttr(CLIENT_ADR));
+			acctFileStream << " connected to router "; Forest::writeForestAdr(acctFileStream,cp.getAttr(RTR_ADR));
+			acctFileStream << endl;
+		} else if(cp.getCpType() == CLIENT_DISCONNECT) {
+			acctFileStream << Misc::getTime() << " Client "; Forest::writeForestAdr(acctFileStream,cp.getAttr(CLIENT_ADR));
+			acctFileStream << " disconnected from router "; Forest::writeForestAdr(acctFileStream,cp.getAttr(RTR_ADR));
+			acctFileStream << endl;
+		} else {
+			acctFileStream << "Unrecognized control packet" << endl;
+		}
+	} else {
+		cerr << "accounting file could not open" << endl;
+	}
+}
+
+
 /* Read usernames and passwords from file and save into respective arrays
  * @param filename is the usernames file to read from
  */
@@ -160,7 +180,42 @@ void ClientMgr::run(int finTime) {
 	now = 0;
 	while(now <= finTime) {
 		now = Misc::getTime();
-		initializeAvatar();
+		if(avaSock < 0) initializeAvatar();
+		int p = recvFromForest();
+		if(p != 0) {
+			CtlPkt cp; cp.unpack(ps->getPayload(p),1500);
+			if(cp.getCpType() == CLIENT_CONNECT || cp.getCpType() == CLIENT_DISCONNECT) {
+				writeToAcctFile(cp);
+				uint64_t highLvlSeq = cp.getSeqNum() & 0xffffffff;
+				lowLvlSeqNum = cp.getSeqNum() >> 32;
+				cp.setSeqNum((++lowLvlSeqNum << 32)|(highLvlSeq & 0xffffffff));
+				cp.setRrType(POS_REPLY);
+				int len = cp.pack(ps->getPayload(p));
+				PacketHeader &h = ps->getHeader(p);
+				h.setLength(Forest::OVERHEAD + len);
+				h.setDstAdr(netMgrAdr);
+				h.setSrcAdr(myAdr);
+				h.pack(ps->getBuffer(p));
+				send(p);
+					
+			} else if(cp.getCpType() == NEW_CLIENT && cp.getRrType() == POS_REPLY) {
+				uint64_t highLvlSeq = cp.getSeqNum() & 0xffffffff;
+				lowLvlSeqNum = cp.getSeqNum() >> 32;
+				writeToAcctFile(cp);
+				fAdr_t avaRtrAdr = cp.getAttr(RTR_ADR);
+				ipa_t avaRtrIp = cp.getAttr(RTR_IP);
+				fAdr_t avaAdr = cp.getAttr(CLIENT_ADR);
+				(*clients)[highLvlSeq].ra = avaRtrAdr;
+				(*clients)[highLvlSeq].rip = avaRtrIp;
+				(*clients)[highLvlSeq].fa = avaAdr;
+				Np4d::sendInt(avaSock,avaRtrAdr);
+				Np4d::sendInt(avaSock,avaAdr);
+				Np4d::sendInt(avaSock,avaRtrIp);
+				Np4d::sendInt(avaSock,CC_Adr);
+				close(avaSock);
+				avaSock = -1;
+			}
+		}
 	}
 	disconnect();
 }

@@ -25,7 +25,7 @@
 
 class RouterCore {
 public:
-		RouterCore(fAdr_t);
+		RouterCore(fAdr_t,fAdr_t,int,int);
 		~RouterCore();
 
 	bool	init(char*,char*,char*,char*,char*);
@@ -33,6 +33,7 @@ public:
 	void	dump(ostream& os);
 private:
 	fAdr_t	myAdr;			// forest address of this router
+	fAdr_t	netMgrAdr;		// forest address of the netMgr
 		
 	int	nLnks;			// max number of links
 	int	nComts;			// max number of comtrees
@@ -40,7 +41,9 @@ private:
 	int	nPkts;			// number of packets
 	int	nBufs;			// number of packet buffers
 	int	nQus;			// number of queues
-
+	int	currClient;		// next fAdr local address to give out
+	int	localLBound;		// lower bound on local addresses
+	int	localUBound;		// upper bound on local addresses
 	uint32_t now;			// current time in 32 bit form
 
 	LinkTable *lt;			// table defining links
