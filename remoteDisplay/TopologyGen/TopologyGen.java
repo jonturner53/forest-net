@@ -243,9 +243,8 @@ public class TopologyGen extends JFrame{
 					"\nleafBitRateUp="+rates[4]+" leafBitRateDown="+rates[5]+" leafPktRateUp="+rates[6]+" leafPktRateDown="+rates[7]+"\n");
 				for(TopoLink tl: ct.getLinks())
 					out.write("link=("+printLink(tl)+") ");
-				out.write("\n;\n; # end of comtrees section");
 			}
-
+			out.write("\n;\n; # end of comtrees section");
 			out.close();
 		}catch(Exception e){
 			 e.printStackTrace();

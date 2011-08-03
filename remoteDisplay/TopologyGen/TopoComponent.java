@@ -11,7 +11,7 @@ public class TopoComponent implements Comparable{
 	protected String[] ifc;
 	protected ArrayList<String[]> interfaces;
 	protected Shape shape;
-	protected ArrayList<Line2D.Double> lnks = new ArrayList<Line2D.Double>();
+	protected ArrayList<TopoLink> lnks = new ArrayList<TopoLink>();
 	protected double dx, dy, dx2, dy2;
 	protected int type;
 	protected Integer weight = 0;
@@ -47,7 +47,7 @@ public class TopoComponent implements Comparable{
 	}
 	
 	public boolean compareLinks(TopoLink l){
-		return lnks.contains(l.shape);
+		return lnks.contains(l);
 	}
 
 	public void setDif(double xdiff, double ydiff){
@@ -177,8 +177,12 @@ public class TopoComponent implements Comparable{
 		return interfaces;
 	}
 
-	public void addLink(Line2D.Double l){
+	public void addLink(TopoLink l){
 		lnks.add(l);
+	}
+	
+	public ArrayList<TopoLink> getLinks(){
+		return lnks;
 	}
 
 	public Point getPoint(){

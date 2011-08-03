@@ -261,6 +261,9 @@ public class Panel extends JPanel{
 			circle.setFrame(radius, radius, width, height);
 			Rectangle2D.Double square = new Rectangle2D.Double(radius, radius, width, height);
 			square.setFrame(radius, radius, width, height);
+			Rectangle2D.Double client_square = new Rectangle2D.Double(radius, radius, width/1.5, height/1.5);
+			client_square.setFrame(radius, radius, width/1.5, height/1.5);
+
 			while(!paintQ.isEmpty()){
 				MenuItem mi  = paintQ.poll();
 				int type = mi.getType();
@@ -276,7 +279,7 @@ public class Panel extends JPanel{
 					numControllers++;
 				}else if(type == c.CLIENT){
 					name="Client"+numClients;
-					next = new TopoComponent(name, mi, square);
+					next = new TopoComponent(name, mi, client_square);
 					numClients++;
 				}
 				if(next != null){
@@ -336,7 +339,7 @@ public class Panel extends JPanel{
 					g2.fill(s);
 					g.setColor(Color.BLACK);
 					g2.draw(s);
-					g2.drawString(tc.getName(), ((int) r.getX()) + ((int) r.getWidth())/3, ((int) r.getY())+((int) r.getHeight())/2);
+					g2.drawString(tc.getName(), ((int) r.getX()) + ((int) r.getWidth())/4, ((int) r.getY())+((int) r.getHeight())/2);
 				}
 			}
 			if(selection != null){
@@ -402,7 +405,10 @@ public class Panel extends JPanel{
 
 			}else if(dragging && !selecting && !linking){ //move selected component
 				TopoComponent close = min(e.getPoint());
-				TopoComponent[] stack = getComponents(e.getPoint());
+				ArrayList<TopoLink> lnks = null;
+				if(!(close instanceof TopoLink))
+					lnks = close.getLinks();
+
 				Rectangle2D bnds = close.shape.getBounds2D();
 				if(first)
 					init = close.getPoint();
@@ -413,15 +419,17 @@ public class Panel extends JPanel{
 				loc.translate((int)((e.getX()-x_offset)-loc.getX()), (int)((e.getY()- y_offset)-loc.getY()));
 				if(close.shape instanceof Ellipse2D.Double)
 					((Ellipse2D.Double) close.shape).setFrame(loc.getX(), loc.getY(), width, height);
-				else if(close.shape instanceof Rectangle2D.Double)
+				else if(close.shape instanceof Rectangle2D.Double && close.getType()==c.CONTROLLER)
 					((Rectangle2D.Double) close.shape).setRect(loc.getX(), loc.getY(), width, height);
-				for(TopoComponent tc: stack){
-					if(!(tc.equals(close))){
-						if(tc instanceof TopoLink)
-							System.out.println("LINE");
+				else if(close.shape instanceof Rectangle2D.Double && close.getType()==c.CLIENT)
+					((Rectangle2D.Double) close.shape).setRect(loc.getX(), loc.getY(), width/1.5, height/1.5);
+				/*
+				if(lnks!=null){
+					for(TopoLink l: lnks){
+						System.out.println("LINE: " + l);
 					}
 				}
-				/*
+			
 				else if(close.shape instanceof Line2D.Double){
 					Line2D.Double ln = (Line2D.Double) close.shape;
 					x1 = ln.getX1();
@@ -552,7 +560,7 @@ public class Panel extends JPanel{
 					}
 					lines.get(lines.indexOf(cLine)).setLine(begin, end);
 					((Line2D.Double) getComponent(cLine).shape).setLine(begin, end);
-					TopoComponent[] pair = addLink(cLine);
+					TopoComponent[] pair = addLink((TopoLink) getComponent(cLine));
 					if(pair != null){
 						if(pair[1]!= null){
 							TopoLink lnk = (TopoLink) getComponent(cLine); 
@@ -663,12 +671,12 @@ public class Panel extends JPanel{
 	}
 
 
-	private TopoComponent[] addLink(Line2D.Double l){
+	private TopoComponent[] addLink(TopoLink l){
 		TopoComponent[] ends = new TopoComponent[2];
 		int count = 0;
 		boolean empty = true;
 		for(TopoComponent tc: components){
-			if(l.intersects(tc.shape.getBounds2D()) && !(tc instanceof TopoLink)){
+			if(l.shape.intersects(tc.shape.getBounds2D()) && !(tc instanceof TopoLink)){
 				tc.addLink(l);
 				empty = false;
 				ends[count++]=tc;
