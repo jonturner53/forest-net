@@ -45,51 +45,79 @@ public:
 		NetInfo(int,int,int,int,int);
 		~NetInfo();
 
+	// methods for working with nodes
 	// predicates
 	bool	validNode(int) const;
-	bool	isLeaf(int) const;
-	bool	isRouter(int) const;
-	bool	validLink(int) const;
-	bool	validIf(int, int) const;
-	bool	validComtree(int) const;
-	bool	validComtIndex(int) const;
-	bool	isComtCoreNode(int,int) const;
-	bool	isComtLink(int,int) const;
-
-	// access methods
+	// iterating through nodes
+	int	firstNode() const;
+	int	nextNode(int) const;
+	// access node attributes
 	int	getMaxNode() const;
-	int	getMaxRouter() const;
-	int	getMaxLink() const;
-	string& getNodeName(int);
+	string& getNodeName(int,string&);
 	int	getNodeNum(string&) const;
 	ntyp_t	getNodeType(int) const;
 	fAdr_t	getNodeAdr(int) const;
 	double	getNodeLat(int) const;
 	double	getNodeLong(int) const;
-	int	firstNode() const;
-	int	nextNode(int) const;
-	int	firstLinkAt(int) const;
-	int	nextLinkAt(int,int) const;
-	// leaf only
-	ipa_t	getLeafIpAdr(int) const;
+	// modify node attributes
+	bool	setNodeName(int, string&);
+	bool	setNodeAdr(int, fAdr_t);
+	bool	setNodeLat(int, double);
+	bool	setNodeLong(int, double);
+
+	// additional methods for leaf nodes
+	// predicates
+	bool	isLeaf(int) const;
 	int	firstLeaf() const;
 	int	nextLeaf(int) const;
-	// router only
+	int	firstController() const;
+	int	nextController(int) const;
+	// access leaf attributes
+	ipa_t	getLeafIpAdr(int) const;
+	// add/modify leaves
+	int	addLeaf(const string&, ntyp_t);
+	bool	setLeafType(int, ntyp_t);
+	bool	setLeafIpAdr(int, ipa_t);
+
+	// additional methods for routers
+	// predicates
+	bool	isRouter(int) const;
+	bool	validIf(int, int) const;
+	// iterating through routers
+	int	firstRouter() const;
+	int	nextRouter(int) const;
+	// access router attributes
+	int	getMaxRouter() const;
 	int	getNumIf(int) const;
 	fAdr_t	getFirstCliAdr(int) const;
 	fAdr_t	getLastCliAdr(int) const;
-	int	firstRouter() const;
-	int	nextRouter(int) const;
-	// router interfaces
 	ipa_t	getIfIpAdr(int,int) const;
 	int	getIfBitRate(int,int) const;
 	int	getIfPktRate(int,int) const;
 	int	getIfFirstLink(int,int) const;
 	int	getIfLastLink(int,int) const;
-	// controllers only
-	int	firstController() const;
-	int	nextController(int) const;
-	// link attributes
+	// add/modify routers
+	int	addRouter(const string&);
+	bool	addInterfaces(int, int);
+	bool	setFirstCliAdr(int, fAdr_t);
+	bool	setLastCliAdr(int, fAdr_t);
+	bool	setIfIpAdr(int,int,ipa_t);
+	bool	setIfIpAdr(int,ipa_t);
+	bool	setIfBitRate(int,int,int);
+	bool	setIfPktRate(int,int,int);
+	bool	setIfFirstLink(int,int,int);
+	bool	setIfLastLink(int,int,int);
+
+	// methods for working with links
+	// predicates
+	bool	validLink(int) const;
+	// iterating through links
+	int	firstLink() const;
+	int	nextLink(int) const;
+	int	firstLinkAt(int) const;
+	int	nextLinkAt(int,int) const;
+	// access link attributes
+	int	getMaxLink() const;
 	int	getLinkL(int) const;
 	int	getLinkR(int) const;
 	int	getPeer(int,int) const;
@@ -101,9 +129,28 @@ public:
 	int	getLinkLength(int) const;
 	int	getLinkNum(int) const;
 	int	getLinkNum(int,int) const;
-	int	firstLink() const;
-	int	nextLink(int) const;
-	// comtree attributes
+	// add/modify links
+	int	addLink(int,int,int,int);
+	bool	setLocLinkL(int,int);
+	bool	setLocLinkR(int,int);
+	bool	setLinkBitRate(int,int);
+	bool	setLinkPktRate(int,int);
+	bool	setLinkLength(int,int);
+
+	// methods for working with comtrees
+	// predicates
+	bool	validComtree(int) const;
+	bool	validComtIndex(int) const;
+	bool	isComtCoreNode(int,int) const;
+	bool	isComtLink(int,int) const;
+	// methods for iterating through comtrees and comtree components
+	int	firstComtIndex() const;
+	int	nextComtIndex(int) const;
+	int	firstCore(int) const;
+	int	nextCore(int, int) const;
+	int	firstComtLink(int) const;
+	int	nextComtLink(int,int) const;
+	// access comtree attributes
 	int	lookupComtree(int) const;
 	int	getComtree(int) const;
 	int	getComtRoot(int) const;
@@ -115,44 +162,13 @@ public:
 	int	getComtLeafBrUp(int) const;
 	int	getComtLeafPrDown(int) const;
 	int	getComtLeafPrUp(int) const;
-	int	firstCore(int) const;
-	int	nextCore(int, int) const;
-	int	firstComtLink(int) const;
-	int	nextComtLink(int,int) const;
-	int	firstComtIndex() const;
-	int	nextComtIndex(int) const;
-
-	// modifiers
-	bool	setNodeName(int, string&);
-	void	setNodeAdr(int, fAdr_t);
-	void	setNodeLat(int, double);
-	void	setNodeLong(int, double);
-	// leaf only
-	void	setLeafType(int, ntyp_t);
-	void	setLeafIpAdr(int, ipa_t);
-	int	addLeaf(const string&, ntyp_t);
-	// router only
-	void	setFirstCliAdr(int, fAdr_t);
-	void	setLastCliAdr(int, fAdr_t);
-	int	addRouter(const string&);
-	bool	addInterfaces(int, int);
-	// router interfaces
-	void	setIfIpAdr(int,int,ipa_t);
-	void	setIfIpAdr(int,ipa_t);
-	void	setIfBitRate(int,int,int);
-	void	setIfPktRate(int,int,int);
-	void	setIfFirstLink(int,int,int);
-	void	setIfLastLink(int,int,int);
-	// links
-	int	addLink(int,int,int,int);
-	void	setLocLinkL(int,int);
-	void	setLocLinkR(int,int);
-	void	setLinkBitRate(int,int);
-	void	setLinkPktRate(int,int);
-	void	setLinkLength(int,int);
-	// comtrees
+	// add/remove/modify comtrees
 	bool	addComtree(int);
 	bool	removeComtree(int);
+	bool	addComtCoreNode(int,int);
+	bool	removeComtCoreNode(int,int);
+	bool	addComtLink(int,int);
+	bool	removeComtLink(int,int);
 	bool	setComtRoot(int,int);
 	bool	setComtBrDown(int,int);
 	bool	setComtBrUp(int,int);
@@ -162,10 +178,6 @@ public:
 	bool	setComtLeafBrUp(int,int);
 	bool	setComtLeafPrDown(int,int);
 	bool	setComtLeafPrUp(int,int);
-	bool	addComtCoreNode(int,int);
-	bool	removeComtCoreNode(int,int);
-	bool	addComtLink(int,int);
-	bool	removeComtLink(int,int);
 
 	// io routines
 	bool read(istream&);
@@ -223,8 +235,6 @@ private:
 	RtrNodeInfo *rtr;
 	UiSetPair *routers;	///< tracks routers and unused router numbers
 
-	string	tmpBuffer;	///< used to return strings to callers
-
 	/** maps a node name back to corresponding node number */
 	map<string, int> *nodeNumMap;
 
@@ -257,387 +267,875 @@ private:
 	IdMap *comtreeMap;	///< maps comtree numbers to indices in array
 };
 
+// Methods for working with nodes ///////////////////////////////////
+
+/** Check to see that a node number is valid.
+ *  @param n is an integer node number
+ *  @return true if n represents a valid node in the network,
+ *  else false
+ */
 inline bool NetInfo::validNode(int n) const {
 	return (isLeaf(n) || isRouter(n));
 }
 
-inline bool NetInfo::isRouter(int n) const {
-	return (1 <= n && n <= maxRtr && rtr[n].fAdr != 0);
-}
-
-inline bool NetInfo::isLeaf(int n) const {
-	return (maxRtr < n && n <= maxNode && leaf[n-maxRtr].fAdr != 0);
-}
-
-inline bool NetInfo::validLink(int lnk) const {
-	return netTopo->validEdge(lnk);
-}
-
-inline bool NetInfo::validIf(int n, int iface) const {
-	return isRouter(n) && (1 <= iface && iface <= rtr[n].numIf &&
-					  rtr[n].iface[iface].ipAdr != 0);
-}
-
-inline bool NetInfo::validComtree(int comt) const {
-	return comtreeMap->validKey(comt);
-}
-
-inline bool NetInfo::validComtIndex(int i) const {
-	return 1 <= i && i <= maxComtree && comtree[i].comtreeNum != 0;
-}
-
-inline bool NetInfo::isComtCoreNode(int i, int x) const {
-	return validComtIndex(i) &&
-		comtree[i].coreSet->find(x) != comtree[i].coreSet->end();
-}
-
-inline bool NetInfo::isComtLink(int i, int lnk) const {
-	return validComtIndex(i) &&
-		comtree[i].linkMap ->find(lnk) != comtree[i].linkMap->end();
-}
-
-inline int NetInfo::getMaxNode() const { return maxNode; }
-inline int NetInfo::getMaxRouter() const { return maxRtr; }
-inline int NetInfo::getMaxLink() const { return maxLink; }
-
-/** Get the name for a given node number.
- *  @param n is a node number
- *  @return a reference to an internal string object with string
- *  value being the name corresponding to the given node number,
- *  or the empty string if there is no such node;
- *  the value of this string may change the next time any method
- *  is called on this NetInfo object
+/** Get the number of the "first" node in the Forest network.
+ *  This method is used when iterating through all the nodes.
+ *  @return the node number of a nominal first node.
  */
-inline string& NetInfo::getNodeName(int n) {
-	tmpBuffer = (isLeaf(n) ? leaf[n-maxRtr].name : 
-		     (isRouter(n) ? rtr[n].name : ""));
-	return tmpBuffer;
+inline int NetInfo::firstNode() const {
+	return (firstRouter() != 0 ? firstRouter() : firstLeaf());
 }
 
+/** Get the node number of the "next" node in the Forest network.
+ *  Used for iterating through all the nodes.
+ *  @param n is the number of a node in the network
+ *  @return the node number of the node following n, or 0 if there is
+ *  no such node
+ */
+inline int NetInfo::nextNode(int n) const {
+	return (isLeaf(n) ? nextLeaf(n) :
+		(isRouter(n) ?
+		 (nextRouter(n) != 0 ? nextRouter(n) : firstLeaf())
+		: 0));
+}
+
+/** Get the node number of the first controller in the Forest network.
+ *  Used for iterating through all the controllers
+ *  @return the node number of the first controller, or 0 if
+ *  no controllers have been defined.
+ */
+inline int NetInfo::firstController() const {
+	set<int>::iterator p = controllers->begin();
+	return (p != controllers->end() ? (*p)+maxRtr : 0);
+}
+
+/** Get the node number of the next controller in the Forest network.
+ *  Used for iterating through all the controllers
+ *  @param n is the node number for a controller
+ *  @return the node number of the next controller, or 0 if
+ *  there is no next controller.
+ */
+inline int NetInfo::nextController(int n) const {
+	set<int>::iterator p = controllers->find(n-maxRtr);
+	if (p == controllers->end()) return 0;
+	p++;
+	return (p != controllers->end() ? (*p)+maxRtr : 0);
+}
+
+/** Get the maximum node number for the network.
+ *  @return the largest node number for nodes in this network
+ */
+inline int NetInfo::getMaxNode() const { return maxNode; }
+
+/** Get the name for a specified node.
+ *  @param n is a node number
+ *  @param s is a provided string in which the result is to be returned
+ *  @return a reference to s
+ */
+inline string& NetInfo::getNodeName(int n, string& s) {
+	s = (isLeaf(n) ? leaf[n-maxRtr].name : 
+	     (isRouter(n) ? rtr[n].name : ""));
+	return s;
+}
+
+/** Get the node number corresponding to a give node name.
+ *  @param s is the name of a node
+ *  @return an integer node number or 0 if the given string does not
+ *  the name of any node
+ */
 inline int NetInfo::getNodeNum(string& s) const {
 	map<string,int>::iterator p = nodeNumMap->find(s);
 	return ((p != nodeNumMap->end()) ? p->second : 0);
 }
 
+/** Get the type of a specified node .
+ *  @param n is a node number
+ *  @return the node type of n or UNDEF_NODE if n is not a valid node number
+ */
 inline ntyp_t NetInfo::getNodeType(int n) const {
 	return (isLeaf(n) ? leaf[n-maxRtr].nType : 
 		(isRouter(n) ? rtr[n].nType : UNDEF_NODE));
 }
 
+/** Set the name of a node.
+ *  @param n is the node number for the node
+ *  @param nam is its new name
+ *  @return true if the operation succeeds, else false
+ */
+inline bool NetInfo::setNodeName(int n, string& nam) {
+	if (!validNode(n)) return false;
+	if (isRouter(n)) rtr[n].name = nam;
+	else 		 leaf[n-maxRtr].name = nam;
+	string s;
+	nodeNumMap->erase(getNodeName(n,s));
+	(*nodeNumMap)[nam] = n;
+	return true;
+}
+
+/** Set the forest address of a node.
+ *  @param n is the node number for the node
+ *  @param adr is its new forest address
+ *  @return true if the operation succeeds, else false
+ */
+inline bool NetInfo::setNodeAdr(int n, fAdr_t adr) {
+	if (isLeaf(n)) leaf[n-maxRtr].fAdr = adr;
+	else if (isRouter(n)) rtr[n].fAdr = adr;
+	else return false;
+	return true;
+}
+
+/** Set the latitude of a node.
+ *  @param n is the node number for the node
+ *  @param lat is its new latitude
+ *  @return true if the operation succeeds, else false
+ */
+inline bool NetInfo::setNodeLat(int n, double lat) {
+	if (isLeaf(n)) leaf[n-maxRtr].latitude = (int) (lat*1000000);
+	else if (isRouter(n)) rtr[n].latitude  = (int) (lat*1000000);
+	else return false;
+	return true;
+}
+
+/** Set the longitude of a node.
+ *  @param n is the node number for the node
+ *  @param lat is its new longtitude
+ *  @return true if the operation succeeds, else false
+ */
+inline bool NetInfo::setNodeLong(int n, double longg) {
+	if (isLeaf(n)) leaf[n-maxRtr].longitude = (int) (longg*1000000);
+	else if (isRouter(n)) rtr[n].longitude  = (int) (longg*1000000);
+	else return false;
+	return true;
+}
+
+// Additional methods for working with leaf nodes ///////////////////
+
+/** Determine if a given node number identifies a leaf.
+ *  @param n is an integer node number
+ *  @return true if n corresponds to a leaf in the network,
+ *  else false
+ */
+inline bool NetInfo::isLeaf(int n) const {
+	return (n <= maxRtr ? 0 : leaves->isIn(n - maxRtr));
+}
+
+/** Get the node number of the first leaf node in the Forest network.
+ *  Used for iterating through all the leaf nodes.
+ *  @return the node number of the nominal first leaf, or 0 if
+ *  no leaves have been defined.
+ */
+inline int NetInfo::firstLeaf() const {
+	return (leaves->firstIn() != 0 ? maxRtr + leaves->firstIn() : 0);
+}
+
+/** Get the node number of the "next" leaf node in the Forest network.
+ *  Used for iterating through all the leaves.
+ *  @param n is the number of a leaf in the network
+ *  @return the node number of the leaf following n, or 0 if there is
+ *  no such leaf
+ */
+inline int NetInfo::nextLeaf(int n) const {
+	int nxt = leaves->nextIn(n-maxRtr);
+	return (nxt != 0 ? maxRtr + nxt : 0);
+}
+
+/** Set the node type of a leaf node.
+ *  @param n is the node number of the leaf
+ *  @param typ is its new node type
+ *  @return true if the operation succeeds, else false
+ */
+inline bool NetInfo::setLeafType(int n, ntyp_t typ) {
+	if (isLeaf(n)) leaf[n-maxRtr].nType = typ;
+	else return false;
+	return true;
+}
+
+/** Set the IP address of a leaf node.
+ *  @param n is the node number of the leaf
+ *  @param ip is its new IP address
+ *  @return true if the operation succeeds, else false
+ */
+inline bool NetInfo::setLeafIpAdr(int n, ipa_t ip) {
+	if (isLeaf(n)) leaf[n-maxRtr].ipAdr = ip;
+	else return false;
+	return true;
+}
+
+// Additional methods for working with routers //////////////////////
+
+/** Determine if a given node number identifies a router.
+ *  @param n is an integer node number
+ *  @return true if n corresponds to a router in the network,
+ *  else false
+ */
+inline bool NetInfo::isRouter(int n) const { return routers->isIn(n); }
+
+/** Check to see if a given router interface is valid.
+ *  @param r is the node number of a router
+ *  @param iface is an integer interface n umber
+ *  @return true if iface is a falid interface for r,
+ *  else false
+ */
+inline bool NetInfo::validIf(int r, int iface) const {
+	return isRouter(r) && (1 <= iface && iface <= rtr[r].numIf &&
+					  rtr[r].iface[iface].ipAdr != 0);
+}
+
+/** Get the node number of the first router in the Forest network.
+ *  Used for iterating through all the routers.
+ *  @return the node number of the nominal first router, or 0 if
+ *  no routers have been defined.
+ */
+inline int NetInfo::firstRouter() const { return routers->firstIn(); } 
+
+/** Get the node number of the "next" router in the Forest network.
+ *  Used for iterating through all the routers.
+ *  @param r is the number of a router in the network
+ *  @return the node number of the router following r, or 0 if there is
+ *  no such router
+ */
+inline int NetInfo::nextRouter(int r) const { return routers->nextIn(r); }
+
+/** Get the maximum router number for the network.
+ *  @return the largest router number for this network
+ */
+inline int NetInfo::getMaxRouter() const { return maxRtr; }
+
+/** Get the first address in a router's range of client addresses.
+ *  Each router is assigned a range of Forest addresses for its clients.
+ *  This method gets the first address in the range.
+ *  @param r is the node number of a router
+ *  @return the first client address for r or 0 if r is not a valid router
+ */
+inline fAdr_t NetInfo::getFirstCliAdr(int r) const {
+	return (isRouter(r) ? rtr[r].firstCliAdr : 0);
+}
+
+/** Get the last address in a router's range of client addresses.
+ *  Each router is assigned a range of Forest addresses for its clients.
+ *  This method gets the last address in the range.
+ *  @param r is the node number of a router
+ *  @return the last client address for r or 0 if r is not a valid router
+ */
+inline fAdr_t NetInfo::getLastCliAdr(int r) const {
+	return (isRouter(r) ? rtr[r].lastCliAdr : 0);
+}
+
+/** Get the number of interfaces defined for a router.
+ *  @param r is the node number of a router
+ *  @return the number of interfaces defined for router r or 0 if r
+ *  is not a valid router
+ */
+inline int NetInfo::getNumIf(int r) const {
+	return (isRouter(r) ? rtr[r].numIf : 0);
+}
+
+/** Get the IP address of a leaf node
+ *  @param n is a leaf node number
+ *  @return the IP address of n or 0 if n is not a valid leaf
+ */
 inline ipa_t NetInfo::getLeafIpAdr(int n) const {
 	return (isLeaf(n) ? leaf[n-maxRtr].ipAdr : 0);
 }
 
+/** Get the Forest address of a node
+ *  @param n is a node number
+ *  @return the Forest address of n or 0 if n is not a valid node
+ */
 inline fAdr_t NetInfo::getNodeAdr(int n) const {
 	return (isLeaf(n) ? leaf[n-maxRtr].fAdr :
 		(isRouter(n) ? rtr[n].fAdr : 0));
 }
 
-inline fAdr_t NetInfo::getFirstCliAdr(int n) const {
-	return (isRouter(n) ? rtr[n].firstCliAdr : 0);
-}
-
-inline fAdr_t NetInfo::getLastCliAdr(int n) const {
-	return (isRouter(n) ? rtr[n].lastCliAdr : 0);
-}
-
-inline int NetInfo::getNumIf(int n) const {
-	return (isRouter(n) ? rtr[n].numIf : 0);
-}
-
+/** Get the latitude of a node in the Forest network.
+ *  Each node has a location which is represented using latitude and longitude.
+ *  Latitudes are returned as double precision values in units of degrees.
+ *  @param n is a node number
+ *  @return the latitude defined for n
+ */
 inline double NetInfo::getNodeLat(int n) const {
 	double x = (isLeaf(n) ? leaf[n-maxRtr].latitude :
 		    (isRouter(n) ? rtr[n].latitude : UNDEF_LAT));
 	return x/1000000;
 }
 
+/** Get the longitude of a node in the Forest network.
+ *  Each node has a location which is represented using latitude and longitude.
+ *  Latitudes are returned as double precision values in units of degrees.
+ *  @param n is a node number
+ *  @return the longitude defined for n
+ */
 inline double NetInfo::getNodeLong(int n) const {
 	double x = (isLeaf(n) ? leaf[n-maxRtr].longitude :
 		    (isRouter(n) ? rtr[n].longitude : UNDEF_LONG));
 	return x/1000000;
 }
 
-inline int NetInfo::firstNode() const { return 1; }
-inline int NetInfo::nextNode(int u) const {
-	return (u < netTopo->n() ? u+1 : 0);
-}
-
-inline int NetInfo::firstLeaf() const { return maxRtr + leaves->firstIn(); }
-inline int NetInfo::nextLeaf(int n) const {
-	if (!isLeaf(n)) return 0;
-	int nxt = leaves->nextIn(n-maxRtr);
-	return (nxt != 0 ? maxRtr + nxt : 0);
-}
-
-inline int NetInfo::firstLink() const { return netTopo->first(); }
-inline int NetInfo::nextLink(int lnk) const { return netTopo->next(lnk); }
-inline int NetInfo::firstLinkAt(int u) const {
-	return netTopo->first(u);
-}
-inline int NetInfo::nextLinkAt(int u, int lnk) const {
-	return netTopo->next(u,lnk);
-}
-
+/** Get the IP address of a specified router interface.
+ *  @param r is the node number of a router in the network
+ *  @param iface is an interface number for r
+ *  @return the IP address of the specified interface or 0 if
+ *  there is no such interface
+ */
 inline ipa_t NetInfo::getIfIpAdr(int n, int iface) const {
 	return (validIf(n,iface) ? rtr[n].iface[iface].ipAdr : 0);
 }
 
-inline int NetInfo::getIfFirstLink(int n, int iface) const {
-	return (validIf(n,iface) ? rtr[n].iface[iface].firstLink : 0);
+/** Get the first link in the range of links assigned to a given interface.
+ *  Each router interface is assigned a consecutive range of link numbers.
+ *  @param r is the node number of a router in the network
+ *  @param iface is an interface number for r
+ *  @return the first link number in the assigned range for this interface,
+ *  or 0 if the interface number is invalid.
+ */
+inline int NetInfo::getIfFirstLink(int r, int iface) const {
+	return (validIf(r,iface) ? rtr[r].iface[iface].firstLink : 0);
 }
 
-inline int NetInfo::getIfLastLink(int n, int iface) const {
-	return (validIf(n,iface) ? rtr[n].iface[iface].lastLink : 0);
+/** Get the last link in the range of links assigned to a given interface.
+ *  Each router interface is assigned a consecutive range of link numbers.
+ *  @param r is the node number of a router in the network
+ *  @param iface is an interface number for r
+ *  @return the last link number in the assigned range for this interface,
+ *  or 0 if the interface number is invalid.
+ */
+inline int NetInfo::getIfLastLink(int r, int iface) const {
+	return (validIf(r,iface) ? rtr[r].iface[iface].lastLink : 0);
 }
 
-inline int NetInfo::getIfBitRate(int n, int iface) const {
-	return (validIf(n,iface) ? rtr[n].iface[iface].bitRate : 0);
+/** Get the bit rate for a specified router interface.
+ *  @param r is the node number of a router in the network
+ *  @param iface is an interface number for r
+ *  @return the bit rate (in kb/s) assigned to this interface,
+ *  or 0 if the interface number is invalid.
+ */
+inline int NetInfo::getIfBitRate(int r, int iface) const {
+	return (validIf(r,iface) ? rtr[r].iface[iface].bitRate : 0);
 }
 
-inline int NetInfo::getIfPktRate(int n, int iface) const {
-	return (validIf(n,iface) ? rtr[n].iface[iface].pktRate : 0);
+/** Get the packet rate for a specified router interface.
+ *  @param r is the node number of a router in the network
+ *  @param iface is an interface number for r
+ *  @return the packet rate (in p/s) assigned to this interface,
+ *  or 0 if the interface number is invalid.
+ */
+inline int NetInfo::getIfPktRate(int r, int iface) const {
+	return (validIf(r,iface) ? rtr[r].iface[iface].pktRate : 0);
 }
 
+/** Set the first address in a router's range of assignable client addresses.
+ *  @param r is the node number of the router
+ *  @param adr is the forest address that defines the start of the range
+ *  @return true if the operation succeeds, else false
+ */
+inline bool NetInfo::setFirstCliAdr(int r, fAdr_t adr) {
+	if (isRouter(r)) rtr[r].firstCliAdr = adr;
+	else return false;
+	return true;
+}
+
+/** Set the last address in a router's range of assignable client addresses.
+ *  @param r is the node number of the router
+ *  @param adr is the forest address that defines the end of the range
+ *  @return true if the operation succeeds, else false
+ */
+inline bool NetInfo::setLastCliAdr(int r, fAdr_t adr) {
+	if (isRouter(r)) rtr[r].lastCliAdr = adr;
+	else return false;
+	return true;
+}
+
+/** Set the bit rate of a router interface.
+ *  @param r is the node number of the router
+ *  @param iface is the interface number
+ *  @param br is the new bit rate for the interface
+ *  @return true if the operation succeeds, else false
+ */
+inline bool NetInfo::setIfBitRate(int r, int iface, int br) {
+	if (validIf(r,iface)) rtr[r].iface[iface].bitRate = br;
+	else return false;
+	return true;
+}
+
+/** Set the packet rate of a router interface.
+ *  @param r is the node number of the router
+ *  @param iface is the interface number
+ *  @param pr is the new packet rate for the interface
+ *  @return true if the operation succeeds, else false
+ */
+inline bool NetInfo::setIfPktRate(int r, int iface, int pr) {
+	if (validIf(r,iface)) rtr[r].iface[iface].pktRate = pr;
+	else return false;
+	return true;
+}
+
+/** Set the first link in the range of links defined for a router interface.
+ *  Each router interface is assigned a consecutive range of link numbers
+ *  @param r is the node number of the router
+ *  @param iface is the interface number
+ *  @param lnk is the first link in the range of link numbers
+ *  @return true if the operation succeeds, else false
+ */
+inline bool NetInfo::setIfFirstLink(int r, int iface, int lnk) {
+	if (validIf(r,iface)) rtr[r].iface[iface].firstLink = lnk;
+	else return false;
+	return true;
+}
+
+/** Set the last link in the range of links defined for a router interface.
+ *  Each router interface is assigned a consecutive range of link numbers
+ *  @param r is the node number of the router
+ *  @param iface is the interface number
+ *  @param lnk is the last link in the range of link numbers
+ *  @return true if the operation succeeds, else false
+ */
+inline bool NetInfo::setIfLastLink(int r, int iface, int lnk) {
+	if (validIf(r,iface)) rtr[r].iface[iface].lastLink = lnk;
+	else return false;
+	return true;
+}
+
+/** Set the IP address of a router interface.
+ *  @param r is the node number of a router
+ *  @param iface is the interface number
+ *  @param ip is the new ip address for the interface
+ *  @return true if the operation succeeds, else false
+ */
+inline bool NetInfo::setIfIpAdr(int r, int iface, ipa_t ip) {
+	if (validIf(r,iface)) rtr[r].iface[iface].ipAdr = ip;
+	else return false;
+	return true;
+}
+
+// Methods for working with links ///////////////////////////////////
+
+/** Check to see if a given link number is valid.
+ *  @param n is an integer link number
+ *  @return true if n corresponds to a link in the network,
+ *  else false
+ */
+inline bool NetInfo::validLink(int lnk) const {
+	return netTopo->validEdge(lnk);
+}
+
+/** Get the number of the first link in the Forest network.
+ *  @return the number of the first link or 0 if no links have
+ *  been defined.
+ */
+inline int NetInfo::firstLink() const { return netTopo->first(); }
+
+/** Get the number of the next link in the Forest network.
+ *  @lnk is the number of a link in the network
+ *  @return the number of the link following lnk or 0 if there is no
+ *  such link
+ */
+inline int NetInfo::nextLink(int lnk) const { return netTopo->next(lnk); }
+
+/** Get the number of the first link incident to a specified node.
+ *  @param n is the node number of a node in the network
+ *  @return the number of the first link incident to n or 0 if there
+ *  are no links incident to n
+ */
+inline int NetInfo::firstLinkAt(int n) const {
+	return (validNode(n) ? netTopo->first(n) : 0);
+}
+
+/** Get the number of the next link incident to a specified node.
+ *  @param n is the node number of a node in the network
+ *  @param lnk is a link incident to n
+ *  @return the number of the next link incident to n or 0 if there
+ *  is no such link
+ */
+inline int NetInfo::nextLinkAt(int n, int lnk) const {
+	return (validNode(n) ? netTopo->next(n,lnk) : 0);
+}
+
+/** Get the maximum link number for the network.
+ *  @return the largest link number for links in this network
+ */
+inline int NetInfo::getMaxLink() const { return maxLink; }
+
+/** Get the node number for the "left" endpoint of a given link.
+ *  The endpoints of a link are arbitrarily designated "left" and "right".
+ *  @param lnk is a link number
+ *  @return the node number of the left endpoint of lnk, or 0 if lnk
+ *  is not a valid link number.
+ */
 inline int NetInfo::getLinkL(int lnk) const {
 	return (validLink(lnk) ? netTopo->left(lnk) : 0);
 }
 
-inline int NetInfo::getPeer(int rtr, int lnk) const {
-	return (validLink(lnk) ? netTopo->mate(rtr,lnk) : 0);
-}
-
+/** Get the node number for the "right" endpoint of a given link.
+ *  The endpoints of a link are arbitrarily designated "left" and "right".
+ *  @param lnk is a link number
+ *  @return the node number of the right endpoint of lnk, or 0 if lnk
+ *  is not a valid link number.
+ */
 inline int NetInfo::getLinkR(int lnk) const {
 	return (validLink(lnk) ? netTopo->right(lnk) : 0);
 }
 
-inline int NetInfo::getLocLink(int lnk, int n) const {
-	return (!validLink(lnk) ? 0 :
-		(n == netTopo->left(lnk) ? getLocLinkL(lnk) :
-		(n == netTopo->right(lnk) ? getLocLinkR(lnk) : 0)));
+/** Get the node number for the "other" endpoint of a given link.
+ *  @param r is the node number of a router
+ *  @param lnk is a link number
+ *  @return the node number of the endpoint of lnk that is not r, or
+ *  0 if lnk is not a valid link number or r is not an endpoint of lnk
+ */
+inline int NetInfo::getPeer(int r, int lnk) const {
+	return (validLink(lnk) ? netTopo->mate(r,lnk) : 0);
 }
 
+/** Get the local link number used by one of the endpoints of a link.
+ *  Each router in a Forest network refers to links using local link numbers.
+ *  @param lnk is a "global" link number
+ *  @param r is the node number of router
+ *  @return the local link number used by r or 0 if r is not a router
+ *  or is not incident to lnk
+ */
+inline int NetInfo::getLocLink(int lnk, int r) const {
+	return (!(validLink(lnk) && isRouter(r)) ? 0 :
+		(r == netTopo->left(lnk) ? getLocLinkL(lnk) :
+		(r == netTopo->right(lnk) ? getLocLinkR(lnk) : 0)));
+}
+
+/** Get the local link number used by the left endpoint of a link.
+ *  Each router in a Forest network refers to links using local link numbers.
+ *  @param lnk is a "global" link number
+ *  @return the local link number used by the left endpoint, or 0 if
+ *  the link number is invalid or the left endpoint is not a router.
+ */
 inline int NetInfo::getLocLinkL(int lnk) const {
-	return (validLink(lnk) ? link[lnk].leftLnum : 0);
+	int r = getLinkL(lnk);
+	return (isRouter(r) ? link[lnk].leftLnum : 0);
 }
 
+/** Get the local link number used by the right endpoint of a link.
+ *  Each router in a Forest network refers to links using local link numbers.
+ *  @param lnk is a "global" link number
+ *  @return the local link number used by the right endpoint, or 0 if
+ *  the link number is invalid or the left endpoint is not a router.
+ */
 inline int NetInfo::getLocLinkR(int lnk) const {
-	return (validLink(lnk) ? link[lnk].rightLnum : 0);
+	int r = getLinkR(lnk);
+	return (isRouter(r) ? link[lnk].rightLnum : 0);
 }
 
+/** Get the bit rate of a link in the Forest network.
+ *  @param lnk is a link number
+ *  @return the bit rate assigned to lnk or 0 if lnk is not a valid
+ *  link number
+ */
 inline int NetInfo::getLinkBitRate(int lnk) const {
 	return (validLink(lnk) ? link[lnk].bitRate : 0);
 }
 
+/** Get the packet rate of a link in the Forest network.
+ *  @param lnk is a link number
+ *  @return the packet rate assigned to lnk or 0 if lnk is not a valid
+ *  link number
+ */
 inline int NetInfo::getLinkPktRate(int lnk) const {
 	return (validLink(lnk) ? link[lnk].pktRate : 0);
 }
 
+/** Get the length of a link in the Forest network.
+ *  @param lnk is a link number
+ *  @return the assigned link length in kilometers, or 0 if lnk is not a valid
+ *  link number
+ */
 inline int NetInfo::getLinkLength(int lnk) const {
 	return (validLink(lnk) ? netTopo->length(lnk) : 0);
 }
 
+/** Get the number of the link incident to a leaf node.
+ *  @param n is a node number for a leaf
+ *  @return the number of its incident link or 0 if n is not a leaf
+ *  or if it has no link
+ */
 inline int NetInfo::getLinkNum(int n) const {
 	return (isLeaf(n) ? netTopo->first(n) : 0);
 }
 
-inline int NetInfo::getLinkNum(int n, int llnk) const {
-	return (isRouter(n) ? locLnk2lnk->lookup(ll2l_key(n,llnk))/2 : 0);
+/** Get the global link number of a link incident to a router.
+ *  @param r is a node number of a router
+ *  @param llnk is a local link number of a link at r
+ *  @return the global link number for local link llnk at r, or
+ *  or 0 if r is not a router, or it has no such link
+ */
+inline int NetInfo::getLinkNum(int r, int llnk) const {
+	return (isRouter(r) ? locLnk2lnk->lookup(ll2l_key(r,llnk))/2 : 0);
 }
 
-inline int NetInfo::firstRouter() const {
-	return routers->firstIn();
-}
-inline int NetInfo::nextRouter(int r) const {
-	return (isRouter(r) ? routers->nextIn(r) : 0);
-}
-
-inline int NetInfo::firstController() const {
-	set<int>::iterator p = controllers->begin();
-	return (p != controllers->end() ? (*p)+maxRtr : 0);
-}
-inline int NetInfo::nextController(int r) const {
-	set<int>::iterator p = controllers->find(r-maxRtr);
-	if (p == controllers->end()) return 0;
-	p++;
-	return (p != controllers->end() ? (*p)+maxRtr : 0);
+/** Set the local link number used by the left endpoint of a link.
+ *  Each router in a Forest network refers to links using local link numbers.
+ *  @param lnk is a "global" link number
+ *  @param loc is the local link number to be used by the left endpoint of lnk
+ *  @return true on success, else false
+ */
+inline bool NetInfo::setLocLinkL(int lnk, int loc) {
+	if (validLink(lnk)) link[lnk].leftLnum = loc;
+	else return false;
+	return true;
 }
 
-inline int NetInfo::lookupComtree(int comt) const {
-	return comtreeMap->getId(comt);
+inline bool NetInfo::setLocLinkR(int lnk, int loc) {
+	if (validLink(lnk)) link[lnk].rightLnum = loc;
+	else return false;
+	return true;
 }
 
-inline int NetInfo::getComtree(int c) const {
-	return (validComtIndex(c) ? comtree[c].comtreeNum : 0);
+/** Set the bit rate of a link.
+ *  @param lnk is a "global" link number
+ *  @param br is the new bit rate
+ *  @return true on success, else false
+ */
+inline bool NetInfo::setLinkBitRate(int lnk, int br) {
+	if (validLink(lnk)) link[lnk].bitRate = br;
+	else return false;
+	return true;
 }
 
-inline int NetInfo::getComtRoot(int c) const {
-	return (validComtIndex(c) ? comtree[c].root : 0);
+/** Set the packet rate of a link.
+ *  @param lnk is a "global" link number
+ *  @param br is the new packet rate
+ *  @return true on success, else false
+ */
+inline bool NetInfo::setLinkPktRate(int lnk, int pr) {
+	if (validLink(lnk)) link[lnk].pktRate = pr;
+	else return false;
+	return true;
 }
 
-inline int NetInfo::getComtBrDown(int c) const {
-	return (validComtIndex(c) ? comtree[c].bitRateDown : 0);
+/** Set the length of a link.
+ *  @param lnk is a "global" link number
+ *  @param len is the new length
+ *  @return true on success, else false
+ */
+inline bool NetInfo::setLinkLength(int lnk, int len) {
+	if (validLink(lnk)) netTopo->setLength(lnk,len);
+	else return false;
+	return true;
 }
 
-inline int NetInfo::getComtBrUp(int c) const {
-	return (validComtIndex(c) ? comtree[c].bitRateUp : 0);
+// Methods for working with comtrees ////////////////////////////////
+
+/** Check to see if a given comtree number is valid.
+ *  @param comt is an integer comtree number
+ *  @return true if comt corresponds to a comtree in the network,
+ *  else false
+ */
+inline bool NetInfo::validComtree(int comt) const {
+	return comtreeMap->validKey(comt);
 }
 
-inline int NetInfo::getComtPrDown(int c) const {
-	return (validComtIndex(c) ? comtree[c].pktRateDown : 0);
+/** Check to see if a given comtree index is valid.
+ *  NetInfo uses integer indices in a restricted range to access
+ *  comtree information efficiently. Users get the comtree index
+ *  for a given comtree number using the lookupComtree() method.
+ *  @param i is an integer comtree index
+ *  @return true if n corresponds to a comtree in the network,
+ *  else false
+ */
+inline bool NetInfo::validComtIndex(int i) const {
+	return comtreeMap->validId(i);
 }
 
-inline int NetInfo::getComtPrUp(int c) const {
-	return (validComtIndex(c) ? comtree[c].pktRateUp : 0);
+/** Determine if a router is a core node in a specified comtree.
+ *  @param i is an integer comtree index
+ *  @param r is the node number of a router
+ *  @return true if r is a core node in the comtree with index i,
+ *  else false
+ */
+inline bool NetInfo::isComtCoreNode(int i, int r) const {
+	return validComtIndex(i) &&
+		comtree[i].coreSet->find(r) != comtree[i].coreSet->end();
 }
 
-inline int NetInfo::getComtLeafBrDown(int c) const {
-	return (validComtIndex(c) ? comtree[c].leafBitRateDown : 0);
+/** Determine if a link is in a specified comtree.
+ *  @param i is an integer comtree index
+ *  @param lnk is a link number
+ *  @return true if lnk is a link in the comtree with index i,
+ *  else false
+ */
+inline bool NetInfo::isComtLink(int i, int lnk) const {
+	return validComtIndex(i) &&
+		comtree[i].linkMap->find(lnk) != comtree[i].linkMap->end();
 }
 
-inline int NetInfo::getComtLeafBrUp(int c) const {
-	return (validComtIndex(c) ? comtree[c].leafBitRateUp : 0);
-}
-
-inline int NetInfo::getComtLeafPrDown(int c) const {
-	return (validComtIndex(c) ? comtree[c].leafPktRateDown : 0);
-}
-
-inline int NetInfo::getComtLeafPrUp(int c) const {
-	return (validComtIndex(c) ? comtree[c].leafPktRateUp : 0);
-}
-
-inline int NetInfo::firstCore(int c) const {
-	if (!validComtIndex(c)) return 0;
-	set<int>::iterator p = comtree[c].coreSet->begin();
-	return (p != comtree[c].coreSet->end() ? *p : 0);
-}
-
-inline int NetInfo::nextCore(int r, int c) const {
-	if (!validComtIndex(c)) return 0;
-	set<int>::iterator p = comtree[c].coreSet->find(r);
-	if (p == comtree[c].coreSet->end()) return 0;
-	p++;
-	return (p != comtree[c].coreSet->end() ? *p : 0);
-}
-
+/** Get the first valid comtree index.
+ *  Used for iterating through all the comtrees.
+ *  @return the index of the first comtree, or 0 if no comtrees defined
+ */
 inline int NetInfo::firstComtIndex() const {
 	return comtreeMap->firstId();
 }
 
-inline int NetInfo::nextComtIndex(int c) const {
-	return comtreeMap->nextId(c);
+/** Get the next valid comtree index.
+ *  Used for iterating through all the comtrees.
+ *  @param ctx is a comtree index
+ *  @return the index of the next comtree after, or 0 if there is no
+ *  next index
+ */
+inline int NetInfo::nextComtIndex(int ctx) const {
+	return comtreeMap->nextId(ctx);
 }
 
-inline int NetInfo::firstComtLink(int c) const {
-	if (!validComtIndex(c)) return 0;
-	map<int,RateSpec>::iterator p = comtree[c].linkMap->begin();
-	return (p != comtree[c].linkMap->end() ? (*p).first : 0);
+/** Get the node number of the first core node in a comtree with a given index.
+ *  @param ctx is the comtree index
+ *  @return the node number of the first core node in the comtree,
+ *  or 0 if the comtree index is invalid or no core nodes have been defined
+ */
+inline int NetInfo::firstCore(int ctx) const {
+	if (!validComtIndex(ctx)) return 0;
+	set<int>::iterator p = comtree[ctx].coreSet->begin();
+	return (p != comtree[ctx].coreSet->end() ? *p : 0);
 }
 
-inline int NetInfo::nextComtLink(int lnk, int c) const {
-	if (!validComtIndex(c)) return 0;
-	map<int,RateSpec>::iterator p = comtree[c].linkMap->find(lnk);
-	if (p == comtree[c].linkMap->end()) return 0;
+/** Get the node number of the next core node in a comtree with a given index.
+ *  @param r is the node number of a router
+ *  @param ctx is the comtree index
+ *  @return the node number of the first core node in the comtree,
+ *  or 0 if the comtree index is invalid or no core nodes have been defined
+ */
+inline int NetInfo::nextCore(int r, int ctx) const {
+	if (!validComtIndex(ctx)) return 0;
+	set<int>::iterator p = comtree[ctx].coreSet->find(r);
+	if (p == comtree[ctx].coreSet->end()) return 0;
 	p++;
-	return (p != comtree[c].linkMap->end() ? (*p).first : 0);
+	return (p != comtree[ctx].coreSet->end() ? *p : 0);
 }
 
-inline bool NetInfo::setNodeName(int n, string& nam) {
-	if (!validNode(n)) return false;
-	if (isRouter(n)) rtr[n].name = nam;
-	else 		 leaf[n-maxRtr].name = nam;
-	nodeNumMap->erase(getNodeName(n));
-	(*nodeNumMap)[nam] = n;
-	return true;
+/** Get the first link defined for a specified comtree.
+ *  Used to iterate the links in a comtree.
+ *  @param ctx is the comtree index
+ *  @return the link number of the first link that belongs to the comtree,
+ *  or 0 if the comtree index is invalid or contains no links
+ */
+inline int NetInfo::firstComtLink(int ctx) const {
+	if (!validComtIndex(ctx)) return 0;
+	map<int,RateSpec>::iterator p = comtree[ctx].linkMap->begin();
+	return (p != comtree[ctx].linkMap->end() ? (*p).first : 0);
 }
 
-inline void NetInfo::setNodeAdr(int n, fAdr_t adr) {
-	if (isLeaf(n)) leaf[n-maxRtr].fAdr = adr;
-	else if (isRouter(n)) rtr[n].fAdr = adr;
-	return;
+/** Get the next link defined for a specified comtree.
+ *  Used to iterate the links in a comtree.
+ *  @param lnk is a link in the comtree
+ *  @param ctx is the comtree index
+ *  @return the link number of the next link after lnk that belongs to the
+ *  comtree, or 0 if the comtree index is invalid or contains no links
+ */
+inline int NetInfo::nextComtLink(int lnk, int ctx) const {
+	if (!validComtIndex(ctx)) return 0;
+	map<int,RateSpec>::iterator p = comtree[ctx].linkMap->find(lnk);
+	if (p == comtree[ctx].linkMap->end()) return 0;
+	p++;
+	return (p != comtree[ctx].linkMap->end() ? (*p).first : 0);
 }
 
-inline void NetInfo::setNodeLat(int n, double lat) {
-	if (isLeaf(n)) leaf[n-maxRtr].latitude = (int) (lat*1000000);
-	else if (isRouter(n)) rtr[n].latitude  = (int) (lat*1000000);
-	return;
+/** Lookup the comtree index for a given comtree number.
+ *  @param comt is a comtree number
+ *  @param return the index used to efficiently access stored information
+ *  for the comtree.
+ */
+inline int NetInfo::lookupComtree(int comt) const {
+	return comtreeMap->getId(comt);
 }
 
-inline void NetInfo::setNodeLong(int n, double longg) {
-	if (isLeaf(n)) leaf[n-maxRtr].longitude = (int) (longg*1000000);
-	else if (isRouter(n)) rtr[n].longitude  = (int) (longg*1000000);
-	return;
+/** Get the comtree number for the comtree with a given index.
+ *  @param ctx is a comtree index
+ *  @param return the comtree number that is mapped to index c
+ *  or 0 if c is not a valid index
+ */
+inline int NetInfo::getComtree(int ctx) const {
+	return (validComtIndex(ctx) ? comtree[ctx].comtreeNum : 0);
 }
 
-inline void NetInfo::setIfIpAdr(int n, int iface, ipa_t ip) {
-	if (isRouter(iface)) rtr[n].iface[iface].ipAdr = ip;
-	return;
+/** Get the comtree root for the comtree with a given index.
+ *  @param ctx is a comtree index
+ *  @param return the specified root node for the comtree
+ *  or 0 if c is not a valid index
+ */
+inline int NetInfo::getComtRoot(int ctx) const {
+	return (validComtIndex(ctx) ? comtree[ctx].root : 0);
 }
 
-inline void NetInfo::setLeafType(int n, ntyp_t typ) {
-	if (isLeaf(n)) leaf[n-maxRtr].nType = typ;
-	return;
+/** Get the downstream backbone bit rate for a comtree with a given index.
+ *  @param ctx is a comtree index
+ *  @param return the default downstream bit rate for backbone links in
+ *  the comtree or 0 if c is not a valid index
+ */
+inline int NetInfo::getComtBrDown(int ctx) const {
+	return (validComtIndex(ctx) ? comtree[ctx].bitRateDown : 0);
 }
 
-inline void NetInfo::setLeafIpAdr(int n, ipa_t ip) {
-	if (isLeaf(n)) leaf[n-maxRtr].ipAdr = ip;
-	return;
+/** Get the upstream backbone bit rate for a comtree with a given index.
+ *  @param ctx is a comtree index
+ *  @param return the default upstream bit rate for backbone links in
+ *  the comtree or 0 if c is not a valid index
+ */
+inline int NetInfo::getComtBrUp(int ctx) const {
+	return (validComtIndex(ctx) ? comtree[ctx].bitRateUp : 0);
 }
 
-inline void NetInfo::setFirstCliAdr(int n, fAdr_t adr) {
-	if (isRouter(n)) rtr[n].firstCliAdr = adr;
-	return;
+/** Get the downstream backbone packet rate for a comtree with a given index.
+ *  @param ctx is a comtree index
+ *  @param return the default downstream packet rate for backbone links in
+ *  the comtree or 0 if c is not a valid index
+ */
+inline int NetInfo::getComtPrDown(int ctx) const {
+	return (validComtIndex(ctx) ? comtree[ctx].pktRateDown : 0);
 }
 
-inline void NetInfo::setLastCliAdr(int n, fAdr_t adr) {
-	if (isRouter(n)) rtr[n].lastCliAdr = adr;
-	return;
+/** Get the upstream backbone packet rate for a comtree with a given index.
+ *  @param ctx is a comtree index
+ *  @param return the default upstream packet rate for backbone links in
+ *  the comtree or 0 if c is not a valid index
+ */
+inline int NetInfo::getComtPrUp(int ctx) const {
+	return (validComtIndex(ctx) ? comtree[ctx].pktRateUp : 0);
 }
 
-inline void NetInfo::setIfBitRate(int n, int iface, int br) {
-	if (validIf(n,iface)) rtr[n].iface[iface].bitRate = br;
-	return;
+/** Get the downstream access bit rate for a comtree with a given index.
+ *  @param ctx is a comtree index
+ *  @param return the default downstream bit rate for access links in
+ *  the comtree or 0 if c is not a valid index
+ */
+inline int NetInfo::getComtLeafBrDown(int ctx) const {
+	return (validComtIndex(ctx) ? comtree[ctx].leafBitRateDown : 0);
 }
 
-inline void NetInfo::setIfPktRate(int n, int iface, int pr) {
-	if (validIf(n,iface)) rtr[n].iface[iface].pktRate = pr;
+/** Get the upstream access bit rate for a comtree with a given index.
+ *  @param ctx is a comtree index
+ *  @param return the default upstream bit rate for access links in
+ *  the comtree or 0 if c is not a valid index
+ */
+inline int NetInfo::getComtLeafBrUp(int ctx) const {
+	return (validComtIndex(ctx) ? comtree[ctx].leafBitRateUp : 0);
 }
 
-inline void NetInfo::setIfFirstLink(int n, int iface, int lnk) {
-	if (validIf(n,iface)) rtr[n].iface[iface].firstLink = lnk;
-	return;
+/** Get the downstream access packet rate for a comtree with a given index.
+ *  @param ctx is a comtree index
+ *  @param return the default downstream packet rate for access links in
+ *  the comtree or 0 if c is not a valid index
+ */
+inline int NetInfo::getComtLeafPrDown(int ctx) const {
+	return (validComtIndex(ctx) ? comtree[ctx].leafPktRateDown : 0);
 }
 
-inline void NetInfo::setIfLastLink(int n, int iface, int lnk) {
-	if (validIf(n,iface)) rtr[n].iface[iface].lastLink = lnk;
-	return;
+/** Get the upstream access packet rate for a comtree with a given index.
+ *  @param ctx is a comtree index
+ *  @param return the default upstream packet rate for access links in
+ *  the comtree or 0 if c is not a valid index
+ */
+inline int NetInfo::getComtLeafPrUp(int ctx) const {
+	return (validComtIndex(ctx) ? comtree[ctx].leafPktRateUp : 0);
 }
 
-inline void NetInfo::setLocLinkL(int lnk, int loc) {
-	if (validLink(lnk)) link[lnk].leftLnum = loc;
-	return;
-}
-
-inline void NetInfo::setLocLinkR(int lnk, int loc) {
-	if (validLink(lnk)) link[lnk].rightLnum = loc;
-	return;
-}
-
-inline void NetInfo::setLinkBitRate(int lnk, int br) {
-	if (validLink(lnk)) link[lnk].bitRate = br;
-	return;
-}
-
-inline void NetInfo::setLinkPktRate(int lnk, int pr) {
-	if (validLink(lnk)) link[lnk].pktRate = pr;
-	return;
-}
-
-inline void NetInfo::setLinkLength(int lnk, int len) {
-	if (validLink(lnk)) netTopo->setLength(lnk,len);
-	return;
-}
-
+/** Add a new comtree.
+ *  Defines a new comtree, with attributes left undefined.
+ *  @param comt is the comtree number for the new comtree.
+ *  @return true on success, false on failure
+ */
 inline bool NetInfo::addComtree(int comt) {
 	int i = comtreeMap->addPair(comt);
 	if (i == 0) return false;
@@ -645,98 +1143,173 @@ inline bool NetInfo::addComtree(int comt) {
 	return true;
 }
 
-inline bool NetInfo::removeComtree(int i) {
-	if (!validComtIndex(i)) return false;
-	comtreeMap->dropPair(comtree[i].comtreeNum);
-	comtree[i].comtreeNum = 0;
+/** Remove a comtree.
+ *  Defines a new comtree, with attributes left undefined.
+ *  @param comt is the comtree number for the new comtree.
+ *  @return true on success, false on failure
+ */
+inline bool NetInfo::removeComtree(int ctx) {
+	if (!validComtIndex(ctx)) return false;
+	comtreeMap->dropPair(comtree[ctx].comtreeNum);
+	comtree[ctx].comtreeNum = 0;
 	return true;
 }
 
-inline bool NetInfo::setComtRoot(int i, int r) {
-	if (!validComtIndex(i)) return false;
-	comtree[i].root = r;
+/** Add a new core node to a comtree.
+ *  The new node is required to be a router.
+ *  @param ctx is the comtree index
+ *  @param r is the node number of the router
+ *  @return true on success, false on failure
+ */
+inline bool NetInfo::addComtCoreNode(int ctx, int r) {
+	if (!validComtIndex(ctx) || !isRouter(r)) return false;
+	comtree[ctx].coreSet->insert(r);
 	return true;
 }
 
-inline bool NetInfo::setComtBrDown(int i, int br) {
-	if (!validComtIndex(i)) return false;
-	comtree[i].bitRateDown = br;
+/** Remove a core node from a comtree.
+ *  @param ctx is the comtree index
+ *  @param r is the node number of the core node
+ *  @return true on success, false on failure
+ */
+inline bool NetInfo::removeComtCoreNode(int ctx, int n) {
+	if (!validComtIndex(ctx)) return false;
+	comtree[ctx].coreSet->erase(n);
 	return true;
 }
 
-inline bool NetInfo::setComtBrUp(int i, int br) {
-	if (!validComtIndex(i)) return false;
-	comtree[i].bitRateUp = br;
-	return true;
-}
-
-inline bool NetInfo::setComtPrDown(int i, int pr) {
-	if (!validComtIndex(i)) return false;
-	comtree[i].pktRateDown = pr;
-	return true;
-}
-
-inline bool NetInfo::setComtPrUp(int i, int pr) {
-	if (!validComtIndex(i)) return false;
-	comtree[i].pktRateUp = pr;
-	return true;
-}
-
-inline bool NetInfo::setComtLeafBrDown(int i, int br) {
-	if (!validComtIndex(i)) return false;
-	comtree[i].leafBitRateDown = br;
-	return true;
-}
-
-inline bool NetInfo::setComtLeafBrUp(int i, int br) {
-	if (!validComtIndex(i)) return false;
-	comtree[i].leafBitRateUp = br;
-	return true;
-}
-
-inline bool NetInfo::setComtLeafPrDown(int i, int pr) {
-	if (!validComtIndex(i)) return false;
-	comtree[i].leafPktRateDown = pr;
-	return true;
-}
-
-inline bool NetInfo::setComtLeafPrUp(int i, int pr) {
-	if (!validComtIndex(i)) return false;
-	comtree[i].leafPktRateUp = pr;
-	return true;
-}
-
-inline bool NetInfo::addComtCoreNode(int i, int n) {
-	if (!validComtIndex(i) || !isRouter(n)) return false;
-	comtree[i].coreSet->insert(n);
-	return true;
-}
-
-inline bool NetInfo::removeComtCoreNode(int i, int n) {
-	if (!validComtIndex(i) || !isRouter(n)) return false;
-	comtree[i].coreSet->erase(n);
-	return true;
-}
-
-inline bool NetInfo::addComtLink(int i, int lnk) {
-	if (!validComtIndex(i) || !validLink(lnk)) return false;
-	//pair<int,RateSpec> mv = { lnk , { 0, 0, 0, 0 }};
+/** Add a new link to a comtree.
+ *  @param ctx is the comtree index
+ *  @param lnk is the link number of the link to be added
+ *  @return true on success, false on failure
+ */
+inline bool NetInfo::addComtLink(int ctx, int lnk) {
+	if (!validComtIndex(ctx) || !validLink(lnk)) return false;
 	pair<int,RateSpec> mv;
 	mv.first = lnk;
 	mv.second.bitRateLeft = mv.second.bitRateRight = 0;
 	mv.second.pktRateLeft = mv.second.pktRateRight = 0;
-	comtree[i].linkMap->insert(mv);
+	comtree[ctx].linkMap->insert(mv);
 	return true;
 }
 
-inline bool NetInfo::removeComtLink(int i, int lnk) {
-	if (!validComtIndex(i) || !validLink(lnk)) return false;
-	comtree[i].linkMap->erase(lnk);
+/** Remove a link from a comtree.
+ *  @param ctx is the comtree index
+ *  @param lnk is the link number of the link to be removed
+ *  @return true on success, false on failure
+ */
+inline bool NetInfo::removeComtLink(int ctx, int lnk) {
+	if (!validComtIndex(ctx) || !validLink(lnk)) return false;
+	comtree[ctx].linkMap->erase(lnk);
 	return true;
 }
 
-inline uint64_t NetInfo::ll2l_key(int n, int llnk) const {
-	return (uint64_t(n) << 32) | (uint64_t(llnk) & 0xffffffff);
+/** Set the root node of a comtree.
+ *  @param ctx is the index of the comtree
+ *  @param r is the router that is to be the comtree root
+ *  @return true on success, false on failure
+ */
+inline bool NetInfo::setComtRoot(int ctx, int r) {
+	if (!validComtIndex(ctx) || !isRouter(r)) return false;
+	comtree[ctx].root = r;
+	return true;
+}
+
+/** Set the downstream bit rate for the backbone links of a comtree.
+ *  @param ctx is the index of the comtree
+ *  @param br is the new default downstream bit rate for backbone links
+ *  @return true on success, false on failure
+ */
+inline bool NetInfo::setComtBrDown(int ctx, int br) {
+	if (!validComtIndex(ctx)) return false;
+	comtree[ctx].bitRateDown = br;
+	return true;
+}
+
+/** Set the upstream bit rate for the backbone links of a comtree.
+ *  @param ctx is the index of the comtree
+ *  @param br is the new default upstream bit rate for backbone links
+ *  @return true on success, false on failure
+ */
+inline bool NetInfo::setComtBrUp(int ctx, int br) {
+	if (!validComtIndex(ctx)) return false;
+	comtree[ctx].bitRateUp = br;
+	return true;
+}
+
+/** Set the downstream packet rate for the backbone links of a comtree.
+ *  @param ctx is the index of the comtree
+ *  @param br is the new default downstream packet rate for backbone links
+ *  @return true on success, false on failure
+ */
+inline bool NetInfo::setComtPrDown(int ctx, int pr) {
+	if (!validComtIndex(ctx)) return false;
+	comtree[ctx].pktRateDown = pr;
+	return true;
+}
+
+/** Set the upstream packet rate for the backbone links of a comtree.
+ *  @param ctx is the index of the comtree
+ *  @param br is the new default upstream packet rate for backbone links
+ *  @return true on success, false on failure
+ */
+inline bool NetInfo::setComtPrUp(int ctx, int pr) {
+	if (!validComtIndex(ctx)) return false;
+	comtree[ctx].pktRateUp = pr;
+	return true;
+}
+
+/** Set the downstream bit rate for the access links of a comtree.
+ *  @param ctx is the index of the comtree
+ *  @param br is the new default downstream bit rate for access links
+ *  @return true on success, false on failure
+ */
+inline bool NetInfo::setComtLeafBrDown(int ctx, int br) {
+	if (!validComtIndex(ctx)) return false;
+	comtree[ctx].leafBitRateDown = br;
+	return true;
+}
+
+/** Set the upstream bit rate for the access links of a comtree.
+ *  @param ctx is the index of the comtree
+ *  @param br is the new default upstream bit rate for access links
+ *  @return true on success, false on failure
+ */
+inline bool NetInfo::setComtLeafBrUp(int ctx, int br) {
+	if (!validComtIndex(ctx)) return false;
+	comtree[ctx].leafBitRateUp = br;
+	return true;
+}
+
+/** Set the downstream packet rate for the access links of a comtree.
+ *  @param ctx is the index of the comtree
+ *  @param br is the new default downstream packet rate for access links
+ *  @return true on success, false on failure
+ */
+inline bool NetInfo::setComtLeafPrDown(int ctx, int pr) {
+	if (!validComtIndex(ctx)) return false;
+	comtree[ctx].leafPktRateDown = pr;
+	return true;
+}
+
+/** Set the upstream packet rate for the access links of a comtree.
+ *  @param ctx is the index of the comtree
+ *  @param br is the new default upstream packet rate for access links
+ *  @return true on success, false on failure
+ */
+inline bool NetInfo::setComtLeafPrUp(int ctx, int pr) {
+	if (!validComtIndex(ctx)) return false;
+	comtree[ctx].leafPktRateUp = pr;
+	return true;
+}
+
+/** Helper method used to define keys for internal locLnk2lnk hash table.
+ *  @param r is the node number of a router
+ *  @param llnk is a local link number at r
+ *  @return a hash key appropriate for use with locLnk2lnk
+ */
+inline uint64_t NetInfo::ll2l_key(int r, int llnk) const {
+	return (uint64_t(r) << 32) | (uint64_t(llnk) & 0xffffffff);
 }
 
 #endif

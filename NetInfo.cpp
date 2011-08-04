@@ -1130,12 +1130,12 @@ bool NetInfo::read(istream& in) {
 }
 
 void NetInfo::write(ostream& out) {
-	string s1, s2, s3; // temp strings used with xx2string methods below
+	string s0, s1, s2, s3; // temp strings used with xx2string methods below
 	out << "Routers\n\n";
 	for (int r = firstRouter(); r != 0; r = nextRouter(r)) {
-		out << "name=" << getNodeName(r) << " "
-		    << "type=" << Forest::nodeType2string(getNodeType(r),s1)
-		    << " fAdr=" << Forest::fAdr2string(getNodeAdr(r),s2);
+		out << "name=" << getNodeName(r,s1) << " "
+		    << "type=" << Forest::nodeType2string(getNodeType(r),s2)
+		    << " fAdr=" << Forest::fAdr2string(getNodeAdr(r),s3);
 		out << " clientAdrRange=("
 		    << Forest::fAdr2string(getFirstCliAdr(r),s1) << "-"
 		    << Forest::fAdr2string(getLastCliAdr(r),s2) << ")";
@@ -1161,7 +1161,7 @@ void NetInfo::write(ostream& out) {
 	out << "LeafNodes\n\n";
 	// print controllers first
 	for (int c = firstController(); c != 0; c = nextController(c)) {
-		out << "name=" << getNodeName(c) << " "
+		out << "name=" << getNodeName(c,s0) << " "
 		    << "type=" << Forest::nodeType2string(getNodeType(c),s1)
 		    << " ipAdr=" << Np4d::ip2string(getLeafIpAdr(c),s2) 
 		    << " fAdr=" << Forest::fAdr2string(getNodeAdr(c),s3);
@@ -1171,7 +1171,7 @@ void NetInfo::write(ostream& out) {
 	// then any other leaf nodes
 	for (int c = firstLeaf(); c != 0; c = nextLeaf(c)) {
 		if (getNodeType(c) == CONTROLLER) continue;
-		out << "name=" << getNodeName(c) << " "
+		out << "name=" << getNodeName(c,s0) << " "
 		    << "type=" << Forest::nodeType2string(getNodeType(c),s1)
 		    << " ipAdr=" << Np4d::ip2string(getLeafIpAdr(c),s2) 
 		    << " fAdr=" << Forest::fAdr2string(getNodeAdr(c),s3);
@@ -1182,9 +1182,9 @@ void NetInfo::write(ostream& out) {
 	out << "Links\n\n";
 	for (int lnk = firstLink(); lnk != 0; lnk = nextLink(lnk)) {
 		int ln = getLinkL(lnk); int rn = getLinkR(lnk);
-		out << "link=(" << getNodeName(ln);
+		out << "link=(" << getNodeName(ln,s0);
 		if (isRouter(ln)) out << "." << getLocLinkL(lnk);
-		out << "," << getNodeName(rn);
+		out << "," << getNodeName(rn,s0);
 		if (isRouter(rn)) out << "." << getLocLinkR(lnk);
 		out << ") "
 		    << "bitRate=" << getLinkBitRate(lnk) << " "
@@ -1197,7 +1197,7 @@ void NetInfo::write(ostream& out) {
 		if (!validComtIndex(ctx)) continue;
 
 		out << "comtree=" << getComtree(ctx)
-		    << " root=" << getNodeName(getComtRoot(ctx))
+		    << " root=" << getNodeName(getComtRoot(ctx),s0)
 		    << "\nbitRateDown=" << getComtBrDown(ctx)
 		    << " bitRateUp=" << getComtBrUp(ctx)
 		    << " pktRateDown=" << getComtPrDown(ctx)
@@ -1211,7 +1211,7 @@ void NetInfo::write(ostream& out) {
 		out << "\n";
 		for (int c = firstCore(ctx); c != 0; c = nextCore(c,ctx)) {
 			if (c != getComtRoot(ctx)) 
-				out << "core=" << getNodeName(c) << " ";
+				out << "core=" << getNodeName(c,s0) << " ";
 		}
 		out << "\n";
 		// iterate through links and print
@@ -1219,9 +1219,9 @@ void NetInfo::write(ostream& out) {
 		         lnk = nextComtLink(lnk,ctx)) {
 
 			int left = getLinkL(lnk); int right = getLinkR(lnk);
-			out << "link=(" << getNodeName(left);
+			out << "link=(" << getNodeName(left,s0);
 			if (isRouter(left)) out << "." << getLocLinkL(lnk);
-			out << "," << getNodeName(right);
+			out << "," << getNodeName(right,s0);
 			if (isRouter(right)) out << "." << getLocLinkR(lnk);
 			out << ") ";
 		}
