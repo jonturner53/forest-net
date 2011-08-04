@@ -217,7 +217,7 @@ public class MazeWorld {
 		}
 		StdDraw.setPenColor(Color.BLACK);
 		StdDraw.setPenRadius(.006);
-		for(int i = 0; i < wallsSet.length(); i++) {
+		for(int i = 0; i < gridSize*gridSize; i++) {
 			if(!wallsSet.get(i))
 				StdDraw.line(frac*(i%gridSize),frac*(i/gridSize),frac*(i%gridSize)+frac,frac*(i/gridSize));
 			else

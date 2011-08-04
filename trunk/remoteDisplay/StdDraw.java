@@ -1,3 +1,5 @@
+package princeton;
+
 /*************************************************************************
  *  Compilation:  javac StdDraw.java
  *  Execution:    java StdDraw
@@ -19,8 +21,6 @@
  *       it can cause flicker
  *
  *************************************************************************/
-
-package princeton;
 
 import java.io.*;
 import java.net.*;
@@ -57,8 +57,19 @@ public final class StdDraw implements ActionListener, MouseListener, MouseMotion
     public static final Color RED        = Color.RED;
     public static final Color WHITE      = Color.WHITE;
     public static final Color YELLOW     = Color.YELLOW;
-    public static final Color BOOK_BLUE  = new Color(9, 90, 166);   // Intro to Programming
-    public static final Color BOOK_RED   = new Color(173, 32, 24);  // Algorithms 4
+
+    /**
+     * Shade of blue used in Introduction to Programming in Java.
+     * It is Pantone Pantone 300U. The RGB values are approximately (9, 90, 266).
+     */
+    public static final Color BOOK_BLUE       = new Color(  9,  90, 166);
+    public static final Color BOOK_LIGHT_BLUE = new Color(103, 198, 243);
+
+    /**
+     * Shade of red used in Algorithms 4th edition.
+     * It is Pantone 1805U. The approximate RGB values are (150, 35, 31).
+     */
+    public static final Color BOOK_RED = new Color(150, 35, 31);
 
     // default colors
     private static final Color DEFAULT_PEN_COLOR   = BLACK;
@@ -116,6 +127,8 @@ public final class StdDraw implements ActionListener, MouseListener, MouseMotion
 
     // keyboard state
     private static LinkedList<Character> keysTyped = new LinkedList<Character>();
+    // added by jst
+    private static LinkedList<Integer> keysPressed = new LinkedList<Integer>();
 
     // not instantiable
     private StdDraw() { }
@@ -137,7 +150,7 @@ public final class StdDraw implements ActionListener, MouseListener, MouseMotion
         height = h;
         init();
     }
-    
+
     // init
     private static void init() {
         if (frame != null) frame.setVisible(false);
@@ -255,6 +268,11 @@ public final class StdDraw implements ActionListener, MouseListener, MouseMotion
     }
 
     /**
+     * Get the current pen radius.
+     */
+    public static double getPenRadius() { return penRadius; }
+
+    /**
      * Set the pen size to the default (.002).
      */
     public static void setPenRadius() { setPenRadius(DEFAULT_PEN_RADIUS); }
@@ -266,10 +284,15 @@ public final class StdDraw implements ActionListener, MouseListener, MouseMotion
     public static void setPenRadius(double r) {
         if (r < 0) throw new RuntimeException("pen radius must be positive");
         penRadius = r * DEFAULT_SIZE;
-        // BasicStroke stroke = new BasicStroke((float) penRadius, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND);
-        BasicStroke stroke = new BasicStroke((float) penRadius);
+        BasicStroke stroke = new BasicStroke((float) penRadius, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND);
+        // BasicStroke stroke = new BasicStroke((float) penRadius);
         offscreen.setStroke(stroke);
     }
+
+    /**
+     * Get the current pen color.
+     */
+    public static Color getPenColor() { return penColor; }
 
     /**
      * Set the pen color to the default color (black).
@@ -285,6 +308,11 @@ public final class StdDraw implements ActionListener, MouseListener, MouseMotion
         penColor = color;
         offscreen.setColor(penColor);
     }
+
+    /**
+     * Get the current font.
+     */
+    public static Font getFont() { return font; }
 
     /**
      * Set the font to the default font (sans serif, 16 point).
@@ -319,7 +347,7 @@ public final class StdDraw implements ActionListener, MouseListener, MouseMotion
      * @param x the x-coordinate of the pixel
      * @param y the y-coordinate of the pixel
      */
-    public static void pixel(double x, double y) {
+    private static void pixel(double x, double y) {
         offscreen.fillRect((int) Math.round(scaleX(x)), (int) Math.round(scaleY(y)), 1, 1);
     }
 
@@ -375,6 +403,48 @@ public final class StdDraw implements ActionListener, MouseListener, MouseMotion
         else offscreen.fill(new Ellipse2D.Double(xs - ws/2, ys - hs/2, ws, hs));
         draw();
     }
+
+
+    /**
+     * Draw an ellipse with given semimajor and semiminor axes, centered on (x, y).
+     * @param x the x-coordinate of the center of the ellipse
+     * @param y the y-coordinate of the center of the ellipse
+     * @param semiMajorAxis is the semimajor axis of the ellipse
+     * @param semiMinorAxis is the semiminor axis of the ellipse
+     * @throws RuntimeException if either of the axes are negative
+     */
+    public static void ellipse(double x, double y, double semiMajorAxis, double semiMinorAxis) {
+        if (semiMajorAxis < 0) throw new RuntimeException("ellipse semimajor axis can't be negative");
+        if (semiMinorAxis < 0) throw new RuntimeException("ellipse semiminor axis can't be negative");
+        double xs = scaleX(x);
+        double ys = scaleY(y);
+        double ws = factorX(2*semiMajorAxis);
+        double hs = factorY(2*semiMinorAxis);
+        if (ws <= 1 && hs <= 1) pixel(x, y);
+        else offscreen.draw(new Ellipse2D.Double(xs - ws/2, ys - hs/2, ws, hs));
+        draw();
+    }
+
+    /**
+     * Draw an ellipse with given semimajor and semiminor axes, centered on (x, y).
+     * @param x the x-coordinate of the center of the ellipse
+     * @param y the y-coordinate of the center of the ellipse
+     * @param semiMajorAxis is the semimajor axis of the ellipse
+     * @param semiMinorAxis is the semiminor axis of the ellipse
+     * @throws RuntimeException if either of the axes are negative
+     */
+    public static void filledEllipse(double x, double y, double semiMajorAxis, double semiMinorAxis) {
+        if (semiMajorAxis < 0) throw new RuntimeException("ellipse semimajor axis can't be negative");
+        if (semiMinorAxis < 0) throw new RuntimeException("ellipse semiminor axis can't be negative");
+        double xs = scaleX(x);
+        double ys = scaleY(y);
+        double ws = factorX(2*semiMajorAxis);
+        double hs = factorY(2*semiMinorAxis);
+        if (ws <= 1 && hs <= 1) pixel(x, y);
+        else offscreen.fill(new Ellipse2D.Double(xs - ws/2, ys - hs/2, ws, hs));
+        draw();
+    }
+
 
     /**
      * Draw an arc of radius r, centered on (x, y), from angle1 to angle2 (in degrees).
@@ -433,6 +503,48 @@ public final class StdDraw implements ActionListener, MouseListener, MouseMotion
         else offscreen.fill(new Rectangle2D.Double(xs - ws/2, ys - hs/2, ws, hs));
         draw();
     }
+
+
+    /**
+     * Draw a rectangle of given half width and half height, centered on (x, y).
+     * @param x the x-coordinate of the center of the rectangle
+     * @param y the y-coordinate of the center of the rectangle
+     * @param halfWidth is half the width of the rectangle
+     * @param halfHeight is half the height of the rectangle
+     * @throws RuntimeException if halfWidth or halfHeight is negative
+     */
+    public static void rectangle(double x, double y, double halfWidth, double halfHeight) {
+        if (halfWidth  < 0) throw new RuntimeException("half width can't be negative");
+        if (halfHeight < 0) throw new RuntimeException("half height can't be negative");
+        double xs = scaleX(x);
+        double ys = scaleY(y);
+        double ws = factorX(2*halfWidth);
+        double hs = factorY(2*halfHeight);
+        if (ws <= 1 && hs <= 1) pixel(x, y);
+        else offscreen.draw(new Rectangle2D.Double(xs - ws/2, ys - hs/2, ws, hs));
+        draw();
+    }
+
+    /**
+     * Draw a filled rectangle of given half width and half height, centered on (x, y).
+     * @param x the x-coordinate of the center of the rectangle
+     * @param y the y-coordinate of the center of the rectangle
+     * @param halfWidth is half the width of the rectangle
+     * @param halfHeight is half the height of the rectangle
+     * @throws RuntimeException if halfWidth or halfHeight is negative
+     */
+    public static void filledRectangle(double x, double y, double halfWidth, double halfHeight) {
+        if (halfWidth  < 0) throw new RuntimeException("half width can't be negative");
+        if (halfHeight < 0) throw new RuntimeException("half height can't be negative");
+        double xs = scaleX(x);
+        double ys = scaleY(y);
+        double ws = factorX(2*halfWidth);
+        double hs = factorY(2*halfHeight);
+        if (ws <= 1 && hs <= 1) pixel(x, y);
+        else offscreen.fill(new Rectangle2D.Double(xs - ws/2, ys - hs/2, ws, hs));
+        draw();
+    }
+
 
     /**
      * Draw a polygon with the given (x[i], y[i]) coordinates.
@@ -546,12 +658,15 @@ public final class StdDraw implements ActionListener, MouseListener, MouseMotion
      * @param s the name of the image/picture, e.g., "ball.gif"
      * @param w the width of the image
      * @param h the height of the image
+     * @throws RuntimeException if the width height are negative
      * @throws RuntimeException if the image is corrupt
      */
     public static void picture(double x, double y, String s, double w, double h) {
         Image image = getImage(s);
         double xs = scaleX(x);
         double ys = scaleY(y);
+        if (w < 0) throw new RuntimeException("width is negative: " + w);
+        if (h < 0) throw new RuntimeException("height is negative: " + h);
         double ws = factorX(w);
         double hs = factorY(h);
         if (ws < 0 || hs < 0) throw new RuntimeException("image " + s + " is corrupt");
@@ -619,12 +734,29 @@ public final class StdDraw implements ActionListener, MouseListener, MouseMotion
     }
 
     /**
+     * Write the given text string in the current font, centered on (x, y) and
+     * rotated by the specified number of degrees  
+     * @param x the center x-coordinate of the text
+     * @param y the center y-coordinate of the text
+     * @param s the text
+     * @param degrees is the number of degrees to rotate counterclockwise
+     */
+    public static void text(double x, double y, String s, double degrees) {
+        double xs = scaleX(x);
+        double ys = scaleY(y);
+        offscreen.rotate(Math.toRadians(-degrees), xs, ys);
+        text(x, y, s);
+        offscreen.rotate(Math.toRadians(+degrees), xs, ys);
+    }
+
+
+    /**
      * Write the given text string in the current font, left-aligned at (x, y).
      * @param x the x-coordinate of the text
      * @param y the y-coordinate of the text
      * @param s the text
      */
-   public static void textLeft(double x, double y, String s) {
+    public static void textLeft(double x, double y, String s) {
         offscreen.setFont(font);
         FontMetrics metrics = offscreen.getFontMetrics();
         double xs = scaleX(x);
@@ -634,6 +766,24 @@ public final class StdDraw implements ActionListener, MouseListener, MouseMotion
         offscreen.drawString(s, (float) (xs), (float) (ys + hs));
         show();
     }
+
+    /**
+     * Write the given text string in the current font, right-aligned at (x, y).
+     * @param x the x-coordinate of the text
+     * @param y the y-coordinate of the text
+     * @param s the text
+     */
+    public static void textRight(double x, double y, String s) {
+        offscreen.setFont(font);
+        FontMetrics metrics = offscreen.getFontMetrics();
+        double xs = scaleX(x);
+        double ys = scaleY(y);
+        int ws = metrics.stringWidth(s);
+        int hs = metrics.getDescent();
+        offscreen.drawString(s, (float) (xs - ws), (float) (ys + hs));
+        show();
+    }
+
 
 
     /**
@@ -843,6 +993,19 @@ public final class StdDraw implements ActionListener, MouseListener, MouseMotion
             return keysTyped.removeLast();
         }
     }
+    // added by jst
+    public static boolean hasNextKeyPressed() {
+        synchronized (keyLock) {
+            return !keysPressed.isEmpty();
+        }
+    }
+
+    // added by jst
+    public static int nextKeyPressed() {
+        synchronized (keyLock) {
+            return keysPressed.removeLast();
+        }
+    }
 
     /**
      * This method cannot be called directly.
@@ -856,7 +1019,12 @@ public final class StdDraw implements ActionListener, MouseListener, MouseMotion
     /**
      * This method cannot be called directly.
      */
-    public void keyPressed(KeyEvent e) { }
+    public void keyPressed(KeyEvent e) {
+	// added by jst
+	synchronized (keyLock) {
+            keysPressed.addFirst(e.getKeyCode());
+        }
+    }
 
     /**
      * This method cannot be called directly.
@@ -874,13 +1042,13 @@ public final class StdDraw implements ActionListener, MouseListener, MouseMotion
         StdDraw.filledSquare(.8, .8, .2);
         StdDraw.circle(.8, .2, .2);
 
-        StdDraw.setPenColor(StdDraw.MAGENTA);
+        StdDraw.setPenColor(StdDraw.BOOK_RED);
         StdDraw.setPenRadius(.02);
         StdDraw.arc(.8, .2, .1, 200, 45);
 
         // draw a blue diamond
         StdDraw.setPenRadius();
-        StdDraw.setPenColor(StdDraw.BLUE);
+        StdDraw.setPenColor(StdDraw.BOOK_BLUE);
         double[] x = { .1, .2, .3, .2 };
         double[] y = { .2, .3, .2, .1 };
         StdDraw.filledPolygon(x, y);

@@ -25,7 +25,7 @@
 
 class RouterCore {
 public:
-		RouterCore(fAdr_t,fAdr_t,int,int);
+		RouterCore(fAdr_t,ipa_t,fAdr_t,int,int);
 		~RouterCore();
 
 	bool	init(char*,char*,char*,char*,char*);
@@ -34,7 +34,7 @@ public:
 private:
 	fAdr_t	myAdr;			// forest address of this router
 	fAdr_t	netMgrAdr;		// forest address of the netMgr
-		
+	ipa_t	myIp;			// IP address of this router
 	int	nLnks;			// max number of links
 	int	nComts;			// max number of comtrees
 	int	nRts;			// max number of routes

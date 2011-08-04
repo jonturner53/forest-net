@@ -51,7 +51,6 @@ private:
 	struct prefixInfo {
 		string prefix;
 		fAdr_t rtrAdr;
-		ipa_t  rtrIp;
 	};
 	prefixInfo prefixes[1000];
 	struct clientInfo {
@@ -72,8 +71,7 @@ private:
 	void	sendToForest(int);
 	int 	rcvFromForest();
 	
-	ipa_t	rtrIpFromAdr(fAdr_t);	///< gives the corresponding router ip
-	bool	getIpByPrefix(ipa_t,fAdr_t&,ipa_t&); ///< gives the rtrAdr of the prefix
+	bool	getIpByPrefix(ipa_t,fAdr_t&); ///< gives the rtrAdr of the prefix
 	
 	bool setupClient(ipa_t , fAdr_t&, ipa_t&, fAdr_t&);
 };
