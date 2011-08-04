@@ -46,7 +46,8 @@ main() {
 
 	for (int r = net.firstRouter(); r != 0; r = net.nextRouter(r)) {
 		// write interface table for r
-		string rName = net.getNodeName(r);
+		string s;
+		string& rName = net.getNodeName(r,s);
 
 		string iftName = rName + "/ift";
 		ofstream ifts; ifts.open(iftName.c_str());
@@ -173,23 +174,22 @@ int findParentLink(int r, int ctx, const NetInfo& net) {
 
 	queue<int> pending; pending.push(ctRoot);
 
-	bool mark[net.getMaxNode()];
-	for (int i = 1; i <= net.getMaxNode(); i++) mark[i] = false;
-	mark[ctRoot] = true;
+	int plink[net.getMaxNode()];
+	for (int i = 1; i <= net.getMaxNode(); i++) plink[i] = 0;
 
 	while (!pending.empty()) {
 		vertex u = pending.front(); pending.pop();
 		for (edge e = net.firstLinkAt(u); e != 0;
 		 	  e = net.nextLinkAt(u,e)) {
-			if (!net.isComtLink(ctx,e)) continue;
+			if (!net.isComtLink(ctx,e) || e == plink[u]) continue;
 			vertex v = net.getPeer(u,e);
-			if (mark[v]) {
+			if (plink[v] != 0) {
 				cerr << "findParentLink: found cycle in "
 				     << "comtree " << ctx << endl;
 				return -1;
 			}
 			if (v == r) return e;
-			pending.push(v); mark[v] = true;
+			pending.push(v); plink[v] = e;
 		}
 	}
 	cerr << "findParentLink: could not find target node " << r 
@@ -229,18 +229,19 @@ bool buildComtTable(int r, const NetInfo& net, ComtreeTable& comtTbl) {
 
 		comtTbl.setCoreFlag(ctte,net.isComtCoreNode(ctx,r));
 		comtTbl.setQnum(ctte,qnum++);
+		comtTbl.setQuant(ctte,100);
 
 		// find parent link by doing a tree-traversal from root
 		int plink = findParentLink(r,ctx,net);
 		if (plink < 0) return false;
-		comtTbl.setPlink(ctte,plink);
+		comtTbl.setPlink(ctte,net.getLocLink(plink,r));
 
 		// add all comtree links incident to r and to the table entry
 		for (int lnk = net.firstLinkAt(r); lnk != 0;
 			 lnk = net.nextLinkAt(r,lnk)) {
 			if (!net.isComtLink(ctx,lnk)) continue;
 			int llnk = net.getLocLink(lnk,r);
-			int peer = net.getPeer(lnk,r);
+			int peer = net.getPeer(r,lnk);
 			comtTbl.addLink(ctte,llnk,net.isRouter(peer),
 					net.isComtCoreNode(ctx,peer));
 		}
