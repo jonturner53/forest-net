@@ -136,8 +136,8 @@ void NetMgr::run(int finishTime) {
 				cp.setCpType(ADD_LINK);
 				cp.setAttr(PEER_IP,cliIp);
 				cp.setAttr(PEER_TYPE,CLIENT);
-				ipa_t rtrIp; fAdr_t rtrAdr;
-				getIpByPrefix(cliIp,rtrAdr,rtrIp);
+				fAdr_t rtrAdr;
+				getIpByPrefix(cliIp,rtrAdr);
 				int plen = cp.pack(ps->getPayload(p));
 				h.setPtype(NET_SIG);
 				h.setLength(plen + Forest::OVERHEAD);
@@ -152,7 +152,7 @@ void NetMgr::run(int finishTime) {
 				uint64_t lowLvlSeq = cp.getSeqNum() >> 32;
 				fAdr_t cliAdr = cp.getAttr(PEER_ADR);
 				fAdr_t rtrAdr = h.getSrcAdr();
-				ipa_t rtrIp = rtrIpFromAdr(rtrAdr);
+				ipa_t rtrIp = cp.getAttr(RTR_IP);
 				(*packetsSent)[highLvlSeq].cliAdr = cliAdr;
 				(*packetsSent)[highLvlSeq].rtrAdr = rtrAdr;
 				(*packetsSent)[highLvlSeq].rtrIp = rtrIp;
@@ -231,16 +231,10 @@ void NetMgr::run(int finishTime) {
 	}
 }
 
-ipa_t NetMgr::rtrIpFromAdr(fAdr_t rtrAdr) {
-	for(size_t i = 0; i < numPrefixes; ++i)
-		if(prefixes[i].rtrAdr == rtrAdr)
-			return prefixes[i].rtrIp;
-	fatal("NetMgr::rtrIpFromAdr: rtrAdr not found");
-}
 /*
  *
  */
-bool NetMgr::getIpByPrefix(ipa_t cliIp, fAdr_t& rtrAdr, ipa_t& rtrIp) {
+bool NetMgr::getIpByPrefix(ipa_t cliIp, fAdr_t& rtrAdr) {
 	string cip;
 	Np4d::addIp2string(cip,cliIp);
 	for(size_t i = 0; i < numPrefixes; ++i) {
@@ -248,7 +242,6 @@ bool NetMgr::getIpByPrefix(ipa_t cliIp, fAdr_t& rtrAdr, ipa_t& rtrIp) {
 		for(size_t j = 0; j < ip.size(); ++j) {
 			if(ip[j]=='*') {
 				rtrAdr = prefixes[i].rtrAdr;
-				rtrIp = prefixes[i].rtrIp;
 				return true;
 			} else if(cip[j]!=ip[j]) {
 				break;
@@ -280,14 +273,12 @@ bool NetMgr::readPrefixInfo(char filename[]) {
 	Misc::skipBlank(ifs);
 	int i = 0;
 	while(!ifs.eof()) {
-		string pfix; fAdr_t rtrAdr; ipa_t rtrIp;
+		string pfix; fAdr_t rtrAdr;
 		ifs >> pfix;
-		if(!Forest::readForestAdr(ifs,rtrAdr) ||
-		   !Np4d::readIpAdr(ifs,rtrIp))
+		if(!Forest::readForestAdr(ifs,rtrAdr))
 			break;
 		prefixes[i].prefix = pfix;
 		prefixes[i].rtrAdr = rtrAdr;
-		prefixes[i].rtrIp = rtrIp;
 		Misc::skipBlank(ifs);
 		i++;
 	}

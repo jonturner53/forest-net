@@ -3,10 +3,10 @@
 nodes: # starts section that defines nodes
 
 # name		nodeType        forestAdr       x-coord		y-coord
-router1         router          1.900          	15		30
-router2         router          2.900          	10		20  
-router3         router          3.900          	20		20  
-router4		router		4.900		10		10
+router1         router          1.1000          	15		30
+router2         router          2.1000          	10		20  
+router3         router          3.1000          	20		20  
+router4		router		4.1000		10		10
 
 .# line starting with . ends router list
 

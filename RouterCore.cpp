@@ -28,19 +28,20 @@ main(int argc, char *argv[]) {
 	int lBound, uBound;
 	ipa_t ipadr; fAdr_t fAdr, netMgrAdr;
 	int numData = 0;
-	if (argc < 11 || argc > 12 ||
+	if (argc < 12 || argc > 13 ||
 	    (fAdr = Forest::forestAdr(argv[1])) == 0 ||
-	    sscanf(argv[7],"%d", &lBound) != 1 ||
-	    sscanf(argv[8],"%d", &uBound) != 1 ||
-	    sscanf(argv[9],"%d", &finTime) != 1 ||
-	    (netMgrAdr = Forest::forestAdr(argv[10])) == 0 ||
-	    (argc == 12 && sscanf(argv[11],"%d",&numData) != 1)) {
+	    (ipadr = Np4d::ipAddress(argv[2])) == 0 ||
+	    sscanf(argv[8],"%d", &lBound) != 1 ||
+	    sscanf(argv[9],"%d", &uBound) != 1 ||
+	    sscanf(argv[10],"%d", &finTime) != 1 ||
+	    (netMgrAdr = Forest::forestAdr(argv[11])) == 0 ||
+	    (argc == 13 && sscanf(argv[12],"%d",&numData) != 1)) {
 		fatal("usage: fRouter fAdr ifTbl lnkTbl comtTbl "
 		      "rteTbl stats finTime");
 	}
 
-	RouterCore router(fAdr,netMgrAdr,lBound,uBound);
-	if (!router.init(argv[2],argv[3],argv[4],argv[5],argv[6])) {
+	RouterCore router(fAdr,ipadr,netMgrAdr,lBound,uBound);
+	if (!router.init(argv[3],argv[4],argv[5],argv[6],argv[7])) {
 		fatal("router: fRouter::init() failed");
 	}
 	router.dump(cout); 		// print tables
@@ -51,8 +52,8 @@ main(int argc, char *argv[]) {
 }
 
 
-RouterCore::RouterCore(fAdr_t myAdr1, fAdr_t nmAdr, int lBound, int uBound)
-    : myAdr(myAdr1), netMgrAdr(nmAdr), localLBound(lBound), localUBound(uBound) {
+RouterCore::RouterCore(fAdr_t myAdr1, ipa_t ipadr, fAdr_t nmAdr, int lBound, int uBound)
+    : myAdr(myAdr1), myIp(ipadr), netMgrAdr(nmAdr), localLBound(lBound), localUBound(uBound) {
 	nLnks = 31; nComts = 5000; nRts = 10000;
 	nPkts = 200000; nBufs = 100000; nQus = 4000;
 	currClient = 0;
@@ -664,6 +665,7 @@ void RouterCore::handleCtlPkt(int p) {
 		if (lt->addEntry(lnk,iface,ntyp,pipa,padr)) {
 			cp1.setAttr(LINK_NUM,lnk);
 			cp1.setAttr(PEER_ADR,padr);
+			cp1.setAttr(RTR_IP,myIp);
 			returnToSender(p,cp1.pack(ps->getPayload(p)));
 		}
 		else errReply(p,cp1,"add link: cannot add link");
