@@ -16,8 +16,16 @@
 /** usage:
  *  fClientMgr netMgrAdr rtrAdr rtrIp myIp myAdr finTime usersFile
  *
- *  Command line arguments include two ip addresses.
- *  The first is the IP address is that of the NetMgr which ClientMgr sends CtlPkts to.
+ *  Command line arguments include the following:
+ *  netMgrAdr - The Forest address of a Network Manager
+ *  rtrAdr - The Forest address of the router to connect to
+ *  CC_Adr - The Forest address of a Comtree Controller
+ *  rtrIp - The IP address of the router to connect to
+ *  myIp - The IP address of this Client Manager
+ *  myAdr - The Forest address of this Client Manager
+ *  finTime - How many seconds this program should run before terminating
+ *  unamesFile - List of usernames and associated passwords
+ *  acctFile - output file keeping track of which clients connect to this Client Manager
  */
 
 int main(int argc, char ** argv) {
@@ -72,6 +80,9 @@ bool ClientMgr::init() {
 		&& Np4d::nonblock(extSock)
 		&& Np4d::nonblock(sock);
 }
+
+/** Receieves the login string and the avatar's IP address
+ */
 void ClientMgr::initializeAvatar() {
 	ipa_t avIp; ipp_t avPort;
 	avaSock = Np4d::accept4d(extSock, avIp, avPort);
@@ -106,7 +117,9 @@ void ClientMgr::initializeAvatar() {
 	(*clients)[highLvlSeqNum].pword = pword;
 	requestAvaInfo(avIp);
 }
-
+/** Requests the router information from a network manager
+ *  @param aip is the IP address of the client to receive information about
+ */
 void ClientMgr::requestAvaInfo(ipa_t aip) {
 	packet p = ps->alloc();
 	if(p == 0) fatal("ClientMgr::requestAvaInfo failed to alloc packet");
@@ -121,8 +134,8 @@ void ClientMgr::requestAvaInfo(ipa_t aip) {
 	send(p);
 }
 
-/*
- *
+/** Writes information about connection control packets to a file
+ *  @param cp is a control packet with information to write into an accounting file
  */
 void ClientMgr::writeToAcctFile(CtlPkt cp) {
 	if(acctFileStream.good()) {
