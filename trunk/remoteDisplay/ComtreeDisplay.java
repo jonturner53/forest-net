@@ -45,7 +45,7 @@ public class ComtreeDisplay{
          * or null if there is no report available
          */
         private static int[] getReport() {
-                int[] packet = new int[3];
+                int[] packet = new int[4];
 		int size = packet.length*4;
 		if (repBuf == null) {
                         repBuf = ByteBuffer.allocate(size);
@@ -73,9 +73,8 @@ public class ComtreeDisplay{
 		packet[0] = repBuf.getInt(); //comtree
 		packet[1] = repBuf.getInt(); //router
 		packet[2] = repBuf.getInt(); //numClients
-
+		packet[3] = repBuf.getInt(); //now
 		if (repBuf.remaining() < size) needData = true;
-
                 return packet;
         }
 
@@ -187,14 +186,14 @@ public class ComtreeDisplay{
 	}
 	
 	public static void main(String[] args){
-		//processArgs(args);
+		processArgs(args);
 		ComtreeDisplay com = new ComtreeDisplay();
 		try {
 			parse("topology");
 		} catch (FileNotFoundException e) {
 			e.printStackTrace();
 		}
-/*		
+	
 		// Open channel to monitor and make it nonblocking
                 try {
                         comChan = SocketChannel.open(comSockAdr);
@@ -204,7 +203,7 @@ public class ComtreeDisplay{
                         System.out.println(e);
                         System.exit(1);
                 }
-*/	
+	
 		System.out.println("Avalible Comtrees: " + ct.keySet());
 		
 		String comtree = readComtree();
@@ -217,7 +216,7 @@ public class ComtreeDisplay{
 						if(n instanceof Router){
 							Router r = ((Router) n);
 							if(r.getZip().charAt(0) == pair.charAt(0)){
-								key = new Pair(num, r.forestAdr);
+								key = new Pair(num, r.getZip());
 					//			System.out.println("Adding new router: " + key+ " " + r);
 								routers.put(key, r);
 					//			System.out.println("map: " + routers);
@@ -272,7 +271,7 @@ public class ComtreeDisplay{
 		boolean numPainted = false;
 
 		while(true){
-/*
+
 			int[] pkt = getReport();
 			try {
  				BufferedWriter out = new BufferedWriter(new FileWriter("output.txt", true));
@@ -280,7 +279,7 @@ public class ComtreeDisplay{
 					out.write(pkt[0] + " " + pkt[1] + " " + pkt[2] + "\n");
 				out.close();
 			} catch (IOException e) {System.out.println("FileIOException: output.txt");}
-*/			
+			
 			Collections.sort(topology);
 			for(NetObj n: topology){
 				if(n instanceof Router && !routersPainted){
@@ -296,12 +295,12 @@ public class ComtreeDisplay{
 						StdDraw.setPenRadius(PEN_RADIUS);
 						StdDraw.circle(r.x, r.y, radius);
 						StdDraw.text(r.x, r.y, r.name);
-/*						
+						
 						if(pkt!=null){
-							if(pkt[0] == comtree && pkt[1]==Integer.parseInt(r.getZip()))
+							if(pkt[0] == Integer.parseInt(comtree) && pkt[1]==Integer.parseInt(r.getZip()))
 								r.setNumClients(pkt[2]);
 						}
-*/
+
 						StdDraw.text(r.x, r.y-radius/2, Integer.toString(r.getNumClients()));
 						}
 					}
@@ -311,7 +310,7 @@ public class ComtreeDisplay{
 				//	for(Pair p: routers.keySet())
 				//		System.out.println(routers.get(p));
 				//	System.out.println("controller comtree fadr: " + comtree + " " + n.forestAdr);
-					Router parent = routers.get(new Pair(comtree, n.forestAdr));
+					Router parent = routers.get(new Pair(comtree, ((Controller)n).getZipCode()));
 				//	System.out.println(parent);
 					StdDraw.setPenRadius(PEN_RADIUS*2);
 					StdDraw.setPenColor(Color.BLACK);
@@ -389,7 +388,7 @@ public class ComtreeDisplay{
 				numPainted = false;
 				StdDraw.clear(c);
 			}
-			StdDraw.show(500);
+			StdDraw.show(50);
 		}
 	}
 }
