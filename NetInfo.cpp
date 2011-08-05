@@ -8,7 +8,13 @@
 
 #include "NetInfo.h"
 
-// Constructor for NetInfo, allocates space and initializes private data
+/** Constructor for NetInfo, allocates space and initializes private data.
+ *  @param maxNode1 is the maximum number of nodes in this NetInfo object
+ *  @param maxLink1 is the maximum number of links in this NetInfo object
+ *  @param maxRtr1 is the maximum number of routers in this NetInfo object
+ *  @param maxCtl1 is the maximum number of controllers in this NetInfo object
+ *  @param maxComtree1 is the maximum number of comtrees in this NetInfo object
+ */
 NetInfo::NetInfo(int maxNode1, int maxLink1,
 		 int maxRtr1, int maxCtl1 , int maxComtree1)
 		 : maxNode(maxNode1), maxLink(maxLink1),
@@ -31,6 +37,9 @@ NetInfo::NetInfo(int maxNode1, int maxLink1,
 	comtreeMap = new IdMap(maxComtree);
 }
 
+/** Destructor for NetInfo class.
+ *  Deallocates all dynamic storage
+ */
 NetInfo::~NetInfo() {
 	delete netTopo;
 	delete [] rtr; delete routers;
@@ -40,6 +49,13 @@ NetInfo::~NetInfo() {
 	delete [] comtree; delete comtreeMap;
 }
 
+/** Add a new router to the NetInfo object.
+ *  A new router object is allocated and assigned a name.
+ *  @param name is the name of the new router
+ *  @return the node number of the new router, or 0 if there
+ *  are no more available router numbers, or the given name is
+ *  already used by some other node.
+ */
 int NetInfo::addRouter(const string& name) {
 	int r = routers->firstOut();
 	if (r == 0) return 0;
@@ -56,13 +72,30 @@ int NetInfo::addRouter(const string& name) {
 	return r;
 }
 
+/** Add interfaces to a router.
+ *  Currently this operation can only be done once for a router,
+ *  typically during its initial initiialization.
+ *  @param r is the node number of the router
+ *  @param numIf is the number of interfaces that are to allocated
+ *  to the router
+ *  @return true on success, 0 on failure (the operation fails if
+ *  r is not a valid router number or if interfaces have already
+ *  been allocated to r)
+ */
 bool NetInfo::addInterfaces(int r, int numIf) {
-	if (getNumIf(r) != 0) return false;
+	if (!isRouter(r) || getNumIf(r) != 0) return false;
 	rtr[r].iface = new IfInfo[numIf+1];
 	rtr[r].numIf = numIf;
 	return true;
 }
 
+/** Add a leaf node to a Forest network
+ *  @param name is the name of the new leaf
+ *  @param nTyp is the desired node type (CLIENT or CONTROLLER)
+ *  @return the node number for the new leaf or 0 on failure
+ *  (the method fails if there are no available leaf records to
+ *  allocate to this leaf, or if the requested name is in use)
+ */
 int NetInfo::addLeaf(const string& name, ntyp_t nTyp) {
 	int ln = leaves->firstOut();
 	if (ln == 0) return 0;
@@ -80,6 +113,17 @@ int NetInfo::addLeaf(const string& name, ntyp_t nTyp) {
 	return nodeNum;
 }
 
+/** Add a link to a forest network.
+ *  @param u is a node number of some node in the network
+ *  @param vi is a leaf number of some node in the network
+ *  @param uln if u is a ROUTER, then uln is a local link number used by
+ *  u to identify the link - for leaf nodes, this argument is ignored
+ *  @param uln if u is a ROUTER, then uln is a local link number used by
+ *  v to identify the link - for leaf nodes,  this argument is ingored
+ *  @return the link number for the new link or 0 if the operation fails
+ *  (the operation fails if it is unable to associate a given local
+ *  link number with a specified router)
+ */
 int NetInfo::addLink(int u, int v, int uln, int vln ) {
         int lnk = netTopo->join(u,v,0);
         if (lnk == 0) return 0;
@@ -99,65 +143,71 @@ int NetInfo::addLink(int u, int v, int uln, int vln ) {
         return lnk;
 }
 
-/* Exampe of NetInfo input file format
- * 
- * Routers # starts section that defines routers
- * 
- * # define salt router
- * name=salt type=router ipAdr=2.3.4.5 fAdr=1.1000
- * location=(40,-50) clientAdrRange=(1.1-1.200)
- * 
- * interfaces # router interfaces
- * # ifaceNum ifaceIp      ifaceLinks  bitRate  pktRate
- *      1     193.168.3.4  1           50000    25000 ;
- *      2     193.168.3.5  2-30        40000    20000 ;
- * end
- * ;
- * 
- * # define kans router
- * name=kans type=router ipAdr=6.3.4.5 fAdr=2.1000
- * location=(40,-40) clientAdrRange=(2.1-2.200)
- * 
- * interfaces
- * # ifaceNum ifaceIp      ifaceLinks  bitRate  pktRate
- *      1     193.168.5.6  1           50000    25000 ;
- *      2     193.168.5.7  2-30        40000    20000 ;
- * end
- * ;
- * ;
- * 
- * LeafNodes # starts section defining other leaf nodes
- * 
- * name=netMgr type=controller ipAdr=192.168.8.2 fAdr=2.900
- * location=(42,-50);
- * name=comtCtl type=controller ipAdr=192.168.7.5 fAdr=1.902
- * location=(42,-40);
- * ;
- * 
- * Links # starts section that defines links
- * 
- * # name.link#:name.link# packetRate bitRate
- * link=(salt.1,kans.1) bitRate=20000 pktRate=40000 ;
- * link=(netMgr,kans.2) bitRate=3000 pktRate=5000 ;
- * link=(comtCtl,salt.2) bitRate=3000 pktRate=5000 ;
- * ;
- * 
- * Comtrees # starts section that defines comtrees
- * 
- * comtree=1001 root=salt core=kans # may have multiple core=x assignments
- * bitRateUp=5000 bitRateDown=10000 pktRateUp=3000 pktRateDown=6000
- * leafBitRateUp=100 leafBitRateDown=200 leafPktRateUp=50 leafPktRateDown=200
- * link=(salt.1,kans.1) link=(netMgr,kans.2) 	
- * ;
- * 
- * comtree=1002 root=kans core=salt 
- * bitRateUp=5000 bitRateDown=10000 pktRateUp=3000 pktRateDown=6000
- * leafBitRateUp=100 leafBitRateDown=200 leafPktRateUp=50 leafPktRateDown=200
- * link=(salt.1,kans.1) link=(comtCtl,salt.2) 	
- * ;
- * ; # end of comtrees section
+/** Exampe of NetInfo input file format
+ *  
+ *  Routers # starts section that defines routers
+ *  
+ *  # define salt router
+ *  name=salt type=router ipAdr=2.3.4.5 fAdr=1.1000
+ *  location=(40,-50) clientAdrRange=(1.1-1.200)
+ *  
+ *  interfaces # router interfaces
+ *  # ifaceNum ifaceIp      ifaceLinks  bitRate  pktRate
+ *       1     193.168.3.4  1           50000    25000 ;
+ *       2     193.168.3.5  2-30        40000    20000 ;
+ *  end
+ *  ;
+ *  
+ *  # define kans router
+ *  name=kans type=router ipAdr=6.3.4.5 fAdr=2.1000
+ *  location=(40,-40) clientAdrRange=(2.1-2.200)
+ *  
+ *  interfaces
+ *  # ifaceNum ifaceIp      ifaceLinks  bitRate  pktRate
+ *       1     193.168.5.6  1           50000    25000 ;
+ *       2     193.168.5.7  2-30        40000    20000 ;
+ *  end
+ *  ;
+ *  ;
+ *  
+ *  LeafNodes # starts section defining other leaf nodes
+ *  
+ *  name=netMgr type=controller ipAdr=192.168.8.2 fAdr=2.900
+ *  location=(42,-50);
+ *  name=comtCtl type=controller ipAdr=192.168.7.5 fAdr=1.902
+ *  location=(42,-40);
+ *  ;
+ *  
+ *  Links # starts section that defines links
+ *  
+ *  # name.link#:name.link# packetRate bitRate
+ *  link=(salt.1,kans.1) bitRate=20000 pktRate=40000 ;
+ *  link=(netMgr,kans.2) bitRate=3000 pktRate=5000 ;
+ *  link=(comtCtl,salt.2) bitRate=3000 pktRate=5000 ;
+ *  ;
+ *  
+ *  Comtrees # starts section that defines comtrees
+ *  
+ *  comtree=1001 root=salt core=kans # may have multiple core=x assignments
+ *  bitRateUp=5000 bitRateDown=10000 pktRateUp=3000 pktRateDown=6000
+ *  leafBitRateUp=100 leafBitRateDown=200 leafPktRateUp=50 leafPktRateDown=200
+ *  link=(salt.1,kans.1) link=(netMgr,kans.2) 	
+ *  ;
+ *  
+ *  comtree=1002 root=kans core=salt 
+ *  bitRateUp=5000 bitRateDown=10000 pktRateUp=3000 pktRateDown=6000
+ *  leafBitRateUp=100 leafBitRateDown=200 leafPktRateUp=50 leafPktRateDown=200
+ *  link=(salt.1,kans.1) link=(comtCtl,salt.2) 	
+ *  ;
+ *  ; # end of comtrees section
  */
 
+/** Reads a network topology file and initializes the NetInfo data structure.
+ *  @param in is an open input stream from which the topology file will
+ *  be read
+ *  @return true if the operation is successful, false if it fails
+ *  (failures are typically accompanied by error messages on cerr)
+ */
 bool NetInfo::read(istream& in) {
 	RtrNodeInfo cRtr;	// holds data for router being parsed
 	LeafNodeInfo cLeaf;	// holds data for leaf being parsed
@@ -177,6 +227,11 @@ bool NetInfo::read(istream& in) {
 	string rightName;	// name of a link's right end point
 	int linkLength = 0;	// length of a link
 
+	// Parse contexts are used to keep track of where we are in the
+	// parsed file. Based opn the context, we look for specific items
+	// in the input stream. For example, the TOP context is the initial
+   	// context, and will in the TOP context, we expect to see one of
+        // keyworks, Routers, LeafNodes, Links or Comtrees.
 	enum ParseContexts {
 		TOP, ROUTER_SEC, ROUTER_CTXT , IFACES, IFACES_ENTRY,
 		LEAF_SEC, LEAF, LINK_SEC, LINK, COMTREE_SEC, COMTREE_CTXT
@@ -1129,8 +1184,19 @@ bool NetInfo::read(istream& in) {
 	return in.eof() && context == TOP;
 }
 
+/** Write the contents of a NetInfo object to an output stream
+ *  The object is written out in a form that allows it to be read in again
+ *  using the read method. Thus programs that modify the interal representation
+ *  can save the result to an output file from which it can later restore the
+ *  original configuration. Note that on re-reading, node numbers and link
+ *  numbers may change, but semantically, the new version will be equivalent
+ *  to the old one.
+ *  @param out is an open output stream
+ */
 void NetInfo::write(ostream& out) {
 	string s0, s1, s2, s3; // temp strings used with xx2string methods below
+
+	// First write the "Routers" section
 	out << "Routers\n\n";
 	for (int r = firstRouter(); r != 0; r = nextRouter(r)) {
 		out << "name=" << getNodeName(r,s1) << " "
@@ -1158,8 +1224,9 @@ void NetInfo::write(ostream& out) {
 		out << "end\n;\n";
 	}
 	out << ";\n\n";
+
+	// Next write the LeafNodes, starting with the controllers
 	out << "LeafNodes\n\n";
-	// print controllers first
 	for (int c = firstController(); c != 0; c = nextController(c)) {
 		out << "name=" << getNodeName(c,s0) << " "
 		    << "type=" << Forest::nodeType2string(getNodeType(c),s1)
@@ -1168,7 +1235,6 @@ void NetInfo::write(ostream& out) {
 		out << "\n\tlocation=(" << getNodeLat(c) << ","
 		    		     << getNodeLong(c) << ");\n";
 	}
-	// then any other leaf nodes
 	for (int c = firstLeaf(); c != 0; c = nextLeaf(c)) {
 		if (getNodeType(c) == CONTROLLER) continue;
 		out << "name=" << getNodeName(c,s0) << " "
@@ -1179,6 +1245,8 @@ void NetInfo::write(ostream& out) {
 		    		     << getNodeLong(c) << ");\n";
 	}
 	out << ";\n\n";
+
+	// Now, write the Links
 	out << "Links\n\n";
 	for (int lnk = firstLink(); lnk != 0; lnk = nextLink(lnk)) {
 		int ln = getLinkL(lnk); int rn = getLinkR(lnk);
@@ -1192,6 +1260,8 @@ void NetInfo::write(ostream& out) {
 		    << "length=" << getLinkLength(lnk) << ";\n";
 	}
 	out << ";\n\n";
+
+	// And finally, the Comtrees
 	out << "Comtrees\n\n";
 	for (int ctx = firstComtIndex(); ctx != 0; ctx = nextComtIndex(ctx)) {
 		if (!validComtIndex(ctx)) continue;
