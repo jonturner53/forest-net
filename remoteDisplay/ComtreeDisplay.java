@@ -9,28 +9,39 @@ import java.awt.Color;
 import java.awt.geom.Point2D;
 import princeton.StdDraw;
 
+/**
+* A GUI for viewing comtrees based on the packets recieved from the ComtreeController.
+* Moving between comtrees, each "router" displays the number of avatars subscribing to that router.
+* A thick line around a circle means a root of a comtree
+* Blue links are links for that particular comtree.
+* Grey circles represent cores of the comtree. White circles represent normal nodes.
+* White squares represent the controller programs.
+*/
 public class ComtreeDisplay{
 	
-	private static final String nodes = "nodes";
-	private static final String interfaces = "interfaces";
-	private static final String controller = "controller";
-	private static final String links = "links";
-	private static final String comtrees = "comtrees";
-	private static final int SIZE = 700;
-	private static final int FACTOR = 5;
-	private static final double PEN_RADIUS = .003;
-	private static final int COM_PORT = 30133;
+	private static final String nodes = "nodes"; //name of nodes section from topology file
+	private static final String interfaces = "interfaces";  //name of interfaces section from topology file
+	private static final String controller = "controller"; //name of controller section from topology file
+	private static final String links = "links";  //name of links section from topology file
+	private static final String comtrees = "comtrees";  //name of comtrees section from topology file
+	private static final int SIZE = 700; // size of gui frame
+	private static final int FACTOR = 5; //fraction of screen covered by StdDraw
+	private static final double PEN_RADIUS = .003; // default stddraw line thickness
+	private static final int COM_PORT = 30133; //port ComtreeDisplay listens to for incoming packets from ComtreeController
 	private static ByteBuffer repBuf = null;        // buffer for report packets
-	private static BufferedReader inStream = null;
-	private static SocketChannel comChan = null;
-	private static InetSocketAddress comSockAdr;
-	private static TreeMap<Pair, Router> routers;
-	private static TreeMap<Pair, Link> lnks;
-	private static TreeMap<String, Comtree> ct;
-	private static ArrayList<NetObj> topology;
+	private static BufferedReader inStream = null; //write packets to a file for debugging
+	private static SocketChannel comChan = null; //socket for network communication with the ComtreeController
+	private static InetSocketAddress comSockAdr; //address for the comChan
+	private static TreeMap<Pair, Router> routers; //list of Router objects
+	private static TreeMap<Pair, Link> lnks; //list of Link objects
+	private static TreeMap<String, Comtree> ct; //list of Comtree objects
+	private static ArrayList<NetObj> topology; //data representation of topology file
 
-	private static boolean needData = true;
-
+	private static boolean needData = true; //data buffer needs data from byte stream
+	
+	/**
+	* Sole constructor
+	*/
 	public ComtreeDisplay(){
 		topology = new ArrayList<NetObj>();
 		routers = new TreeMap<Pair, Router>();
@@ -78,6 +89,11 @@ public class ComtreeDisplay{
                 return packet;
         }
 
+	/**
+	* @param args - command line arguments for the ComtreeDisplay
+	* "localhost" is the only required member of args
+	* @return boolean - successful comSockAdr openning on COM_PORT
+	*/
 	private static boolean processArgs(String[] args) {
                 try {
                         comSockAdr = new InetSocketAddress(args[0], COM_PORT);
@@ -123,6 +139,10 @@ public class ComtreeDisplay{
                 return comtree;
         }
 	
+	/**
+	* @param s - user inputted comtree number
+	* @return boolean - s is a name of one of the comtrees in the topology file
+	*/
 	private static boolean validate(String s){
 		if(s.equals(""))
 			return false;
@@ -131,7 +151,11 @@ public class ComtreeDisplay{
 				return true;
 		return false;
 	}
-
+	
+	/**
+	* @param path - full path name to the topology file
+	* parses a custom topology file into topology<NetObj> array.
+	*/
 	public static void parse(String path) throws FileNotFoundException{
 		Scanner in = new Scanner(new FileInputStream(path));
 		ArrayList<ArrayList<String>> topology_raw = new ArrayList<ArrayList<String>>();
@@ -178,6 +202,9 @@ public class ComtreeDisplay{
 			}
 	}
 	
+	/**
+	* @return String representation of the topology<NetObj> array based on NetObj's toString().
+	*/
 	public String toString(){
 		StringBuilder sb = new StringBuilder();
 		for(NetObj n: topology)
@@ -185,6 +212,9 @@ public class ComtreeDisplay{
 		return sb.toString();
 	}
 	
+	/**
+	* Main method
+	*/
 	public static void main(String[] args){
 		processArgs(args);
 		ComtreeDisplay com = new ComtreeDisplay();
