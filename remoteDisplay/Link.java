@@ -2,10 +2,19 @@ import princeton.StdDraw;
 import java.awt.geom.Point2D;
 import java.util.regex.*;
 
+/**
+* representation of a Link from the topology file
+*/
 public class Link extends NetObj{
 	protected Point2D A, B;	
 	private String[] pair, zipcode;
 
+	/**
+	* Default constructor
+	* @param nme name of link formatted with forestAdr:otherForestAdr
+	* @param packet rate
+	* @param bit rate
+	*/
 	public Link(String nme, String pkt, String bit){
 		name = nme;
 		int count = 0;
@@ -31,17 +40,29 @@ public class Link extends NetObj{
 		bitrate = bit;
 		weight = 0;
 	}
+
+	/**
+	* @return high order forest addresses of both ends of a Link
+	*/
 	public String[]	getZip(){
 		return zipcode;
 	}
-
+	
+	/**
+	* @return forest addresses of both ends of a Link
+	*/
 	public String[] getPair(){
 		return pair;
 	}
+
+	/**
+	* set coordinate points of the Link for painting purposes
+	*/
 	public void setPoints(Point2D l, Point2D m){
 		A = l;
 		B = m;
 	}	 
+	
 	@Override
 	public String toString() {
 		return name + " " + pktrate + " " + bitrate;

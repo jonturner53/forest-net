@@ -1,3 +1,6 @@
+/**
+* Custom Python style Pair class 
+*/
 public class Pair implements Comparable{
 	private String first, last, cat;	
 	public Pair(String f, String l){
@@ -6,10 +9,16 @@ public class Pair implements Comparable{
 		cat = f+l;
 	}	
 	
+	/**
+	* @return first part of the Pair
+	*/
 	public String getFirst(){
 		return first;
 	}
-
+	
+	/**
+	* @return last part of the Pair
+	*/
 	public String getLast(){
 		return last;
 	}

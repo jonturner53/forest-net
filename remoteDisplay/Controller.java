@@ -1,8 +1,20 @@
 import princeton.StdDraw;
 import java.util.regex.*;
 
+/**
+* representation of a Controller from the topology file
+*/
 public class Controller extends NetObj{
-	String zipcode;
+
+	/**
+	* default constructor
+	* @param nme - name of controller
+	* @param type - "controller"
+	* @param ip - ip address
+	* @param fAdr - forest address
+	* @param xStr - x coordinate
+	* @param yStr - y coordinate
+	*/
 	public Controller(String nme, String type, String ip, String fAdr, String xStr, String yStr){
 		name = nme;
 		nodeType = type;
