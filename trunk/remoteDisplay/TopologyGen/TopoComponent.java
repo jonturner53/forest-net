@@ -118,7 +118,10 @@ public class TopoComponent implements Comparable{
 	public boolean isController(){
 		return (type== c.CONTROLLER);
 	}
-
+	
+	public boolean isClient(){
+		return (type== c.CLIENT);
+	}
 	public boolean isRoot(){
 		return isRoot;
 	}

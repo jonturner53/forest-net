@@ -106,7 +106,7 @@ public class Panel extends JPanel{
 				lblName.setAlignmentX(Component.CENTER_ALIGNMENT);
 				panel.add(lblName);
 				panel.add(name);
-				if(tc.isController()){
+				if(tc.isController() || tc.isClient()){
 					JLabel lblIp = new JLabel("Ip: ");
 					lblIp.setAlignmentX(Component.CENTER_ALIGNMENT);
 					panel.add(lblIp);
@@ -211,6 +211,8 @@ public class Panel extends JPanel{
 					}
 					comp.setName(name.getText());
 					comp.setForestAdr(fadr.getText());
+					if(ip != null)
+						comp.setIp(ip.getText());
 				}
 				Panel.this.repaint();
 				ContextMenu.this.dispose();
@@ -259,10 +261,8 @@ public class Panel extends JPanel{
 			//int radius = ((int) Math.sqrt(SIZE/(paintQ.size()*FACTOR*Math.PI)));
 			Ellipse2D.Double circle = new Ellipse2D.Double(radius, radius, width, height);
 			circle.setFrame(radius, radius, width, height);
-			Rectangle2D.Double square = new Rectangle2D.Double(radius, radius, width, height);
-			square.setFrame(radius, radius, width, height);
-			Rectangle2D.Double client_square = new Rectangle2D.Double(radius, radius, width/1.5, height/1.5);
-			client_square.setFrame(radius, radius, width/1.5, height/1.5);
+			Rectangle2D.Double square = new Rectangle2D.Double(radius, radius, width/1.5, height/1.5);
+			square.setFrame(radius, radius, width/1.5, height/1.5);
 
 			while(!paintQ.isEmpty()){
 				MenuItem mi  = paintQ.poll();
@@ -274,12 +274,12 @@ public class Panel extends JPanel{
 					next = new TopoComponent(name, mi, circle);
 					numRouters++;
 				}else if(type == c.CONTROLLER){
-					name = "Controller"+numControllers;
+					name = "Ctrl"+numControllers;
 					next = new TopoComponent(name, mi, square);
 					numControllers++;
 				}else if(type == c.CLIENT){
 					name="Client"+numClients;
-					next = new TopoComponent(name, mi, client_square);
+					next = new TopoComponent(name, mi, square);
 					numClients++;
 				}
 				if(next != null){
@@ -328,7 +328,7 @@ public class Panel extends JPanel{
 					g2.fill(s);
 					g.setColor(Color.BLACK);
 					g2.draw(s);
-					g2.drawString(tc.getName(), ((int) r.getX()) + ((int) r.getWidth())/6, ((int) r.getY())+((int) r.getHeight())/2);
+					g2.drawString(tc.getName(), ((int) r.getX()) + ((int) r.getWidth())/4, ((int) r.getY())+((int) r.getHeight())/2);
 				}
 				else if(type == c.CLIENT){
 					if(tc.isSelected())
@@ -419,9 +419,7 @@ public class Panel extends JPanel{
 				loc.translate((int)((e.getX()-x_offset)-loc.getX()), (int)((e.getY()- y_offset)-loc.getY()));
 				if(close.shape instanceof Ellipse2D.Double)
 					((Ellipse2D.Double) close.shape).setFrame(loc.getX(), loc.getY(), width, height);
-				else if(close.shape instanceof Rectangle2D.Double && close.getType()==c.CONTROLLER)
-					((Rectangle2D.Double) close.shape).setRect(loc.getX(), loc.getY(), width, height);
-				else if(close.shape instanceof Rectangle2D.Double && close.getType()==c.CLIENT)
+				else if(close.getType()==c.CLIENT || close.getType()==c.CONTROLLER)
 					((Rectangle2D.Double) close.shape).setRect(loc.getX(), loc.getY(), width/1.5, height/1.5);
 				/*
 				if(lnks!=null){
@@ -499,7 +497,7 @@ public class Panel extends JPanel{
 						if(tc.shape instanceof Ellipse2D.Double)
 							((Ellipse2D.Double) tc.shape).setFrame(pos.getX(), pos.getY(), width, height);
 						else if(tc.shape instanceof Rectangle2D.Double)
-							((Rectangle2D.Double) tc.shape).setRect(pos.getX(), pos.getY(), width, height);
+							((Rectangle2D.Double) tc.shape).setRect(pos.getX(), pos.getY(), width/1.5, height/1.5);
 						else if(tc.shape instanceof Line2D.Double){
 							p2.translate((int)((loc.getX()+tc.dx2)-p2.getX()), (int)((loc.getY()+tc.dy2)-p2.getY()));
 							((Line2D.Double) tc.shape).setLine(pos, p2); 

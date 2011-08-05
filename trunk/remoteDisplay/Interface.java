@@ -1,10 +1,21 @@
 import java.util.regex.Pattern;
 import princeton.StdDraw;
 
+/**
+* representation of an interface
+*/
 public class Interface extends NetObj{
 
 	private String[] links;
 	private String ifNum;
+	
+	/**
+	* Default Constructor
+	* @param nme - name of interface
+	* @param inf - interface number
+	* @param ip - ip address of an interface
+	* @param lk - list of all ports on the interface
+	*/
 	public Interface(String nme, String ifn, String ip, String lk){
 		name = nme;
 		ifNum = ifn;
