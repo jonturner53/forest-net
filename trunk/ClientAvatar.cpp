@@ -1,4 +1,4 @@
-/** @file Avatar.cpp
+/** @file ClientAvatar.cpp
  *
  *  @author Jon Turner
  *  @date 2011
@@ -59,16 +59,20 @@ main(int argc, char *argv[]) {
  * 
  *  @param mipa is this host's IP address
  *  @param cmipa is the IP address of the client manager
- *  @param ma is the forest address for this host
- *  @param ra is the forest address for the access router
- *  @param ct is the comtree used for the virtual world
- *  @param gridSize is the unit size of one square in the virtual world
+ *  @param gridSize is width and height of the number of grid squares in the virtual world
  *  @param walls is a hex representation of the walls in the maze
+ *  @param cmt is the comtree used for the virtual world
+ *  @param cmt1 is the lower bound of comtrees in the virtual world
+ *  @param cmt2 is the upper bound of comtrees in the virtual world
+ *  @param prt is the port on which to listen for the MazeWorld Controller
  */
 Avatar::Avatar(ipa_t mipa, ipa_t cmipa, int gridSize, char * walls, comt_t cmt,comt_t cmt1, comt_t cmt2,ipp_t prt)
 		: myIpAdr(mipa), cliMgrIpAdr(cmipa), SIZE(GRID*gridSize), WALLS(walls), comt(cmt), comt1(cmt1), comt2(cmt2), port(prt) {
 }
 
+/** setup preforms initialization of variables that couldn't be done
+ *  until after information is received from the ClientManager.
+ */
 void Avatar::setup() {
 	int nPkts = 10000;
 	ps = new PacketStore(nPkts+1, nPkts+1);
