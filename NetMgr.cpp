@@ -231,8 +231,10 @@ void NetMgr::run(int finishTime) {
 	}
 }
 
-/*
- *
+/** Finds the router address of the router based on IP prefix
+ *  @param cliIp is the ip of the client
+ *  @param rtrAdr is the address of the router associated with this IP prefix
+ *  @return true if there was an IP prefix found, false otherwise
  */
 bool NetMgr::getIpByPrefix(ipa_t cliIp, fAdr_t& rtrAdr) {
 	string cip;
@@ -251,22 +253,10 @@ bool NetMgr::getIpByPrefix(ipa_t cliIp, fAdr_t& rtrAdr) {
 	return false;
 }
 
-/*
-bool NetMgr::setupClient(ipa_t  cliIp, fAdr_t& cliAdr,
-			 ipa_t& rtrIp, fAdr_t& rtrAdr) {
-	for (int i = 0; i < numClients; i++) {
-		if (cliIp == clientInfo[i].cliIp &&
-		    clientInfo[i].inUse == false) {
-			cliAdr = clientInfo[i].cliAdr;
-			rtrIp  = clientInfo[i].rtrIp;
-			rtrAdr = clientInfo[i].rtrAdr;
-			clientInfo[i].inUse = true;
-			return true;
-		}
-	}
-	return false;
-}*/
-
+/** Reads the prefix file
+ *  @param filename is the name of the prefix file
+ *  @return true on success, false otherwise
+ */
 bool NetMgr::readPrefixInfo(char filename[]) {
 	ifstream ifs; ifs.open(filename);
 	if(ifs.fail()) return false;
@@ -286,33 +276,6 @@ bool NetMgr::readPrefixInfo(char filename[]) {
 	cout << "read address info for " << numPrefixes << " clients" << endl;
 	return true;
 }
-/*
-bool NetMgr::readClientInfo(char fileName[]) {
-	ifstream in; in.open(fileName);
-	if (in.fail()) return false;
-	Misc::skipBlank(in);
-	int i = 0;
-	while (!in.eof()) {
-		ipa_t  cliIp,  rtrIp;
-		fAdr_t cliAdr, rtrAdr;
-		if (!Np4d::readIpAdr(in, cliIp) || 
-		    !Forest::readForestAdr(in, cliAdr) ||
-		    !Np4d::readIpAdr(in, rtrIp) || 
-		    !Forest::readForestAdr(in, rtrAdr))
-			break;
-		if (i >= MAX_CLIENTS) break;
-		clientInfo[i].cliIp  = cliIp;
-		clientInfo[i].cliAdr = cliAdr;
-		clientInfo[i].rtrIp  = rtrIp;
-		clientInfo[i].rtrAdr = rtrAdr;
-		clientInfo[i].inUse = false;
-		Misc::skipBlank(in);
-		i++;
-	}
-	numClients = i;
-	cout << "read address information for " << numClients << " clients\n";
-	return true;
-}*/
 
 /** Check for next packet from the remote UI.
  *  @return a packet number with a formatted control packet on success,
@@ -343,6 +306,7 @@ int NetMgr::recvFromUi() {
 }
 
 /** Write a packet to the socket for the user interface.
+ *  @param p is the packet to be sent to the CLI
  */
 void NetMgr::sendToUi(int p) {
 	buffer_t& buf = ps->getBuffer(p);
