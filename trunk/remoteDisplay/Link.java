@@ -1,3 +1,7 @@
+/** @file Link.java */
+
+package remoteDisplay;
+
 import princeton.StdDraw;
 import java.awt.geom.Point2D;
 import java.util.regex.*;

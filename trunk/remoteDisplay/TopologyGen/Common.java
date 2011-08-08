@@ -1,3 +1,7 @@
+/** @file Common.java */
+
+package TopologyGen;
+
 import java.awt.Dimension;
 import java.awt.Color;
 

@@ -1,3 +1,5 @@
+package TopologyGen;
+
 import javax.swing.table.*;
 
 class MyTableModel extends DefaultTableModel{

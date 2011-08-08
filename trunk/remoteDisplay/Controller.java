@@ -1,3 +1,7 @@
+/** @file Controller.java */
+
+package remoteDisplay;
+
 import princeton.StdDraw;
 import java.util.regex.*;
 

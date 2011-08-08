@@ -1,3 +1,7 @@
+/** @file TopologyGen.java 
+
+package TopologyGen;
+
 import java.util.*;
 import java.awt.*;
 import java.io.*;
@@ -5,6 +9,7 @@ import java.awt.geom.*;
 import java.awt.event.*;
 import javax.swing.*;
 import javax.swing.event.*;
+import remoteDisplay.Comtree;
 
 public class TopologyGen extends JFrame{
 	private int width, height;

@@ -1,3 +1,7 @@
+/** @file Pair.java */
+
+package remoteDisplay;
+
 /**
 * Custom Python style Pair class 
 */

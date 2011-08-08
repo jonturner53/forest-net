@@ -1,3 +1,7 @@
+/** @file ComtreeDisplay.java */
+
+package remoteDisplay;
+
 import java.util.*;
 import java.util.regex.*;
 import java.io.*;
