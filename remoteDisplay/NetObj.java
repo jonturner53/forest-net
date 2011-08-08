@@ -1,3 +1,7 @@
+/** @file NetObj.java */
+
+package remoteDisplay;
+
 import princeton.StdDraw;
 
 /**

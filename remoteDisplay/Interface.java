@@ -1,3 +1,7 @@
+/** @file Interface.java */
+
+package remoteDisplay;
+
 import java.util.regex.Pattern;
 import princeton.StdDraw;
 

@@ -1,3 +1,7 @@
+/** @file ComtreeDialog.java */
+
+package TopologyGen;
+
 import java.util.*;
 import java.awt.*;
 import java.io.*;

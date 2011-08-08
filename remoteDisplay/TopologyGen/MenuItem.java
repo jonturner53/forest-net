@@ -1,3 +1,5 @@
+ package TopologyGen;
+
 import java.awt.event.*;
 import javax.swing.*;
 
