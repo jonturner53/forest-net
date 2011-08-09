@@ -1,4 +1,4 @@
-/** @file Avatar.h 
+/** @file ClientAvatar.h 
  *
  *  @author Jon Turner
  *  @date 2011
