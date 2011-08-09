@@ -49,12 +49,12 @@ string& Clist::toString(string& s) const {
 		mark[i] = 1;
 		s += "(";
 		if (N <= 26) s += ((char) ('a'+(i-1)));
-		else s += Misc::toString(i,s1);
+		else s += Misc::num2string(i,s1);
 		for (j = node[i].next; j != i; j = node[j].next) {
 			mark[j] = 1;
 			s += " ";
 			if (N <= 26) s = s + ((char) ('a'+(j-1)));
-			else s += Misc::toString(j,s1);
+			else s += Misc::num2string(j,s1);
 		}
 		s += ")";
 	}
