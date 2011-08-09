@@ -1,8 +1,6 @@
-/** @file NetObj.java */
-
 package remoteDisplay;
 
-import princeton.StdDraw;
+/** @file NetObj.java */
 
 /**
 * abtract class used in parsing the topology file

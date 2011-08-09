@@ -1,6 +1,6 @@
-/** @file Common.java */
+package remoteDisplay.TopologyGen;
 
-package TopologyGen;
+/** @file Common.java */
 
 import java.awt.Dimension;
 import java.awt.Color;

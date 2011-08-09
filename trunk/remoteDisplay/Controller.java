@@ -2,14 +2,13 @@
 
 package remoteDisplay;
 
-import princeton.StdDraw;
 import java.util.regex.*;
 
 /**
 * representation of a Controller from the topology file
 */
 public class Controller extends NetObj{
-
+	String zipcode;
 	/**
 	* default constructor
 	* @param nme - name of controller

@@ -1,4 +1,4 @@
-package TopologyGen;
+package remoteDisplay.TopologyGen;
 
 import java.awt.event.*;
 import java.awt.*;
