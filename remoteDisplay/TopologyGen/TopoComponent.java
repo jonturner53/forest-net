@@ -10,6 +10,10 @@ import javax.swing.*;
 import remoteDisplay.*;
 import remoteDisplay.TopologyGen.Common.*;
 
+/**
+* Object used as a data representation of the front end gui for building a topology file
+* TopoComponents represent Routers, Clients, Controllers, and one end of a TopoLink, which extends TopoComponent
+*/
 public class TopoComponent implements Comparable{
 	protected MenuItem item = null;
 	protected String name, port, fAdr, ip, ports;
@@ -27,8 +31,17 @@ public class TopoComponent implements Comparable{
 	protected ArrayList<String> avaPorts = new ArrayList<String>();
 	//protected Common c;
 
+	/**
+	* Empty Constructor
+	*/
 	TopoComponent(){}
 
+	/**
+	* Default Constructor
+	* @param nme is the name of this Component apart from its graphical representation
+	* @param jmi is the MenuItem that spawns this type of TopoComponent
+	* @param s is the graphical representation of this TopoComponent
+	*/
 	TopoComponent(String nme, MenuItem jmi, Shape s){
 		name = nme;
 		item = jmi;
@@ -52,29 +65,50 @@ public class TopoComponent implements Comparable{
 		ports = sb.toString();
 	}
 	
+	/**
+	* @param l is a TopoLink
+	* @return true if this link is shared by this TopoComponent
+	*/
 	public boolean compareLinks(TopoComponent l){
 		return lnks.contains(l);
 	}
 
+	/**
+	* Used for plotting the next location of the shape on the screen
+	* @param xdiff is the initial x-axis distance from a mouse press to this Shape (x1)
+	* @param ydiff is the initial y0axis distance from a mouse press to this Shape (y1)
+	*/
 	public void setDif(double xdiff, double ydiff){
 		dx = xdiff;
 		dy = ydiff;
 	}
 
+	/**
+	* Used for plotting the next location of a line on the screen
+	* @param xdiff is the initial distance form mouse press to the shape (x1)
+	* @param ydiff is the initial distance form mouse press to the shape (y1)
+	* @param x2diff is the initial distance form mouse press to the shape (x2)
+	* @param y2diff is the initial distance form mouse press to the shape (y2)
+	*/
 	public void setDiff(double xdiff, double ydiff, double x2diff, double y2diff){
 		dx = xdiff;
 		dy = ydiff;
 		dx2 = x2diff;
 		dy2 = y2diff;
 	}
-	
+	/**
+	* @return all possible ports for a component to use.
+	*/
 	public String[] getAllPorts(){
 		String[] ports = new String[Common.NUMPORTS];
 		for(int n = 1; n <= Common.NUMPORTS; n++)
 			ports[n-1] = Integer.toString(n);
 		return ports;
 	}
-
+	
+	/**
+	* @return all ports minus those already used by itself in connection with other components
+	*/
 	public String[] getAvaPorts(){
 		ArrayList<Integer> sorter = new ArrayList<Integer>();
 		for(String s: avaPorts)
@@ -86,70 +120,131 @@ public class TopoComponent implements Comparable{
 		return array;
 	}
 
+	/**
+	* set name of this TopoComponent
+	* @param n is the new name of thsi component
+	*/
 	public void setName(String n){
 		name = n;
 	}
 	
+	/**
+	* set state of isCore
+	* @param bool if this TopoComponent is a core router in the Forest network
+	*/
 	public void setCore(boolean bool){
 		isCore = bool;
 	}
 	
+	/**
+	* set this component is selected or not
+	* @param bool if this TopoComponent is selected on screen
+	*/
 	public void setSelected(boolean bool){
 		selected = bool;
 	}
 	
+	/**
+	* this parameters are the fields from the Interface table in the context menu if this TopoComponent's type equals Router
+	* @param num is the row number of this interface beggining with 1
+	* @param ip is the ip address from the table
+	* @param lnks is the specified range of values such as 1 or min-max for the number of links to this interface
+	* @param bit is the bitrate of this interface
+	* @param pkt is the packet rate of this interface
+	*/
 	public void addInterface(String num, String ip, String lnks, String bit, String pkt){
 		String[] temp = {num, ip, lnks, bit, pkt};
 		ifc = temp;
 		interfaces.add(ifc);
 	}
 	
+	/**
+	* set the forest address
+	* @param f is the forest address of this component in the form of [high order].[low order]
+	*/
 	public void setForestAdr(String f){
 		fAdr = f;
 	}
-
+	
+	/**
+	* set the ip address
+	* @param adr is the ip address of this component
+	*/
 	public void setIp(String adr){
 		ip = adr;
 	}
 	
+	/**
+	* set port range
+	* @param lowBound is the lower bound of the port range
+	* @param upBound is the upper bound of the port range
+	*/
 	public void setRange(String lowBound, String upBound){
 		range[0] = lowBound;
 		range[1] = upBound;
 	}
 
+	/**
+	* @return true if type is Common.ROUTER
+	*/
 	public boolean isRouter(){
 		return (type == Common.ROUTER);
 	}
 
+	/**
+	* @return true if type is Common.CONTROLLER
+	*/
 	public boolean isController(){
 		return (type== Common.CONTROLLER);
 	}
 	
+	/**
+	* @return true if type is Common.CLIENT
+	*/
 	public boolean isClient(){
 		return (type== Common.CLIENT);
 	}
+	
+	/**
+	* @return true if this is root
+	*/
 	public boolean isRoot(){
 		return isRoot;
 	}
 
+	/**
+	* @return true if this is a core
+	*/
 	public boolean isCore(){
 		return isCore;
 	}
 
+	/**
+	* @reurn true if this is selected
+	*/
 	public boolean isSelected(){
 		return selected;
 	}
 	
+	/**
+	* @param s the port number for this component
+	*/
 	public void bindPort(String s){
 		port = s;
 		avaPorts.remove(port);
 	}
 
+	/**
+	* give this component's port back to the pool of ports and set port to null
+	*/
 	public void releasePort(){
 		avaPorts.add(port);
 		port = "";
 	}
 	
+	/**
+	* @return true if port is not null or empty
+	*/
 	public boolean hasPort(){
 		if(port == null)
 			return false;
@@ -158,42 +253,73 @@ public class TopoComponent implements Comparable{
 		return true;
 	}
 
+	/**
+	* @return TopoComponent's type from MenuItem
+	*/
 	public int getType(){
 		return item.getType();
 	}
 
+	/**
+	* @return TopoComponent's name
+	*/
 	public String getName(){
 		return name;
 	}
-
+	
+	/**
+	* @return forest address
+	*/
 	public String getForestAdr(){
 		return fAdr;
 	}
 	
+	/**
+	* @return ip address
+	*/
 	public String getIp(){
 		return ip;
 	}
 
+	/**
+	* @return port
+	*/
 	public String getPort(){
 		return port;
 	}
-
+	
+	/**
+	* @return the upper and lower bounds of link ranges
+	*/
 	public String[] getRange(){
 		return range;
 	}
-
+	
+	/**
+	* @return the line from the Interfaces table for this TopoComponent
+	*/
 	public ArrayList<String[]> getInterface(){
 		return interfaces;
 	}
-
+	
+	/**
+	* @param l is really a TopoLink
+	* adds a link to the list of links belonging to this component
+	*/
 	public void addLink(TopoComponent l){
 		lnks.add(l);
 	}
 	
+	/**
+	* @return the list of TopoLinks belonging to this component
+	*/
 	public ArrayList<TopoComponent> getLinks(){
 		return lnks;
 	}
 
+	/**
+	* @return the graphical point from the bounds of the shape
+	*/
 	public Point getPoint(){
 		return new Point((int) shape.getBounds().getX(), (int) shape.getBounds().getY());
 	}
