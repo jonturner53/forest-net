@@ -50,7 +50,7 @@ main(int argc, char *argv[]) {
 	exit(0);
 }
 
-// Constructor for NetMgr, allocates space and initializes private data
+/// Constructor for NetMgr, allocates space and initializes private data
 NetMgr::NetMgr(ipa_t xipa, ipa_t iipa, ipa_t ripa, fAdr_t ma, fAdr_t ra, fAdr_t cma)
 		: extIp(xipa), intIp(iipa), rtrIp(ripa), myAdr(ma), rtrAdr(ra), cliMgrAdr(cma) {
 	int nPkts = 10000;

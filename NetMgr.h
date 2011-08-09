@@ -27,7 +27,6 @@ public:
 	bool	init();
 	void	run(int); 
 
-	bool readClientInfo(char*);
 	bool	readPrefixInfo(char*);	///< reads the prefix file and stores
 private:
 	const static short NM_PORT = 30122; ///< port# for used by remote UI
@@ -73,7 +72,6 @@ private:
 	
 	bool	getIpByPrefix(ipa_t,fAdr_t&); ///< gives the rtrAdr of the prefix
 	
-	bool setupClient(ipa_t , fAdr_t&, ipa_t&, fAdr_t&);
 };
 
 
