@@ -166,10 +166,11 @@ void ClientMgr::writeToAcctFile(CtlPkt cp) {
 void ClientMgr::readUsernames() {
 	ifstream ifs(unamesFile);
 	if(ifs.good()) {
-		string line;
-		while(getline(ifs,line)) {
-			string uname = line.substr(0,line.find_first_of(' '));
-			string pword = line.substr(uname.size()+1,line.size()-uname.size()+1);
+		while(!ifs.eof()) {
+			string uname; string pword;
+			ifs >> uname;
+			ifs >> pword;
+			Misc::skipBlank(ifs);
 			(*unames)[uname] = pword;
 		}
 	} else

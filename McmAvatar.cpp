@@ -1,4 +1,4 @@
-/** @file Avatar.cpp
+/** @file McmAvatar.cpp
  *
  *  @author Jon Turner
  *  @date 2011
@@ -11,7 +11,7 @@
 #include "CommonDefs.h"
 #include "McmAvatar.h"
 /** usage:
- *       Avatar myIpAdr rtrIpAdr myAdr rtrAdr ccAdr comt finTime gridSize comt1 comt2 walls
+ *       McmAvatar myIpAdr rtrIpAdr myAdr rtrAdr ccAdr comt finTime gridSize comt1 comt2 walls
  * 
  *  Command line arguments include the ip address of the
  *  avatar's machine, the router's IP address, the forest
@@ -47,12 +47,12 @@ main(int argc, char *argv[]) {
 	    sscanf(argv[8],"%d", &gridSize) != 1 ||
 	    sscanf(argv[9],"%d", &comt1) != 1 ||
 	    sscanf(argv[10], "%d", &comt2) != 1)
-		fatal("usage: Avatar myIpAdr rtrIpAdr myAdr rtrAdr "
+		fatal("usage: McmAvatar myIpAdr rtrIpAdr myAdr rtrAdr "
 		      		    "comtree finTime");
 	
 	char * walls = argv[11];
-	Avatar avatar(myIpAdr,rtrIpAdr,ccAdr,myAdr,rtrAdr, comt, comt1, comt2, gridSize, walls);
-	if (!avatar.init()) fatal("Avatar:: initialization failure");
+	McmAvatar avatar(myIpAdr,rtrIpAdr,ccAdr,myAdr,rtrAdr, comt, comt1, comt2, gridSize, walls);
+	if (!avatar.init()) fatal("McmAvatar:: initialization failure");
 	avatar.run(1000000*finTime);
 }
 
@@ -68,7 +68,7 @@ main(int argc, char *argv[]) {
  *  @param gridSize is the size of one grid space
  *  @param walls a hex representation of the walls in the maze
  */
-Avatar::Avatar(ipa_t mipa, ipa_t ripa, fAdr_t ccAdr, fAdr_t ma, fAdr_t ra, comt_t ct, comt_t ct1, comt_t ct2, int gridSize, char * walls)
+McmAvatar::McmAvatar(ipa_t mipa, ipa_t ripa, fAdr_t ccAdr, fAdr_t ma, fAdr_t ra, comt_t ct, comt_t ct1, comt_t ct2, int gridSize, char * walls)
 		: myIpAdr(mipa), rtrIpAdr(ripa), CC_Adr(ccAdr), myAdr(ma), rtrAdr(ra),
 		  comt(ct), comt1(ct1), comt2(ct2), SIZE(GRID*gridSize), WALLS(walls) {
 	int nPkts = 10000;
@@ -77,7 +77,7 @@ Avatar::Avatar(ipa_t mipa, ipa_t ripa, fAdr_t ccAdr, fAdr_t ma, fAdr_t ra, comt_
 	// initialize avatar to random position
 	struct timeval tv;
 	if (gettimeofday(&tv, NULL) < 0)
-		fatal("Avatar::Avatar: gettimeofday failure");
+		fatal("McmAvatar::McmAvatar: gettimeofday failure");
 	//srand(tv.tv_usec);
 	srand(myAdr);
 	x = randint(0,SIZE-1); y = randint(0,SIZE-1);
@@ -86,12 +86,12 @@ Avatar::Avatar(ipa_t mipa, ipa_t ripa, fAdr_t ccAdr, fAdr_t ma, fAdr_t ra, comt_
 	speed = MEDIUM;
 
 	mcGroups = new UiDlist((SIZE/GRID)*(SIZE/GRID));
-	nearAvatars = new UiHashTbl(MAXNEAR);
-	visibleAvatars = new UiHashTbl(MAXNEAR);
+	nearMcmAvatars = new UiHashTbl(MAXNEAR);
+	visibleMcmAvatars = new UiHashTbl(MAXNEAR);
 	
 	//set up bitset
 	if((SIZE/GRID)*(SIZE/GRID) >= 10000)
-		fatal("AvatarController::AvatarController bitset too small; hex string too large");
+		fatal("McmAvatarController::McmAvatarController bitset too small; hex string too large");
 	for(int i = 0; i < (SIZE/GRID)*(SIZE/GRID); i++) {
 		char s = WALLS[i];
 		int x;
@@ -120,12 +120,12 @@ Avatar::Avatar(ipa_t mipa, ipa_t ripa, fAdr_t ccAdr, fAdr_t ma, fAdr_t ra, comt_
 	nextAv = 1;
 }
 
-Avatar::~Avatar() { delete mcGroups; delete nearAvatars; delete ps; }
+McmAvatar::~McmAvatar() { delete mcGroups; delete nearMcmAvatars; delete ps; }
 
 /** Initialize a datagram socket for nonblocking IO.
  *  @return true on success, false on failure
  */
-bool Avatar::init() {
+bool McmAvatar::init() {
 	sock = Np4d::datagramSocket();
 
 	return (sock >= 0 &&
@@ -133,7 +133,7 @@ bool Avatar::init() {
         	Np4d::nonblock(sock));
 }
 
-/** Main Avatar processing loop.
+/** Main McmAvatar processing loop.
  *  Operates on a cycle with a period of UPDATE_PERIOD milliseconds,
  *  Each cycle, update the current position, direction, speed;
  *  issue new SUB_UNSUB packet if necessary; read all incoming 
@@ -143,7 +143,7 @@ bool Avatar::init() {
  *  @param finishTime is the number of microseconds to 
  *  to run before halting.
  */
-void Avatar::run(int finishTime) {
+void McmAvatar::run(int finishTime) {
 	connect(); 		// send initial connect packet
 
 	uint32_t now;    	// free-running microsecond time
@@ -151,8 +151,8 @@ void Avatar::run(int finishTime) {
 	now = nextTime = 0;
 	while (now <= finishTime) {
 		//reset hashtables and report
-		nearAvatars->clear();
-		visibleAvatars->clear();
+		nearMcmAvatars->clear();
+		visibleMcmAvatars->clear();
 		stableNumNear = numNear; stableNumVisible = numVisible;
 		numVisible = numNear = 0;
 		nextAv = 1;
@@ -185,7 +185,7 @@ void Avatar::run(int finishTime) {
  *  
  *  @param now is the reference time for the status report
  */
-void Avatar::sendStatus(int now) {
+void McmAvatar::sendStatus(int now) {
 	packet p = ps->alloc();
 
 	PacketHeader& h = ps->getHeader(p);
@@ -208,7 +208,7 @@ void Avatar::sendStatus(int now) {
  *@param join is true if the avatar wishes to join the comtree, false otherwise
  *@param comtree is the comtree number that the avatar wishes to join or leave
  */
-void Avatar::sendCtlPkt(bool join, int comtree) {
+void McmAvatar::sendCtlPkt(bool join, int comtree) {
 	packet p = ps->alloc();
 	if(p==0)
 		fatal("McmAvatar::sendCtlPkt: Not enough space to alloc packet");
@@ -232,16 +232,16 @@ void Avatar::sendCtlPkt(bool join, int comtree) {
 /*sends a packet to the ComtreeController
  *@param p is the packet to be sent
  */
-void Avatar::send2CC(int p) {
+void McmAvatar::send2CC(int p) {
 	int length = ps->getHeader(p).getLength();
 	ps->pack(p);
 	int rv = Np4d::sendto4d(sock,(void *) ps->getBuffer(p),length,rtrIpAdr, Forest::ROUTER_PORT);
-	if (rv == -1) fatal("Avatar::send: failure in sendto");
+	if (rv == -1) fatal("McmAvatar::send: failure in sendto");
 	ps->free(p);
 }
 /** Send initial connect packet, using comtree 1 (the signalling comtree).
  */
-void Avatar::connect() {
+void McmAvatar::connect() {
 	packet p = ps->alloc();
 	PacketHeader& h = ps->getHeader(p);
 
@@ -254,7 +254,7 @@ void Avatar::connect() {
 
 /** Send final disconnect packet.
  */
-void Avatar::disconnect() {
+void McmAvatar::disconnect() {
 	packet p = ps->alloc();
 	PacketHeader& h = ps->getHeader(p);
 
@@ -266,18 +266,18 @@ void Avatar::disconnect() {
 
 /** Send packet and recycle storage.
  */
-void Avatar::send(int p) {
+void McmAvatar::send(int p) {
 	int length = ps->getHeader(p).getLength();
 	ps->pack(p);
 	int rv = Np4d::sendto4d(sock,(void *) ps->getBuffer(p),length,
 		    		rtrIpAdr, Forest::ROUTER_PORT);
-	if (rv == -1) fatal("Avatar::send: failure in sendto");
+	if (rv == -1) fatal("McmAvatar::send: failure in sendto");
 	ps->free(p);
 }
 
 /** Return next waiting packet or 0 if there is none. 
  */
-int Avatar::receive() { 
+int McmAvatar::receive() { 
 	int p = ps->alloc();
 	if (p == 0) return 0;
 	PacketHeader& h = ps->getHeader(p);
@@ -292,7 +292,7 @@ int Avatar::receive() {
                 if (errno == EWOULDBLOCK) {
                         ps->free(p); return 0;
                 }
-                fatal("Avatar::receive: error in recvfrom call");
+                fatal("McmAvatar::receive: error in recvfrom call");
         }
 
 	ps->unpack(p);
@@ -306,7 +306,7 @@ int Avatar::receive() {
 /** Update status of avatar based on passage of time.
  *  @param now is the reference time for the simulated update
  */
-void Avatar::updateStatus(int now) {
+void McmAvatar::updateStatus(int now) {
 	const double PI = 3.141519625;
 	double r;
 
@@ -366,7 +366,7 @@ void Avatar::updateStatus(int now) {
  *  @param x1 is the x coordinate of the position of interest
  *  @param y1 is the y coordinate of the position of interest
  */
-int Avatar::groupNum(int x1, int y1) {
+int McmAvatar::groupNum(int x1, int y1) {
 	return 1 + (x1/GRID) + (y1/GRID)*(SIZE/GRID);
 }
 
@@ -374,7 +374,7 @@ int Avatar::groupNum(int x1, int y1) {
  * @param region1 is the region from which we are interested in visiblity
  * @param region2 is the region to which we are interested in visibility
  */
-bool Avatar::isVis(int region1, int region2) {
+bool McmAvatar::isVis(int region1, int region2) {
 	int region1xs[4];
 	int region1ys[4];
 	int region2xs[4];
@@ -416,7 +416,7 @@ bool Avatar::isVis(int region1, int region2) {
  *@param dx is the x of the second point of the second line
  *@param dy is the y of the seocnd point of the second line
  */
-bool Avatar::linesIntersect(double ax, double ay, double bx, double by , double cx ,double cy, double dx,double dy) {
+bool McmAvatar::linesIntersect(double ax, double ay, double bx, double by , double cx ,double cy, double dx,double dy) {
 	double distAB;
 	double theCos;
 	double theSin;
@@ -443,7 +443,7 @@ bool Avatar::linesIntersect(double ax, double ay, double bx, double by , double 
 
 /** Update the set of multicast subscriptions based on current position.
  */
-void Avatar::updateSubscriptions() {
+void McmAvatar::updateSubscriptions() {
 	const double SQRT2 = 1.41421356;
 	
 	int myGroup = groupNum(x,y);
@@ -487,7 +487,7 @@ void Avatar::updateSubscriptions() {
 	send(p); ps->free(p);
 }
 
-/** Update the set of nearby Avatars.
+/** Update the set of nearby McmAvatars.
  *  If the given packet is a status report, check to see if the
  *  sending avatar is visible. If it is visible, but not in our
  *  set of nearby avatars, then add it. If it is not visible
@@ -496,7 +496,7 @@ void Avatar::updateSubscriptions() {
  *  are such that we will get at least one report from a newly
  *  invisible avatar.
  */
-void Avatar::updateNearby(int p) {
+void McmAvatar::updateNearby(int p) {
 	ps->unpack(p);
 	PacketHeader& h = ps->getHeader(p);
 	uint32_t *pp = ps->getPayload(p);
@@ -506,9 +506,9 @@ void Avatar::updateNearby(int p) {
 	double dx = x - x1; double dy = y - y1;
 
 	uint64_t key = h.getSrcAdr(); key = (key << 32) | h.getSrcAdr();
-	if(nearAvatars->lookup(key) == 0) {
+	if(nearMcmAvatars->lookup(key) == 0) {
 		numNear++;
-		nearAvatars->insert(key, nextAv++);
+		nearMcmAvatars->insert(key, nextAv++);
 	}
 	bool canSee = true;
 	for(size_t i = 0; i < (SIZE/GRID)*(SIZE/GRID); i++) {
@@ -520,9 +520,9 @@ void Avatar::updateNearby(int p) {
 			canSee = false;
 	}
 	if(canSee) {
-		if (visibleAvatars->lookup(key) == 0) {
+		if (visibleMcmAvatars->lookup(key) == 0) {
 			if (nextAv <= MAXNEAR) {
-				visibleAvatars->insert(key, nextAv++);
+				visibleMcmAvatars->insert(key, nextAv++);
 				numVisible++;
 			}
 		}
