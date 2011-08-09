@@ -51,8 +51,14 @@ private:
 		string prefix;
 		fAdr_t rtrAdr;
 	};
+	struct clientInfo {
+		ipa_t cliIp;
+		fAdr_t rtrAdr;
+		fAdr_t cliAdr;
+		ipa_t rtrIp;
+	};
 	prefixInfo prefixes[1000];
-	
+	map<uint32_t,clientInfo> *packetsSent;
 	// private helper methods
 	void	connect();		
 	void	disconnect();	
