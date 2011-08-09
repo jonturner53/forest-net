@@ -1,4 +1,4 @@
-/** @file Avatar.cpp
+/** @file MazeAvatar.cpp
  *
  *  @author Jon Turner
  *  @date 2011
@@ -11,7 +11,7 @@
 #include "CommonDefs.h"
 #include "MazeAvatar.h"
 /** usage:
- *       Avatar myIpAdr rtrIpAdr myAdr rtrAdr comt finTime
+ *       MazeAvatar myIpAdr rtrIpAdr myAdr rtrAdr comt finTime
  * 
  *  Command line arguments include the ip address of the
  *  avatar's machine, the router's IP address, the forest
@@ -45,11 +45,11 @@ main(int argc, char *argv[]) {
 	    sscanf(argv[5],"%d", &comt) != 1 ||
 	    sscanf(argv[6],"%d", &finTime) != 1 ||
 	    sscanf(argv[7],"%d", &gridSize) != 1)
-		fatal("usage: Avatar myIpAdr rtrIpAdr myAdr rtrAdr "
+		fatal("usage: MazeAvatar myIpAdr rtrIpAdr myAdr rtrAdr "
 		      		    "comtree finTime");
 
-	Avatar avatar(myIpAdr,rtrIpAdr,myAdr,rtrAdr, comt, gridSize, walls);
-	if (!avatar.init()) fatal("Avatar:: initialization failure");
+	MazeAvatar avatar(myIpAdr,rtrIpAdr,myAdr,rtrAdr, comt, gridSize, walls);
+	if (!avatar.init()) fatal("MazeAvatar:: initialization failure");
 	avatar.run(1000000*finTime);
 }
 
@@ -63,7 +63,7 @@ main(int argc, char *argv[]) {
  *  @param gridSize is the unit size of one square in the virtual world
  *  @param walls is a hex representation of the walls in the maze
  */
-Avatar::Avatar(ipa_t mipa, ipa_t ripa, fAdr_t ma, fAdr_t ra, comt_t ct, int gridSize, char * walls)
+MazeAvatar::MazeAvatar(ipa_t mipa, ipa_t ripa, fAdr_t ma, fAdr_t ra, comt_t ct, int gridSize, char * walls)
 		: myIpAdr(mipa), rtrIpAdr(ripa), myAdr(ma), rtrAdr(ra),
 		  comt(ct), SIZE(GRID*gridSize), WALLS(walls) {
 	int nPkts = 10000;
@@ -72,7 +72,7 @@ Avatar::Avatar(ipa_t mipa, ipa_t ripa, fAdr_t ma, fAdr_t ra, comt_t ct, int grid
 	// initialize avatar to random position
 	struct timeval tv;
 	if (gettimeofday(&tv, NULL) < 0)
-		fatal("Avatar::Avatar: gettimeofday failure");
+		fatal("MazeAvatar::MazeAvatar: gettimeofday failure");
 	//srand(tv.tv_usec);
 	srand(myAdr);
 	x = randint(0,SIZE-1); y = randint(0,SIZE-1);
@@ -81,12 +81,12 @@ Avatar::Avatar(ipa_t mipa, ipa_t ripa, fAdr_t ma, fAdr_t ra, comt_t ct, int grid
 	speed = MEDIUM;
 
 	mcGroups = new UiDlist((SIZE/GRID)*(SIZE/GRID));
-	nearAvatars = new UiHashTbl(MAXNEAR);
-	visibleAvatars = new UiHashTbl(MAXNEAR);
+	nearMazeAvatars = new UiHashTbl(MAXNEAR);
+	visibleMazeAvatars = new UiHashTbl(MAXNEAR);
 	
 	//set up bitset
 	if((SIZE/GRID)*(SIZE/GRID) >= 10000)
-		fatal("AvatarController::AvatarController bitset too small; hex string too large");
+		fatal("MazeAvatarController::MazeAvatarController bitset too small; hex string too large");
 	for(int i = 0; i < (SIZE/GRID)*(SIZE/GRID); i++) {
 		char s = WALLS[i];
 		int x;
@@ -115,12 +115,12 @@ Avatar::Avatar(ipa_t mipa, ipa_t ripa, fAdr_t ma, fAdr_t ra, comt_t ct, int grid
 	nextAv = 1;
 }
 
-Avatar::~Avatar() { delete mcGroups; delete nearAvatars; delete ps; }
+MazeAvatar::~MazeAvatar() { delete mcGroups; delete nearMazeAvatars; delete ps; }
 
 /** Initialize a datagram socket for nonblocking IO.
  *  @return true on success, false on failure
  */
-bool Avatar::init() {
+bool MazeAvatar::init() {
 	sock = Np4d::datagramSocket();
 
 	return	sock >= 0 &&
@@ -128,7 +128,7 @@ bool Avatar::init() {
         	Np4d::nonblock(sock);
 }
 
-/** Main Avatar processing loop.
+/** Main MazeAvatar processing loop.
  *  Operates on a cycle with a period of UPDATE_PERIOD milliseconds,
  *  Each cycle, update the current position, direction, speed;
  *  issue new SUB_UNSUB packet if necessary; read all incoming 
@@ -138,7 +138,7 @@ bool Avatar::init() {
  *  @param finishTime is the number of microseconds to 
  *  to run before halting.
  */
-void Avatar::run(int finishTime) {
+void MazeAvatar::run(int finishTime) {
 	connect(); 		// send initial connect packet
 
 	uint32_t now;    	// free-running microsecond time
@@ -146,8 +146,8 @@ void Avatar::run(int finishTime) {
 	now = nextTime = 0;
 	while (now <= finishTime) {
 		//reset hashtables and report
-		nearAvatars->clear();
-		visibleAvatars->clear();
+		nearMazeAvatars->clear();
+		visibleMazeAvatars->clear();
 		stableNumNear = numNear; stableNumVisible = numVisible;
 		numVisible = numNear = 0;
 		nextAv = 1;
@@ -176,7 +176,7 @@ void Avatar::run(int finishTime) {
  *  
  *  @param now is the reference time for the status report
  */
-void Avatar::sendStatus(int now) {
+void MazeAvatar::sendStatus(int now) {
 	packet p = ps->alloc();
 
 	PacketHeader& h = ps->getHeader(p);
@@ -198,7 +198,7 @@ void Avatar::sendStatus(int now) {
 
 /** Send initial connect packet, using comtree 1 (the signalling comtree).
  */
-void Avatar::connect() {
+void MazeAvatar::connect() {
 	packet p = ps->alloc();
 	PacketHeader& h = ps->getHeader(p);
 
@@ -211,7 +211,7 @@ void Avatar::connect() {
 
 /** Send final disconnect packet.
  */
-void Avatar::disconnect() {
+void MazeAvatar::disconnect() {
 	packet p = ps->alloc();
 	PacketHeader& h = ps->getHeader(p);
 
@@ -223,18 +223,18 @@ void Avatar::disconnect() {
 
 /** Send packet and recycle storage.
  */
-void Avatar::send(int p) {
+void MazeAvatar::send(int p) {
 	int length = ps->getHeader(p).getLength();
 	ps->pack(p);
 	int rv = Np4d::sendto4d(sock,(void *) ps->getBuffer(p),length,
 		    		rtrIpAdr, Forest::ROUTER_PORT);
-	if (rv == -1) fatal("Avatar::send: failure in sendto");
+	if (rv == -1) fatal("MazeAvatar::send: failure in sendto");
 	ps->free(p);
 }
 
 /** Return next waiting packet or 0 if there is none. 
  */
-int Avatar::receive() { 
+int MazeAvatar::receive() { 
 	int p = ps->alloc();
 	if (p == 0) return 0;
 	PacketHeader& h = ps->getHeader(p);
@@ -247,7 +247,7 @@ int Avatar::receive() {
                 if (errno == EWOULDBLOCK) {
                         ps->free(p); return 0;
                 }
-                fatal("Avatar::receive: error in recvfrom call");
+                fatal("MazeAvatar::receive: error in recvfrom call");
         }
 
 	ps->unpack(p);
@@ -261,7 +261,7 @@ int Avatar::receive() {
 /** Update status of avatar based on passage of time.
  *  @param now is the reference time for the simulated update
  */
-void Avatar::updateStatus(int now) {
+void MazeAvatar::updateStatus(int now) {
 	const double PI = 3.141519625;
 	double r;
 
@@ -321,7 +321,7 @@ void Avatar::updateStatus(int now) {
  *  @param x1 is the x coordinate of the position of interest
  *  @param y1 is the y coordinate of the position of interest
  */
-int Avatar::groupNum(int x1, int y1) {
+int MazeAvatar::groupNum(int x1, int y1) {
 	return 1 + (x1/GRID) + (y1/GRID)*(SIZE/GRID);
 }
 
@@ -329,7 +329,7 @@ int Avatar::groupNum(int x1, int y1) {
  * @param region1 is the region from which we are interested in visiblity
  * @param region2 is the region to which we are interested in visibility
  */
-bool Avatar::isVis(int region1, int region2) {
+bool MazeAvatar::isVis(int region1, int region2) {
 	int region1xs[4];
 	int region1ys[4];
 	int region2xs[4];
@@ -362,7 +362,7 @@ bool Avatar::isVis(int region1, int region2) {
 	return false;
 }
 
-bool Avatar::linesIntersect(double ax, double ay, double bx, double by , double cx ,double cy, double dx,double dy) {
+bool MazeAvatar::linesIntersect(double ax, double ay, double bx, double by , double cx ,double cy, double dx,double dy) {
 	double distAB;
 	double theCos;
 	double theSin;
@@ -389,7 +389,7 @@ bool Avatar::linesIntersect(double ax, double ay, double bx, double by , double 
 
 /** Update the set of multicast subscriptions based on current position.
  */
-void Avatar::updateSubscriptions() {
+void MazeAvatar::updateSubscriptions() {
 	const double SQRT2 = 1.41421356;
 	
 	int myGroup = groupNum(x,y);
@@ -433,7 +433,7 @@ void Avatar::updateSubscriptions() {
 	send(p); ps->free(p);
 }
 
-/** Update the set of nearby Avatars.
+/** Update the set of nearby MazeAvatars.
  *  If the given packet is a status report, check to see if the
  *  sending avatar is visible. If it is visible, but not in our
  *  set of nearby avatars, then add it. If it is not visible
@@ -442,7 +442,7 @@ void Avatar::updateSubscriptions() {
  *  are such that we will get at least one report from a newly
  *  invisible avatar.
  */
-void Avatar::updateNearby(int p) {
+void MazeAvatar::updateNearby(int p) {
 	ps->unpack(p);
 	PacketHeader& h = ps->getHeader(p);
 	uint32_t *pp = ps->getPayload(p);
@@ -452,9 +452,9 @@ void Avatar::updateNearby(int p) {
 	double dx = x - x1; double dy = y - y1;
 
 	uint64_t key = h.getSrcAdr(); key = (key << 32) | h.getSrcAdr();
-	if(nearAvatars->lookup(key) == 0) {
+	if(nearMazeAvatars->lookup(key) == 0) {
 		numNear++;
-		nearAvatars->insert(key, nextAv++);
+		nearMazeAvatars->insert(key, nextAv++);
 	}
 	bool canSee = true;
 	for(size_t i = 0; i < (SIZE/GRID)*(SIZE/GRID); i++) {
@@ -466,9 +466,9 @@ void Avatar::updateNearby(int p) {
 			canSee = false;
 	}
 	if(canSee) {
-		if (visibleAvatars->lookup(key) == 0) {
+		if (visibleMazeAvatars->lookup(key) == 0) {
 			if (nextAv <= MAXNEAR) {
-				visibleAvatars->insert(key, nextAv++);
+				visibleMazeAvatars->insert(key, nextAv++);
 				numVisible++;
 			}
 		}

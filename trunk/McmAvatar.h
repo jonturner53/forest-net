@@ -1,4 +1,4 @@
-/** @file Avatar.h 
+/** @file McmAvatar.h 
  *
  *  @author Jon Turner
  *  @date 2011
@@ -6,8 +6,8 @@
  *  See http://www.apache.org/licenses/LICENSE-2.0 for details.
  */
 
-#ifndef AVATAR_H
-#define AVATAR_H
+#ifndef MCMAVATAR_H
+#define MCMAVATAR_H
 
 #include "CommonDefs.h"
 #include "PacketHeader.h"
@@ -23,14 +23,14 @@
  *  issuing status reports periodically, indicating where it is,
  *  the direction in which it's moving and its velocity.
  *  The status reports are sent on a multicast group associated
- *  with the the grid square it's currently in. The Avatar also
+ *  with the the grid square it's currently in. The McmAvatar also
  *  subscribes to multicasts for all squares within its
  *  "visibility range".
  */ 
-class Avatar {
+class McmAvatar {
 public:
-		Avatar(ipa_t, ipa_t, fAdr_t, fAdr_t, fAdr_t, comt_t,comt_t,comt_t, int,char *);
-		~Avatar();
+		McmAvatar(ipa_t, ipa_t, fAdr_t, fAdr_t, fAdr_t, comt_t,comt_t,comt_t, int,char *);
+		~McmAvatar();
 
 	bool	init();			
 	void	run(int); 	
@@ -75,8 +75,8 @@ private:
 	int stableNumVisible;		///< number of visible avatare reported
 	int nextAv;			///< next available avatar index
 	bool ** visibility;		///< maps visibility from one region to another
-	UiHashTbl *visibleAvatars;	///< set of visible avatars
-	UiHashTbl *nearAvatars;		///< set of nearby avatars (receiving multicasts)
+	UiHashTbl *visibleMcmAvatars;	///< set of visible avatars
+	UiHashTbl *nearMcmAvatars;		///< set of nearby avatars (receiving multicasts)
 
 	PacketStore *ps;		///< pointer to packet store
 
