@@ -2,7 +2,6 @@
 
 package remoteDisplay;
 
-import princeton.StdDraw;
 import java.util.regex.*;
 
 /**

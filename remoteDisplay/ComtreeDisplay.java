@@ -9,9 +9,9 @@ import java.net.*;
 import java.nio.*;
 import java.nio.channels.*;
 import java.awt.Color;
+import princeton.StdDraw;
 
 import java.awt.geom.Point2D;
-import princeton.StdDraw;
 
 /**
 * A GUI for viewing comtrees based on the packets recieved from the ComtreeController.

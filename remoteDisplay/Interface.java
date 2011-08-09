@@ -3,7 +3,6 @@
 package remoteDisplay;
 
 import java.util.regex.Pattern;
-import princeton.StdDraw;
 
 /**
 * representation of an interface

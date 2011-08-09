@@ -1,4 +1,4 @@
-package TopologyGen;
+package remoteDisplay.TopologyGen;
 
 import java.util.*;
 import java.awt.*;
@@ -48,7 +48,7 @@ public class TopoLink extends TopoComponent{
 	
 	@Override
 	public int getType(){
-		return c.LINK;
+		return Common.LINK;
 	}
 
 	@Override

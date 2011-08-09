@@ -1,6 +1,6 @@
 /** @file ComtreeDialog.java */
 
-package TopologyGen;
+package remoteDisplay.TopologyGen;
 
 import java.util.*;
 import java.awt.*;
@@ -11,6 +11,7 @@ import javax.swing.*;
 import javax.swing.table.*;
 import javax.swing.event.*;
 import javax.swing.DefaultListModel;
+import remoteDisplay.Comtree;
 
 public class ComtreeDialog extends JPanel{
 	private JComboBox cores;

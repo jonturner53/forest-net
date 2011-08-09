@@ -1,6 +1,6 @@
-/** @file TopologyGen.java 
+/** @file TopologyGen.java */ 
 
-package TopologyGen;
+package remoteDisplay.TopologyGen;
 
 import java.util.*;
 import java.awt.*;
@@ -22,14 +22,13 @@ public class TopologyGen extends JFrame{
 	private File store;
 	private Queue<MenuItem> paintQ;
 	private Panel panel;
-	private Common c;
 	private JFrame cont;
 	private ComtreeDialog cd;
 	private ArrayList<MenuItem> ctList;
 	private ArrayList<Comtree> comtrees;
 	
 	public TopologyGen(){				
-		setPreferredSize(c.SIZE);
+		setPreferredSize(Common.SIZE);
 		setLayout(null);
 		paintQ = new LinkedList<MenuItem>();
 		fc = new JFileChooser();
@@ -56,30 +55,26 @@ public class TopologyGen extends JFrame{
 		mb.setDoubleBuffered(true);
 		file = new JMenu("File");
 		mb.add(file);
-	/*
-		open = new MenuItem("Open");
-		open.addActionListener(ml);
-		file.add(open);
-	*/
-		save = new MenuItem("Save", c.SAVE);
+		
+		save = new MenuItem("Save", Common.SAVE);
 		save.addActionListener(ml);	
 		file.add(save);
-		close = new MenuItem("Close", c.CLOSE);
+		close = new MenuItem("Close", Common.CLOSE);
 		close.addActionListener(ml);
 		file.add(close);
 		
 		add = new JMenu("Add");
 		mb.add(add);
-		ct = new MenuItem("new Comtree", c.COMTREE);
+		ct = new MenuItem("new Comtree", Common.COMTREE);
 		ct.addActionListener(ml);
 		add.add(ct);
-		router = new MenuItem("new Router", c.ROUTER);
+		router = new MenuItem("new Router", Common.ROUTER);
 		router.addActionListener(ml);
 		add.add(router);
-		controller = new MenuItem("new Controller", c.CONTROLLER);
+		controller = new MenuItem("new Controller", Common.CONTROLLER);
 		controller.addActionListener(ml);
 		add.add(controller);
-		client = new MenuItem("new Client", c.CLIENT);
+		client = new MenuItem("new Client", Common.CLIENT);
 		client.addActionListener(ml);
 		add.add(client);
 		comt = new JMenu("Comtrees");
@@ -99,7 +94,7 @@ public class TopologyGen extends JFrame{
 				ct.addCores(panel.getCores());
 				ct.addLinks(panel.getLinks());
 				comtrees.add(ct);
-				MenuItem temp = new MenuItem(ct.getName(), c.COM);
+				MenuItem temp = new MenuItem(ct.getName(), Common.COM);
 				int inCt = -1;
 				for(int n = 0; n < ctList.size(); n++)
 					if(ctList.get(n).getText().equals(ct.getName()))
@@ -107,7 +102,7 @@ public class TopologyGen extends JFrame{
 				if(inCt > 0)
 					ctList.set(inCt, temp);
 				else
-					ctList.add(new MenuItem(ct.getName(), c.COM));
+					ctList.add(new MenuItem(ct.getName(), Common.COM));
 				comt.removeAll();
 				Collections.sort(ctList);
 				for(MenuItem mi: ctList){
@@ -128,7 +123,7 @@ public class TopologyGen extends JFrame{
 			}
 			MenuItem src = ((MenuItem)e.getSource());
 			int type= src.getType();
-			if(type == c.COMTREE){
+			if(type == Common.COMTREE){
 				if(!(panel.getRouters().isEmpty() || panel.getLinks().isEmpty() || panel.getAllLinks().isEmpty())){
 					cd.build(panel.getRouters());
 					changeListener change = new changeListener();
@@ -149,14 +144,14 @@ public class TopologyGen extends JFrame{
 				}
 			}
 				
-			if(type == c.SAVE){
+			if(type == Common.SAVE){
 				//System.out.println("Saving..");
 				int returnVal = fc.showSaveDialog(TopologyGen.this.getParent());
 				if (returnVal == JFileChooser.APPROVE_OPTION) {
 					store = fc.getSelectedFile();		
 					write(store.getPath());
 				}
-			}else if(type == c.CLOSE)
+			}else if(type == Common.CLOSE)
 				System.exit(1);
 			else if(inAdd(src))
 				paintQ.offer(src);
@@ -204,7 +199,7 @@ public class TopologyGen extends JFrame{
 				String x = Integer.toString((int) r.getX());
 				String y = Integer.toString((int) r.getY());
 				out.write("\n# define "+tc.getName()+" router\n");
-				out.write("name="+tc.getName()+" type="+c.types[tc.getType()]+" fAdr="+tc.getForestAdr()+"\n"+
+				out.write("name="+tc.getName()+" type="+Common.types[tc.getType()]+" fAdr="+tc.getForestAdr()+"\n"+
 				"location=("+x+","+y+")"+" clientAdrRange=("+tc.getRange()[0]+"-"+tc.getRange()[1]+")\n\n");
 				//print interfaces
 				out.write("interfaces # router interfaces:\n# ifaceNum\tifaceIp\tifaceLinks\tbitRate\tpktRate\n");
@@ -226,7 +221,7 @@ public class TopologyGen extends JFrame{
 				Rectangle2D r = tc.shape.getBounds2D();
 				String x = Integer.toString((int) r.getX());
 				String y = Integer.toString((int) r.getY());
-				out.write("name="+tc.getName()+" type="+c.types[tc.getType()]+" ipAdr="+tc.getIp()+" fAdr="+tc.getForestAdr()+
+				out.write("name="+tc.getName()+" type="+Common.types[tc.getType()]+" ipAdr="+tc.getIp()+" fAdr="+tc.getForestAdr()+
 				"\nlocation=("+x+","+y+");\n");
 			}
 			out.write(";\n\n");

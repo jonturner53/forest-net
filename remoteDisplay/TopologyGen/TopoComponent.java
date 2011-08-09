@@ -1,10 +1,14 @@
-package TopologyGen;
+package remoteDisplay.TopologyGen;
+
+/** @file TopoComponent.java */
 
 import java.util.*;
 import java.awt.*;
 import java.awt.geom.*;
 import java.awt.event.*;
 import javax.swing.*;
+import remoteDisplay.*;
+import remoteDisplay.TopologyGen.Common.*;
 
 public class TopoComponent implements Comparable{
 	protected MenuItem item = null;
@@ -13,7 +17,7 @@ public class TopoComponent implements Comparable{
 	protected String[] ifc;
 	protected ArrayList<String[]> interfaces;
 	protected Shape shape;
-	protected ArrayList<TopoLink> lnks = new ArrayList<TopoLink>();
+	protected ArrayList<TopoComponent> lnks = new ArrayList<TopoComponent>();
 	protected double dx, dy, dx2, dy2;
 	protected int type;
 	protected Integer weight = 0;
@@ -21,7 +25,7 @@ public class TopoComponent implements Comparable{
 	protected boolean isCore;
 	protected boolean selected;
 	protected ArrayList<String> avaPorts = new ArrayList<String>();
-	protected Common c;
+	//protected Common c;
 
 	TopoComponent(){}
 
@@ -37,9 +41,9 @@ public class TopoComponent implements Comparable{
 		selected = false;
 		ip = "127.0.0.1";
 		StringBuilder sb = new StringBuilder();
-		for(int n = 1; n <= c.NUMPORTS; n++){
+		for(int n = 1; n <= Common.NUMPORTS; n++){
 			String num = Integer.toString(n);
-			if(n != c.NUMPORTS)
+			if(n != Common.NUMPORTS)
 				sb.append(num+",");
 			else
 				sb.append(num);
@@ -48,7 +52,7 @@ public class TopoComponent implements Comparable{
 		ports = sb.toString();
 	}
 	
-	public boolean compareLinks(TopoLink l){
+	public boolean compareLinks(TopoComponent l){
 		return lnks.contains(l);
 	}
 
@@ -65,8 +69,8 @@ public class TopoComponent implements Comparable{
 	}
 	
 	public String[] getAllPorts(){
-		String[] ports = new String[c.NUMPORTS];
-		for(int n = 1; n <= c.NUMPORTS; n++)
+		String[] ports = new String[Common.NUMPORTS];
+		for(int n = 1; n <= Common.NUMPORTS; n++)
 			ports[n-1] = Integer.toString(n);
 		return ports;
 	}
@@ -114,15 +118,15 @@ public class TopoComponent implements Comparable{
 	}
 
 	public boolean isRouter(){
-		return (type == c.ROUTER);
+		return (type == Common.ROUTER);
 	}
 
 	public boolean isController(){
-		return (type== c.CONTROLLER);
+		return (type== Common.CONTROLLER);
 	}
 	
 	public boolean isClient(){
-		return (type== c.CLIENT);
+		return (type== Common.CLIENT);
 	}
 	public boolean isRoot(){
 		return isRoot;
@@ -182,11 +186,11 @@ public class TopoComponent implements Comparable{
 		return interfaces;
 	}
 
-	public void addLink(TopoLink l){
+	public void addLink(TopoComponent l){
 		lnks.add(l);
 	}
 	
-	public ArrayList<TopoLink> getLinks(){
+	public ArrayList<TopoComponent> getLinks(){
 		return lnks;
 	}
 

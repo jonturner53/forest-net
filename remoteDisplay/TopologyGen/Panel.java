@@ -1,4 +1,4 @@
-package TopologyGen;
+package remoteDisplay.TopologyGen;
 
 import java.util.*;
 import java.awt.*;
@@ -407,7 +407,7 @@ public class Panel extends JPanel{
 
 			}else if(dragging && !selecting && !linking){ //move selected component
 				TopoComponent close = min(e.getPoint());
-				ArrayList<TopoLink> lnks = null;
+				ArrayList<TopoComponent> lnks = null;
 				if(!(close instanceof TopoLink))
 					lnks = close.getLinks();
 

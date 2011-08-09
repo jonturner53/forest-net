@@ -4,7 +4,7 @@ package remoteDisplay;
 
 import java.util.regex.*;
 import java.util.ArrayList;
-import princeton.StdDraw;
+import remoteDisplay.TopologyGen.*;
 
 /**
 * forest Comtree representation from topology file
@@ -27,16 +27,14 @@ public class Comtree extends NetObj{
 		src = new ArrayList<TopoComponent>();
 	}
 
-/*
-	//deprecated
+
 	/**
-	* Default Constructor
+	* Constructor
 	* @param num - comtree number
 	* @param rt - string name of comtree root
 	* @param core - string list of cores
 	* @param lk - string list of comtree links in the same syntax as a link in the links section
 	*/
-
 	public Comtree(String num, String rt, String core, String lk){
 		name = num;
 		root = rt;
@@ -44,12 +42,13 @@ public class Comtree extends NetObj{
 		links= lk;
 		lnks = new ArrayList<TopoLink>();
 		src = new ArrayList<TopoComponent>();
+		/*
 		Pattern p = Pattern.compile("\\d+\\.\\d+");
 		for(String s: links.split(",")){
 			Matcher m = p.matcher(s);
 			while(m.find()){
 		//		System.out.println("comtree lnk: " + m.group());
-				lnks.add(m.group());
+				links.add(m.group());
 			}
 		}
 		p = Pattern.compile("\\d+");
@@ -60,8 +59,8 @@ public class Comtree extends NetObj{
 		    		src.add(m.group());
 		 	}       
 		 }
-	}
-*/	
+		 */
+	}	
 
 	/**
 	* @param a is bitRateUp

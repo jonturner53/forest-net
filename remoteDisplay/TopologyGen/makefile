@@ -1,9 +1,8 @@
-
-CLASSFILES = MenuItem.class NetInfo.class TopoLink.class TopoComponent.class Ports.class Panel.class TopologyGen.class
+CLASSFILES = Common.class MenuItem.class TopoComponent.class TopoLink.class Ports.class Panel.class TopologyGen.class
 
 %.class: %.java
 	echo $$CLASSPATH $$HOME
-	javac $<
+	javac -cp ../.. $<
 	cp $@ ~/bin/java/TopologyGen
 
 all : ${CLASSFILES}
