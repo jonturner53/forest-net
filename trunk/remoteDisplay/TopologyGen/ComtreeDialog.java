@@ -13,6 +13,9 @@ import javax.swing.event.*;
 import javax.swing.DefaultListModel;
 import remoteDisplay.Comtree;
 
+/**
+* Context menu for setting the attributes of a Comtree
+*/
 public class ComtreeDialog extends JPanel{
 	private JComboBox cores;
 	private JTextField name;
@@ -26,15 +29,18 @@ public class ComtreeDialog extends JPanel{
 	protected boolean built = false;
 	private Common c;
 	
+	/**
+	* Default constructor
+	*/
 	public ComtreeDialog(){
 		super();
 		info = new Stack<Comtree>();
 	}
-
-	public ComtreeDialog(Comtree ct){
-		
-	}
 	
+	/**
+	* main method for building the inital Comtree menu
+	* @param compts is the list of all routers on screen
+	*/
 	public void build(ArrayList<TopoComponent> compts){
 		if(!built){		
 			setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
@@ -90,6 +96,9 @@ public class ComtreeDialog extends JPanel{
 		}
 	}
 
+	/**
+	* listener for the JComboBox of selected values
+	*/
 	private class listListener implements ListSelectionListener{
 		public void valueChanged(ListSelectionEvent e){
 			objs =  ((JList)e.getSource()).getSelectedValues();
@@ -100,6 +109,9 @@ public class ComtreeDialog extends JPanel{
 		}
 	}
 
+	/**
+	* listener for the ok button to build this comtree with the inputted values
+	*/
 	private class actorListener implements ActionListener{
 		public void actionPerformed(ActionEvent e) {
 			if(e.getSource().equals(ok)){

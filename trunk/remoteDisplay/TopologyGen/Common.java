@@ -5,6 +5,9 @@ package remoteDisplay.TopologyGen;
 import java.awt.Dimension;
 import java.awt.Color;
 
+/**
+* Common constants required by many of the classes in TopologyGen
+*/
 public class Common{
 	protected static final int NUMPORTS = 17;
 	//Graphics stuff

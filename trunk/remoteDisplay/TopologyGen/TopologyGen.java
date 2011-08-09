@@ -11,6 +11,9 @@ import javax.swing.*;
 import javax.swing.event.*;
 import remoteDisplay.Comtree;
 
+/**
+* JFrame class to drive TopologyGen's subclasses as well as menuing system.
+*/
 public class TopologyGen extends JFrame{
 	private int width, height;
 	private boolean linking;
@@ -27,6 +30,9 @@ public class TopologyGen extends JFrame{
 	private ArrayList<MenuItem> ctList;
 	private ArrayList<Comtree> comtrees;
 	
+	/**
+	* Defuault Constructor
+	*/
 	public TopologyGen(){				
 		setPreferredSize(Common.SIZE);
 		setLayout(null);
@@ -49,6 +55,9 @@ public class TopologyGen extends JFrame{
 		setVisible(true);
 	}
 	
+	/**
+	* builds the JMenuBar with is associated listeners and Menu directories
+	*/
 	private JMenuBar getTopoMenu(){
 		MenuListener ml = new MenuListener();
 		mb = new JMenuBar();
@@ -87,6 +96,9 @@ public class TopologyGen extends JFrame{
 		return mb;
 	}
 
+	/**
+	* Listens to state changes from the ComtreeDialog class and adds a new Comtree to the JMenu of Comtrees.
+	*/
 	private class changeListener implements ChangeListener{
 		public void stateChanged(ChangeEvent e) {
 			if(!cd.info.isEmpty() && e.getSource().equals(cd.ok)){
@@ -115,6 +127,9 @@ public class TopologyGen extends JFrame{
 		}
 	}
 
+	/**
+	* Listenens to the master JMenuBar for click and selection events and maps them to a particular action that is passed down to the Panel class.
+	*/
 	private class MenuListener implements ActionListener{
 		 public void actionPerformed(ActionEvent e) {
 			if(e.getSource().equals(lnkMode)){
@@ -172,6 +187,10 @@ public class TopologyGen extends JFrame{
 		 }
 	}
 	
+	/**
+	* @param MenuItem m item checked for in Add menu directory
+	* @return true if MenuItem exists in the Add menu directory, false otherwise
+	*/
 	public boolean inAdd(MenuItem m){
 		for(Component mi: add.getMenuComponents())
 			if(((MenuItem)mi).equals(m))
@@ -180,6 +199,10 @@ public class TopologyGen extends JFrame{
 
 	}
 
+	/**
+	* @param MenuItem m item checked for in Comtree menu directory
+	* @return true if MenuItem exists in the Add menu directory, false otherwise
+	*/
 	public boolean inComtrees(MenuItem m){
 		for(Component mi:  comt.getMenuComponents())
 			if(((MenuItem)mi).equals(m))
@@ -187,6 +210,10 @@ public class TopologyGen extends JFrame{
 		return false;
 	}
 
+	/**
+	* @param filename is the pathname passed in via the FileChooser Dialog that is opened after selecting File>Save
+	* writes a textfile to the specified absolute path in the format of a forest topology file.
+	*/
 	public void write(String filename){
 		try{
 			FileWriter fw = new FileWriter(filename);
@@ -251,6 +278,10 @@ public class TopologyGen extends JFrame{
 		}
 	}
 
+	/**
+	* @param TopoLink l is the TopoLink used for building a string representation that conforms to the forest topology
+	* @return a String with the pair of TopoComponent's names seperated by a comma
+	*/
 	private String printLink(TopoLink l){
 		TopoComponent[] link = l.getConnection();
 		StringBuilder sb = new StringBuilder();
@@ -266,7 +297,10 @@ public class TopologyGen extends JFrame{
 
 		return sb.toString();
 	}
-
+	
+	/**
+	* main function that launches TopologyGen
+	*/
 	public static void main(String[] args){
 		TopologyGen gen = new TopologyGen();
 	}
