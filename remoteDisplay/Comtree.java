@@ -12,8 +12,9 @@ import remoteDisplay.TopologyGen.*;
 public class Comtree extends NetObj{
 	protected String root, cores, links;
 	protected String[] rates = new String[8];
-	protected ArrayList<TopoComponent> src;
-	protected ArrayList<TopoLink> lnks;
+	protected ArrayList<TopoComponent> srcTopo;
+	protected ArrayList<TopoLink> lnksTopo;
+	protected ArrayList<String> src, lnks;
 	
 	/**
 	* @param num is the comtree number
@@ -23,8 +24,8 @@ public class Comtree extends NetObj{
 	public Comtree(String num, String rt){
 		name = num;
 		root = rt;
-		lnks = new ArrayList<TopoLink>();
-		src = new ArrayList<TopoComponent>();
+		lnksTopo = new ArrayList<TopoLink>();
+		srcTopo = new ArrayList<TopoComponent>();
 	}
 
 
@@ -40,15 +41,16 @@ public class Comtree extends NetObj{
 		root = rt;
 		cores = core;
 		links= lk;
-		lnks = new ArrayList<TopoLink>();
-		src = new ArrayList<TopoComponent>();
-		/*
+		lnksTopo = new ArrayList<TopoLink>();
+		srcTopo = new ArrayList<TopoComponent>();
+		lnks = new ArrayList<String>();
+		src = new ArrayList<String>();
 		Pattern p = Pattern.compile("\\d+\\.\\d+");
 		for(String s: links.split(",")){
 			Matcher m = p.matcher(s);
 			while(m.find()){
 		//		System.out.println("comtree lnk: " + m.group());
-				links.add(m.group());
+				lnks.add(m.group());
 			}
 		}
 		p = Pattern.compile("\\d+");
@@ -59,7 +61,6 @@ public class Comtree extends NetObj{
 		    		src.add(m.group());
 		 	}       
 		 }
-		 */
 	}	
 
 	/**
@@ -80,8 +81,8 @@ public class Comtree extends NetObj{
 
 	public String getName(){return name;}
 	public String getRoot(){return root;}
-	public ArrayList<TopoComponent> getCores(){return src;}
-	public ArrayList<TopoLink> getLinks(){return lnks;}	
+	public ArrayList<TopoComponent> getCores(){return srcTopo;}
+	public ArrayList<TopoLink> getLinks(){return lnksTopo;}	
 	public String[] getRates(){return rates;}
 
 	/**
@@ -90,7 +91,7 @@ public class Comtree extends NetObj{
 	*/
 	public void addCores(ArrayList<TopoComponent> core){
 		for(TopoComponent tc: core)
-			src.add(tc);
+			srcTopo.add(tc);
 	}
 	
 	/**
@@ -99,7 +100,7 @@ public class Comtree extends NetObj{
 	*/
 	public void addLinks(ArrayList<TopoLink> l){
 		for(TopoLink lnk: l)
-			lnks.add(lnk);
+			lnksTopo.add(lnk);
 	}
 	
 	@Override
