@@ -1,6 +1,6 @@
-/** @file ComtreeDisplay.java */
-
 package remoteDisplay;
+
+/** @file ComtreeDisplay.java */
 
 import java.util.*;
 import java.util.regex.*;
@@ -9,9 +9,8 @@ import java.net.*;
 import java.nio.*;
 import java.nio.channels.*;
 import java.awt.Color;
-import princeton.StdDraw;
-
 import java.awt.geom.Point2D;
+import princeton.*;
 
 /**
 * A GUI for viewing comtrees based on the packets recieved from the ComtreeController.
