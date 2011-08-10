@@ -13,22 +13,23 @@ import remoteDisplay.Comtree;
 
 /**
 * JFrame class to drive TopologyGen's subclasses as well as menuing system.
+* This class is the top level of the TopologyGen gui and handles much of the interaction between the Panel sub class and TopologyGen's own menus in Comtree Dialog
 */
 public class TopologyGen extends JFrame{
-	private int width, height;
-	private boolean linking;
-	private JMenuBar mb;
-	private JMenu file, add, comt;
-	private MenuItem open, save, close, ct, router, controller, client;
-	private JCheckBoxMenuItem lnkMode;
-	private JFileChooser fc;
-	private File store;
-	private Queue<MenuItem> paintQ;
-	private Panel panel;
-	private JFrame cont;
-	private ComtreeDialog cd;
-	private ArrayList<MenuItem> ctList;
-	private ArrayList<Comtree> comtrees;
+	private int width, height; ///< width and height of the frame
+	private boolean linking; ///< flag on the binary JCheckBox for if lines should be drawn when a mouse is pressed and dragged
+	private JMenuBar mb; ///< menu bar that contains the menuing toolbar system for TopologyGen to save the gui to a formatted text file, create new objects, or close the program
+	private JMenu file, add, comt; ///< top level directories for adding, saveing, closing, or editing existing comtrees
+	private MenuItem open, save, close, ct, router, controller, client; ///< children menu items of the parent directories such that File> Save, Close Add > New Comtree, new Controller, new Router, and new Client and comt > any new Comtrees
+	private JCheckBoxMenuItem lnkMode; ///< binary switch for the drawing of lines
+	private JFileChooser fc; ///< Swing component for designating the path to save the formatted Forest topology file
+	private File store; ///< the file containing the path for writing the Forest topology file
+	private Queue<MenuItem> paintQ; ///< queue of Add ... events to be sent to the Panel for painting
+	private Panel panel; ///< main painting surface and ui listener
+	private JFrame cont; ///< container for the context menu of all on screen objects
+	private ComtreeDialog cd; ///< context menu for seting the attributes of a comtree
+	private ArrayList<MenuItem> ctList; ///< list form of the menubar system
+	private ArrayList<Comtree> comtrees; ///< list of comtrees as they arrive from the ComtreeDialog
 	
 	/**
 	* Defuault Constructor
