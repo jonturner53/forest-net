@@ -57,7 +57,14 @@ bool LinkTable::addEntry(int lnk, int intf, ntyp_t pTyp, ipa_t pipa, fAdr_t pfa)
         enable(lnk); // mark as valid entry (even tho some fields not yet set)
         return true;
 }
-
+bool LinkTable::linkConsistent(int lnk, int intf, ntyp_t pTyp, ipa_t pipa, fAdr_t pfa) {
+	if(lnk == 0 || lnk > nlnk) return false;
+	if(ld[lnk].intf != intf) return false;
+	if(ld[lnk].pipa != pipa) return false;
+	if(ld[lnk].ptyp != pTyp) return false;
+	if(pTyp == ROUTER && ld[lnk].padr != pfa) return false;
+	return true;
+}
 bool LinkTable::removeEntry(int lnk) {
 // Remove the table entry for lnk. Return true on success, false on failure.
 	if (!valid(lnk)) return false;
@@ -155,6 +162,14 @@ bool LinkTable::read(istream& in) {
 	return true;
 }
 
+/** Tells whether there is a link in the table with a certain peer IP address
+ *  @param ipAdr is the ip address to search for
+ *  @return true if this ip address is found in the table, false otherwise
+ */
+bool LinkTable::ipValidLink(ipa_t ipAdr,bool leafNode) {
+        return (0 != ht->lookup(hashkey(ipAdr,leafNode)));
+
+}
 void LinkTable::writeEntry(ostream& out, int i) const {
 // Print entry for link i
 	out << setw(5) << right << i << setw(6) << getInterface(i) << "  ";

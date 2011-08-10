@@ -605,7 +605,15 @@ void RouterCore::handleCtlPkt(int p) {
 	switch (cp.getCpType()) {
 	// Configuring logical interfaces
 	case ADD_IFACE:
-		if (iop->addEntry(cp.getAttr(IFACE_NUM),
+		if(iop->valid(cp.getAttr(IFACE_NUM))) {
+			if(iop->lookupEntry(cp.getAttr(IFACE_NUM),
+				  cp.getAttr(LOCAL_IP),
+		     		  cp.getAttr(MAX_BIT_RATE),
+				  cp.getAttr(MAX_PKT_RATE)))
+				returnToSender(p,cp1.pack(ps->getPayload(p)));
+			else
+				errReply(p,cp1,"add iface: iface already in table!");
+		} else if (iop->addEntry(cp.getAttr(IFACE_NUM),
 				  cp.getAttr(LOCAL_IP),
 		     		  cp.getAttr(MAX_BIT_RATE),
 				  cp.getAttr(MAX_PKT_RATE))) {
@@ -655,20 +663,44 @@ void RouterCore::handleCtlPkt(int p) {
 			errReply(p,cp1,"add link: missing required attributes");
 			break;
 		}
-		ipa_t  pipa = cp.getAttr(PEER_IP);
-		fAdr_t padr = Forest::forestAdr(Forest::zipCode(myAdr),localLBound + (currClient++));
 		ntyp_t ntyp = (ntyp_t) cp.getAttr(PEER_TYPE);
+		ipa_t  pipa = cp.getAttr(PEER_IP);
 		int lnk = (cp.isSet(LINK_NUM) ? cp.getAttr(LINK_NUM) :
 						lt->alloc());
 		int iface = (cp.isSet(IFACE_NUM) ? cp.getAttr(IFACE_NUM) :
 					  	   iop->getDefaultIface());
-		if (lt->addEntry(lnk,iface,ntyp,pipa,padr)) {
-			cp1.setAttr(LINK_NUM,lnk);
-			cp1.setAttr(PEER_ADR,padr);
-			cp1.setAttr(RTR_IP,myIp);
-			returnToSender(p,cp1.pack(ps->getPayload(p)));
+		fAdr_t padr;
+		if(ntyp == ROUTER) {
+			if(!cp.isSet(PEER_ADR)) {
+				errReply(p,cp1,"add link: missing attribute");
+				break;
+			}
+			padr = cp.getAttr(PEER_ADR);
+			if(lt->ipValidLink(pipa,false)) {
+				if(!lt->linkConsistent(lnk,iface,ntyp,pipa,padr)) {
+					errReply(p,cp1,"add link: inconsistent link info");
+					break;
+				}
+			} else if (!lt->addEntry(lnk,iface,ntyp,pipa,padr)) {
+				errReply(p,cp1,"add link: cannot add link");
+				break;
+			}
+		} else if(ntyp == CLIENT) {
+			padr = Forest::forestAdr(Forest::zipCode(myAdr),localLBound + (currClient++));
+			if(lt->ipValidLink(pipa,true)) {
+				if(!lt->linkConsistent(lnk,iface,ntyp,pipa,padr)) {
+					errReply(p,cp1,"add link: inconsistent link info");
+					break;
+				}
+			} else if (!lt->addEntry(lnk,iface,ntyp,pipa,padr)) {
+				errReply(p,cp1,"add link: cannot add link");
+				break;
+			}
 		}
-		else errReply(p,cp1,"add link: cannot add link");
+		cp1.setAttr(LINK_NUM,lnk);
+		cp1.setAttr(PEER_ADR,padr);
+		cp1.setAttr(RTR_IP,myIp);
+		returnToSender(p,cp1.pack(ps->getPayload(p)));
 		break;
 	}
         case DROP_LINK:
@@ -728,7 +760,12 @@ void RouterCore::handleCtlPkt(int p) {
 		} else errReply(p,cp1,"get link: invalid link number");
 		break; }
         case ADD_COMTREE:
-		if (ctt->addEntry(cp.getAttr(COMTREE_NUM)) != 0)
+		if(ctt->lookup(cp.getAttr(COMTREE_NUM)) != 0) {
+			if(ctt->lookupEntry(cp.getAttr(COMTREE_NUM)))
+				returnToSender(p,cp1.pack(ps->getPayload(p)));
+			else
+				errReply(p,cp1,"add comtree: comtree already in table!");
+		} else if (ctt->addEntry(cp.getAttr(COMTREE_NUM)) != 0)
 			returnToSender(p,cp1.pack(ps->getPayload(p)));
 		else errReply(p,cp1,"add comtree: cannot add comtree");
 		break;
@@ -785,8 +822,23 @@ void RouterCore::handleCtlPkt(int p) {
 			errReply(p,cp1,"add comtree link: invalid link or peer address");
 			break;
 		}
-		ctt->addLink(ctte,lnk,false,false);
-		returnToSender(p,cp1.pack(ps->getPayload(p)));
+		bool isRtr = ROUTER == lt->getPeerType(lnk);
+		bool isCore = false;
+		if(isRtr) {
+			if(!cp.isSet(CORE_FLAG)) {
+				errReply(p,cp1,"add comtree link: router had no core flag set");
+				break;
+			} else isCore = cp.getAttr(CORE_FLAG);
+		}
+		if(ctt->isLink(ctte,lnk)) {
+			if(ctt->lookupLink(ctte,lnk,isRtr,isCore))
+				returnToSender(p,cp1.pack(ps->getPayload(p)));
+			else
+				errReply(p,cp1,"add comtree link: ct link already exists");
+		} else {
+			ctt->addLink(ctte,lnk,isRtr,isCore);
+			returnToSender(p,cp1.pack(ps->getPayload(p)));
+		}
 		break;
 	}
 	case DROP_COMTREE_LINK: {
@@ -811,7 +863,17 @@ void RouterCore::handleCtlPkt(int p) {
 		break;
 	}
         case ADD_ROUTE:
-		if (rt->addEntry(cp.getAttr(COMTREE_NUM),
+		if (rt->lookup(cp.getAttr(COMTREE_NUM),
+				cp.getAttr(DEST_ADR)) != 0) {
+			if(rt->compareEntry(cp.getAttr(COMTREE_NUM),
+					cp.getAttr(DEST_ADR),
+				 	cp.getAttr(LINK_NUM),
+					cp.getAttr(QUEUE_NUM))) {
+				returnToSender(p,cp1.pack(ps->getPayload(p)));
+			} else {
+				errReply(p,cp1,"add route: conflicting route exists");
+			}
+		} else if (rt->addEntry(cp.getAttr(COMTREE_NUM),
 				 cp.getAttr(DEST_ADR),
 				 cp.getAttr(LINK_NUM),
 				 cp.getAttr(QUEUE_NUM)) != 0) {

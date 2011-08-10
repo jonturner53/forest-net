@@ -145,7 +145,13 @@ bool IoProcessor::addEntry(int ifnum, ipa_t ipa, int brate, int prate) {
 	ift[ifnum].maxbitrate = brate; ift[ifnum].maxpktrate = prate;
 	return true;
 }
-
+bool IoProcessor::lookupEntry(int ifnum, ipa_t ipa, int brate, int prate) {
+	if(ifnum < 1 || ifnum > Forest::MAXINTF) return false;
+	if(!valid(ifnum)) return false;
+	return ift[ifnum].ipa == ipa &&
+	       ift[ifnum].maxbitrate == brate &&
+	       ift[ifnum].maxpktrate == prate;
+}
 void IoProcessor::removeEntry(int ifnum) {
 	if (ifnum >= 0 && ifnum <= Forest::MAXINTF)
 		ift[ifnum].ipa = 0;

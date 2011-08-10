@@ -32,6 +32,7 @@ public:
 	int	receive();	
 	void	send(int,int);
 	bool	addEntry(int,ipa_t,int,int);
+	bool	lookupEntry(int,ipa_t,int,int);
 	void	removeEntry(int);
 	void	setMaxBitRate(int, int);
 	void	setMaxPktRate(int, int);

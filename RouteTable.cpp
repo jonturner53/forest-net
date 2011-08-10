@@ -88,6 +88,15 @@ int RouteTable::addEntry(comt_t comt, fAdr_t adr, int lnk, int qnum) {
 	}
 }
 
+bool RouteTable::compareEntry(comt_t comt, fAdr_t adr, int lnk, int qnum) {	
+	int te = ht->lookup(hashkey(comt,adr));
+	if(te == 0) return false;
+	return tbl[te].ct == comt &&
+	       tbl[te].qn == qnum &&
+	       tbl[te].adr == adr &&
+	       tbl[te].lnks == lnk;
+}
+
 bool RouteTable::removeEntry(int te) {
 // Remove entry te from routing table.
 	ht->remove(hashkey(tbl[te].ct,tbl[te].adr));

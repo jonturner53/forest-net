@@ -44,10 +44,30 @@ int ComtreeTable::addEntry(comt_t ct) {
 	tbl[entry].links = tbl[entry].rlinks = 0;
 	tbl[entry].llinks = tbl[entry].clinks = 0;
 	tbl[entry].cFlag = false; tbl[entry].plnk = 0;
-	tbl[entry].qn = 1;
+	tbl[entry].qn = -1;
 	return entry;
 }
 
+bool ComtreeTable::lookupLink(int ctte, int lnk, bool rflg, bool cflg) {
+	if(ctte == 0) return false;
+	if(!isLink(ctte,lnk)) return false;
+	if(rflg && !isRlink(ctte,lnk)) return false;
+	if(rflg && cflg && !isClink(ctte,lnk)) return false;
+	return true;
+}
+
+bool ComtreeTable::lookupEntry(comt_t ct) {
+	int entry = ht->lookup(ct);
+	if(entry == 0) return 0;
+	return tbl[entry].comt == ct &&
+	       tbl[entry].links == 0 &&
+	       tbl[entry].rlinks == 0 &&
+	       tbl[entry].llinks == 0 &&
+	       tbl[entry].clinks == 0 &&
+	       tbl[entry].plnk == 0 &&
+	       tbl[entry].qn == -1 &&
+	       !tbl[entry].cFlag;
+}
 /** Remove a table entry.
  *
  *  @param entry is the index of the entry to be deleted
