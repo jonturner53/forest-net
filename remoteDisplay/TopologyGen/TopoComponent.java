@@ -15,21 +15,20 @@ import remoteDisplay.TopologyGen.Common.*;
 * TopoComponents represent Routers, Clients, Controllers, and one end of a TopoLink, which extends TopoComponent
 */
 public class TopoComponent implements Comparable{
-	protected MenuItem item = null;
-	protected String name, port, fAdr, ip, ports;
-	protected String[] range;
-	protected String[] ifc;
-	protected ArrayList<String[]> interfaces;
-	protected Shape shape;
-	protected ArrayList<TopoComponent> lnks = new ArrayList<TopoComponent>();
-	protected double dx, dy, dx2, dy2;
-	protected int type;
-	protected Integer weight = 0;
-	protected boolean isRoot;
-	protected boolean isCore;
-	protected boolean selected;
-	protected ArrayList<String> avaPorts = new ArrayList<String>();
-	//protected Common c;
+	protected MenuItem item = null; ///< MenuItem that spawned this TopoComponent
+	protected String name, port, fAdr, ip, ports; //< attributes of a TopoComponent: name, port #, forest address and ports - all possible port #s
+	protected String[] range; ///< client port # range
+	protected String[] ifc; ///< cantains a row from the interface table
+	protected ArrayList<String[]> interfaces; ///< contains all rows from the interface table
+	protected Shape shape; ///< the graphical representation of this TopoComponent on screen
+	protected ArrayList<TopoComponent> lnks = new ArrayList<TopoComponent>(); ///< list of all TopoLinks abstracted as their parent TopoComponents
+	protected double dx, dy, dx2, dy2; ///< original distance from another object on screen before any translation
+	protected int type; ///< type as defined in the Common class
+	protected Integer weight = 0; ///< default place in order for being painted on screen
+	protected boolean isRoot; ///< is root of a comtree - iff type equals ROUTER
+	protected boolean isCore; ///< is a core of a comtree - iff type equals ROUTER
+	protected boolean selected; ///< is selected from SHIFT key or depressed mouse
+	protected ArrayList<String> avaPorts = new ArrayList<String>(); //< avalible ports on this TopoComponent
 
 	/**
 	* Empty Constructor

@@ -7,16 +7,15 @@ import java.awt.*;
 import javax.swing.*;
 
 /**
-* Context menu for selecting ports for a TopoComponent
+* Context menu for selecting ports for a TopoComponent. Ports may only be selected for Routers and Clients,  not for Controllers. This in the relation Router - Controller, only a port on the Router side is selected but in the relation Router - Client a port is individually selected for both.
 */
 public class Ports extends JFrame{
-	JPanel control;
-	JComboBox a, b;
-	JButton ok;
-	JLabel first, last;
-	TopoLink link;
-	TopoComponent[] compts;
-	Common c;
+	JPanel control; ///< JPanel on which all JLabels, Button, and Listeners are added to
+	JComboBox a, b; ///< ports for TopoComponent A and TopoComponent B
+	JButton ok; ///< button that, when fired, closes the window and sets the selected port # to its respective TopoComponent
+	JLabel first, last; ///< name of TopoComponent A and TopoComponent B
+	TopoLink link; ///< the TopoLink that binds TopoComponent A and B
+	TopoComponent[] compts; ///< the pair of TopoComponents A and B
 	
 	/**
 	* Empty constructor
@@ -30,8 +29,8 @@ public class Ports extends JFrame{
 	public Ports(TopoLink lnk){
 		super();
 		setTitle("Set Ports");
-		setBackground(c.COLOR);
-		setSize((int) c.SIZE.getWidth(), (int) c.SIZE.getHeight()/5);
+		setBackground( Common.COLOR);
+		setSize((int) Common.SIZE.getWidth(), (int) Common.SIZE.getHeight()/5);
 		
 		getContentPane().add(setPanel(lnk));
 		pack();
@@ -45,8 +44,8 @@ public class Ports extends JFrame{
 	*/
 	public JPanel setPanel(TopoLink lnk){
 		control = new JPanel();
-		control.setSize((int) c.SIZE.getWidth(), (int) c.SIZE.getHeight()/5);
-		control.setBackground(c.COLOR);
+		control.setSize((int) Common.SIZE.getWidth(), (int) Common.SIZE.getHeight()/5);
+		control.setBackground( Common.COLOR);
 		
 		ok = new JButton("OK");
 		actListener act = new actListener();
@@ -79,8 +78,8 @@ public class Ports extends JFrame{
 	*/
 	public JPanel getPanel(TopoLink lnk){
 		control = new JPanel();
-		control.setSize((int) c.SIZE.getWidth(), (int) c.SIZE.getHeight()/5);
-		control.setBackground(c.COLOR);
+		control.setSize((int) Common.SIZE.getWidth(), (int) Common.SIZE.getHeight()/5);
+		control.setBackground( Common.COLOR);
 		a= null;
 		b= null;
 		link = lnk;

@@ -14,20 +14,19 @@ import javax.swing.DefaultListModel;
 import remoteDisplay.Comtree;
 
 /**
-* Context menu for setting the attributes of a Comtree
+* GRaphical context menu for setting the attributes of a Comtree. Selecting the cores, which of the cores is root, the comtree number, and the bitrates, for itself and all leaves both up and down as well as the same for packet rates
 */
 public class ComtreeDialog extends JPanel{
-	private JComboBox cores;
-	private JTextField name;
-	private MyTableModel tableModel;
-	private JTable table;
-	private DefaultListModel listModel;
-	private JList list;
-	protected JButton ok, cancel;
-	protected Stack<Comtree> info;
-	protected Object[] objs;
-	protected boolean built = false;
-	private Common c;
+	private JComboBox cores; ///< Swing JComboBox for selecting cores for the comtree being constructed
+	private JTextField name; ///< comtree #
+	private MyTableModel tableModel; ///< local build of the regular DefaultTableModel for the rates table
+	private JTable table; ///< table that uses the above MyTableModel
+	private DefaultListModel listModel; ///< local build of the regular DefaultListModel for selecting cores
+	private JList list; ///< list that uses the above Model
+	protected JButton ok, cancel; ///< buttons for saving each fields' values or closing the window without saving the values
+	protected Stack<Comtree> info; ///< transfer structure for building a new Comtree object and passing it to the TopologyGen class by way of a change listener
+	protected Object[] objs; ///< wrapper for the list of values in the JComboBox
+	protected boolean built = false; ///< flag set to true after first call of this class
 	
 	/**
 	* Default constructor
@@ -66,7 +65,7 @@ public class ComtreeDialog extends JPanel{
 			JLabel lblName = new JLabel("Comtree #: ");
 			lblName.setAlignmentX(Component.CENTER_ALIGNMENT);
 			add(lblName);
-			name = new JTextField(c.FIELD_WIDTH);
+			name = new JTextField( Common.FIELD_WIDTH);
 			name.setMaximumSize(name.getPreferredSize());
 			name.setEditable(true);
 			add(name);
@@ -82,9 +81,9 @@ public class ComtreeDialog extends JPanel{
 			ok.addActionListener(actor);
 			ok.setAlignmentX(Component.CENTER_ALIGNMENT);
 			add(ok, actor);
-			setSize((int) c.SIZE.getWidth(), (int) c.SIZE.getHeight()/2);
+			setSize((int)  Common.SIZE.getWidth(), (int)  Common.SIZE.getHeight()/2);
 			setPreferredSize(getSize());
-			setBackground(c.COLOR);
+			setBackground( Common.COLOR);
 			setFocusable(true);
 			setDoubleBuffered(true);
 			built = true;
