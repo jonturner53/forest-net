@@ -5,10 +5,10 @@ package remoteDisplay;
 import java.util.regex.*;
 
 /**
-* representation of a Controller from the topology file
+* representation of a Controller from the topology file. Composed of a name, type, ip address, forest address and x and y coordinate and a zipcode containing the high order portion of its forest address.
 */
 public class Controller extends NetObj{
-	String zipcode;
+	String zipcode; ///< number to the left of the decimel in a forest address. Otherwise considered the high order portion of the address.
 	/**
 	* default constructor
 	* @param nme - name of controller

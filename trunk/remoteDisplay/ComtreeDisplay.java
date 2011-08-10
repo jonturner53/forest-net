@@ -22,25 +22,25 @@ import princeton.*;
 */
 public class ComtreeDisplay{
 	
-	private static final String nodes = "nodes"; //name of nodes section from topology file
-	private static final String interfaces = "interfaces";  //name of interfaces section from topology file
-	private static final String controller = "controller"; //name of controller section from topology file
-	private static final String links = "links";  //name of links section from topology file
-	private static final String comtrees = "comtrees";  //name of comtrees section from topology file
-	private static final int SIZE = 700; // size of gui frame
-	private static final int FACTOR = 5; //fraction of screen covered by StdDraw
-	private static final double PEN_RADIUS = .003; // default stddraw line thickness
-	private static final int COM_PORT = 30133; //port ComtreeDisplay listens to for incoming packets from ComtreeController
-	private static ByteBuffer repBuf = null;        // buffer for report packets
-	private static BufferedReader inStream = null; //write packets to a file for debugging
-	private static SocketChannel comChan = null; //socket for network communication with the ComtreeController
-	private static InetSocketAddress comSockAdr; //address for the comChan
-	private static TreeMap<Pair, Router> routers; //list of Router objects
-	private static TreeMap<Pair, Link> lnks; //list of Link objects
-	private static TreeMap<String, Comtree> ct; //list of Comtree objects
-	private static ArrayList<NetObj> topology; //data representation of topology file
+	private static final String nodes = "nodes"; ///<name of nodes section from topology file
+	private static final String interfaces = "interfaces";  ///<name of interfaces section from topology file
+	private static final String controller = "controller"; ///<name of controller section from topology file
+	private static final String links = "links";  ///<name of links section from topology file
+	private static final String comtrees = "comtrees";  ///<name of comtrees section from topology file
+	private static final int SIZE = 700; ///<size of gui frame
+	private static final int FACTOR = 5; ///<fraction of screen covered by StdDraw
+	private static final double PEN_RADIUS = .003; ///<default stddraw line thickness
+	private static final int COM_PORT = 30133; ///<port ComtreeDisplay listens to for incoming packets from ComtreeController
+	private static ByteBuffer repBuf = null;        ///< buffer for report packets
+	private static BufferedReader inStream = null; ///<write packets to a file for debugging
+	private static SocketChannel comChan = null; ///<socket for network communication with the ComtreeController
+	private static InetSocketAddress comSockAdr; ///<address for the comChan
+	private static TreeMap<Pair, Router> routers; ///<list of Router objects
+	private static TreeMap<Pair, Link> lnks; ///<list of Link objects
+	private static TreeMap<String, Comtree> ct; ///<list of Comtree objects
+	private static ArrayList<NetObj> topology; ///<data representation of topology file
 
-	private static boolean needData = true; //data buffer needs data from byte stream
+	private static boolean needData = true; ///<data buffer needs data from byte stream
 	
 	/**
 	* Sole constructor
@@ -143,6 +143,7 @@ public class ComtreeDisplay{
         }
 	
 	/**
+	* validates a comtree number aginst the list of comtrees liste in the Forest topology file
 	* @param s - user inputted comtree number
 	* @return boolean - s is a name of one of the comtrees in the topology file
 	*/
@@ -157,7 +158,8 @@ public class ComtreeDisplay{
 	
 	/**
 	* @param path - full path name to the topology file
-	* parses a custom topology file into topology<NetObj> array.
+	* parses a custom topology file into topology<NetObj> data structure.
+	* The resulting structure is a two-dimensional ArrayList< ArrayList<NetObj> > that based on the header in the topology file, builds a router, link, controller etc and represents them all as NetObjs
 	*/
 	public static void parse(String path) throws FileNotFoundException{
 		Scanner in = new Scanner(new FileInputStream(path));
@@ -216,7 +218,8 @@ public class ComtreeDisplay{
 	}
 	
 	/**
-	* Main method
+	* Main method that opens all TCP connections to the ComtreeController and then parses a local copy of the Forest topology file. After painting a graphical representation of the master topology data structure, the socket listener listens for incoming bit streams from the ComtreeController. Contained in each stream is as follows:
+	{Comtree number, router number, number of avatars subscribed, timestamp}The first three values are used to find the appropriate comtree and router and update that router's number of avatars subscribed. The timestamp is ignored and only used for debugging purposes. During runtime the comtree on screen can be changed by a commandline argument and the values are updated as new information arrives from the comtree controller pretaining to the specified comtree.
 	*/
 	public static void main(String[] args){
 		processArgs(args);

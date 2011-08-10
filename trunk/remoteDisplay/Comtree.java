@@ -7,14 +7,14 @@ import java.util.ArrayList;
 import remoteDisplay.TopologyGen.*;
 
 /**
-* forest Comtree representation from topology file
+* forest Comtree representation from topology file. Composed of a lsit of its respective cores and links, each comtree has a name and root that define it.
 */
 public class Comtree extends NetObj{
-	protected String root, cores, links;
-	protected String[] rates = new String[8];
-	protected ArrayList<TopoComponent> srcTopo;
-	protected ArrayList<TopoLink> lnksTopo;
-	protected ArrayList<String> src, lnks;
+	protected String root, cores, links; ///< name of the root, cores, and links as parsed from the topology file
+	protected String[] rates = new String[8]; ///< added after a change to the topology file format and used in the TopologyGen program to contain up and down bitrates, packet rates as well as leaf packet and leaf bit rates
+	protected ArrayList<TopoComponent> srcTopo; ///< list of TopoComponent versions of the string representations found in src for this comtree
+	protected ArrayList<TopoLink> lnksTopo; ///< list of TopoLinks (from TopoComponent) for this comtree
+	protected ArrayList<String> src, lnks; ///<String versions of srcTopo and lnksTopo
 	
 	/**
 	* @param num is the comtree number

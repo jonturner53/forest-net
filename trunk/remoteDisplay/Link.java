@@ -6,7 +6,7 @@ import java.awt.geom.Point2D;
 import java.util.regex.*;
 
 /**
-* representation of a Link from the topology file
+* representation of a Link from the topology file. A link has a Line2D.Double graphical representation as as well as a bitrate, packet rate and a String representing the two forest addresses of the two components that define the ends of this link.
 */
 public class Link extends NetObj{
 	protected Point2D A, B;	
@@ -15,8 +15,8 @@ public class Link extends NetObj{
 	/**
 	* Default constructor
 	* @param nme name of link formatted with forestAdr:otherForestAdr
-	* @param packet rate
-	* @param bit rate
+	* @param pkt is the packet rate
+	* @param bit is the bit rate
 	*/
 	public Link(String nme, String pkt, String bit){
 		name = nme;
