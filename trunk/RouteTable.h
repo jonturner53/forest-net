@@ -48,6 +48,7 @@ public:
 	bool	isLink(int,int) const;
 	bool	noLinks(int) const;
 	bool	checkEntry(int) const;	
+	bool	compareEntry(comt_t,fAdr_t,int,int);
 
 	/** modifiers */
 	int	addEntry(comt_t,fAdr_t,int,int);

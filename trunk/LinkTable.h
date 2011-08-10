@@ -32,6 +32,8 @@ public:
 	int	getMinDelta(int) const;	
 
 	/** predicates */
+	bool	ipValidLink(ipa_t,bool);
+	bool	linkConsistent(int,int,ntyp_t,ipa_t,fAdr_t);
 	bool	valid(int) const;
 	bool	checkEntry(int);
 

@@ -46,6 +46,8 @@ public:
 
 	/** add/modify table entries */
 	int	addEntry(comt_t);
+	bool	lookupEntry(comt_t);
+	bool	lookupLink(int, int, bool, bool);
 	bool	removeEntry(int);
 	bool	checkEntry(int) const;
 	void 	addLink(int, int, bool, bool);
