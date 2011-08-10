@@ -1,5 +1,7 @@
 package remoteDisplay.TopologyGen;
 
+/** @file Panel.java */
+
 import java.util.*;
 import java.awt.*;
 import java.io.*;
@@ -9,6 +11,9 @@ import javax.swing.*;
 import javax.swing.table.*;
 import java.text.*;
 
+/**
+* Master painting JPanel with a JLabel for the actual painting methods and multiple screen listeners for painting and moving Graphics2D components
+*/
 public class Panel extends JPanel{
 	private static final int SIZE = 800;
 	private static final double FACTOR = 1;
@@ -31,6 +36,9 @@ public class Panel extends JPanel{
 	private Ports p;
 	private Common c;
 
+	/**
+	* Default Constructor
+	*/
 	public Panel(){
 		super(new BorderLayout());
 		setSize(c.SIZE);
@@ -64,6 +72,9 @@ public class Panel extends JPanel{
 		setVisible(true);
 	}
 	
+	/**
+	* Context menu that pops up whenever a component is right-clicked. Attributes are set from this pane.
+	*/
 	private class ContextMenu extends JFrame{
 		JPanel panel;
 		BoxLayout box;
@@ -73,7 +84,11 @@ public class Panel extends JPanel{
 		JTextField name, pkts, bits, ip, fadr;
 		JTable iftable, adrTable;
 		MyTableModel adrModel, ifModel;
-
+		
+		/**
+		* Default Constructor
+		* @param tc is the TopoComponent that was clicked (may be a TopoLink)
+		*/
 		public ContextMenu(TopoComponent tc){
 			super();
 			comp = tc;
@@ -190,6 +205,9 @@ public class Panel extends JPanel{
 			setVisible(true);
 		}
 		
+		/**
+		* Button listener for adding interfaces to the Interface table or firing the ok button and processing all attribute fields
+		*/
 		private class actListener implements ActionListener{
 			public void actionPerformed(ActionEvent e) {
 				if(e.getSource().equals(inf)){
@@ -220,7 +238,10 @@ public class Panel extends JPanel{
 				ContextMenu.this.dispose();
 			}
 		}
-
+		
+		/**
+		* Local copy of a tble model for use in the interface table
+		*/
 		private class MyTableModel extends DefaultTableModel{
 			Object[] columnNames;
 			Object[][] data;
@@ -230,7 +251,11 @@ public class Panel extends JPanel{
 				data = body;
 			}
 		}
-
+		
+		/**
+		* not used
+		* Local table cell renderer for decimel formatting of text
+		*/
 		private class MyCellRenderer extends DefaultTableCellRenderer{
 			private DecimalFormat formatter = new DecimalFormat( "#.0000" );
 			public MyCellRenderer(){ super();}
@@ -241,7 +266,14 @@ public class Panel extends JPanel{
 		}
 	}
 	
+	/**
+	* Painting surface
+	*/
 	private class Canvas extends JLabel{
+		
+		/**
+		* Default Constructor
+		*/
 		public Canvas(){
 			setPreferredSize(c.SIZE);
 			setLayout(null);
@@ -254,8 +286,11 @@ public class Panel extends JPanel{
 		public void update(Graphics g) { 
 			paint(g);
 		} 
-
-		@Override
+		
+		/**
+		* @Override
+		* Paints components
+		*/
 		public void paint(Graphics g){
 			super.setBackground(c.COLOR);
 			super.paint(g);
@@ -350,7 +385,10 @@ public class Panel extends JPanel{
 			}
 		}
 	}
-
+	
+	/**
+	* Mouse listener for the Canvas
+	*/
 	private class ClickListener implements MouseListener, MouseMotionListener{
 		Point2D begin, end;
 		Point init = null;
@@ -623,6 +661,9 @@ public class Panel extends JPanel{
 		}
 	}
 	
+	/**
+	* Keyboard listener for Canvas
+	*/
 	private class keyListener implements KeyListener{
 		public void keyPressed(KeyEvent e){
 			if(!keys.contains(e))
@@ -647,6 +688,9 @@ public class Panel extends JPanel{
 		}
 	}
 	
+	/**
+	* if BACKSPACE key is pressed, the selected object(s) are removed from the screen
+	*/
 	private void delete(){
 		for(TopoComponent tc:selected){
 			components.remove(tc);
@@ -661,6 +705,9 @@ public class Panel extends JPanel{
 		lines.clear();
 	}
 
+	/**
+	* Check if the SHIFT key is depressed
+	*/
 	private boolean shiftDown(){
 		if(keys.isEmpty())
 			return false;
@@ -670,7 +717,10 @@ public class Panel extends JPanel{
 		return false;
 	}
 
-
+	/**
+	* @param l is the selected TopoLink
+	* @return the two TopoComponents that intersect with this line on screen
+	*/
 	private TopoComponent[] addLink(TopoLink l){
 		TopoComponent[] ends = new TopoComponent[2];
 		int count = 0;
@@ -687,7 +737,11 @@ public class Panel extends JPanel{
 		else
 			return ends;
 	}
-
+	
+	/**
+	* @param e is the point at mouse click
+	* @return all objects at point e along the z-axis
+	*/
 	private TopoComponent[] getComponents(Point2D e){
 		ArrayList<TopoComponent> inRange = new ArrayList<TopoComponent>();
 		for(TopoComponent tc: components){
@@ -736,7 +790,11 @@ public class Panel extends JPanel{
 			return array;
 		}
 	}
-
+	
+	/**
+	* @param s is the shape that may be part of a TopoComponent
+	* @return the TopoComponent that contains s
+	*/
 	private TopoComponent getComponent(Shape s){
 		if(components.isEmpty())
 			return null;
@@ -745,7 +803,11 @@ public class Panel extends JPanel{
 				return tc;
 		return null;
 	}
-
+	
+	/**
+	* @param mouse is the point at mouse pressed
+	* @return the closest component on the screen to the point passed in.
+	*/
 	private TopoComponent min(Point mouse){
 		if(selected == null)
 			return null;
@@ -762,7 +824,10 @@ public class Panel extends JPanel{
 		}
 		return min;
 	}
-
+	
+	/**
+	* Clear all selected item lists and set all selected values to false
+	*/
 	private void clear(){
 		if(selected.isEmpty())
 			return;
@@ -771,6 +836,9 @@ public class Panel extends JPanel{
 		selected.clear();
 	}
 	
+	/**
+	* @return list of components that are routers
+	*/
 	public ArrayList<TopoComponent> getRouters(){
 		ArrayList<TopoComponent> routers = new ArrayList<TopoComponent>();
 		for(TopoComponent tc: components){
@@ -780,6 +848,9 @@ public class Panel extends JPanel{
 		return routers;
 	}
 
+	/**
+	* @return list of components that are cores
+	*/
 	public ArrayList<TopoComponent> getCores(){
 		ArrayList<TopoComponent> cores = new ArrayList<TopoComponent>();
 		for(TopoComponent tc: components){
@@ -790,6 +861,9 @@ public class Panel extends JPanel{
 		return cores;
 	}
 	
+	/**
+	* @return the subset of lines from the selected list
+	*/
 	public ArrayList<TopoLink> getLinks(){
 		ArrayList<TopoLink> l = new ArrayList<TopoLink>();
 		for(TopoComponent lnk: selected){	
@@ -809,7 +883,10 @@ public class Panel extends JPanel{
 		}
 		return l;
 	}
-
+	
+	/**
+	* @return the list of all links
+	*/
 	public ArrayList<TopoLink> getAllLinks(){
 		ArrayList<TopoLink> l = new ArrayList<TopoLink>();
 		for(TopoComponent lnk: components){	
@@ -829,7 +906,10 @@ public class Panel extends JPanel{
 		}
 		return l;
 	}
-
+	
+	/**
+	* @return a list of all TopoComponents with type ROUTER
+	*/
 	public ArrayList<TopoComponent> getNodes(){
 		ArrayList<TopoComponent> nodes = new ArrayList<TopoComponent>();
 		for(TopoComponent tc: components){
@@ -841,7 +921,10 @@ public class Panel extends JPanel{
 		}
 		return nodes;
 	}
-
+	
+	/**
+	* @return a list of all TopoComponents with type CONTROLLER
+	*/
 	public ArrayList<TopoComponent> getControllers(){
 		ArrayList<TopoComponent> ctrl = new ArrayList<TopoComponent>();
 		for(TopoComponent tc: components){
@@ -855,6 +938,9 @@ public class Panel extends JPanel{
 		return ctrl;
 	}
 	
+	/**
+	* @return a list of all TopoComponents with type CLIENT
+	*/
 	public ArrayList<TopoComponent> getClients(){
 		ArrayList<TopoComponent> clts = new ArrayList<TopoComponent>();
 		for(TopoComponent tc: clts){
@@ -867,7 +953,10 @@ public class Panel extends JPanel{
 		}
 		return clts;
 	}
-
+	
+	/**
+	* @return a list of all TopoComponents with type CONTROLLER or CLIENT
+	*/
 	public ArrayList<TopoComponent> getLeafNodes(){
 		ArrayList<TopoComponent> container = getControllers();
 		container.addAll(getClients());

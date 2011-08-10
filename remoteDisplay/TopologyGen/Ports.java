@@ -1,9 +1,14 @@
 package remoteDisplay.TopologyGen;
 
+/** @file Ports.java */
+
 import java.awt.event.*;
 import java.awt.*;
 import javax.swing.*;
 
+/**
+* Context menu for selecting ports for a TopoComponent
+*/
 public class Ports extends JFrame{
 	JPanel control;
 	JComboBox a, b;
@@ -13,8 +18,15 @@ public class Ports extends JFrame{
 	TopoComponent[] compts;
 	Common c;
 	
+	/**
+	* Empty constructor
+	*/
 	public Ports(){}
-
+	
+	/**
+	* Default constructor
+	* @param link is the link that binds two TopoComponents and whose individual ports that use this link are being set
+	*/
 	public Ports(TopoLink lnk){
 		super();
 		setTitle("Set Ports");
@@ -26,6 +38,11 @@ public class Ports extends JFrame{
 		setVisible(true);
 	}
 	
+	/**
+	* build panel based on the type of TopoComponents
+	* @param lnk that binds the two TopoComponents
+	* @return jpanel with labels, boxes, and listeners included
+	*/
 	public JPanel setPanel(TopoLink lnk){
 		control = new JPanel();
 		control.setSize((int) c.SIZE.getWidth(), (int) c.SIZE.getHeight()/5);
@@ -54,7 +71,12 @@ public class Ports extends JFrame{
 		return control;
 
 	}
-
+	
+	/**
+	* called if setPanel has already been called
+	* @param lnk that binds the two TopoComponents
+	* @return jpanel with labels, boxes, and listeners included
+	*/
 	public JPanel getPanel(TopoLink lnk){
 		control = new JPanel();
 		control.setSize((int) c.SIZE.getWidth(), (int) c.SIZE.getHeight()/5);
@@ -84,7 +106,10 @@ public class Ports extends JFrame{
 		return control;
 	
 	}
-
+	
+	/**
+	* set ports of the TopoComponents and add these two TopoComponents to the parent link
+	*/
 	public void  fire(){
 		if(!(compts[0].isController()))
 			compts[0].bindPort((String) a.getSelectedItem());					
@@ -93,6 +118,9 @@ public class Ports extends JFrame{
 		link.setConnection(compts);	
 	}
 	
+	/**
+	* Button listener to fire ok button
+	*/
 	private class actListener implements ActionListener{
 		public void actionPerformed(ActionEvent e) {
 			if(e.getSource().equals(ok)){
