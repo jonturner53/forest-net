@@ -3,10 +3,10 @@
 package remoteDisplay;
 
 /**
-* Custom Python style Pair class 
+* Custom Python style Pair class useful for storing a pair of values as a key in a Map. In ComtreeDisplay, this is used as a key to map a forest address and a comtree number. 
 */
 public class Pair implements Comparable{
-	private String first, last, cat;	
+	private String first, last, cat; ///< first and last are the two values stored in this Pair structure. cat is the appending of both first and last.	
 	public Pair(String f, String l){
 		first = f;
 		last = l;
