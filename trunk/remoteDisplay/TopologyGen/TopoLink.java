@@ -9,11 +9,11 @@ import java.awt.event.*;
 import javax.swing.*;
 
 /**
-* Component to represent links in the topology file
+* Component to represent links in the topology file and borrows some of the same attributes as a TopoComponent for easy storage in the Panel class
 */
 public class TopoLink extends TopoComponent{
-	protected int bitrate, pktrate;
-	protected TopoComponent[] connect;
+	protected int bitrate, pktrate; ///< bitrate and packet rate values for this link
+	protected TopoComponent[] connect; ///< the pair of TopoComponents that this line intersects
 
 	/**
 	* default Constructor

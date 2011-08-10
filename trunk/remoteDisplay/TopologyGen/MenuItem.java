@@ -9,7 +9,7 @@ import javax.swing.*;
 * MenuItem extends Java's JMenuItem and gives each MenuItem an integer type as defined in the Common class
 */
 public class MenuItem extends JMenuItem implements Comparable{
-	private Integer type = null;
+	private Integer type = null; ///< gives a menu item another form of id besides its text name used for display purposes. Definitions found in the Common class
 
 	/**
 	* constructor

@@ -13,43 +13,41 @@ import java.text.*;
 
 /**
 * Master painting JPanel with a JLabel for the actual painting methods and multiple screen listeners for painting and moving Graphics2D components
+* Recieves cues from the parent TopologyGen JFrame class as to MenuItems selected etc
 */
 public class Panel extends JPanel{
-	private static final int SIZE = 800;
-	private static final double FACTOR = 1;
-	private double radius = SIZE/2;
-	private double width = 100;
-	private double height = 100;
-	private int rowIndex = 1;
-	private Point2D origin;
-	private Rectangle2D.Double selection;
-	private int numRouters, numControllers, numClients;
-	private boolean selecting, dragging, first, linksSet;
-	protected boolean linking;
-	private Canvas canvas;
-	private TopoComponent min;
-	protected Queue<MenuItem> paintQ;
-	private LinkedList<KeyEvent> keys;
-	private ArrayList<TopoComponent> components, selected;
-	private ArrayList<Line2D.Double> lines;
-	private ContextMenu cm;
-	private Ports p;
-	private Common c;
+	private static final int SIZE = 800; ///< default window size
+	private double radius = SIZE/2; ///< wize of objects painted for ellipses
+	private double width = 100; ///< size of a painted object's width
+	private double height = 100; ///< size of a painted object's height 
+	private int rowIndex = 1; ///< initial row number for the interfaces table
+	private Point2D origin; ///< initial mouse location before dragging the surrounding selected objects
+	private Rectangle2D.Double selection; ///< selection bounding box
+	private int numRouters, numControllers, numClients; ///< counts for the default names as follows "Router" + numRouters, "Controller" + numControllers etc
+	private boolean selecting, dragging, first; ///< booleans for program states such as dragging objects, selecting objects
+	protected boolean linking; ///< state if linkingneeds to be protected so the parent TopologyGen can manipulate it
+	private Canvas canvas; ///< name of the nested JLabel used for painting
+	private TopoComponent min; ///< object on screen closest to a mouse pressed/clicked
+	protected Queue<MenuItem> paintQ; ///< queue if any adding of objects from the parent JMenuBar
+	private LinkedList<KeyEvent> keys; ///< list of all depressed keys
+	private ArrayList<TopoComponent> components, selected; ///< list of all components on screen versus those in selected, which is a subset of components
+	private ArrayList<Line2D.Double> lines; ///< list of all lines on screen connecting other components
+	private ContextMenu cm; ///< context menu that pops up on right click over an on screen component
+	private Ports p; ///< contextual pane for selecting port # for two components that define a TopoLink
 
 	/**
 	* Default Constructor
 	*/
 	public Panel(){
 		super(new BorderLayout());
-		setSize(c.SIZE);
-		setPreferredSize(c.SIZE);
+		setSize(Common.SIZE);
+		setPreferredSize(Common.SIZE);
 		setFocusable(true);
 		setDoubleBuffered(true);
 		min = null;
 		dragging = false;
 		linking = false;
 		first = true;
-		linksSet = false;
 		numRouters = 1;
 		numControllers = 1;
 		numClients = 1;
@@ -58,7 +56,7 @@ public class Panel extends JPanel{
 		lines = new ArrayList<Line2D.Double>();
 		components = new ArrayList<TopoComponent>();
 		selected = new ArrayList<TopoComponent>();
-		super.setBackground(c.COLOR);
+		super.setBackground( Common.COLOR);
 		
 		canvas = new Canvas();
 		add(canvas, BorderLayout.CENTER);
@@ -93,19 +91,19 @@ public class Panel extends JPanel{
 			super();
 			comp = tc;
 			setTitle("Set Attributes");
-			setBackground(c.COLOR);
-			setSize((int) c.SIZE.getWidth(), (int) c.SIZE.getHeight()/5);
+			setBackground( Common.COLOR);
+			setSize((int) Common.SIZE.getWidth(), (int) Common.SIZE.getHeight()/5);
 			panel = new JPanel();
 			panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
 			panel.setSize(getSize());
-			panel.setBackground(c.COLOR);
+			panel.setBackground( Common.COLOR);
 			actListener act = new actListener();
 			
 			if(tc instanceof TopoLink){
 				TopoLink tl = (TopoLink) tc;
-				pkts = new JTextField(c.FIELD_WIDTH);
+				pkts = new JTextField( Common.FIELD_WIDTH);
 				pkts.setText(Integer.toString(tl.getPktRate()));
-				bits = new JTextField(c.FIELD_WIDTH);
+				bits = new JTextField( Common.FIELD_WIDTH);
 				bits.setText(Integer.toString(tl.getBitRate()));
 				JLabel lblPkt = new JLabel("pktrate: ");
 				lblPkt.setAlignmentX(Component.CENTER_ALIGNMENT);
@@ -117,7 +115,7 @@ public class Panel extends JPanel{
 				panel.add(bits);
 				panel.add(p.getPanel(tl));
 			}else{
-				name = new JTextField(c.FIELD_WIDTH);
+				name = new JTextField( Common.FIELD_WIDTH);
 				name.setText(tc.getName());
 				JLabel lblName = new JLabel("name: ");
 				lblName.setAlignmentX(Component.CENTER_ALIGNMENT);
@@ -127,11 +125,11 @@ public class Panel extends JPanel{
 					JLabel lblIp = new JLabel("Ip: ");
 					lblIp.setAlignmentX(Component.CENTER_ALIGNMENT);
 					panel.add(lblIp);
-					ip = new JTextField(c.FIELD_WIDTH);
+					ip = new JTextField( Common.FIELD_WIDTH);
 					ip.setText(tc.getIp());
 					panel.add(ip);
 				}
-				fadr = new JTextField(c.FIELD_WIDTH);
+				fadr = new JTextField( Common.FIELD_WIDTH);
 				fadr.setText(tc.getForestAdr());
 				JLabel lblFadr = new JLabel("ForestAdr: ");
 				lblFadr.setAlignmentX(Component.CENTER_ALIGNMENT);
@@ -275,7 +273,7 @@ public class Panel extends JPanel{
 		* Default Constructor
 		*/
 		public Canvas(){
-			setPreferredSize(c.SIZE);
+			setPreferredSize( Common.SIZE);
 			setLayout(null);
 			setDoubleBuffered(true);
 			setVisible(true);
@@ -292,7 +290,7 @@ public class Panel extends JPanel{
 		* Paints components
 		*/
 		public void paint(Graphics g){
-			super.setBackground(c.COLOR);
+			super.setBackground( Common.COLOR);
 			super.paint(g);
 			Graphics2D g2 = ((Graphics2D) g);
 			//int radius = ((int) Math.sqrt(SIZE/(paintQ.size()*FACTOR*Math.PI)));
@@ -306,15 +304,15 @@ public class Panel extends JPanel{
 				int type = mi.getType();
 				String name = "";
 				TopoComponent next = null;
-				if(type == c.ROUTER){
+				if(type == Common.ROUTER){
 					name = "Router" + numRouters;
 					next = new TopoComponent(name, mi, circle);
 					numRouters++;
-				}else if(type == c.CONTROLLER){
+				}else if(type == Common.CONTROLLER){
 					name = "Ctrl"+numControllers;
 					next = new TopoComponent(name, mi, square);
 					numControllers++;
-				}else if(type == c.CLIENT){
+				}else if(type == Common.CLIENT){
 					name="Client"+numClients;
 					next = new TopoComponent(name, mi, square);
 					numClients++;
@@ -333,7 +331,7 @@ public class Panel extends JPanel{
 				Shape s = tc.shape;
 				Rectangle2D r = s.getBounds2D();
 				Integer type = tc.getType();
-				if(type == c.LINK){
+				if(type == Common.LINK){
 					BasicStroke line = new BasicStroke(4.0f);
 					g2.setStroke(line);
 					if(selected.contains(tc))
@@ -343,7 +341,7 @@ public class Panel extends JPanel{
 					g2.draw(s);
 					g2.setStroke(basic);
 				}
-				else if(type == c.ROUTER){
+				else if(type == Common.ROUTER){
 					if(tc.isSelected() && tc.isCore())
 						g.setColor(Color.DARK_GRAY);
 					else if(tc.isCore())
@@ -357,7 +355,7 @@ public class Panel extends JPanel{
 					g2.draw(s);	
 					g2.drawString(tc.name, ((int) r.getX()) + ((int) r.getWidth())/3, ((int) r.getY())+((int) r.getHeight())/2);
 				}
-				else if(type == c.CONTROLLER){
+				else if(type == Common.CONTROLLER){
 					if(tc.isSelected())
 						g.setColor(Color.LIGHT_GRAY);
 					else
@@ -367,7 +365,7 @@ public class Panel extends JPanel{
 					g2.draw(s);
 					g2.drawString(tc.getName(), ((int) r.getX()) + ((int) r.getWidth())/4, ((int) r.getY())+((int) r.getHeight())/2);
 				}
-				else if(type == c.CLIENT){
+				else if(type == Common.CLIENT){
 					if(tc.isSelected())
 						g.setColor(new Color(0,191,255));
 					else
@@ -440,7 +438,7 @@ public class Panel extends JPanel{
 					((Line2D.Double) getComponent(cLine).shape).setLine(begin, end);
 				}else{
 					lines.add(cLine);
-					components.add(new TopoLink(cLine, c.LINK));
+					components.add(new TopoLink(cLine, Common.LINK));
 				}
 
 			}else if(dragging && !selecting && !linking){ //move selected component
@@ -459,7 +457,7 @@ public class Panel extends JPanel{
 				loc.translate((int)((e.getX()-x_offset)-loc.getX()), (int)((e.getY()- y_offset)-loc.getY()));
 				if(close.shape instanceof Ellipse2D.Double)
 					((Ellipse2D.Double) close.shape).setFrame(loc.getX(), loc.getY(), width, height);
-				else if(close.getType()==c.CLIENT || close.getType()==c.CONTROLLER)
+				else if(close.getType()== Common.CLIENT || close.getType()== Common.CONTROLLER)
 					((Rectangle2D.Double) close.shape).setRect(loc.getX(), loc.getY(), width/1.5, height/1.5);
 				/*
 				if(lnks!=null){
@@ -695,11 +693,11 @@ public class Panel extends JPanel{
 		for(TopoComponent tc:selected){
 			components.remove(tc);
 			int type = tc.getType();
-			if(type == c.ROUTER || type == c.CLIENT)
+			if(type == Common.ROUTER || type == Common.CLIENT)
 				tc.releasePort();
-			if(type == c.ROUTER) numRouters--;
-			else if(type == c.CONTROLLER) numControllers--;
-			else if(type == c.CLIENT) numClients--;
+			if(type == Common.ROUTER) numRouters--;
+			else if(type == Common.CONTROLLER) numControllers--;
+			else if(type == Common.CLIENT) numClients--;
 		}
 		clear();
 		lines.clear();
@@ -915,7 +913,7 @@ public class Panel extends JPanel{
 		for(TopoComponent tc: components){
 			if(!(tc.shape instanceof Line2D.Double)){
 				int type = tc.item.getType();
-				if(type == c.ROUTER)
+				if(type == Common.ROUTER)
 					nodes.add(tc);
 			}
 		}
@@ -930,7 +928,7 @@ public class Panel extends JPanel{
 		for(TopoComponent tc: components){
 			if(!(tc.shape instanceof Line2D.Double)){
 				int type = tc.item.getType();
-				if(type == c.CONTROLLER)
+				if(type == Common.CONTROLLER)
 					ctrl.add(tc);
 	
 			}
@@ -946,7 +944,7 @@ public class Panel extends JPanel{
 		for(TopoComponent tc: clts){
 			if(!(tc.shape instanceof Line2D.Double)){
 				int type = tc.item.getType();
-				if(type == c.CLIENT)
+				if(type == Common.CLIENT)
 					clts.add(tc);
 	
 			}
