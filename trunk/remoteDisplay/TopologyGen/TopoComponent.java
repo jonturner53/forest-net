@@ -16,7 +16,7 @@ import remoteDisplay.TopologyGen.Common.*;
 */
 public class TopoComponent implements Comparable{
 	protected MenuItem item = null; ///< MenuItem that spawned this TopoComponent
-	protected String name, port, fAdr, ip, ports; //< attributes of a TopoComponent: name, port #, forest address and ports - all possible port #s
+	protected String name, port, fAdr, ip; //< attributes of a TopoComponent: name, forest address and ip address
 	protected String[] range; ///< client port # range
 	protected String[] ifc; ///< cantains a row from the interface table
 	protected ArrayList<String[]> interfaces; ///< contains all rows from the interface table
@@ -61,7 +61,6 @@ public class TopoComponent implements Comparable{
 				sb.append(num);
 			avaPorts.add(num);
 		}
-		ports = sb.toString();
 	}
 	
 	/**
@@ -105,13 +104,19 @@ public class TopoComponent implements Comparable{
 		return ports;
 	}
 	
+	public boolean hasPort(){
+		return (isRouter() || isClient());
+	}
 	/**
 	* @return all ports minus those already used by itself in connection with other components
 	*/
 	public String[] getAvaPorts(){
 		ArrayList<Integer> sorter = new ArrayList<Integer>();
+		if(avaPorts.isEmpty())
+			return null;
 		for(String s: avaPorts)
-			sorter.add(Integer.parseInt(s));
+			if(s != null)
+				sorter.add(Integer.parseInt(s));
 		Collections.sort(sorter);
 		String[] array = new String[sorter.size()];
 		for(int n = 0; n < sorter.size(); n++)
@@ -182,6 +187,23 @@ public class TopoComponent implements Comparable{
 		range[0] = lowBound;
 		range[1] = upBound;
 	}
+	
+	/**
+	* Remove a port # from the avalible pool
+	* @param p is the port being removed from the pool of avalible ports
+	*/
+	public void bindPort(String p){
+		avaPorts.remove(p);
+	}
+
+	/**
+	* Add port # back into the avalible pool
+	* @param s is the port # being added to the pool
+	*/
+	public void releasePort(String p){
+		if(!avaPorts.contains(p))
+			avaPorts.add(p);
+	}
 
 	/**
 	* @return true if type is Common.ROUTER
@@ -226,33 +248,6 @@ public class TopoComponent implements Comparable{
 	}
 	
 	/**
-	* @param s the port number for this component
-	*/
-	public void bindPort(String s){
-		port = s;
-		avaPorts.remove(port);
-	}
-
-	/**
-	* give this component's port back to the pool of ports and set port to null
-	*/
-	public void releasePort(){
-		avaPorts.add(port);
-		port = "";
-	}
-	
-	/**
-	* @return true if port is not null or empty
-	*/
-	public boolean hasPort(){
-		if(port == null)
-			return false;
-		if(port.equals(""))
-			return false;
-		return true;
-	}
-
-	/**
 	* @return TopoComponent's type from MenuItem
 	*/
 	public int getType(){
@@ -280,13 +275,6 @@ public class TopoComponent implements Comparable{
 		return ip;
 	}
 
-	/**
-	* @return port
-	*/
-	public String getPort(){
-		return port;
-	}
-	
 	/**
 	* @return the upper and lower bounds of link ranges
 	*/
@@ -332,7 +320,7 @@ public class TopoComponent implements Comparable{
 	@Override
 	public String toString(){
 		return name;
-		//return  name +"."+port+ " " + shape.getBounds2D().getX() + " " + shape.getBounds2D().getY() + " " + lnks+"\n"+"IP: " + ip + " FADR: " + fAdr;
+		//return  name +" " + shape.getBounds2D().getX() + " " + shape.getBounds2D().getY() + " " + lnks+"\n"+"IP: " + ip + " FADR: " + fAdr;
 	}
 
 }

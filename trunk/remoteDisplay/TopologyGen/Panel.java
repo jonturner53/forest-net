@@ -693,8 +693,6 @@ public class Panel extends JPanel{
 		for(TopoComponent tc:selected){
 			components.remove(tc);
 			int type = tc.getType();
-			if(type == Common.ROUTER || type == Common.CLIENT)
-				tc.releasePort();
 			if(type == Common.ROUTER) numRouters--;
 			else if(type == Common.CONTROLLER) numControllers--;
 			else if(type == Common.CLIENT) numClients--;
