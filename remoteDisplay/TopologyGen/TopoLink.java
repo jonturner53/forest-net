@@ -14,6 +14,7 @@ import javax.swing.*;
 public class TopoLink extends TopoComponent{
 	protected int bitrate, pktrate; ///< bitrate and packet rate values for this link
 	protected TopoComponent[] connect; ///< the pair of TopoComponents that this line intersects
+	protected String[] ports; ///<port # of the two TopoComponents
 
 	/**
 	* default Constructor
@@ -25,6 +26,7 @@ public class TopoLink extends TopoComponent{
 		shape = s;
 		type = mark;
 		connect = new TopoComponent[2];
+		ports = new String[2];
 	}
 	
 	/**
@@ -32,6 +34,16 @@ public class TopoLink extends TopoComponent{
 	*/
 	public void setConnection(TopoComponent[] compts){
 		connect = compts;
+	}
+	
+	/**
+	* set the port # of and keep a copy on the TopoLink that relates them
+	* @param a is the port # of the first TopoComponent
+	* @param b is the port # of the last TopoComponent
+	*/
+	public void setPorts(String a, String b){
+		ports[0] = a;
+		ports[1] = b;
 	}
 	
 	/**
@@ -80,7 +92,14 @@ public class TopoLink extends TopoComponent{
 	public TopoComponent[] getConnection(){
 		return connect;
 	}
-	
+
+	/**
+	* @return the two port # of the TopoComponents that define this link
+	*/
+	public String[] getPorts(){
+		return ports;
+	}
+
 	/**
 	* @Override
 	* return the type of this to Common.LINK
@@ -91,6 +110,6 @@ public class TopoLink extends TopoComponent{
 
 	@Override
 	public String toString(){
-		return new String(getClass() + "	"+Integer.toString(bitrate) + "	" + Integer.toString(pktrate));
+		return new String(getClass() + "	"+connect[0]+", "+connect[1]+"	"+Integer.toString(bitrate) + "	" + Integer.toString(pktrate));
 	}
 }

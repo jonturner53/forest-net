@@ -285,14 +285,15 @@ public class TopologyGen extends JFrame{
 	*/
 	private String printLink(TopoLink l){
 		TopoComponent[] link = l.getConnection();
+		String[] ports = l.getPorts();
 		StringBuilder sb = new StringBuilder();
 		if(link[0].hasPort())
-			sb.append(link[0].getName()+"."+link[0].getPort());
+			sb.append(link[0].getName()+"."+ports[0]);
 		else
 			sb.append(link[0].getName());
 		sb.append(",");
 		if(link[1].hasPort())
-			sb.append(link[1].getName()+"."+link[1].getPort());
+			sb.append(link[1].getName()+"."+ports[1]);
 		else
 			sb.append(link[1].getName());
 

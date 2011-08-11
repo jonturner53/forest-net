@@ -16,7 +16,8 @@ public class Ports extends JFrame{
 	JLabel first, last; ///< name of TopoComponent A and TopoComponent B
 	TopoLink link; ///< the TopoLink that binds TopoComponent A and B
 	TopoComponent[] compts; ///< the pair of TopoComponents A and B
-	
+	String[] ports; ///< the pair of port #s for TopoComponents A and B
+
 	/**
 	* Empty constructor
 	*/
@@ -30,8 +31,7 @@ public class Ports extends JFrame{
 		super();
 		setTitle("Set Ports");
 		setBackground( Common.COLOR);
-		setSize((int) Common.SIZE.getWidth(), (int) Common.SIZE.getHeight()/5);
-		
+		setSize((int) Common.SIZE.getWidth(), (int) Common.SIZE.getHeight()/5);	
 		getContentPane().add(setPanel(lnk));
 		pack();
 		setVisible(true);
@@ -52,6 +52,7 @@ public class Ports extends JFrame{
 		ok.addActionListener(act);
 		link = lnk;
 		compts = lnk.getConnection();
+		ports = lnk.getPorts();
 		first = new JLabel(compts[0].getName());
 		last = new JLabel(compts[1].getName());
 		if(!(compts[0].isController()))
@@ -84,15 +85,18 @@ public class Ports extends JFrame{
 		b= null;
 		link = lnk;
 		compts = lnk.getConnection();
+		ports = lnk.getPorts();
 		first = new JLabel(compts[0].getName());
 		last = new JLabel(compts[1].getName());
 		if(!(compts[0].isController())){
-			a = new JComboBox(((TopoComponent)compts[0]).getAllPorts());
-			a.setSelectedIndex(Integer.parseInt(compts[0].getPort())-1);
+			a = new JComboBox(((TopoComponent)compts[0]).getAllPorts());	
+			if(ports[0] != null)
+				a.setSelectedIndex(Integer.parseInt(ports[0])-1);
 		}
 		if(!(compts[1].isController())){
 			b = new JComboBox(((TopoComponent)compts[1]).getAllPorts());
-			b.setSelectedIndex(Integer.parseInt(compts[1].getPort())-1);
+			if(ports[1] != null)
+				b.setSelectedIndex(Integer.parseInt(ports[1])-1);
 		}
 		control.add(first);
 		if(a!=null)
@@ -110,10 +114,13 @@ public class Ports extends JFrame{
 	* set ports of the TopoComponents and add these two TopoComponents to the parent link
 	*/
 	public void  fire(){
-		if(!(compts[0].isController()))
+		if(!(compts[0].isController()) && !(compts[1].isController())){
+			compts[0].releasePort(ports[0]);
+			compts[1].releasePort(ports[1]);
 			compts[0].bindPort((String) a.getSelectedItem());					
-		if(!(compts[1].isController()))
 			compts[1].bindPort((String) b.getSelectedItem());
+			link.setPorts((String) a.getSelectedItem(), (String) b.getSelectedItem());
+		}
 		link.setConnection(compts);	
 	}
 	
