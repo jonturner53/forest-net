@@ -7,10 +7,11 @@ LIBS = lib support/lib
 
 LIBFILES = CommonDefs.o IoProcessor.o LinkTable.o ComtreeTable.o \
 	   RouteTable.o StatsModule.o CpAttr.o CpType.o CtlPkt.o \
-	   QuManager.o PacketHeader.o PacketStore.o  NetInfo.o
+	   QuManager.o PacketHeader.o PacketStore.o  NetInfo.o \
+	   ComtreeController_NetInfo.o
 
 all : supportLib fHost fRouter fAvatar fMonitor fCliMgr fNetMgr \
-	fComtreeController fCli BuildRtables
+	fComtreeController fComtreeController_NetInfo fCli BuildRtables
 
 supportLib:
 	${MAKE} -C support
@@ -41,6 +42,11 @@ fCliMgr : ClientMgr.o ${LIBS}
 fComtreeController : ComtreeController.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
 	cp $@ ${HOME}/bin
+
+fComtreeController_NetInfo : ComtreeController_NetInfo.o ${LIBS}
+	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
+	cp $@ ${HOME}/bin
+
 BuildRtables : BuildRtables.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
 	cp $@ ${HOME}/bin
@@ -50,4 +56,4 @@ lib : ${LIBFILES}
 
 clean :
 	${MAKE} -C support clean
-	rm -f *.o lib fHost fRouter fAvatar fMonitor fNetMgr fCli fCliMgr fComtreeController
+	rm -f *.o lib fHost fRouter fAvatar fMonitor fNetMgr fCli fCliMgr fComtreeController fComtreeController_NetInfo
