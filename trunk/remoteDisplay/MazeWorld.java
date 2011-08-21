@@ -7,13 +7,13 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.HashSet;
 import java.util.Set;
-import java.util.BitSet;
 import java.util.Iterator;
 import java.net.*;
 import java.io.*;
 import java.nio.*;
 import java.nio.channels.*;
 import princeton.StdDraw;
+import java.util.Scanner;
 /**
  *  ShowWorld provides a visual display of the avatars moving around
  *  within a virtual world. It connects to a remote monitor that
@@ -28,8 +28,8 @@ public class MazeWorld {
 	private static int SIZE;	//size of full map
 	private static int gridSize;	//number of squares in map (x or y direction)
 	private static final int MON_PORT = 30124; // port number used by monitor
-	private static String WALLS; // list of solid walls in hex
-	private static BitSet wallsSet; // list of walls in bitset form
+	private static Scanner mazeFile; // filename of maze
+	private static int[] walls; // list of walls in bitset form
 	private static SocketChannel monChan = null;	// channel to remote monitor
 	private static ByteBuffer repBuf = null; 	// buffer for report packets
 	private static AvatarStatus rep = null;		// most recent report
@@ -160,19 +160,29 @@ public class MazeWorld {
 	private static boolean processArgs(String[] args) {
 		try {
 			monSockAdr = new InetSocketAddress(args[0], MON_PORT);
-			WALLS = args[1];
-			wallsSet = new BitSet();
-			for(int i = 0; i < WALLS.length(); i++) {
-				int x = Integer.parseInt(String.valueOf(WALLS.charAt(i)),16);
-				String j = Integer.toBinaryString(x);
-				for(int k = j.length(); k <4; k++)
-					j = "0" + j;
-				wallsSet.set(i*4,j.charAt(0)=='1');
-				wallsSet.set(i*4+1,j.charAt(1)=='1');
-				wallsSet.set(i*4+2,j.charAt(2)=='1');
-				wallsSet.set(i*4+3,j.charAt(3)=='1');
+			mazeFile = new Scanner(new File(args[1]));
+			int counter = 1;
+			while(mazeFile.hasNextLine()) {
+				String temp = mazeFile.nextLine();
+				if(walls==null) {
+					gridSize = temp.length();
+					walls = new int[gridSize*gridSize];
+				}
+				for(int i = 0; i < gridSize; i++) {
+					if(temp.charAt(i)=='+') {
+						walls[(gridSize-counter)*gridSize+i] = 1;
+					} else if(temp.charAt(i)=='-') {
+						walls[(gridSize-counter)*gridSize+i] = 2;
+					} else if(temp.charAt(i)=='|') {
+						walls[(gridSize-counter)*gridSize+i] = 3;
+					} else if(temp.charAt(i)==' ') {
+						walls[(gridSize-counter)*gridSize+i] = 4;
+					} else {
+						System.out.println("Unrecognized symbol in map file!");
+					}
+				}
+				counter++;
 			}
-			gridSize = Integer.parseInt(args[2]);
 			SIZE = GRID*gridSize;
 		} catch (Exception e) {
 			System.out.println("usage: ShowWorldNet monIp walls size");
@@ -218,10 +228,14 @@ public class MazeWorld {
 		StdDraw.setPenColor(Color.BLACK);
 		StdDraw.setPenRadius(.006);
 		for(int i = 0; i < gridSize*gridSize; i++) {
-			if(!wallsSet.get(i))
-				StdDraw.line(frac*(i%gridSize),frac*(i/gridSize),frac*(i%gridSize)+frac,frac*(i/gridSize));
-			else
+			if(walls[i]==1) {
+				StdDraw.line(frac*(i%gridSize),frac*(i/gridSize)+frac,frac*(i%gridSize)+frac,frac*(i/gridSize)+frac);
 				StdDraw.line(frac*(i%gridSize),frac*(i/gridSize),frac*(i%gridSize),frac*(i/gridSize)+frac);
+			} else if(walls[i]==2) {
+				StdDraw.line(frac*(i%gridSize),frac*(i/gridSize)+frac,frac*(i%gridSize)+frac,frac*(i/gridSize)+frac);
+			} else if(walls[i]==3) {
+				StdDraw.line(frac*(i%gridSize),frac*(i/gridSize),frac*(i%gridSize),frac*(i/gridSize)+frac);
+			}
 		}
 		StdDraw.setPenRadius(.003);
 		StdDraw.text(.08, -.02, "comtree: " + comtree);
@@ -242,7 +256,7 @@ public class MazeWorld {
 		processArgs(args);
 				
 		// Open channel to monitor and make it nonblocking
-		try {
+	/*	try {
 			monChan = SocketChannel.open(monSockAdr);
 			monChan.configureBlocking(false);
 		} catch (Exception e) {
@@ -250,7 +264,7 @@ public class MazeWorld {
 			System.out.println(e);
 			System.exit(1);
 		}
-
+*/
 		// setup canvas
 		comtree = 0;
 		StdDraw.setCanvasSize(700,700);
