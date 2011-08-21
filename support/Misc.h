@@ -44,6 +44,7 @@ public:
 	static void genPerm(int, int*);	
 	static int strnlen(char*, int);
 	static uint32_t getTime();
+	static uint64_t getTimeNs();
 };
 
 /** Convert a small integer to a lower-case letter.

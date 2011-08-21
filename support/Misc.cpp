@@ -212,7 +212,7 @@ int Misc::strnlen(char* s, int n) {
  *  simple microsecond clock for greater convenience.
  */
 uint32_t Misc::getTime() {
-        /** note use of static variables */
+        // note use of static variables
         static uint32_t now;
         static struct timeval prevTimeval = { 0, 0 };
 
@@ -235,6 +235,43 @@ uint32_t Misc::getTime() {
 	}
 	now += 1000000*dsec + dusec;
         prevTimeval = nowTimeval;
+
+        return now;
+}
+
+/** Return time expressed as a free-running nanosecond clock
+ *
+ *  Uses the gettimeofday system call, but converts result to
+ *  simple nanosecond clock for greater convenience.
+ *  Would be better if we used Linux clock_gettime functions,
+ *  but these functions not available on all systems.
+ *  As a result, we really only get microsecond resolution.
+ */
+uint64_t Misc::getTimeNs() {
+        // note use of static variables
+        static uint64_t now;
+        static struct timeval prevTimeval = { 0, 0 };
+
+        if (prevTimeval.tv_sec == 0 && prevTimeval.tv_usec == 0) {
+                // first call to getTime(); initialize and return 0
+                if (gettimeofday(&prevTimeval, NULL) < 0)
+                        fatal("Misc::getTime: gettimeofday failure");
+                now = 0;
+                return 0;
+        }
+        // normal case
+        struct timeval nowTimeval;
+        if (gettimeofday(&nowTimeval, NULL) < 0)
+                fatal("Misc::getTime: gettimeofday failure");
+	time_t dsec = nowTimeval.tv_sec - prevTimeval.tv_sec;
+	suseconds dusec = nowTimeval.tv_usec - prevTimeval.tv_usec;
+	if (nowTimeval.tv_usec < prevTimeval.tv_usec) {
+		dusec = nowTimeval.tv_usec + (1000000 - prevTimeval.tv_usec);
+		dsec--;
+	}
+        prevTimeval = nowTimeval;
+	uint64_t diff = dsec; diff *= 1000000; diff += dusec; diff *= 1000;
+	now += diff;
 
         return now;
 }

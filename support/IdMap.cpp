@@ -15,6 +15,7 @@ IdMap::IdMap(int n1) : n(n1) {
 	if (n > MAXID) fatal("IdMap::IdMap: specified size too large");
 	ht = new UiHashTbl(n);
 	ids = new UiSetPair(n);
+	cnt = 0;
 };
 	
 IdMap::~IdMap() { delete ht; delete ids; }
@@ -29,6 +30,7 @@ int IdMap::addPair(uint64_t key) {
 	int id = ids->firstOut(); 
 	if (!ht->insert(key,id)) return 0;
 	ids->swap(id);
+	cnt++;
 	return id;
 }
 
@@ -42,11 +44,12 @@ int IdMap::addPair(uint64_t key, int id) {
 	if (validKey(key) || validId(id)) return 0;
 	if (!ht->insert(key,id)) return 0;
 	ids->swap(id);
+	cnt++;
 	return id;
 }
 
 /** Remove a pair from the mapping.
- *  This operation makes the id available to be bound to some other key.
+ *  This operation removes a (key,id) pair from the mapping.
  *  @param key is the key whose id is to be released
  */
 void IdMap::dropPair(uint64_t key) {
@@ -54,6 +57,7 @@ void IdMap::dropPair(uint64_t key) {
 	if (id == 0) return;
 	ht->remove(key);
 	ids->swap(id);
+	cnt--;
 }
 
 /** Clear the IdMap.  */

@@ -3,7 +3,7 @@ CXXFLAGS = -O2 -m64 -I .. -I ../..
 %.o : %.cpp
 	${CXX} ${CXXFLAGS} -c $<
 
-all : TestUiList TestUiDlist TestIdSet TestClist TestGraph
+all : TestUiList TestUiDlist TestIdSet TestClist TestGraph TestHeapSet
 
 TestUiList: TestUiList.o ../lib
 	${CXX} ${CXXFLAGS} $< ../lib -o $@
@@ -21,6 +21,9 @@ TestGraph: TestGraph.o ../lib
 	${CXX} ${CXXFLAGS} $< ../lib -o $@
 
 TestUiSetPair: TestUiSetPair.o ../lib
+	${CXX} ${CXXFLAGS} $< ../lib -o $@
+
+TestHeapSet: TestHeapSet.o ../lib
 	${CXX} ${CXXFLAGS} $< ../lib -o $@
 
 clean :
