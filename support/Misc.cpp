@@ -264,7 +264,7 @@ uint64_t Misc::getTimeNs() {
         if (gettimeofday(&nowTimeval, NULL) < 0)
                 fatal("Misc::getTime: gettimeofday failure");
 	time_t dsec = nowTimeval.tv_sec - prevTimeval.tv_sec;
-	suseconds dusec = nowTimeval.tv_usec - prevTimeval.tv_usec;
+	suseconds_t dusec = nowTimeval.tv_usec - prevTimeval.tv_usec;
 	if (nowTimeval.tv_usec < prevTimeval.tv_usec) {
 		dusec = nowTimeval.tv_usec + (1000000 - prevTimeval.tv_usec);
 		dsec--;
