@@ -12,7 +12,7 @@
 #include <set>
 #include "CommonDefs.h"
 #include "IdMap.h"
-// #include "LinkTable.h"
+#include "LinkTable.h"
 
 /** Class that implements a table of information on comtrees.
  *
@@ -23,8 +23,7 @@
  */
 class ComtreeTable {
 public:
-//		ComtreeTable(int,int,LinkTable*);
-		ComtreeTable(int,int);
+		ComtreeTable(int,int,LinkTable*);
 		~ComtreeTable();
 
 	// predicates
@@ -104,7 +103,7 @@ private:
 	ComtLinkInfo *clTbl;		///< cLnkTbl[cl] has info on comtLink cl
 	IdMap *clMap;			///< maps (comtree,link)->comtLink
 
-	//LinkTable *lt;
+	LinkTable *lt;
 
 	/** helper functions */
 	uint64_t key(comt_t) const;
@@ -142,7 +141,7 @@ inline bool ComtreeTable::isLink(int ctx, int lnk) const {
  */
 inline bool ComtreeTable::isRtrLink(int ctx, int lnk) const {
 	if (!validComtIndex(ctx)) return false;
-	return isRtrLnk(clMap->getId(key(tbl[ctx].comt,lnk)));
+	return isRtrLink(clMap->getId(key(tbl[ctx].comt,lnk)));
 }
 
 inline bool ComtreeTable::isRtrLink(int cLnk) const {
