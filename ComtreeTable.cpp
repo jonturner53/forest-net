@@ -9,9 +9,9 @@
 #include "ComtreeTable.h"
 
 /** Constructor for ComtreeTable, allocates space and initializes table. */
-ComtreeTable::ComtreeTable(int maxCtx1, int maxComtLink1)//, LinkTable *lt1)
-			   : maxCtx(maxCtx1), maxComtLink(maxComtLink1){//,
-			    // lt(lt1) {
+ComtreeTable::ComtreeTable(int maxCtx1, int maxComtLink1, LinkTable *lt1)
+			   : maxCtx(maxCtx1), maxComtLink(maxComtLink1),
+			     lt(lt1) {
 	tbl = new TblEntry[maxCtx+1];
 	comtMap = new IdMap(maxCtx);
 	clTbl = new ComtLinkInfo[maxComtLink+1];
@@ -51,7 +51,7 @@ int ComtreeTable::addEntry(comt_t comt) {
 void ComtreeTable::removeEntry(int ctx) {
 	if (!validComtIndex(ctx)) return;
 	
-	set<int>& comtLinks = tbl[ctx].comtLinks;
+	set<int>& comtLinks = *tbl[ctx].comtLinks;
 	set<int>::iterator p;
 	for (p = comtLinks.begin(); p != comtLinks.end(); p++)
 		removeLink(ctx,*p);
