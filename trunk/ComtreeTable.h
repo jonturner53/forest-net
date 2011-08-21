@@ -9,8 +9,10 @@
 #ifndef COMTREETABLE_H
 #define COMTREETABLE_H
 
+#include <set>
 #include "CommonDefs.h"
-#include "QuManager.h"
+#include "IdMap.h"
+// #include "LinkTable.h"
 
 /** Class that implements a table of information on comtrees.
  *
@@ -21,292 +23,300 @@
  */
 class ComtreeTable {
 public:
-		ComtreeTable(int, fAdr_t, LinkTable*, QuManager*);
+//		ComtreeTable(int,int,LinkTable*);
+		ComtreeTable(int,int);
 		~ComtreeTable();
 
-	/** access routines */
-	int	lookup(comt_t);		
-	comt_t	getComtree(int) const;
-	bool	getCoreFlag(int) const;
-	int	getPlink(int) const;
-	int	getQnum(int) const;
-	int	getQuant(int) const;
-	int 	getLinkCount(int) const;
-	int	getLinks(int,uint16_t*,int) const;	
-	int	getRlinks(int,uint16_t*,int) const;
-	int	getLlinks(int,uint16_t*,int) const;
-	int	getClinks(int,uint16_t*,int) const;
-
-	/** predicates */
-	bool	valid(int) const;		
-	bool	isLink(int,int) const;	
-	bool	isRlink(int,int) const;
-	bool	isLlink(int,int) const;
-	bool	isClink(int,int) const;
-
-	/** add/modify table entries */
-	int	addEntry(comt_t);
-	bool	lookupEntry(comt_t);
-	bool	lookupLink(int, int, bool, bool);
-	bool	removeEntry(int);
+	// predicates
+	bool	validComtree(comt_t) const;		
+	bool	validComtIndex(int) const;		
+	bool	validComtLink(int) const;		
 	bool	checkEntry(int) const;
-	void 	addLink(int, int, bool, bool);
+	bool	inCore(int) const;
+	bool	isLink(int, int) const;
+	bool	isRtrLink(int, int) const;
+	bool	isRtrLink(int) const;
+	bool	isCoreLink(int, int) const;
+	bool	isCoreLink(int) const;
+
+	// iteration methods
+	int	firstComtIndex() const;
+	int	nextComtIndex(int) const;
+
+	// access routines 
+	int	getComtIndex(comt_t) const;		
+	comt_t	getComtree(int) const;
+	int	getLink(int) const;
+	int	getPlink(int) const;
+	int	getLinkCount(int) const;
+	int	getComtLink(int, int) const;
+	int	getPCLnk(int) const;
+	int	getLinkQ(int) const;
+	int	getInBitRate(int) const;
+	int	getInPktRate(int) const;
+	int	getOutBitRate(int) const;
+	int	getOutPktRate(int) const;
+	set<int>& getLinks(int) const;
+	set<int>& getRtrLinks(int) const;
+	set<int>& getCoreLinks(int) const;
+
+	// add/remove/modify table entries
+	int	addEntry(comt_t);
+	void	removeEntry(int);
+	bool 	addLink(int, int, bool, bool);
 	void 	removeLink(int, int);
 	void	setCoreFlag(int, bool);
 	void	setPlink(int, int);
-	void	setQnum(int, int);
-	void	setQuant(int, int);
+	void	setLinkQ(int, int);
+	void	setInBitRate(int, int);
+	void	setInPktRate(int, int);
+	void	setOutBitRate(int, int);
+	void	setOutPktRate(int, int);
 
-	/** input/output of table contents */
+	// input/output of table contents 
 	bool 	readTable(istream&);
 	void	writeTable(ostream&) const;
 private:
-	int	maxte;			///< largest table entry number
-	struct tblEntry { 
-		int comt;		///< comtree for this table entry
-		int plnk;		///< parent link in comtree
-		bool cFlag;		///< true if this router is in core
-		int qn;			///< number of comtree queue
-		int quant;		///< quantum associated with queue
-		int links;		///< bit vector of links
-		int rlinks;		///< bit vec of links to other routers
-		int llinks;		///< bit vec of links to local routers
-		int clinks;		///< bit vec to neighboring core routers
-	} *tbl;				///< tbl[i] contains data for entry i
-	int free;			///< start of free list
+	int	maxCtx;			///< largest comtree index
+	int	maxComtLink;		///< largest comtLink
 
-	fAdr_t	myAdr;			///< forest address of this router
-	LinkTable *lt;			///< pointer to link table
-	QuManager *qm;			///< pointer to queue manager
-	UiHashTbl *ht;			///< hash table for fast lookup
+	struct TblEntry { 		///< comtree table entry
+	int	comt;			///< comtree for this table entry
+	int	plnk;			///< parent link in comtree
+	int	pCLnk;			///< corresponding cLnk value
+	bool	cFlag;			///< true if this router is in core
+	set<int> *comtLinks;		///< list of comtLink #s in comtree
+	set<int> *rtrLinks;		///< comtLinks to other routers
+	set<int> *coreLinks;		///< comtLinks to core routers
+	};
+	TblEntry *tbl;
+	IdMap *comtMap;			///< maps comtree numbers to indices
+
+	struct ComtLinkInfo {		
+	int	ctx;			///< index of comtree for this comtLink
+	int	lnk;			///< actual link # for this comtLink
+	int	qnum;			///< queue number used by comtree
+	int	inBitRate;		///< max incoming bit rate
+	int	inPktRate;		///< max incoming packet rate
+	int	outBitRate;		///< max outgoing bit rate
+	int	outPktRate;		///< max outgoing packet rate
+	};
+	ComtLinkInfo *clTbl;		///< cLnkTbl[cl] has info on comtLink cl
+	IdMap *clMap;			///< maps (comtree,link)->comtLink
+
+	//LinkTable *lt;
 
 	/** helper functions */
-	uint64_t hashkey(comt_t) const;
-	int	listLinks(int,uint16_t*,int) const;
+	uint64_t key(comt_t) const;
+	uint64_t key(comt_t, int) const;
 	bool 	readEntry(istream&);
 	void	writeEntry(ostream&, const int) const;
-	int	readLinks(istream&);	
+	void	readLinks(istream&, set<int>&);	
 	void	writeLinks(ostream&,int) const;
 };
 
-/** Add the link to the set of valid links for specified entry
- *
- *  @param entry is number of table entry to be modified
- *  @param link is the number of the link to add
- *  @param rflg is true if far end of link is another router
- *  @param cflg is true if far end of link is a core router for this comtree
- */
-inline void ComtreeTable::addLink(int entry, int lnk, bool rflg, bool cflg) {
-	if (entry > 0 && entry <= maxte && valid(entry)) {
-		tbl[entry].links |= (1 << lnk);
-		if (rflg) tbl[entry].rlinks |= (1 << lnk);
-		if (rflg && cflg) tbl[entry].clinks |= (1 << lnk);
-	}
+inline bool ComtreeTable::validComtIndex(int ctx) const {
+	return comtMap->validId(ctx);
 }
 
-/** Remove the link from the set of valid links for specified entry.
- *
- *  @param entry is number of table entry to be modified
- *  @param link is the number of the link to add
- */
-inline void ComtreeTable::removeLink(int entry, int lnk) {
-	if (entry > 0 && entry <= maxte && valid(entry)) {
-		tbl[entry].links &= ~(1 << lnk);
-		tbl[entry].rlinks &= ~(1 << lnk);
-		tbl[entry].clinks &= ~(1 << lnk);
-	}
+inline bool ComtreeTable::validComtLink(int cLnk) const {
+	return clMap->validId(cLnk);
 }
 
-/** Get the comtree number for a given table entry.
- *  @param entry is the entry number
- *  @return the comtree number
- */
-inline comt_t ComtreeTable::getComtree(int entry) const {
-	assert(valid(entry)); return tbl[entry].comt;
-}
-
-/** Get the parent link for a given table entry.
- *  @param entry is the entry number
- *  @return the link leading to the parent (in the comtree) of this router;
- *  returns 0 if the router is the root of the comtree
- */
-inline int ComtreeTable::getPlink(int entry) const {
-	assert(valid(entry)); return tbl[entry].plnk;
-}
-
-/** Get the core flag for a given table entry.
- *  @param entry is the entry number
- *  @return true if this router is in the core of the comtree, else false
- */
-inline bool ComtreeTable::getCoreFlag(int entry) const {
-	assert(valid(entry)); return tbl[entry].cFlag;
-}
-
-/** Get the queue number for a given table entry.
- *  @param entry is the entry number
- *  @return the queue used by packets sent on this comtree
- */
-inline int ComtreeTable::getQnum(int entry) const {
-	assert(valid(entry)); return tbl[entry].qn;
-}
-
-/** Get the quantum for this comtree.
- *  @param entry is the entry number
- *  @return the quantum associated with the comtree's queue
- */
-inline int ComtreeTable::getQuant(int entry) const {
-	assert(valid(entry)); return tbl[entry].quant;
-}
-
-/** Set the parent link for a given table entry.
- *  @param entry is the entry number
- *  @param p is the number of the link to this router's parent in the comtree
- */
-inline void ComtreeTable::setPlink(int entry, int p) {
-	assert(valid(entry)); tbl[entry].plnk = p;
-}
-
-/** Set the core flag for a given table entry.
- *  @param entry is the entry number
- *  @param f is the new value of the core flag for this entry
- */
-inline void ComtreeTable::setCoreFlag(int entry, bool f) {
-	assert(valid(entry)); tbl[entry].cFlag = f;
-}
-
-/** Set the queue number for a given table entry.
- *  @param entry is the entry number
- *  @param q is the number of the queue to use for packets in this comtree
- */
-inline void ComtreeTable::setQnum(int entry, int q) {
-	assert(valid(entry)); tbl[entry].qn = q;
-}
-
-/** Set the quantum for a given table entry.
- *  @param entry is the entry number
- *  @param q is the quantum for the comtree's queue
- */
-inline void ComtreeTable::setQuant(int entry, int q) {
-	assert(valid(entry)); tbl[entry].quant = q;
-}
-
-/** Determine if an entry number is valid or not.
- *  @param entry is the entry number
- *  @return true if the entry number is valid, else false
- */
-inline bool ComtreeTable::valid(int entry) const {
-	return entry > 0 && entry <= maxte && tbl[entry].qn != 0;
-}
+inline bool ComtreeTable::inCore(int ctx) const { return tbl[ctx].cFlag; }
 
 /** Determine if a given link is part of a given comtree.
  *  @param entry is the entry number
  *  @param lnk is the link number
  *  @return true if the specified link is part of the comtree
  */
-inline bool ComtreeTable::isLink(int entry, int lnk) const {
-	return (tbl[entry].links & (1 << lnk)) ? true : false;
-}
-
-/** Get the number of links in a specific comtree.
- *  @param entry is the entry number for the comgtree
- *  @return the number of links in this comtree
- */
-inline int ComtreeTable::getLinkCount(int entry) const {
-	int cnt = 0;
-	for (uint32_t i = 1; i != 0; i <<= 1)
-		if (tbl[entry].links & i) cnt++;
-	return cnt;
+inline bool ComtreeTable::isLink(int ctx, int lnk) const {
+	if (!validComtIndex(ctx)) return false;
+	return clMap->validKey(key(tbl[ctx].comt,lnk));
 }
 
 /** Determine if a given link connects to another router.
- *  @param entry is the entry number
+ *  @param ctx is the entry number
  *  @param lnk is the link number
  *  @return true if the specified link connects to another router
  */
-inline bool ComtreeTable::isRlink(int entry, int lnk) const {
-	return (tbl[entry].rlinks & (1 << lnk)) ? true : false;
+inline bool ComtreeTable::isRtrLink(int ctx, int lnk) const {
+	if (!validComtIndex(ctx)) return false;
+	return isRtrLnk(clMap->getId(key(tbl[ctx].comt,lnk)));
 }
 
-/** Determine if a given link connects to a node in the same zip code
- *  @param entry is the entry number
- *  @param lnk is the link number
- *  @return true if the peer node at the far end of the link is in the
- *  same zip code
- */
-inline bool ComtreeTable::isLlink(int entry, int lnk) const {
-	return (tbl[entry].llinks & (1 << lnk)) ? true : false;
+inline bool ComtreeTable::isRtrLink(int cLnk) const {
+	if (cLnk == 0) return false;
+	set<int>& rl = *tbl[clTbl[cLnk].ctx].rtrLinks;
+	return (rl.find(cLnk) != rl.end());
 }
 
 /** Determine if a given link connects to a core node.
- *  @param entry is the entry number
+ *  @param ctx is the entry number
  *  @param lnk is the link number
  *  @return true if the peer node for the link is in the comtree core
  */
-inline bool ComtreeTable::isClink(int entry, int lnk) const {
-	return (tbl[entry].clinks & (1 << lnk)) ? true : false;
+inline bool ComtreeTable::isCoreLink(int ctx, int lnk) const {
+	if (!validComtIndex(ctx)) return false;
+	return isCoreLink(clMap->getId(key(tbl[ctx].comt,lnk)));
 }
 
-/** Return all the comtree links for the specified comtree. 
- *  Note that this requires a comtree table entry number. 
- *  Lnks points to a vector that will hold the links on return. 
- *  The limit argument specifies the maximum number of links that
- *  may be returned. If the table entry specifies more links, the 
- *  extra ones will be ignored. The value returned by the function 
- *  is the number of links that were returned. 
+inline bool ComtreeTable::isCoreLink(int cLnk) const {
+	if (cLnk == 0) return false;
+	set<int>& cl = *tbl[clTbl[cLnk].ctx].coreLinks;
+	return (cl.find(cLnk) != cl.end());
+}
+	
+inline int ComtreeTable::firstComtIndex() const {
+	return comtMap->firstId();
+}
+
+inline int ComtreeTable::nextComtIndex(int ctx) const {
+	return comtMap->nextId(ctx);
+}
+
+/** Get the comtree number for a given table entry.
+ *  @param ctx is the comtree index
+ *  @return the comtree number
  */
-inline int ComtreeTable::getLinks(int entry, uint16_t* lnks, int limit) const {
-        if (entry < 1 || entry > maxte || !valid(entry)) return 0;
-	return listLinks(tbl[entry].links,lnks,limit);
+inline comt_t ComtreeTable::getComtree(int ctx) const {
+	return tbl[ctx].comt;
 }
 
-/** Get a vector of links to adjacent routers in the comtree.
- *  @param entry is the entry number
- *  @param lnks points to an array in which link numbers are stored
- *  @param limit is an upper bound on the number of links to be returned
- *  @return the number of links returned
+inline int ComtreeTable::getComtIndex(comt_t comt) const {
+	return comtMap->getId(key(comt));
+}
+
+/** Get the parent link for a given table entry.
+ *  @param ctx is the entry number
+ *  @return the link leading to the parent (in the comtree) of this router;
+ *  returns 0 if the router is the root of the comtree
  */
-inline int ComtreeTable::getRlinks(int entry, uint16_t* lnks, int limit) const {
-        if (entry < 1 || entry > maxte || !valid(entry)) return 0;
-	return listLinks(tbl[entry].rlinks,lnks,limit);
+inline int ComtreeTable::getPlink(int ctx) const { return tbl[ctx].plnk; }
+
+
+inline int ComtreeTable::getLinkCount(int ctx) const {
+	return tbl[ctx].comtLinks->size();
 }
 
-/** Get a vector of local links in the comtree.
- *  @param entry is the entry number
- *  @param lnks points to an array in which link numbers are stored
- *  @param limit is an upper bound on the number of links to be returned
- *  @return the number of links returned
+inline int ComtreeTable::getComtLink(int comt, int lnk) const {
+	return clMap->getId(key(comt,lnk));
+}
+
+inline int ComtreeTable::getPCLnk(int ctx) const { return tbl[ctx].pCLnk; }
+
+inline int ComtreeTable::getLink(int cLnk) const {
+	return clTbl[cLnk].lnk;
+}
+
+inline int ComtreeTable::getLinkQ(int cLnk) const {
+	return clTbl[cLnk].qnum;
+}
+
+inline int ComtreeTable::getInBitRate(int cLnk) const {
+	return clTbl[cLnk].inBitRate;
+}
+
+inline int ComtreeTable::getInPktRate(int cLnk) const {
+	return clTbl[cLnk].inPktRate;
+}
+
+inline int ComtreeTable::getOutBitRate(int cLnk) const {
+	return clTbl[cLnk].outBitRate;
+}
+
+inline int ComtreeTable::getOutPktRate(int cLnk) const {
+	return clTbl[cLnk].outPktRate;
+}
+
+inline set<int>& ComtreeTable::getLinks(int ctx) const {
+	return *tbl[ctx].comtLinks;
+}
+
+inline set<int>& ComtreeTable::getRtrLinks(int ctx) const {
+	return *tbl[ctx].rtrLinks;
+}
+
+inline set<int>& ComtreeTable::getCoreLinks(int ctx) const {
+	return *tbl[ctx].coreLinks;
+}
+
+
+/** Set the parent link for a given table entry.
+ *  @param ctx is the entry number
+ *  @param plink is the number of the link to this router's parent
+ *  in the comtree
  */
-inline int ComtreeTable::getLlinks(int entry, uint16_t* lnks, int limit) const {
-        if (entry < 1 || entry > maxte || !valid(entry)) return 0;
-	return listLinks(tbl[entry].llinks,lnks,limit);
+inline void ComtreeTable::setPlink(int ctx, int plink) {
+	if (!validComtIndex(ctx)) return;
+	int cLnk = clMap->getId(key(tbl[ctx].comt,plink));
+	if (!isRtrLink(ctx,plink)) return;
+	tbl[ctx].plnk = plink; tbl[ctx].pCLnk =cLnk;
 }
 
-/** Get a vector of links to adjacent core routers in the comtree.
- *  @param entry is the entry number
- *  @param lnks points to an array in which link numbers are stored
- *  @param limit is an upper bound on the number of links to be returned
- *  @return the number of links returned
+/** Set the core flag for a given table entry.
+ *  @param ctx is the entry number
+ *  @param f is the new value of the core flag for this entry
  */
-inline int ComtreeTable::getClinks(int entry, uint16_t* lnks, int limit) const {
-        if (entry < 1 || entry > maxte || !valid(entry)) return 0;
-	return listLinks(tbl[entry].clinks,lnks,limit);
+inline void ComtreeTable::setCoreFlag(int ctx, bool f) {
+	if (validComtIndex(ctx)) tbl[ctx].cFlag = f;
 }
 
-/** Compute key for hash lookup.
+/** Set the queue number for a comtree link.
+ *  @param cLnk is a comtree link number
+ *  @param q is a queue number
+ */
+inline void ComtreeTable::setLinkQ(int cLnk, int q) {
+	if (validComtLink(cLnk)) clTbl[cLnk].qnum = q;
+}
+
+/** Set the incoming bit rate for a comtree link.
+ *  @param cLnk is a comtree link number
+ *  @param br is a bit rate
+ */
+inline void ComtreeTable::setInBitRate(int cLnk, int br) {
+	if (validComtLink(cLnk)) clTbl[cLnk].inBitRate = br;
+}
+
+/** Set the incoming packet rate for a comtree link.
+ *  @param cLnk is a comtree link number
+ *  @param pr is a packet rate
+ */
+inline void ComtreeTable::setInPktRate(int cLnk, int pr) {
+	if (validComtLink(cLnk)) clTbl[cLnk].inPktRate = pr;
+}
+
+/** Set the outgoing bit rate for a comtree link.
+ *  @param cLnk is a comtree link number
+ *  @param br is a bit rate
+ */
+inline void ComtreeTable::setOutBitRate(int cLnk, int br) {
+	if (validComtLink(cLnk)) clTbl[cLnk].outBitRate = br;
+}
+
+/** Set the outgoing packet rate for a comtree link.
+ *  @param cLnk is a comtree link number
+ *  @param pr is a packet rate
+ */
+inline void ComtreeTable::setOutPktRate(int cLnk, int pr) {
+	if (validComtLink(cLnk)) clTbl[cLnk].outPktRate = pr;
+}
+
+/** Compute key for use with comtMap.
  *  @param ct is a comtree number
  *  @return a 64 bit hash key
  */
-inline uint64_t ComtreeTable::hashkey(comt_t ct) const {
+inline uint64_t ComtreeTable::key(comt_t ct) const {
         return (uint64_t(ct) << 32) | ct;
 }
 
-/** Lookup the table entry number for a given comtree.
+/** Compute key for use with clMap.
  *  @param ct is a comtree number
- *  @return is the entry number for the given comtree, or zero if there is
- *  no match
+ *  @param lnk is a link number
+ *  @return a 64 bit hash key
  */
-inline int ComtreeTable::lookup(comt_t ct) {
-        return ht->lookup(hashkey(ct));
+inline uint64_t ComtreeTable::key(comt_t ct, int lnk) const {
+        return (uint64_t(ct) << 32) | lnk;
 }
 
 #endif
