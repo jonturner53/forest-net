@@ -220,7 +220,7 @@ private:
 	static int const UNDEF_LAT = 91;	// invalid latitude
 	static int const UNDEF_LONG = 361;	// invalid longitude
 
-	/** structure holding information used by all nodes */
+	/** structure holding information used by router nodes */
 	struct RtrNodeInfo {
 	string	name;		///< node name
 	ntyp_t	nType;		///< node type
@@ -878,6 +878,12 @@ inline bool NetInfo::setLocLinkL(int lnk, int loc) {
 	return true;
 }
 
+/** Set the local link number used by the right endpoint of a link.
+ *  Each router in a Forest network refers to links using local link numbers.
+ *  @param lnk is a "global" link number
+ *  @param loc is the local link number to be used by the right endpoint of lnk
+ *  @return true on success, else false
+ */
 inline bool NetInfo::setLocLinkR(int lnk, int loc) {
 	if (validLink(lnk)) link[lnk].rightLnum = loc;
 	else return false;

@@ -11,119 +11,50 @@
 /** Constructor for RouteTable, allocates space and initializes table.
  *  Nte1 is the number of routing table entries.
  */
-RouteTable::RouteTable(int nte1, fAdr_t myAdr1, LinkTable* lt1,
-		       ComtreeTable* ctt1, QuManager* qm1)
-		      : nte(nte1), myAdr(myAdr1), lt(lt1), ctt(ctt1), qm(qm1) {
+RouteTable::RouteTable(int maxRtx1, fAdr_t myAdr1, ComtreeTable* ctt1)
+		      : maxRtx(maxRtx1), myAdr(myAdr1), ctt(ctt1) {
 	int i;
-	tbl = new rtEntry[nte+1];
-	ht = new UiHashTbl(nte);
-	for (i = 0; i <= nte; i++) tbl[i].ct = 0;    // ct=0 for unused entry
-	for (i = 1; i < nte; i++) {
-		tbl[i].lnks = i+1;  // link unused entries
-		tbl[i].qn = 0;	    // for qn=0 packets go to default for comt
-	}
-	free = 1; tbl[nte].lnks = 0;
+	tbl = new RouteEntry[maxRtx+1];
+	rteMap = new IdMap(maxRtx);
 };
 	
-RouteTable::~RouteTable() { delete [] tbl; }
+RouteTable::~RouteTable() { delete [] tbl; delete rteMap; }
 
-int RouteTable::lookup(comt_t comt, fAdr_t adr) {
-// Perform a lookup in the routing table. Comt is the comtree number,
-// adr is the destination address. Returned value is the index
-// of the table entry, or 0 if there is no match.
-	//return ht->lookup(hashkey(comt,adr));
-
-	uint64_t x = hashkey(comt,adr);
-	int te = ht->lookup(x);
-	uint64_t z = ht->getKey(te);
-	if (te == 0) return 0;
-	if (x != z)
-		cerr << "hash lookup on " << x << " returns " << te
-		     << " for which stored key is " << z << endl;
-	else if (tbl[te].ct != comt)
-		cerr << "hash is ok but stored comtree value " << tbl[te].ct
-		     << " does not match " << comt << endl;
-	return te;
-
-}
-
-int RouteTable::getLinks(int te, uint16_t lnks[], int limit) const {
-// Return a vector of links for a given multicast table entry.
-// N is the size of lnkVec. Return the number of links, or 0
-// if this is  not a multicast table entry.
-	if (!Forest::mcastAdr(tbl[te].adr)) return 0;
-	int vec = tbl[te].lnks >> 1; int i = 0; int lnk = 1;
-	while (lnk <= limit && vec != 0) {
-		if (vec & 1) lnks[i++] = lnk;
-		vec >>= 1; lnk++;
-	}
-	return i;
-}
-
-int RouteTable::addEntry(comt_t comt, fAdr_t adr, int lnk, int qnum) {
 // Insert routing table entry for given comtree and address,
-// with specified link and queue number. For unicast addresses,
-// store link number. For multicast addresses, set bit in a bit
-// vector representing a set of links. For multicast entries,
-// if lnk=0, the bit vector should be all zeros (empty set).
+// with specified comtree link. For multicast entries,
+// if lnk=0, make the link set empty.
 // Return index of routing table entry or 0 on failure.
-	if (free == 0) return 0;
-	int te = free; free = tbl[free].lnks;
-
-	if (ht->insert(hashkey(comt,adr),te)) {
-		tbl[te].ct = comt;
-		tbl[te].qn = qnum;
-		if (Forest::mcastAdr(adr)) {
-			tbl[te].adr = adr;
-			tbl[te].lnks = (lnk == 0 ? 0 : 1 << lnk);
-		} else {
-			int zip = Forest::zipCode(adr);
-			tbl[te].adr =  (zip == Forest::zipCode(myAdr) ?
-					adr : Forest::forestAdr(zip,0));
-			tbl[te].lnks = lnk;
-		}
-		return te;
+int RouteTable::addEntry(comt_t comt, fAdr_t adr, int cLnk) {
+	int rtx = rteMap->addPair(key(comt,adr));
+	if (rtx == 0) return 0;
+	tbl[rtx].ct = comt;
+	if (Forest::mcastAdr(adr)) {
+		tbl[rtx].adr = adr;
+		tbl[rtx].links = new set<int>();
+		if (cLnk != 0) tbl[rtx].links->insert(cLnk);
 	} else {
-		free = te; return 0;
+		int zip = Forest::zipCode(adr);
+		tbl[rtx].adr =  (zip == Forest::zipCode(myAdr) ?
+				adr : Forest::forestAdr(zip,0));
+		tbl[rtx].lnk = cLnk;
 	}
+	return rtx;
 }
 
-bool RouteTable::compareEntry(comt_t comt, fAdr_t adr, int lnk, int qnum) {	
-	int te = ht->lookup(hashkey(comt,adr));
-	if(te == 0) return false;
-	return tbl[te].ct == comt &&
-	       tbl[te].qn == qnum &&
-	       tbl[te].adr == adr &&
-	       tbl[te].lnks == lnk;
+// Remove entry rtx from routing table.
+void RouteTable::removeEntry(int rtx) {
+	if (!validRteIndex(rtx)) return;
+	if (Forest::mcastAdr(tbl[rtx].adr)) delete tbl[rtx].links;
+	rteMap->dropPair(key(tbl[rtx].ct,tbl[rtx].adr));
 }
 
-bool RouteTable::removeEntry(int te) {
-// Remove entry te from routing table.
-	ht->remove(hashkey(tbl[te].ct,tbl[te].adr));
-	tbl[te].ct = 0; tbl[te].lnks = free; free = te;
+/*
+bool RouteTable::compareEntry(comt_t comt, fAdr_t adr, int lnk) {
+        int rtx = rteMap->getId(hashkey(comt,adr));
+        if(rtx == 0) return false;
+        return tbl[te].ct == comt && tbl[te].adr == adr && tbl[te].lnk == lnk;
 }
-
-bool RouteTable::checkEntry(int te) const {
-// Return true if consistent, else false;
-	int i, n; uint16_t lnkvec[Forest::MAXLNK];
-	// comtrees in routing table must be valid
-	int ctte = ctt->lookup(getComtree(te));
-	if (ctte == 0) return false;
-
-	// only multicast addresses can have more than one link
-	n = getLinks(te,lnkvec,Forest::MAXLNK);
-	if (!Forest::mcastAdr(getAddress(te))) return (n == 1 ? true : false);
-
-	// check links of multicast routes
-	for (i = 0; i < n; i++) {
-		// links mentioned in routing table must be valid
-		if (!lt->valid(lnkvec[i])) return false;
-		// links go only to children that are not in core
-		if (lnkvec[i] == ctt->getPlink(ctte)) return false;
-		if (ctt->isClink(ctte,lnkvec[i])) return false;
-	}
-	return true;
-}
+*/
 
 bool RouteTable::readEntry(istream& in) {
 // Read an entry from in and create a routing table entry for it.
@@ -131,30 +62,31 @@ bool RouteTable::readEntry(istream& in) {
 // A trailing comment is also allowed at the end of a line by
 // including a # sign. All lines that are not pure comment lines
 // or blank are assumed to contain a complete routing table entry.
-	int comt, lnk, qnum, quant, te; fAdr_t adr;
-
+	int comt, lnk; fAdr_t adr;
         Misc::skipBlank(in);
-        if (!Misc::readNum(in, comt) || !Forest::readForestAdr(in,adr) ||
-	    !Misc::readNum(in,qnum) || !Misc::readNum(in,quant)) {
+        if (!Misc::readNum(in, comt) || !Forest::readForestAdr(in,adr)) 
                 return false;
-        }
-	if ((te = addEntry(comt,adr,0,qnum)) == 0) return false;
+	int rtx = addEntry(comt,adr,0);
+	if (rtx == 0) return false;
 	if (Forest::mcastAdr(adr)) {
 		do {
 			if (!Misc::readNum(in,lnk)) {
-				removeEntry(te); return false;
+				removeEntry(rtx); return false;
 			}
-			addLink(te,lnk);
-			if (qnum != 0) qm->setQuantum(lnk,qnum,quant);
+			int cLnk = ctt->getComtLink(comt,lnk);
+			if (cLnk == 0) return false;
+			addLink(rtx,cLnk);
 		} while (Misc::verify(in,','));
 	} else {
-		if (!Misc::readNum(in,lnk)) return false;
+		if (!Misc::readNum(in,lnk)) {
+			removeEntry(rtx); return false;
+		}
 		Misc::cflush(in,'\n');
-		setLink(te,lnk);
+		int cLnk = ctt->getComtLink(comt,lnk);
+		if (cLnk == 0) return false;
+		setLink(rtx,cLnk);
 	}
 	Misc::cflush(in,'\n');
-
-	if (!checkEntry(te)) { removeEntry(te); return false; }
 	return true;
 }
 
@@ -183,31 +115,30 @@ bool RouteTable::read(istream& in) {
         return true;
 }
 
-void RouteTable::writeEntry(ostream& out, int te) const {
-// Print entry number te.
-	out << setw(4) << te << ": " << getComtree(te) << " ";
-	if (Forest::mcastAdr(getAddress(te))) {
-	   	out << getAddress(te) << " " << getQnum(te) << " ";
+// Print entry number rtx.
+void RouteTable::writeEntry(ostream& out, int rtx) const {
+	string s;
+	out << getComtree(rtx) << " ";
+	fAdr_t adr = getAddress(rtx);
+	if (Forest::mcastAdr(adr)) {
+	   	out << Forest::fAdr2string(adr,s) << " ";
+		if (noLinks(rtx)) { out << "-\n"; return; }
 		bool first = true;
-		if (getLinks(te) == 0) { out << "-\n"; return; }
-		for (int i = 1; i <= 31; i++) {
-			if (getLinks(te) & (1 << i)) {
-				if (first) first = false;
-				else out << ",";
-				out << i;
-			}
+		set<int>& rteLinks = getRteLinks(rtx);
+		set<int>::iterator p;
+		for (p = rteLinks.begin(); p != rteLinks.end(); p++) {
+			if (first) first = false;
+			else out << ",";
+			out << ctt->getLink(*p);
 		}
-		out << endl;
-	} else {
-	   	out << Forest::zipCode(getAddress(te)) << "."
-		   << Forest::localAdr(getAddress(te))
-		   << " " << getQnum(te) << " " <<  getLinks(te) << endl;
-	}
+	} else 
+		out << Forest::fAdr2string(adr,s) << " " << getLink(rtx);
+	out << endl;
 }
 
 void RouteTable::write(ostream& out) const {
 // Output human readable representation of routing table.
-        for (int i = 1; i <= nte; i++) {
-                if (valid(i)) writeEntry(out,i);
-	}
+	out << rteMap->size() << endl;
+	for (int rtx = firstRteIndex(); rtx != 0; rtx = nextRteIndex(rtx))
+                writeEntry(out,rtx);
 }

@@ -8,8 +8,11 @@
 
 #include "PacketStore.h"
 
+/** Constructor allocates space and initializes free lists.
+ *  @param N1 is number of packets to allocate space for
+ *  @param M1 is the number of buffers to allocate space for
+ */
 PacketStore::PacketStore(int N1, int M1) : N(N1), M(M1) {
-// Constructor for PacketStore, allocates space and initializes table.
 	n = m = 0;
 	phdr = new PacketHeader[N+1]; pb = new int[N+1];
 	buff = new buffer_t[M+1]; ref = new int[M+1];
@@ -26,9 +29,10 @@ PacketStore::~PacketStore() {
 	delete freePkts; delete freeBufs;
 }
 
+/** Allocate a new packet and buffer.
+ *  @return the packet number or 0, if no more packets available
+ */
 packet PacketStore::alloc() {
-// Allocate new packet and buffer and return it.
-// If no space for packet, return 0.
 	packet p; int b;
 	if (freePkts->empty() || freeBufs->empty()) return 0;
 	n++; m++;
@@ -38,18 +42,24 @@ packet PacketStore::alloc() {
 	return p;
 }
 
+/** Release the storage used by a packet.
+ *  Also releases the associated buffer, if no clones are using it.
+ *  @param p is the packet number of the packet to be released
+ */
 void PacketStore::free(packet p) {
-// Free packet p and release buffer, if no other packets using it.
-	assert(1 <= p && p <= N);
+	if (p < 1 || p > N || freePkts->member(p)) return;
 	int b = pb[p]; pb[p] = 0;
 	freePkts->addFirst(p); n--;
 	if ((--ref[b]) == 0) { freeBufs->addFirst(b); m--; }
 }
 
+/** Make a "clone" of an existing packet.
+ *  The clone shares the same buffer as the original.
+ *  Its header is initialized to match the original.
+ *  @param p is the packet number of the packet to be cloned
+ *  @return the index of the new packet or 0 on failure
+ */
 packet PacketStore::clone(packet p) {
-// Allocate a new packet that references the same buffer as p,
-// and initialize its header fields to match p.
-// Return a pointer to the new packet.
 	int b = pb[p];
 	if (freePkts->empty()) return 0;
 	n++;
@@ -58,7 +68,7 @@ packet PacketStore::clone(packet p) {
 	return p1;
 }
 
-/** Allocate a new packet that with the same content as b.
+/** Allocate a new packet that with the same content as p.
  *  A new buffer is allocated for this packet.
  *  @return the index of the new packet.
  */
