@@ -19,6 +19,7 @@ UiSetPair::UiSetPair(int n1) : n(n1) {
 	}
 	nxt[n] = prv[1] = 0;
 	outHead = 1; outTail = n;
+	numIn = 0; numOut = n;
 
 	nxt[0] = prv[0] = 0;
 }
@@ -45,6 +46,7 @@ void UiSetPair::swap(int i) {
 			nxt[outTail] = -i; prv[i] = -outTail;
 		}
 		outTail = i;
+		numIn--; numOut++;
 	} else {
 		if (nxt[i] == 0) outTail = -prv[i];
 		else prv[-nxt[i]] = prv[i];
@@ -59,6 +61,7 @@ void UiSetPair::swap(int i) {
 			nxt[inTail] = i; prv[i] = inTail;
 		}
 		inTail = i;
+		numIn++; numOut--;
 	}
 }
 

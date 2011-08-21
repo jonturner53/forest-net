@@ -31,7 +31,7 @@ public:
 	bool	isIn(int) const;
 	bool	isOut(int) const;
 
-	// access methods
+	// iteration methods
 	int	firstIn() const; 	
 	int	firstOut() const; 	
 	int	lastIn() const; 	
@@ -41,17 +41,25 @@ public:
 	int	prevIn(int) const; 	
 	int	prevOut(int) const; 	
 
+	// getters
+	int	getNumIn() const;
+	int	getNumOut() const;
+
 	// modifiers
 	void	swap(int);
 
 	// produce string representation
 	string&	toString(string&) const;
 private:
-	int n;			///< largest integer in list pair
-	int inHead;		///< first value in the in-list
-	int inTail;		///< last value in the in-list
-	int outHead;		///< first value in the out-list
-	int outTail;		///< last value in the out-list
+	int n;			///< largest integer in set pair
+	int numIn;		///< number of elements in in-set
+	int numOut;		///< number of elements in out-set
+
+	int inHead;		///< first value in the in-set
+	int inTail;		///< last value in the in-set
+	int outHead;		///< first value in the out-set
+	int outTail;		///< last value in the out-set
+
 	int *nxt;		///< nxt[i] defines next value after i
 	int *prv;		///< prv[i] defines value preceding i
 };
@@ -72,29 +80,32 @@ inline bool UiSetPair::isOut(int i) const {
 	return 1 <= i && i <= n && (nxt[i] < 0 || i == outTail);
 }
 
-/** Get the first int in the in-list.
- *  @return the first value on the in-list or 0 if the list is empty.
+inline int UiSetPair::getNumIn() const { return numIn; }
+inline int UiSetPair::getNumOut() const { return numOut; }
+
+/** Get the first int in the in-set.
+ *  @return the first value on the in-set or 0 if the list is empty.
  */
 inline int UiSetPair::firstIn() const { return inHead; }
 
-/** Get the first int in the out-list.
- *  @return the first value on the out-list or 0 if the list is empty.
+/** Get the first int in the out-set.
+ *  @return the first value on the out-set or 0 if the list is empty.
  */
 inline int UiSetPair::firstOut() const { return outHead; }
 
-/** Get the last int in the in-list.
- *  @return the last value on the in-list or 0 if the list is empty.
+/** Get the last int in the in-set.
+ *  @return the last value on the in-set or 0 if the list is empty.
  */
 inline int UiSetPair::lastIn() const { return inTail; }
 
-/** Get the first int in the out-list.
- *  @return the last value on the out-list or 0 if the list is empty.
+/** Get the first int in the out-set.
+ *  @return the last value on the out-set or 0 if the list is empty.
  */
 inline int UiSetPair::lastOut() const { return outTail; }
 
 /** Get the next value in the inlist.
  *  @param i is the "current" value
- *  @return the next value on the in-list or 0 if no more values
+ *  @return the next value on the in-set or 0 if no more values
  */
 inline int UiSetPair::nextIn(int i) const {
 	return (0 <= i && i <= n && nxt[i] > 0 ? nxt[i] : 0);
@@ -102,7 +113,7 @@ inline int UiSetPair::nextIn(int i) const {
 
 /** Get the next value in the outlist.
  *  @param i is the "current" value
- *  @return the next value on the out-list or 0 if no more values
+ *  @return the next value on the out-set or 0 if no more values
  */
 inline int UiSetPair::nextOut(int i) const {
 	return (0 <= i && i <= n && nxt[i] < 0 ? -nxt[i] : 0);
@@ -110,7 +121,7 @@ inline int UiSetPair::nextOut(int i) const {
 
 /** Get the previous value in the inlist.
  *  @param i is the "current" value
- *  @return the previous value on the in-list or 0 if no more values
+ *  @return the previous value on the in-set or 0 if no more values
  */
 inline int UiSetPair::prevIn(int i) const {
 	return (0 <= i && i <= n && prv[i] > 0 ? prv[i] : 0);
@@ -118,7 +129,7 @@ inline int UiSetPair::prevIn(int i) const {
 
 /** Get the previous value in the outlist.
  *  @param i is the "current" value
- *  @return the previous value on the out-list or 0 if no more values
+ *  @return the previous value on the out-set or 0 if no more values
  */
 inline int UiSetPair::prevOut(int i) const {
 	return (0 <= i && i <= n && prv[i] < 0 ? -prv[i] : 0);

@@ -33,6 +33,7 @@ public:
 	int	firstId() const; 	
 	int	lastId() const; 	
 	int	nextId(int) const; 	
+	int	size() const;
 	int	getId(uint64_t) const; 		
 	uint64_t getKey(int) const;
 
@@ -52,6 +53,7 @@ public:
 private:
 	static const int MAXID = (1 << 20)-1;  ///< largest possible identifier
 	int n;				///< largest identifier in this set
+	int cnt;			///< number of valid mappings
 	UiHashTbl *ht;			///< hash table to compute mapping
 	UiSetPair *ids;			///< in-use and free ids
 };
@@ -87,6 +89,8 @@ inline bool IdMap::validKey(uint64_t key) const {
 inline bool IdMap::validId(int id) const {
 	return (1 <= id && id <= n && ids->isIn(id));
 }
+
+inline int IdMap::size() const { return cnt; }
 
 /** Get the id for a given key.
  *  @param key is the key for which the id is required
