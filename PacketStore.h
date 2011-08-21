@@ -25,25 +25,25 @@ public:
                 PacketStore(int=100000, int=50000);
                 ~PacketStore();
 
-	/** getters */
+	// getters 
         PacketHeader& getHeader(packet) const;
         buffer_t& getBuffer(packet) const;      
         uint32_t* getPayload(packet) const;    
 
-	/** setters */
+	// setters 
         void setHeader(packet, const PacketHeader&);
 
-	/** allocate/free packets */
+	// allocate/free packets 
         packet  alloc();           
         void    free(packet);     
         packet  clone(packet);   
         packet  fullCopy(packet);   
 
-        /** pack/unpack header fields to/from buffer */
+        // pack/unpack header fields to/from buffer 
         void    unpack(packet);         
         void    pack(packet);        
 
-        /** error checking */
+        // error checking 
         bool    hdrErrCheck(packet); 
         bool    payErrCheck(packet);
         void    hdrErrUpdate(packet);    
@@ -65,42 +65,79 @@ private:
         UiList    *freeBufs;              ///< list of free buffers
 };
 
-// Return reference to packet header
+/** Get reference to packet header.
+ *  @param p is a packet number
+ *  @return a reference to the packet header for p
+ */
 inline PacketHeader& PacketStore::getHeader(packet p) const {
 	return phdr[p];
 }
 
-// Return reference to buffer for packet p.
-// This is for use of the IO routines (recvfrom, sendto).
+/** Get reference to packet buffer.
+ *  @param p is a packet number
+ *  @return a reference to the buffer for packet p
 inline buffer_t& PacketStore::getBuffer(packet p) const {
 	return buff[pb[p]];
 }
 
-// Return pointer to start of payload for p.
+/** Get pointer to start of a packet payload.
+ *  @param p is a packet number
+ *  @return a pointer to first word of the payload for p
+ */
 inline uint32_t* PacketStore::getPayload(packet p) const {
 	return &buff[pb[p]][Forest::HDR_LENG/sizeof(uint32_t)];
 }
 
+/** Set the header fields for a packet.
+ *  @param p is the packet whose header is to be updated
+ *  @param h is a reference to another header whose value is to be
+ *  copied into the header for p
+ */
 inline void PacketStore::setHeader(packet p, const PacketHeader& h) {
 	phdr[p] = h;
 }
 
+/** Unpack the header fields for a packet from its buffer.
+ *  @param p is the packet whose header fields are to be unpacked
+ */
 inline void PacketStore::unpack(packet p) {
 	getHeader(p).unpack(getBuffer(p));
 }
+
+/** Pack header fields into a packet's buffer.
+ *  @param p is the packet whose buffer is to be packed from its header
+ */
 inline void PacketStore::pack(packet p) {
 	getHeader(p).pack(getBuffer(p));
 }
 
+/** Check the header error check field of a packet.
+ *  @param p is a packet number
+ */
 inline bool PacketStore::hdrErrCheck(packet p) {
 	return getHeader(p).hdrErrCheck(getBuffer(p));
 }
+
+/** Check the payload error check field of a packet.
+ *  @param p is a packet number
+ */
 inline bool PacketStore::payErrCheck(packet p) {
 	return getHeader(p).payErrCheck(getBuffer(p));
 }
+
+/** Update the header error check field of a packet.
+ *  Computes error check over the header fields as they appear
+ *  in the packet buffer.
+ *  @param p is a packet number
+ */
 inline void PacketStore::hdrErrUpdate(packet p) {
 	getHeader(p).hdrErrUpdate(getBuffer(p));
 }
+
+/** Update the payload error check field of a packet.
+ *  Computes error check over the entire packet payload.
+ *  @param p is a packet number
+ */
 inline void PacketStore::payErrUpdate(packet p) {
 	getHeader(p).payErrUpdate(getBuffer(p));
 }

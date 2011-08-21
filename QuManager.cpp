@@ -8,17 +8,6 @@
 
 /*
 Implementation Notes
-
-We represent time using 32 bit values and use 1 us resolution.
-This allows for 4000 seconds of time, so more than an hour.
-We assume that each link will send at least one packet every
-30 minutes, a safe assumption if link speeds are at least 1 Kb/s,
-AND if neighbors' links are constrained so they can't send us
-packets faster than the max rate at which we can forward them.
-This allows us to use circular time values that wrap around.
-If a, b are distinct time values, we interpret a to be greater
-than b if (a-b) < 2^31.
-
 We maintain two heaps defined on the links. The active heap
 contains links for which packets are currently queued. The
 vactive heap contains links that are "virtually active", meaning
@@ -32,178 +21,168 @@ It's important that links be moved off the vactive heap when
 they become eligible to send new packets. This is done in the
 nextReady routine, which is expected to be called frequently
 (e.g. once on each iteration of the router's main loop).
+
+In addition to the active and vactive heaps, there is a HeapSet
+data structure that contains a heap for each link. These heaps
+contain queues and the key of a queue in its heap, is the
+virtual finish time of the queue in a Self-Clocked Fair Queueing
+packet scheduler.
 */
 
 #include "QuManager.h"
 
 // Constructor for QuManager, allocates space and initializes everything.
-QuManager::QuManager(int nL1, int nP1, int nQ1, int qL1,
-		     PacketStore *ps1, LinkTable *lt1)
-	   	    : nL(nL1), nP(nP1), nQ(nQ1), qL(qL1), ps(ps1), lt(lt1) {
-	int lnk, q, qid;
+QuManager::QuManager(int nL1, int nP1, int nQ1, int maxppl1,
+		     PacketStore *ps1, StatsModule *sm1)
+	   	    : nL(nL1), nP(nP1), nQ(nQ1),
+		      maxppl(maxppl1), ps(ps1), sm(sm1) {
+	queues = new UiListSet(nP,nQ);
+	active = new Heap(nL);  
+	vactive = new Heap(nL);
+	quInfo = new QuInfo[nQ+1];
+	lnkInfo = new LinkInfo[nL+1]; 
+	hset = new HeapSet(nQ,nL);
 
-	queues = new UiListSet(nP,nL*nQ);
-	active = new ModHeap(nL,4,true);  // active is also a min-heap
-	vactive = new ModHeap(nL,4,true);  // vactive is a min-heap 
-	npq = new int[nL+1]; nbq = new int[nL+1];
-
-	for (lnk = 1; lnk <= nL; lnk++) {
-		npq[lnk] = 0; nbq[lnk] = 0;
+	for (int lnk = 1; lnk <= nL; lnk++) {
+		lnkInfo[lnk].vt = 0; setLinkRates(lnk, 1, 1);
 	}
 
-	pSched = new UiDlist*[nL+1];
-	cq = new int[nL+1];
-	qStatus = new qStatStruct[nL*nQ+1];
-	for (lnk = 1; lnk <= nL; lnk++) {
-		pSched[lnk] = new UiDlist(nQ);
-		cq[lnk] = 0; 
-		for (q = 1; q <= nQ; q++) {
-			qid = (lnk-1)*nQ+q;
-			qStatus[qid].quantum = 100; // default value
-			qStatus[qid].credits = 0;
-			qStatus[qid].np = qStatus[qid].nb = 0;
-			qStatus[qid].pktLim = qL;	// default packet limit
-			qStatus[qid].byteLim = qL*1600;	// default byte limit
-		}
+	// build free list of queues using lnk field
+	for (int qid = 1; qid < nQ; qid++) {
+		quInfo[qid].lnk = qid+1;
+		quInfo[qid].pktLim = -1; // used to identify unassigned queues
 	}
+	quInfo[nQ].lnk = 0; free = 1;
 }
 		
 QuManager::~QuManager() {
-	delete queues; delete active; delete [] npq; delete [] nbq;
-	delete [] pSched; delete [] cq; delete [] qStatus;
+	delete queues; delete active; delete vactive;
+	delete [] quInfo; delete [] lnkInfo; delete hset;
 }
 
-bool QuManager::enq(int p, int lnk, int q, uint32_t now) {
-// Enqueue packet on specified queue for lnk. Return true if
-// packet was successfully queued, else false. Note, it
-// is up to the caller to discard packets that are not queued.
+/** Allocate a queue and assign it to a link.
+ *  @param lnk is the link to be assigned a new queue.
+ *  @return the qid of the assigned queue, or 0 no queues are available
+ */
+int QuManager::allocQ(int lnk) {
+	if (free == 0) return 0;
+	int qid = free; free = quInfo[qid].lnk;
+	quInfo[qid].lnk = lnk;
+	quInfo[qid].pktLim = 0; // non-negative value for assigned queues
+}
+
+/** Free a queue.
+ *  If the specified queue is empty, it is immediately returned to
+ *  the free list. Otherwise, it is marked so that no new packets
+ *  can be queued. When all existing packets have been sent, the
+ *  queue will be returned to the free list.
+ */
+void QuManager::freeQ(int qid) {
+	if (queues->empty(qid)) {
+		quInfo[qid].lnk = free; free = qid;
+	} 
+	quInfo[qid].pktLim = -1; // negative value for free queues
+}
+
+/** Enqueue a packet.
+ *  @param p is the packet number of the packet to be queued
+ *  @param q is the the qid for the queue for the packet
+ *  @param now is the current time
+ *  @return true on success, false on failure; the operation can fail
+ *  if the qid is invalid, if the queue is already full, or the link
+ *  is at its limit for packets queued
+ */
+bool QuManager::enq(int p, int qid, uint64_t now) {
 	int pleng = Forest::truPktLeng((ps->getHeader(p)).getLength());
-	int qid = (lnk-1)*nQ + q; // used for accessing queues, qStatus
-	qStatStruct *qs = &qStatus[qid];
+	QuInfo& q = quInfo[qid]; int lnk = q.lnk;
+
+	if (quInfo[qid].pktLim == -1) return false;
 
 	// don't queue it if too many packets for link
 	// or if queue is past its limits
-	if (npq[lnk] >= qL || qs->np >= qs->pktLim ||
-			      qs->nb + pleng > qs->byteLim) {
+	if (sm->getLinkQlen(lnk) >= maxppl ||
+	    sm->getQlen(qid) >= q.pktLim ||
+	    sm->getQbytes(qid) + pleng > q.byteLim) {
 		return false;
 	}
 
-	// update queue and packet scheduler
 	if (queues->empty(qid)) {
-		pSched[lnk]->addLast(q);
-		if (q == pSched[lnk]->get(1)) {
-			cq[lnk] = q;
-			qs->credits = qs->quantum;
-			// update heap of active links
-			uint32_t d = now;
+		// make link active if need be
+		if (!active->member(lnk)) {
+			uint32_t d;
 			if (vactive->member(lnk)) {
 				d = vactive->key(lnk);
 				if ((now - d) <= (1 << 31))  // now >= d
 					d = now;
 				vactive->remove(lnk);
-			}
+			} else d = now;
 			active->insert(lnk,d);
-		} else {
-			qs->credits = 0;
 		}
-	}
+		// set virtual finish time of queue
+		uint64_t d = q.nsPerByte; d *= pleng;
+		if (q.minDelta > d) d = q.minDelta;
+		q.vft = max(q.vft, lnkInfo[lnk].vt) + d;
+
+		// add queue to scheduling heap for link
+		hset->insert(qid,q.vft,lnk);
+	} 
+
+	// add packet to queue
 	queues->addLast(p,qid);
-	qs->np++; qs->nb += pleng;
-	npq[lnk]++; nbq[lnk] += pleng;
+	sm->incQlen(qid,lnk,pleng);
 	return true;
 }
 
-int QuManager::deq(int lnk) {
-// Find the next queue for the given link that has sufficient credits
-// to send its next packet. Add quantum credits for each queue that
-// is considered but does not have enough credits now.
-// Once a queue with sufficient credits is found, remove and return
-// its first packet. Update all data structures appropriately.
-	int q = cq[lnk];
-	int qid = (lnk-1)*nQ + q; // used for accessing queues, qstatus
-	qStatStruct *qs = &qStatus[qid];
-	int p = queues->first(qid); PacketHeader h = ps->getHeader(p);
-
-	// if current queue has too few credits, advance to next queue
-	while (qs->credits < h.getLength()) { 
-		cq[lnk] = pSched[lnk]->next(q) != 0 ?
-				pSched[lnk]->next(q) : pSched[lnk]->get(1);
-		q = cq[lnk]; qid = (lnk-1)*nQ + q; qs = &qStatus[qid];
-		qs->credits += qs->quantum;
-		p = queues->first(qid); h = ps->getHeader(p);
-	}
-	// Now, current queue has enough credit, so can deque is first
-	// packet, update credits, pSched and heaps
-	p = queues->removeFirst(qid); h = ps->getHeader(p);
-	int pleng = Forest::truPktLeng(h.getLength());
-	qs->credits -= pleng;
-	qs->np--; qs->nb -= pleng;
-	npq[lnk]--; nbq[lnk] -= pleng;
-
-	if (queues->empty(qid)) {
-		cq[lnk] = pSched[lnk]->next(q) != 0 ?
-				pSched[lnk]->next(q) : pSched[lnk]->get(1);
-		pSched[lnk]->remove(q);
-		qs = &qStatus[(lnk-1)*nQ+cq[lnk]];
-		qs->credits += qs->quantum;
-	}
-
-	// update heaps for lnk
-	uint32_t d;
-	d = (pleng*8000)/lt->getBitRate(lnk);
-	d = max(d,lt->getMinDelta(lnk));
-	d += active->key(lnk);
-	if (pSched[lnk]->empty()) {
-		vactive->insert(lnk,d);
-		active->remove(lnk);
-		cq[lnk] = 0;
-	} else {
-		active->changekey(lnk,d);
-	}
-
-	return p;
-}
-
-
-int QuManager::nextReady(uint32_t now) {
-// Return the index of the next link that is ready to send, or 0 if
-// none is ready to send. This routine also checks to see if any of
-// the links in the vactive heap can be removed.
-	// remove vactive links whose times are now past
-	int lnk = vactive->findmin(); uint32_t d = vactive->key(lnk);
-	while (lnk != 0 && (now - d) <= (1 << 31)) {
-		vactive->remove(lnk);
-		lnk = vactive->findmin(); d = vactive->key(lnk);
+/** Dequeue the next packet that is ready to go out.
+ *  @param now is the current time
+ *  @param lnk is a reference argument; on a successful return,
+ *  it is set to the number of the link on which the packet should be sent
+ *  @return the packet number of the packet to be sent, or 0 if there
+ *  are no links that are ready to send a packet
+ */
+int QuManager::deq(int& lnk, uint64_t now) {
+	// first process virtually active links that should now be idle
+	int vl = vactive->findmin(); uint64_t d = vactive->key(vl);
+	while (vl != 0 && now >= d) {
+		vactive->remove(vl);
+		vl = vactive->findmin(); d = vactive->key(vl);
 	}
 	// determine next active link that is ready to send
 	if (active->empty()) return 0;
 	lnk = active->findmin(); d = active->key(lnk);
-	if ((now - d) <= (1 << 31)) return lnk;
-	return 0;
-}
+	if (now < d) return 0;
 
-void QuManager::write(int lnk, int q) const {
-// Print the packets in the specified queue
-	cout << "[" << lnk << "," << q << "] ";
-	queues->write(cout, (lnk-1)*nQ+q);
-}
+	// dequeue packet and update statistics
+	int qid = hset->findMin(lnk);
+	int p = queues->removeFirst(qid);
+	int pleng = Forest::truPktLeng(ps->getHeader(p).getLength());
+	sm->decQlen(qid,lnk,pleng);
 
-void QuManager::write() const {
-// Print the active heap and status of all active links
-	int lnk, q, qid; qStatStruct *qs;
-
-	active->write(cout);
-	for (lnk = 1; lnk <= nL; lnk++) {
-		if (pSched[lnk]->empty()) continue;
-		cout << "link " << lnk << ": ";
-		pSched[lnk]->write(cout);
-		cout << " | " << cq[lnk] << endl;
-		for (q = pSched[lnk]->get(1); q != 0; q = pSched[lnk]->next(q)){
-			qid = (lnk-1)*nQ + q; qs = &qStatus[qid];
-			cout << "queue " << q << "(" << qs->quantum << ","
-			     << qs->credits << ") ";
-			write(lnk,q);
+	// and update scheduling heap and virtual time of lnk
+	QuInfo& q = quInfo[qid];
+	lnkInfo[lnk].vt = q.vft;
+	if (queues->empty(qid)) {
+		hset->deleteMin(lnk);
+		if (q.pktLim < 0) {
+			// move queue to the free list
+			q.lnk = free; free = qid;
 		}
+	} else {
+		int np = queues->first(qid);
+		int npleng = Forest::truPktLeng(ps->getHeader(np).getLength());
+		uint64_t d = q.nsPerByte; d *= npleng;
+		if (q.minDelta > d) d = q.minDelta;
+		q.vft += d;
+		hset->changeKeyMin(q.vft, lnk);
 	}
-	cout << endl;
+
+	// update the time when lnk can send its next packet
+	uint64_t t = lnkInfo[lnk].nsPerByte; t *= pleng;
+	if (lnkInfo[lnk].minDelta > t) t = lnkInfo[lnk].minDelta;
+	t += active->key(qid);
+
+	if (hset->empty(lnk)) { active->remove(qid); vactive->insert(qid,t); }
+	else 		    { active->changekey(qid,t); }
+
+	return p;
 }

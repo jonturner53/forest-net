@@ -115,11 +115,11 @@ int NetInfo::addLeaf(const string& name, ntyp_t nTyp) {
 
 /** Add a link to a forest network.
  *  @param u is a node number of some node in the network
- *  @param vi is a leaf number of some node in the network
+ *  @param v is a leaf number of some node in the network
  *  @param uln if u is a ROUTER, then uln is a local link number used by
  *  u to identify the link - for leaf nodes, this argument is ignored
- *  @param uln if u is a ROUTER, then uln is a local link number used by
- *  v to identify the link - for leaf nodes,  this argument is ingored
+ *  @param vln if v is a ROUTER, then vln is a local link number used by
+ *  v to identify the link - for leaf nodes,  this argument is ignored
  *  @return the link number for the new link or 0 if the operation fails
  *  (the operation fails if it is unable to associate a given local
  *  link number with a specified router)
@@ -143,7 +143,7 @@ int NetInfo::addLink(int u, int v, int uln, int vln ) {
         return lnk;
 }
 
-/** Exampe of NetInfo input file format
+/* Example of NetInfo input file format.
  *  
  *  Routers # starts section that defines routers
  *  
@@ -1184,7 +1184,7 @@ bool NetInfo::read(istream& in) {
 	return in.eof() && context == TOP;
 }
 
-/** Write the contents of a NetInfo object to an output stream
+/** Write the contents of a NetInfo object to an output stream.
  *  The object is written out in a form that allows it to be read in again
  *  using the read method. Thus programs that modify the interal representation
  *  can save the result to an output file from which it can later restore the

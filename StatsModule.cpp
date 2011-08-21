@@ -8,9 +8,19 @@
 
 #include "StatsModule.h"
 
-StatsModule::StatsModule(int maxStats1, LinkTable *lt1, QuManager *qm1)
-		         : maxStats(maxStats1), lt(lt1), qm(qm1) {
-	stat = new statItem[maxStats+1];
+StatsModule::StatsModule(int maxStats1, int maxLnk1, int maxQ1)
+		         : maxStats(maxStats1), maxLnk(maxLnk1), maxQ(maxQ1) {
+	stat = new StatItem[maxStats+1];
+	lnkCnts = new LinkCounts[maxLnk+1];
+	qCnts = new QueueCounts[maxQ+1];
+	for (int i = 1; i <= maxLnk; i++) {
+		lnkCnts[i].inByte = lnkCnts[i].outByte = 0;
+		lnkCnts[i].inPkt = lnkCnts[i].outPkt = 0;
+		lnkCnts[i].numPkt = 0;
+	}
+	for (int i = 1; i <= maxQ; i++) {
+		qCnts[i].bytLen = qCnts[i].pktLen = 0;
+	}
 	n = 0;
 };
 	
@@ -18,20 +28,39 @@ StatsModule::~StatsModule() { delete [] stat; }
 
 void StatsModule::record(uint32_t now) {
 // Record statistics at time now.
-	int i, val; statItem *s;
+	int i, val;
 
 	if (n == 0) return;
 	for (i = 1; i <= n; i++) {
-		s = &stat[i];
-		switch(s->typ) {
-			case inPkt:  val = lt->iPktCnt(s->lnk); break;
-			case outPkt: val = lt->oPktCnt(s->lnk); break;
-			case qPkt:   val = qm->getLengthPkts(s->lnk,s->qnum);
-				     break;
-			case inByt:  val = lt->iBytCnt(s->lnk); break;
-			case outByt: val = lt->oBytCnt(s->lnk); break;
-			case qByt:   val = qm->getLengthBytes(s->lnk,s->qnum);
-				     break;
+		StatItem& s = stat[i];
+		switch(s.typ) {
+			case inPkt:  
+				if (s.lnk == 0) val = totInPkt;
+				else if (s.lnk == -1) val = rtrInPkt;
+				else if (s.lnk == -2) val = leafInPkt;
+				else val = lnkCnts[s.lnk].inPkt;
+				break;
+			case outPkt:
+				if (s.lnk == 0) val = totOutPkt;
+				else if (s.lnk == -1) val = rtrOutPkt;
+				else if (s.lnk == -2) val = leafOutPkt;
+				else val = lnkCnts[s.lnk].outPkt;
+				break;
+			case inByt:  
+				if (s.lnk == 0) val = totInByte;
+				else if (s.lnk == -1) val = rtrInByte;
+				else if (s.lnk == -2) val = leafInByte;
+				else val = lnkCnts[s.lnk].inByte;
+				break;
+			case outByt:
+				if (s.lnk == 0) val = totOutByte;
+				else if (s.lnk == -1) val = rtrOutByte;
+				else if (s.lnk == -2) val = leafOutByte;
+				else val = lnkCnts[s.lnk].outByte;
+				break;
+// add code to convert lnk+qnum to global qnum
+			case qPkt:   val = qCnts[s.qnum].pktLen; break;
+			case qByt:   val = qCnts[s.qnum].bytLen; break;
 			default: break;
 		}
 		fs << val << " ";
@@ -60,7 +89,7 @@ void StatsModule::record(uint32_t now) {
  *  the statistics for the router as a whole are reported. If the
  *  link # is -1, the statistics for packets to/from other routers
  *  is reported. If the link # is -2, the statistics for packets
- *  to/from clients is reported. Note, the current implementation
+ *  to/from leaf nodes is reported. Note, the current implementation
  *  does not support byte counts for the statistics to/from other
  *  routers or to/from other clients. In the queue length statistics, if the
  *  given queue number is zero, then the total number of packets (bytes)
@@ -96,10 +125,10 @@ bool StatsModule::readStat(istream& in) {
 	if (n >= maxStats) return false;
 	n++;
 
-	statItem* s = &stat[n];
-	s->typ = typ;
-	s->lnk = lnk;
-	s->qnum = qnum;
+	StatItem& s = stat[n];
+	s.typ = typ;
+	s.lnk = lnk;
+	s.qnum = qnum;
 
 	return true;
 }
@@ -124,27 +153,27 @@ bool StatsModule::read(istream& in) {
 
 void StatsModule::writeStat(ostream& out, int i) const {
 // Print i-th entry
-	statItem *s = &stat[i];
-	switch(s->typ) {
+	StatItem& s = stat[i];
+	switch(s.typ) {
 	case  inPkt:
-		out << " inPkt " << setw(2) << s->lnk << endl;
+		out << " inPkt " << setw(2) << s.lnk << endl;
 		break;
 	case  outPkt:
-		out << "outPkt " << setw(2) << s->lnk << endl;
+		out << "outPkt " << setw(2) << s.lnk << endl;
 		break;
 	case  inByt:
-		out << " inByt " << setw(2) << s->lnk << endl;
+		out << " inByt " << setw(2) << s.lnk << endl;
 		break;
 	case outByt:
-		out << "outByt " << setw(2) << s->lnk << endl;
+		out << "outByt " << setw(2) << s.lnk << endl;
 		break;
 	case   qPkt:
-		out << "  qPkt " << setw(2) << s->lnk
-		   << " " << setw(2) << s->qnum << endl;
+		out << "  qPkt " << setw(2) << s.lnk
+		   << " " << setw(2) << s.qnum << endl;
 		break;
 	case   qByt:
-		out << "  qByt " << setw(2) << s->lnk
-		   << " " << setw(2) << s->qnum << endl;
+		out << "  qByt " << setw(2) << s.lnk
+		   << " " << setw(2) << s.qnum << endl;
 		break;
 	}
 }
