@@ -80,7 +80,7 @@ main() {
 		// build and write comtree table for r
 		ComtreeTable *comtTbl = new ComtreeTable(maxComtree,
 				        Forest::forestAdr(1,2),lnkTbl,
-					(QuManager *) NULL);
+					(QuManager *) &qm);
 		if (!buildComtTable(r, net, *comtTbl)) {
 			cerr << "buildTables: could not build comtree table "
 			     << "for router " << r << endl;
