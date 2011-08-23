@@ -89,8 +89,8 @@ public:
 	static const ipp_t ROUTER_PORT = 30123; ///< port # used by routers
 
 	/** router implementation parameters */
-	static const short int MAXLNK = 31;	///< max # of links per router
 	static const short int MAXINTF= 20;	///< max # of interfaces
+	static const short int MAXLNK = 1000;	///< max # of links per router
 	static const int MINBITRATE = 500; 	///< min link bit rate in Kb/s
 	static const int MAXBITRATE = 1000000;	///< max link bit rate in Kb/s
 	static const int MINPKTRATE = 500; 	///< min packet rate in p/s

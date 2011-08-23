@@ -76,6 +76,7 @@ inline PacketHeader& PacketStore::getHeader(packet p) const {
 /** Get reference to packet buffer.
  *  @param p is a packet number
  *  @return a reference to the buffer for packet p
+ */
 inline buffer_t& PacketStore::getBuffer(packet p) const {
 	return buff[pb[p]];
 }

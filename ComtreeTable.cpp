@@ -69,7 +69,7 @@ void ComtreeTable::removeEntry(int ctx) {
  *  @param rflg is true if far end of link is another router
  *  @param cflg is true if far end of link is a core router for this comtree
  */
-inline bool ComtreeTable::addLink(int ctx, int lnk, bool rflg, bool cflg) {
+bool ComtreeTable::addLink(int ctx, int lnk, bool rflg, bool cflg) {
         if (!validComtIndex(ctx)) return false;
 
 	int cLnk = clMap->addPair(key(getComtree(ctx),lnk));
@@ -89,7 +89,7 @@ inline bool ComtreeTable::addLink(int ctx, int lnk, bool rflg, bool cflg) {
  *  @param ctx is number of table entry to be modified
  *  @param cLnk is the number of the comtree link to removed
  */
-inline void ComtreeTable::removeLink(int ctx, int cLnk) {
+void ComtreeTable::removeLink(int ctx, int cLnk) {
         if (!validComtIndex(ctx) || !validComtLink(cLnk)) return;
 
         tbl[ctx].comtLinks->erase(cLnk);
@@ -191,7 +191,7 @@ bool ComtreeTable::readEntry(istream& in) {
  *  number of the link leading to the parent, a queue number, a queue quantum,
  *  and three comma-separated lists of links.
  */
-bool ComtreeTable::readTable(istream& in) {
+bool ComtreeTable::read(istream& in) {
 	int num;
 	Misc::skipBlank(in);
 	if (!Misc::readNum(in,num)) return false;
@@ -226,7 +226,7 @@ void ComtreeTable::writeEntry(ostream& out, int ctx) const {
 
 /** Output human readable representation of comtree table.
  */
-void ComtreeTable::writeTable(ostream& out) const {
+void ComtreeTable::write(ostream& out) const {
 	out << comtMap->size() << endl;
 	out << "# comtree  coreFlag  pLink  links"
 	    << "            coreLinks" << endl;
