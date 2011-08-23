@@ -49,7 +49,7 @@ public:
 	int	getPlink(int) const;
 	int	getLinkCount(int) const;
 	int	getComtLink(int, int) const;
-	int	getPCLnk(int) const;
+	int	getPCLink(int) const;
 	int	getLinkQ(int) const;
 	int	getDest(int) const;
 	int	getInBitRate(int) const;
@@ -208,10 +208,10 @@ inline int ComtreeTable::getComtLink(int comt, int lnk) const {
 	return clMap->getId(key(comt,lnk));
 }
 
-inline int ComtreeTable::getPCLnk(int ctx) const { return tbl[ctx].pCLnk; }
+inline int ComtreeTable::getPCLink(int ctx) const { return tbl[ctx].pCLnk; }
 
 inline int ComtreeTable::getLink(int cLnk) const {
-	return clTbl[cLnk].lnk;
+	return (cLnk != 0 ? clTbl[cLnk].lnk : 0);
 }
 
 inline int ComtreeTable::getLinkQ(int cLnk) const {
@@ -258,7 +258,12 @@ inline set<int>& ComtreeTable::getCoreLinks(int ctx) const {
  */
 inline void ComtreeTable::setPlink(int ctx, int plink) {
 	if (!validComtIndex(ctx)) return;
+	if (plink == 0) {
+		tbl[ctx].plnk = 0; tbl[ctx].pCLnk = 0;
+		return;
+	}
 	int cLnk = clMap->getId(key(tbl[ctx].comt,plink));
+	if (!validComtLink(cLnk)) return;
 	if (!isRtrLink(ctx,plink)) return;
 	tbl[ctx].plnk = plink; tbl[ctx].pCLnk =cLnk;
 }

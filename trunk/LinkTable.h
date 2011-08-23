@@ -38,8 +38,10 @@ public:
 	fAdr_t 	getPeerAdr(int) const;	
 	int	getBitRate(int) const;	
 	int	getPktRate(int) const;	
-	int	getAvailBitRate(int) const;	
-	int	getAvailPktRate(int) const;	
+	int	getAvailInBitRate(int) const;	
+	int	getAvailInPktRate(int) const;	
+	int	getAvailOutBitRate(int) const;	
+	int	getAvailOutPktRate(int) const;	
 
 	// modifiers
 	int	addEntry(int,ipa_t,ipp_t);
@@ -50,10 +52,14 @@ public:
 	void	setPeerAdr(int, fAdr_t);	
 	void	setBitRate(int, int);	
 	void	setPktRate(int, int);	
-	bool	setAvailBitRate(int, int);	
-	bool	setAvailPktRate(int, int);	
-	bool	addAvailBitRate(int, int);	
-	bool	addAvailPktRate(int, int);	
+	bool	setAvailInBitRate(int, int);	
+	bool	setAvailInPktRate(int, int);	
+	bool	setAvailOutBitRate(int, int);	
+	bool	setAvailOutPktRate(int, int);	
+	bool	addAvailInBitRate(int, int);	
+	bool	addAvailInPktRate(int, int);	
+	bool	addAvailOutBitRate(int, int);	
+	bool	addAvailOutPktRate(int, int);	
 
 	// io routines
 	bool read(istream&);
@@ -70,8 +76,10 @@ private:
 	fAdr_t	peerAdr;		///< peer's forest address
 	int	bitRate;		///< max bit rate of link (MAC level)
 	int	pktRate;		///< maximum packet rate of link
-	int	avBitRate;		///< available bit rate of link
-	int	avPktRate;		///< available packet rate of link
+	int	avInBitRate;		///< available input bit rate of link
+	int	avInPktRate;		///< available input packet rate
+	int	avOutBitRate;		///< available output bit rate
+	int	avOutPktRate;		///< available output packet rate
 	};
 	LinkInfo *lnkTbl;		///< lnkTbl[i] is link info for link i
 	UiSetPair *links;		///< sets for in-use and unused links
@@ -101,11 +109,18 @@ inline ntyp_t LinkTable::getPeerType(int i) const { return lnkTbl[i].peerType; }
 inline fAdr_t LinkTable::getPeerAdr(int i) const { return lnkTbl[i].peerAdr; }
 inline int LinkTable::getBitRate(int i) const { return lnkTbl[i].bitRate; }
 inline int LinkTable::getPktRate(int i) const { return lnkTbl[i].pktRate; }
-inline int LinkTable::getAvailBitRate(int i) const {
-	return lnkTbl[i].avBitRate;
+
+inline int LinkTable::getAvailInBitRate(int i) const {
+	return lnkTbl[i].avInBitRate;
 }
-inline int LinkTable::getAvailPktRate(int i) const {
-	return lnkTbl[i].avPktRate;
+inline int LinkTable::getAvailInPktRate(int i) const {
+	return lnkTbl[i].avInPktRate;
+}
+inline int LinkTable::getAvailOutBitRate(int i) const {
+	return lnkTbl[i].avOutBitRate;
+}
+inline int LinkTable::getAvailOutPktRate(int i) const {
+	return lnkTbl[i].avOutPktRate;
 }
 
 // setters
@@ -114,26 +129,49 @@ inline void LinkTable::setPeerType(int i, ntyp_t nt) { lnkTbl[i].peerType =nt; }
 inline void LinkTable::setPeerAdr(int i, fAdr_t adr) { lnkTbl[i].peerAdr =adr; }
 inline void LinkTable::setBitRate(int i, int br) { lnkTbl[i].bitRate = br; }
 inline void LinkTable::setPktRate(int i, int pr) { lnkTbl[i].pktRate = pr; }
-inline bool LinkTable::setAvailBitRate(int i, int br) {
+
+inline bool LinkTable::setAvailInBitRate(int i, int br) {
 	if (br > lnkTbl[i].bitRate) return false;
-	lnkTbl[i].avBitRate = max(0,br);
+	lnkTbl[i].avInBitRate = max(0,br);
 	return true;
 }
-inline bool LinkTable::setAvailPktRate(int i, int pr) {
+inline bool LinkTable::setAvailInPktRate(int i, int pr) {
 	if (pr > lnkTbl[i].pktRate) return false;
-	lnkTbl[i].avPktRate = max(0,pr);
+	lnkTbl[i].avInPktRate = max(0,pr);
 	return true;
 }
-inline bool LinkTable::addAvailBitRate(int i, int br) {
-	int s = br + lnkTbl[i].avBitRate;
+inline bool LinkTable::setAvailOutBitRate(int i, int br) {
+	if (br > lnkTbl[i].bitRate) return false;
+	lnkTbl[i].avOutBitRate = max(0,br);
+	return true;
+}
+inline bool LinkTable::setAvailOutPktRate(int i, int pr) {
+	if (pr > lnkTbl[i].pktRate) return false;
+	lnkTbl[i].avOutPktRate = max(0,pr);
+	return true;
+}
+inline bool LinkTable::addAvailInBitRate(int i, int br) {
+	int s = br + lnkTbl[i].avInBitRate;
 	if (s > lnkTbl[i].bitRate) return false;
-	lnkTbl[i].avBitRate = max(0,s);
+	lnkTbl[i].avInBitRate = max(0,s);
 	return true;
 }
-inline bool LinkTable::addAvailPktRate(int i, int pr) {
-	int s = pr + lnkTbl[i].avPktRate;
+inline bool LinkTable::addAvailInPktRate(int i, int pr) {
+	int s = pr + lnkTbl[i].avInPktRate;
 	if (s > lnkTbl[i].pktRate) return false;
-	lnkTbl[i].avPktRate = max(0,s);
+	lnkTbl[i].avInPktRate = max(0,s);
+	return true;
+}
+inline bool LinkTable::addAvailOutBitRate(int i, int br) {
+	int s = br + lnkTbl[i].avOutBitRate;
+	if (s > lnkTbl[i].bitRate) return false;
+	lnkTbl[i].avOutBitRate = max(0,s);
+	return true;
+}
+inline bool LinkTable::addAvailOutPktRate(int i, int pr) {
+	int s = pr + lnkTbl[i].avOutPktRate;
+	if (s > lnkTbl[i].pktRate) return false;
+	lnkTbl[i].avOutPktRate = max(0,s);
 	return true;
 }
 

@@ -83,6 +83,8 @@ private:
 	StatsModule *sm;		///< class for recording statistics
 
 	// setup 
+	bool	checkTables();
+	bool	setAvailRates();
 	void	addLocalRoutes();
 
 	fAdr_t	allocLeafAdr();

@@ -121,37 +121,6 @@ main(int argc, char *argv[]) {
 	cout << endl;
 	router.dump(cout); 		// print final tables
 	cout << endl;
-
-
-/*
-
-	int finTime;
-	int ip0, ip1, ip2, ip3;
-	int lBound, uBound;
-	ipa_t ipadr; fAdr_t fAdr, nmAdr;
-	int numData = 0;
-	if (argc < 12 || argc > 13 ||
-	    (fAdr = Forest::forestAdr(argv[1])) == 0 ||
-	    (ipadr = Np4d::ipAddress(argv[2])) == 0 ||
-	    sscanf(argv[8],"%d", &lBound) != 1 ||
-	    sscanf(argv[9],"%d", &uBound) != 1 ||
-	    sscanf(argv[10],"%d", &finTime) != 1 ||
-	    (nmAdr = Forest::forestAdr(argv[11])) == 0 ||
-	    (argc == 13 && sscanf(argv[12],"%d",&numData) != 1)) {
-		fatal("usage: fRouter fAdr ifTbl lnkTbl comtTbl "
-		      "rtxTbl stats finTime");
-	}
-
-	RouterCore router(fAdr,ipadr,nmAdr,lBound,uBound);
-	if (!router.init(argv[3],argv[4],argv[5],argv[6],argv[7])) {
-		fatal("router: fRouter::init() failed");
-	}
-	router.dump(cout); 		// print tables
-	router.run(1000000*finTime,numData);
-	cout << endl;
-	router.dump(cout); 		// print final tables
-	cout << endl;
-*/
 }
 
 
@@ -239,8 +208,208 @@ bool RouterCore::init(const ArgInfo& args) {
 		fs.close();
 	}
 
+	if (!checkTables()) return false;
+	if (!setAvailRates()) return false;
 	addLocalRoutes();
 	return true;
+}
+
+/** Check all router tables for mutual consistency.
+ *  Sends error messages to cerr if inconsistencies are found.
+ *  This does not verify the consistency of interface, link and comtree rates.
+ *  That is left to the setAvailRates() method.
+ *  @return true on success, false on failure
+ */
+bool RouterCore::checkTables() {
+	bool success = true;
+
+	// verify that the default interface is valid and
+	// that each interface has a non-zero IP address
+	if (!ift->valid(ift->getDefaultIface())) {
+		cerr << "RouterCore::checkTables: specified default iface "
+		     << ift->getDefaultIface() << " is invalid\n";
+		success = false;
+	}
+	int iface;
+	for (iface = ift->firstIface(); iface != 0;
+	     iface = ift->nextIface(iface)) {
+		if (ift->getIpAdr(iface) == 0) {
+			cerr << "RouterCore::checkTables: interface "
+			     << iface << " has zero for IP address\n";
+			success = false;
+		}
+	}
+
+	// verify that each link is assigned to a valid interface
+	// that the peer Ip address and port are non-zero and consistent,
+	// the the peer type is valid and that the peer address is a valid
+	// unicast forest address
+	int lnk;
+	for (lnk = lt->firstLink(); lnk != 0; lnk = lt->nextLink(lnk)) {
+		iface = lt->getIface(lnk);
+		if (!ift->valid(iface)) {
+			cerr << "RouterCore::checkTables: interface " << iface
+			     << " for link " << lnk << " is not valid\n";
+			success = false;
+		}
+		if (lt->getPeerIpAdr(lnk) == 0) {
+			cerr << "RouterCore::checkTables: invalid peer IP "
+			     << "for link " << lnk << endl;
+			success = false;
+		}
+		if (!Forest::validUcastAdr(lt->getPeerAdr(lnk))) {
+			cerr << "RouterCore::checkTables: invalid peer address "
+			     << "for link " << lnk << endl;
+			success = false;
+		}
+	}
+
+	// verify that the links in each comtree are valid,
+	// that the router links and core links refer to peer routers,
+	// and that each comtree link is consistent
+	int ctx;
+	for (ctx = ctt->firstComtIndex(); ctx != 0;
+	     ctx = ctt->nextComtIndex(ctx)) {
+		int comt = ctt->getComtree(ctx);
+		int plnk = ctt->getPlink(ctx);
+		int pcLnk = ctt->getPCLink(ctx);
+		if (plnk != ctt->getLink(pcLnk)) {
+			cerr << "RouterCore::checkTables: parent link "
+			     <<  plnk << " not consistent with pcLnk\n";
+			success = false;
+		}
+		if (ctt->inCore(ctx) && plnk != 0 && !ctt->isCoreLink(pcLnk)) {
+			cerr << "RouterCore::checkTables: parent link "
+			     <<  plnk << " of core node does not lead to "
+			     << "another core node\n";
+			success = false;
+		}
+		set<int>& links = ctt->getLinks(ctx);
+		set<int>::iterator p;
+		for (p = links.begin(); p != links.end(); p++) {
+			int cLnk = *p; int lnk = ctt->getLink(cLnk);
+			if (!lt->valid(lnk)) {
+				cerr << "RouterCore::checkTables: link "
+				     << lnk << " in comtree " << comt
+				     << " not in link table" << endl;
+				success = false;
+				continue;
+			}
+			fAdr_t dest = ctt->getDest(cLnk);
+			if (dest != 0 && !Forest::validUcastAdr(dest)) {
+				cerr << "RouterCore::checkTables: dest addr "
+				     << "for " << lnk << " in comtree " << comt
+				     << " is not valid" << endl;
+				success = false;
+			}
+			int qid = ctt->getLinkQ(cLnk);
+			if (qid == 0) {
+				cerr << "RouterCore::checkTables: queue id "
+				     << "for " << lnk << " in comtree " << comt
+				     << " is zero" << endl;
+				success = false;
+			}
+		}
+		if (!success) break;
+		set<int>& rtrLinks = ctt->getRtrLinks(ctx);
+		for (p = rtrLinks.begin(); p != rtrLinks.end(); p++) {
+			int cLnk = *p; int lnk = ctt->getLink(cLnk);
+			if (!ctt->isLink(ctx,lnk)) {
+				cerr << "RouterCore::checkTables: router link "
+				     << lnk << " is not valid in comtree "
+				     << comt << endl;
+				success = false;
+			}
+			if (!lt->getPeerType(lnk) != ROUTER) {
+				cerr << "RouterCore::checkTables: router link "
+				     << lnk << " in comtree " << comt 
+				     << " connects to non-router peer\n";
+				success = false;
+			}
+		}
+		set<int>& coreLinks = ctt->getCoreLinks(ctx);
+		for (p = coreLinks.begin(); p != coreLinks.end(); p++) {
+			int cLnk = *p; int lnk = ctt->getLink(cLnk);
+			if (!ctt->isRtrLink(ctx,lnk)) {
+				cerr << "RouterCore::checkTables: core link "
+				     << lnk << " is not a router link "
+				     << comt << endl;
+				success = false;
+			}
+		}
+	}
+	// come back later and add checks for route table
+}
+
+/** Set available rates for interfaces and links.
+ *  Sends error messages to cerr if specified rates lead to over-subscription.
+ *  @return true on success, false if specified rates oversubscribe
+ *  an interface or link
+ */
+bool RouterCore::setAvailRates() {
+	bool success = true;
+	int iface;
+	for (iface = ift->firstIface(); iface != 0;
+	     iface = ift->nextIface(iface)) {
+		if (ift->getMaxBitRate(iface) < Forest::MINBITRATE ||
+		    ift->getMaxBitRate(iface) > Forest::MAXBITRATE ||
+		    ift->getMaxPktRate(iface) < Forest::MINBITRATE ||
+		    ift->getMaxPktRate(iface) > Forest::MAXBITRATE) {
+			cerr << "RouterCore::setAvailRates: interface rates "
+				"outside allowed range\n";
+			success = false;
+		}
+		ift->setAvailBitRate(iface, ift->getMaxBitRate(iface));
+		ift->setAvailPktRate(iface, ift->getMaxPktRate(iface));
+	}
+	if (!success) return false;
+	int lnk;
+	for (lnk = lt->firstLink(); lnk != 0; lnk = lt->nextLink(lnk)) {
+		if (lt->getBitRate(lnk) < Forest::MINBITRATE ||
+		    lt->getBitRate(lnk) > Forest::MAXBITRATE ||
+		    lt->getPktRate(lnk) < Forest::MINBITRATE ||
+		    lt->getPktRate(lnk) > Forest::MAXBITRATE) {
+			cerr << "RouterCore::setAvailRates: link rates "
+				"outside allowed range\n";
+			success = false;
+		}
+		iface = lt->getIface(lnk);
+		if (!ift->addAvailBitRate(iface,-lt->getBitRate(lnk)) ||
+		    !ift->addAvailPktRate(iface,-lt->getPktRate(lnk))) {
+			cerr << "RouterCore::setAvailRates: oversubscribing "
+				"interface " << iface << endl;
+			success = false;
+		}
+		lt->setAvailInBitRate(lnk,lt->getBitRate(lnk));
+		lt->setAvailInPktRate(lnk,lt->getPktRate(lnk));
+		lt->setAvailOutBitRate(lnk,lt->getBitRate(lnk));
+		lt->setAvailOutPktRate(lnk,lt->getPktRate(lnk));
+	}
+	if (!success) return false;
+	int ctx;
+	for (ctx = ctt->firstComtIndex(); ctx != 0;
+	     ctx = ctt->nextComtIndex(ctx)) {
+		int comt = ctt->getComtree(ctx);
+		set<int>& comtLinks = ctt->getLinks(ctx);
+		set<int>::iterator p;
+		for (p = comtLinks.begin(); p != comtLinks.end(); p++) {
+			int cLnk = *p; int lnk = ctt->getLink(cLnk);
+			int ibr = ctt->getInBitRate(cLnk);
+			int ipr = ctt->getInPktRate(cLnk);
+			int obr = ctt->getOutBitRate(cLnk);
+			int opr = ctt->getOutPktRate(cLnk);
+			if (!lt->addAvailInBitRate(lnk,-ibr) ||
+			    !lt->addAvailInPktRate(lnk,-ipr) ||
+			    !lt->addAvailOutPktRate(lnk,-obr) ||
+			    !lt->addAvailOutPktRate(lnk,-opr)) {
+				cerr << "RouterCore::setAvailRates: "
+					"oversubscribing link "
+				     << lnk << endl;
+				success = false;
+			}
+		}
+	}
+	return success;
 }
 
 // Add routes for all directly attached hosts for all comtrees.
@@ -532,7 +701,7 @@ void RouterCore::multiSend(int p, int ctx, int rtx) {
 		}
 		// now copy for parent
 		if (pLink != 0 && pLink != inLink) {
-			qvec[n++] = ctt->getLinkQ(ctt->getPCLnk(ctx));
+			qvec[n++] = ctt->getLinkQ(ctt->getPCLink(ctx));
 		}
 		// now, copies for subscribers if any
 		if (rtx == 0) return;
@@ -662,7 +831,7 @@ void RouterCore::subUnsub(int p, int ctx) {
 	// propagate subscription packet to parent if not a core node
 	if (propagate && !ctt->inCore(ctx) && ctt->getPlink(ctx) != 0) {
 		ps->payErrUpdate(p);
-		int qid = ctt->getLinkQ(ctt->getPCLnk(ctx));
+		int qid = ctt->getLinkQ(ctt->getPCLink(ctx));
 		if (qm->enq(p,qid,now)) return;
 	}
 	ps->free(p); return;
