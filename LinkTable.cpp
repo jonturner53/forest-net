@@ -38,8 +38,10 @@ int LinkTable::addEntry(int lnk, ipa_t peerIp, ipp_t peerPort) {
 	setPeerAdr(lnk,0); setPeerType(lnk,UNDEF_NODE);
 	setBitRate(lnk,Forest::MINBITRATE);
 	setPktRate(lnk,Forest::MINPKTRATE);
-	setAvailBitRate(lnk,Forest::MINBITRATE);
-	setAvailPktRate(lnk,Forest::MINPKTRATE);
+	setAvailInBitRate(lnk,Forest::MINBITRATE);
+	setAvailInPktRate(lnk,Forest::MINPKTRATE);
+	setAvailOutBitRate(lnk,Forest::MINBITRATE);
+	setAvailOutPktRate(lnk,Forest::MINPKTRATE);
         return lnk;
 }
 
