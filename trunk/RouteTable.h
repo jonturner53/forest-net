@@ -42,7 +42,7 @@ public:
 	comt_t	getComtree(int) const;
 	fAdr_t	getAddress(int) const;	
 	int 	getLink(int) const; 		
-	set<int>& getRteLinks(int) const;
+	set<int>& getSubLinks(int) const;
 
 	// modifiers
 	int	addEntry(comt_t,fAdr_t,int);
@@ -100,6 +100,14 @@ inline bool RouteTable::noLinks(int rtx) const {
 	return tbl[rtx].links->size() == 0;
 }
 
+inline int RouteTable::firstRteIndex() const {
+	return rteMap->firstId();
+}
+
+inline int RouteTable::nextRteIndex(int rtx) const {
+	return rteMap->nextId(rtx);
+}
+
 // Perform a lookup in the routing table. Comt is the comtree number,
 // adr is the destination address. Returned value is the index
 // of the table entry, or 0 if there is no match. 
@@ -121,7 +129,7 @@ inline int RouteTable::getLink(int rtx) const {
 	return tbl[rtx].lnk;
 }
 
-inline set<int>& RouteTable::getRteLinks(int rtx) const {
+inline set<int>& RouteTable::getSubLinks(int rtx) const {
 	return *tbl[rtx].links;
 }
 	

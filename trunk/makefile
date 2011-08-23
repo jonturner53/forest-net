@@ -5,7 +5,7 @@ LIBS = lib support/lib
 %.o: %.cpp %.h stdinc.h
 	${CXX} ${CXXFLAGS} -c $<
 
-LIBFILES = CommonDefs.o IoProcessor.o LinkTable.o ComtreeTable.o \
+LIBFILES = CommonDefs.o IoProcessor.o IfaceTable.o LinkTable.o ComtreeTable.o \
 	   RouteTable.o StatsModule.o CpAttr.o CpType.o CtlPkt.o \
 	   QuManager.o PacketHeader.o PacketStore.o  NetInfo.o \
 	   ComtreeController_NetInfo.o

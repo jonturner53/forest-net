@@ -24,13 +24,33 @@
 #include "IoProcessor.h"
 #include "StatsModule.h"
 
+struct ArgInfo {
+        string  mode;
+
+        fAdr_t  myAdr;
+        ipa_t   myIp;
+        fAdr_t  nmAdr;
+        ipa_t   nmIp;
+        fAdr_t  ccAdr;
+        fAdr_t  firstLeafAdr;
+        fAdr_t  lastLeafAdr;
+
+        string  ifTbl;
+        string  lnkTbl;
+        string  comtTbl;
+        string  rteTbl;
+        string  statSpec;
+
+        int     finTime;
+};
+
 class RouterCore {
 public:
-		RouterCore(fAdr_t,ipa_t,fAdr_t,int,int);
+		RouterCore(const ArgInfo&);
 		~RouterCore();
 
-	bool	init(char*,char*,char*,char*,char*);
-	void	run(uint32_t,int);
+	bool	init(const ArgInfo&);
+	void	run(uint64_t);
 	void	dump(ostream& os);
 private:
 	ipa_t	myIp;			///< IP address of this router
@@ -45,6 +65,7 @@ private:
 	UiSetPair *leafAdr;		///< offsets for in-use and free leaf
 					///< addresses
 
+	int	nIfaces;		///< max number of interfaces
 	int	nLnks;			///< max number of links
 	int	nComts;			///< max number of comtrees
 	int	nRts;			///< max number of routes
@@ -64,8 +85,10 @@ private:
 	// setup 
 	void	addLocalRoutes();
 
-	fadr_t	allocCliAdr();
-	void	freeCliAdr(fadr_t);
+	fAdr_t	allocLeafAdr();
+	void	freeLeafAdr(fAdr_t);
+	bool	validLeafAdr(fAdr_t) const;
+	bool	isFreeLeafAdr(fAdr_t) const;
 
 	// basic forwarding 
 	void 	forward(int,int);
@@ -83,18 +106,29 @@ private:
 	void	returnToSender(packet,int);
 };
 
-inline fadr_t RouterCore::allocLeafAdr() {
+inline fAdr_t RouterCore::allocLeafAdr() {
 	int offset = leafAdr->firstOut();
 	if (offset == 0) return 0;
 	leafAdr->swap(offset);
 	return firstLeafAdr + offset - 1;
 }
 
-inline void RouterCore::freeLeafAdr(fadr_t adr) {
+inline void RouterCore::freeLeafAdr(fAdr_t adr) {
 	int offset = (adr - firstLeafAdr) + 1;
 	if (!leafAdr->isIn(offset)) return;
 	leafAdr->swap(offset);
 	return;
+}
+
+
+inline bool RouterCore::validLeafAdr(fAdr_t adr) const {
+	int offset = (adr - firstLeafAdr) + 1;
+	return leafAdr->isIn(offset);
+}
+
+inline bool RouterCore::isFreeLeafAdr(fAdr_t adr) const {
+	int offset = (adr - firstLeafAdr) + 1;
+	return leafAdr->isOut(offset);
 }
 
 #endif

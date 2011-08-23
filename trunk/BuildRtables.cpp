@@ -12,6 +12,8 @@
 #include "stdinc.h"
 #include "CommonDefs.h"
 #include "NetInfo.h"
+#include "IfaceTable.h"
+#include "QuManager.h"
 #include "LinkTable.h"
 #include "ComtreeTable.h"
 
@@ -25,19 +27,16 @@
  *  will be written in files foo/ift, foo/lt and foo/ctt.
  */
 
-bool writeIfaceTable(int, const NetInfo&, ostream&);
+bool buildIfaceTable(int, const NetInfo&, IfaceTable&);
 bool buildLinkTable(int, const NetInfo&, LinkTable&);
 bool buildComtTable(int, const NetInfo&, ComtreeTable&);
 
 main() {
-	int maxNode = 100000; int maxLink = 200000;
+	int maxNode = 100000; int maxLink = 10000;
 	int maxRtr = 5000; int maxCtl = 200;
-	int maxComtree = 100000;
+	int maxComtree = 10000;
 
         NetInfo net(maxNode, maxLink, maxRtr, maxCtl, maxComtree);
-
-	// dummy data structure needed for comtree table below
-	QuManager qm(Forest::MAXLNK, 1000, 1000, 10000, 0, 0);
 
 	if (!net.read(cin)) {
 		cerr << "buildTables: cannot read network information\n";
@@ -45,22 +44,23 @@ main() {
 	}
 
 	for (int r = net.firstRouter(); r != 0; r = net.nextRouter(r)) {
-		// write interface table for r
 		string s;
 		string& rName = net.getNodeName(r,s);
 
+		// build and write interface table for r
+		IfaceTable *ifTbl = new IfaceTable(Forest::MAXINTF);
+		if (!buildIfaceTable(r, net, *ifTbl)) {
+			cerr << "buildTables: could not build interface table "
+			     << "for router " << r << endl;
+			exit(1);
+		}
 		string iftName = rName + "/ift";
 		ofstream ifts; ifts.open(iftName.c_str());
 		if (ifts.fail()) {
 			cerr << "buildTables:: can't open interface table\n";
 			exit(1);
 		}
-		if (!writeIfaceTable(r, net, ifts)) {
-			cerr << "buildTables: could not write iface table "
-			     << "for router " << r << endl;
-			exit(1);
-		}
-		ifts.close();
+		ifTbl->write(ifts); ifts.close();
 
 		// build and write link table for r
 		LinkTable *lnkTbl = new LinkTable(Forest::MAXLNK);
@@ -78,9 +78,8 @@ main() {
 		lnkTbl->write(lts); lts.close();
 
 		// build and write comtree table for r
-		ComtreeTable *comtTbl = new ComtreeTable(maxComtree,
-				        Forest::forestAdr(1,2),lnkTbl,
-					(QuManager *) &qm);
+		ComtreeTable *comtTbl = new ComtreeTable(10*Forest::MAXLNK,
+					20*Forest::MAXLNK,lnkTbl);
 		if (!buildComtTable(r, net, *comtTbl)) {
 			cerr << "buildTables: could not build comtree table "
 			     << "for router " << r << endl;
@@ -92,31 +91,19 @@ main() {
 			cerr << "buildTables:: can't open comtree table\n";
 			exit(1);
 		}
-		comtTbl->writeTable(ctts); ctts.close();
+		comtTbl->write(ctts); ctts.close();
 
 		delete lnkTbl; delete comtTbl;
 	}
 }
 
-bool writeIfaceTable(int r, const NetInfo& net, ostream& out) {
-	if (!net.isRouter(r)) {
-		cerr << "writeIfaceTable: invalid router number " << r << endl;
-		return false;
-	}
-
-	int num = 0;
-	for (int i = 1; i <= net.getNumIf(r); i++)
-		if (net.validIf(r,i)) num++; 
-
-	out << num << endl;
-	out << "# iface       ifaceIp     bitRate  pktRate\n";
+bool buildIfaceTable(int r, const NetInfo& net, IfaceTable& ift) {
 	for (int i = 1; i <= net.getNumIf(r); i++) {
 		if (!net.validIf(r,i)) continue;
-		string s;
-		out << setw(5) << i << "   " << setw(16) 
-		    << Np4d::ip2string(net.getIfIpAdr(r,i),s)
-		    << setw(9) << net.getIfBitRate(r,i)
-		    << setw(9) << net.getIfPktRate(r,i) << endl;
+		ift.addEntry(i,	net.getIfIpAdr(r,i),
+			     	net.getIfBitRate(r,i),
+				net.getIfPktRate(r,i)
+			    );
 	}
 }
 
@@ -149,9 +136,10 @@ bool buildLinkTable(int r, const NetInfo& net, LinkTable& lt) {
 		ipa_t peerIp = (net.getNodeType(peer) == ROUTER ?
 				net.getIfIpAdr(peer,peerIface) :
 				net.getLeafIpAdr(peer));
-		lt.addEntry(llnk, iface, net.getNodeType(peer),peerIp,
-			     net.getNodeAdr(peer));
-		lt.setPeerDest(llnk,0);
+		ipp_t peerPort = (net.getNodeType(peer) == ROUTER ?
+				  Forest::ROUTER_PORT : 0);
+		lt.addEntry(llnk, peerIp, peerPort);
+		lt.setPeerType(llnk,net.getNodeType(peer));
 		lt.setBitRate(llnk,net.getLinkBitRate(lnk));
 		lt.setPktRate(llnk,net.getLinkPktRate(lnk));
 	}
@@ -228,8 +216,6 @@ bool buildComtTable(int r, const NetInfo& net, ComtreeTable& comtTbl) {
 		}
 
 		comtTbl.setCoreFlag(ctte,net.isComtCoreNode(ctx,r));
-		comtTbl.setQnum(ctte,qnum++);
-		comtTbl.setQuant(ctte,100);
 
 		// find parent link by doing a tree-traversal from root
 		int plink = findParentLink(r,ctx,net);

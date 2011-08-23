@@ -107,7 +107,17 @@ inline int StatsModule::oByteCnt(int lnk) const {
 		(lnk == -1 ? rtrOutByte :
 		 (lnk == -2 ? leafOutByte : lnkCnts[lnk].outByte)));
 }
+inline int StatsModule::getQlen(int q) const {
+	return qCnts[q].pktLen;
+}
 
+inline int StatsModule::getQbytes(int q) const {
+	return qCnts[q].bytLen;
+}
+
+inline int StatsModule::getLinkQlen(int lnk) const {
+	return lnkCnts[lnk].numPkt;
+}
 
 inline void StatsModule::cntInLink(int lnk, int len, bool isRtr) {
 	if (1 <= lnk && lnk <= maxLnk) {

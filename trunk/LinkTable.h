@@ -31,24 +31,29 @@ public:
 
 	// access methods
 	int 	lookup(ipa_t, ipp_t) const;
-	int	getIface(int) const;	
 	ipa_t	getPeerIpAdr(int) const;	
 	ipp_t 	getPeerPort(int) const;	
+	int	getIface(int) const;	
 	ntyp_t	getPeerType(int) const;	
 	fAdr_t 	getPeerAdr(int) const;	
 	int	getBitRate(int) const;	
 	int	getPktRate(int) const;	
-	int	getNsPerByte(int) const;	
-	int	getMinDelta(int) const;	
-	int	getFreeLink() const;
+	int	getAvailBitRate(int) const;	
+	int	getAvailPktRate(int) const;	
 
 	// modifiers
-	bool	addEntry(int,int,ntyp_t,ipa_t,fAdr_t);
+	int	addEntry(int,ipa_t,ipp_t);
 	void	removeEntry(int);		
-	void 	setPeerPort(int, ipp_t);	
+	bool 	setPeerPort(int, ipp_t);	
+	void 	setIface(int, int);	
 	void	setPeerType(int, ntyp_t);	
+	void	setPeerAdr(int, fAdr_t);	
 	void	setBitRate(int, int);	
 	void	setPktRate(int, int);	
+	bool	setAvailBitRate(int, int);	
+	bool	setAvailPktRate(int, int);	
+	bool	addAvailBitRate(int, int);	
+	bool	addAvailPktRate(int, int);	
 
 	// io routines
 	bool read(istream&);
@@ -65,6 +70,8 @@ private:
 	fAdr_t	peerAdr;		///< peer's forest address
 	int	bitRate;		///< max bit rate of link (MAC level)
 	int	pktRate;		///< maximum packet rate of link
+	int	avBitRate;		///< available bit rate of link
+	int	avPktRate;		///< available packet rate of link
 	};
 	LinkInfo *lnkTbl;		///< lnkTbl[i] is link info for link i
 	UiSetPair *links;		///< sets for in-use and unused links
@@ -78,21 +85,57 @@ private:
 
 inline bool LinkTable::valid(int i) const { return links->isIn(i); }
 
-/** getters */
-inline int LinkTable::getIface(int i) const { return lnkTbl[i].iface; }
+inline int LinkTable::firstLink() const {
+	return links->firstIn();
+}
+
+inline int LinkTable::nextLink(int lnk) const {
+	return links->nextIn(lnk);
+}
+
+// getters
 inline ipa_t LinkTable::getPeerIpAdr(int i) const { return lnkTbl[i].peerIp; }
 inline ipp_t LinkTable::getPeerPort(int i) const { return lnkTbl[i].peerPort; }
+inline int LinkTable::getIface(int i) const { return lnkTbl[i].iface; }
 inline ntyp_t LinkTable::getPeerType(int i) const { return lnkTbl[i].peerType; }
 inline fAdr_t LinkTable::getPeerAdr(int i) const { return lnkTbl[i].peerAdr; }
 inline int LinkTable::getBitRate(int i) const { return lnkTbl[i].bitRate; }
 inline int LinkTable::getPktRate(int i) const { return lnkTbl[i].pktRate; }
-inline int LinkTable::getFreeLink() const { return links->firstOut(); }
+inline int LinkTable::getAvailBitRate(int i) const {
+	return lnkTbl[i].avBitRate;
+}
+inline int LinkTable::getAvailPktRate(int i) const {
+	return lnkTbl[i].avPktRate;
+}
 
-/** setters */
-inline void LinkTable::setPeerPort(int i, ipp_t pp) { lnkTbl[i].peerPort = pp; }
-inline void LinkTable::setPeerType(int i, ntyp_t nt) { lnkTbl[i].peerType = nt; }
+// setters
+inline void LinkTable::setIface(int i, int iface) { lnkTbl[i].iface = iface; }
+inline void LinkTable::setPeerType(int i, ntyp_t nt) { lnkTbl[i].peerType =nt; }
+inline void LinkTable::setPeerAdr(int i, fAdr_t adr) { lnkTbl[i].peerAdr =adr; }
 inline void LinkTable::setBitRate(int i, int br) { lnkTbl[i].bitRate = br; }
 inline void LinkTable::setPktRate(int i, int pr) { lnkTbl[i].pktRate = pr; }
+inline bool LinkTable::setAvailBitRate(int i, int br) {
+	if (br > lnkTbl[i].bitRate) return false;
+	lnkTbl[i].avBitRate = max(0,br);
+	return true;
+}
+inline bool LinkTable::setAvailPktRate(int i, int pr) {
+	if (pr > lnkTbl[i].pktRate) return false;
+	lnkTbl[i].avPktRate = max(0,pr);
+	return true;
+}
+inline bool LinkTable::addAvailBitRate(int i, int br) {
+	int s = br + lnkTbl[i].avBitRate;
+	if (s > lnkTbl[i].bitRate) return false;
+	lnkTbl[i].avBitRate = max(0,s);
+	return true;
+}
+inline bool LinkTable::addAvailPktRate(int i, int pr) {
+	int s = pr + lnkTbl[i].avPktRate;
+	if (s > lnkTbl[i].pktRate) return false;
+	lnkTbl[i].avPktRate = max(0,s);
+	return true;
+}
 
 
 /** Compute key for hash lookup
@@ -106,13 +149,7 @@ inline uint64_t LinkTable::hashkey(ipa_t ipa, ipp_t ipp) const {
  *  @return the link number that matches h or 0 if none match
  */
 inline int LinkTable::lookup(ipa_t ipa, ipp_t ipp) const {
-	bool rtrLink = (ipp == Forest::ROUTER_PORT);
-        int lnk = ht->lookup(hashkey(ipa,ipp));
-	if (lnk == 0) return 0;
-	if (( rtrLink && lnkTbl[lnk].peerType != ROUTER) ||
-	    (!rtrLink && lnkTbl[lnk].peerType == ROUTER))
-		return 0;
-	return lnk;
+        return ht->lookup(hashkey(ipa,ipp));
 }
 
 #endif

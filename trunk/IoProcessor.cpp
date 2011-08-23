@@ -20,14 +20,14 @@ IoProcessor::IoProcessor(int maxIface1, IfaceTable *ift1, LinkTable *lt1,
 
 IoProcessor::~IoProcessor() {
 	int iface;
-	for (iface = ift->firstIface(); iface != 0; iface=ift->nextIface(iface))
+	for (iface = ift->firstIface(); iface != 0;
+	     iface = ift->nextIface(iface))
 		close(sock[iface]);
 	delete sockets;
 }
 
 // Setup an interface. Return true on success, false on failure.
 bool IoProcessor::setup(int i) {
-
 	// create datagram socket
 	sock[i]= Np4d::datagramSocket();
 	if (sock[i] < 0) {
@@ -94,16 +94,18 @@ int IoProcessor::receive() {
 	ps->unpack(p);
         if (!ps->hdrErrCheck(p)) { ps->free(p); return 0; }
 	lnk = lt->lookup(sIpAdr, sPort);
+	if (lnk == 0 && h.getPtype() == CONNECT)
+		lnk = lt->lookup(sIpAdr, 0); // check for "startup" entry
         if (lnk == 0 || cIf != lt->getIface(lnk) ||
-	    sPort != lt->getPeerPort(lnk)) {
+	    (sPort == Forest::ROUTER_PORT && lt->getPeerType(lnk) != ROUTER) ||
+	    (sPort != Forest::ROUTER_PORT && lt->getPeerType(lnk) == ROUTER)) {
 		ps->free(p); return 0;
 	}
         
         h.setInLink(lnk); h.setIoBytes(nbytes);
         h.setTunSrcIp(sIpAdr); h.setTunSrcPort(sPort);
 
-	bool rtrLink = (lt->getPeerType(lnk) == ROUTER);
-        sm->cntInLink(lnk,nbytes,rtrLink);
+        sm->cntInLink(lnk,nbytes, (lt->getPeerType(lnk) == ROUTER));
 
         return p;
 }
@@ -127,7 +129,6 @@ void IoProcessor::send(int p, int lnk) {
 		     << errno << ")\n";
 		exit(1);
 	}
-	bool rtrLink = (lt->getPeerType(lnk) == ROUTER);
-	sm->cntOutLink(lnk,length,rtrLink);
+	sm->cntOutLink(lnk,length, (lt->getPeerType(lnk) == ROUTER));
 	ps->free(p);
 }

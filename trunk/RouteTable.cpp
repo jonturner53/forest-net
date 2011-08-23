@@ -124,9 +124,9 @@ void RouteTable::writeEntry(ostream& out, int rtx) const {
 	   	out << Forest::fAdr2string(adr,s) << " ";
 		if (noLinks(rtx)) { out << "-\n"; return; }
 		bool first = true;
-		set<int>& rteLinks = getRteLinks(rtx);
+		set<int>& subLinks = getSubLinks(rtx);
 		set<int>::iterator p;
-		for (p = rteLinks.begin(); p != rteLinks.end(); p++) {
+		for (p = subLinks.begin(); p != subLinks.end(); p++) {
 			if (first) first = false;
 			else out << ",";
 			out << ctt->getLink(*p);

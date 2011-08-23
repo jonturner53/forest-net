@@ -51,6 +51,7 @@ public:
 	int	getComtLink(int, int) const;
 	int	getPCLnk(int) const;
 	int	getLinkQ(int) const;
+	int	getDest(int) const;
 	int	getInBitRate(int) const;
 	int	getInPktRate(int) const;
 	int	getOutBitRate(int) const;
@@ -73,8 +74,8 @@ public:
 	void	setOutPktRate(int, int);
 
 	// input/output of table contents 
-	bool 	readTable(istream&);
-	void	writeTable(ostream&) const;
+	bool 	read(istream&);
+	void	write(ostream&) const;
 private:
 	int	maxCtx;			///< largest comtree index
 	int	maxComtLink;		///< largest comtLink
@@ -94,6 +95,7 @@ private:
 	struct ComtLinkInfo {		
 	int	ctx;			///< index of comtree for this comtLink
 	int	lnk;			///< actual link # for this comtLink
+	fAdr_t	dest;			///< if non-zero, allowed dest address
 	int	qnum;			///< queue number used by comtree
 	int	inBitRate;		///< max incoming bit rate
 	int	inPktRate;		///< max incoming packet rate
@@ -113,6 +115,10 @@ private:
 	void	readLinks(istream&, set<int>&);	
 	void	writeLinks(ostream&,int) const;
 };
+
+inline bool ComtreeTable::validComtree(comt_t comt) const {
+	return comtMap->validKey(key(comt));
+}
 
 inline bool ComtreeTable::validComtIndex(int ctx) const {
 	return comtMap->validId(ctx);
@@ -210,6 +216,10 @@ inline int ComtreeTable::getLink(int cLnk) const {
 
 inline int ComtreeTable::getLinkQ(int cLnk) const {
 	return clTbl[cLnk].qnum;
+}
+
+inline int ComtreeTable::getDest(int cLnk) const {
+	return clTbl[cLnk].dest;
 }
 
 inline int ComtreeTable::getInBitRate(int cLnk) const {
