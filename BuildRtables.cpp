@@ -139,7 +139,9 @@ bool buildLinkTable(int r, const NetInfo& net, LinkTable& lt) {
 		ipp_t peerPort = (net.getNodeType(peer) == ROUTER ?
 				  Forest::ROUTER_PORT : 0);
 		lt.addEntry(llnk, peerIp, peerPort);
+		lt.setIface(llnk,iface);
 		lt.setPeerType(llnk,net.getNodeType(peer));
+		lt.setPeerAdr(llnk,net.getNodeAdr(peer));
 		lt.setBitRate(llnk,net.getLinkBitRate(lnk));
 		lt.setPktRate(llnk,net.getLinkPktRate(lnk));
 	}
@@ -217,11 +219,6 @@ bool buildComtTable(int r, const NetInfo& net, ComtreeTable& comtTbl) {
 
 		comtTbl.setCoreFlag(ctte,net.isComtCoreNode(ctx,r));
 
-		// find parent link by doing a tree-traversal from root
-		int plink = findParentLink(r,ctx,net);
-		if (plink < 0) return false;
-		comtTbl.setPlink(ctte,net.getLocLink(plink,r));
-
 		// add all comtree links incident to r and to the table entry
 		for (int lnk = net.firstLinkAt(r); lnk != 0;
 			 lnk = net.nextLinkAt(r,lnk)) {
@@ -231,6 +228,11 @@ bool buildComtTable(int r, const NetInfo& net, ComtreeTable& comtTbl) {
 			comtTbl.addLink(ctte,llnk,net.isRouter(peer),
 					net.isComtCoreNode(ctx,peer));
 		}
+
+		// find parent link by doing a tree-traversal from root
+		int plink = findParentLink(r,ctx,net);
+		if (plink < 0) return false;
+		comtTbl.setPlink(ctte,net.getLocLink(plink,r));
 	} 
 	return true;
 }

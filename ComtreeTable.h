@@ -16,10 +16,15 @@
 
 /** Class that implements a table of information on comtrees.
  *
- *  Provides a lookup method that uses a hash table to
- *  map a comtree number to an "entry number".
- *  The entry number can then be used to access the fields in
- *  an individual entry.
+ *  Table entries are accessed using a "comtree index", which
+ *  can be obtained using the getComtIndex() method.
+ *
+ *  Information about the use of a link in a comtree can be
+ *  accessed using a comtree link number. For example, using
+ *  the comtree link number, you can get the qid of the that
+ *  is used for packets in a given comtree that a sent on
+ *  on the link. Comtree link numbers can be obtained using
+ *  the getComtLink() method.
  */
 class ComtreeTable {
 public:
@@ -116,22 +121,39 @@ private:
 	void	writeLinks(ostream&,int) const;
 };
 
+/** Determine if the table has an entry for a given comtree.
+ *  @param comt is a comtree number
+ *  @return true if table contains an entry for comt, else false.
+ */
 inline bool ComtreeTable::validComtree(comt_t comt) const {
 	return comtMap->validKey(key(comt));
 }
 
+/** Determine if a comtree index is being used in this table.
+ *  @param cts is a comtree index
+ *  @return true if the table contains an entry matching ctx, else false.
+ */
 inline bool ComtreeTable::validComtIndex(int ctx) const {
 	return comtMap->validId(ctx);
 }
 
+/** Determine if a comtree link number is in use in this table.
+ *  @param cLnk is a comtree link number
+ *  @return true if cLnk is a valid comtree link number for this table,
+ *  else false
+ */
 inline bool ComtreeTable::validComtLink(int cLnk) const {
 	return clMap->validId(cLnk);
 }
 
+/** Determine if "this node" is in the core of the comtree.
+ *  @param ctx is a comtree index
+ *  @return true if the router is in the core, else false
+ */
 inline bool ComtreeTable::inCore(int ctx) const { return tbl[ctx].cFlag; }
 
 /** Determine if a given link is part of a given comtree.
- *  @param entry is the entry number
+ *  @param entry is the comtree index
  *  @param lnk is the link number
  *  @return true if the specified link is part of the comtree
  */
@@ -141,7 +163,7 @@ inline bool ComtreeTable::isLink(int ctx, int lnk) const {
 }
 
 /** Determine if a given link connects to another router.
- *  @param ctx is the entry number
+ *  @param ctx is the comtree index
  *  @param lnk is the link number
  *  @return true if the specified link connects to another router
  */
@@ -150,6 +172,10 @@ inline bool ComtreeTable::isRtrLink(int ctx, int lnk) const {
 	return isRtrLink(clMap->getId(key(tbl[ctx].comt,lnk)));
 }
 
+/** Determine if a given comtree link connects to another router.
+ *  @param cLnk is the comtree index
+ *  @return true if the specified link connects to another router
+ */
 inline bool ComtreeTable::isRtrLink(int cLnk) const {
 	if (cLnk == 0) return false;
 	set<int>& rl = *tbl[clTbl[cLnk].ctx].rtrLinks;
@@ -157,7 +183,7 @@ inline bool ComtreeTable::isRtrLink(int cLnk) const {
 }
 
 /** Determine if a given link connects to a core node.
- *  @param ctx is the entry number
+ *  @param ctx is the comtree index
  *  @param lnk is the link number
  *  @return true if the peer node for the link is in the comtree core
  */
@@ -166,6 +192,10 @@ inline bool ComtreeTable::isCoreLink(int ctx, int lnk) const {
 	return isCoreLink(clMap->getId(key(tbl[ctx].comt,lnk)));
 }
 
+/** Determine if a given comtree link connects to a core node.
+ *  @param cLnk is the comtree link number
+ *  @return true if the peer node for the link is in the comtree core
+ */
 inline bool ComtreeTable::isCoreLink(int cLnk) const {
 	if (cLnk == 0) return false;
 	set<int>& cl = *tbl[clTbl[cLnk].ctx].coreLinks;
@@ -193,7 +223,7 @@ inline int ComtreeTable::getComtIndex(comt_t comt) const {
 }
 
 /** Get the parent link for a given table entry.
- *  @param ctx is the entry number
+ *  @param ctx is the comtree index
  *  @return the link leading to the parent (in the comtree) of this router;
  *  returns 0 if the router is the root of the comtree
  */
@@ -252,7 +282,7 @@ inline set<int>& ComtreeTable::getCoreLinks(int ctx) const {
 
 
 /** Set the parent link for a given table entry.
- *  @param ctx is the entry number
+ *  @param ctx is the comtree index
  *  @param plink is the number of the link to this router's parent
  *  in the comtree
  */
@@ -269,7 +299,7 @@ inline void ComtreeTable::setPlink(int ctx, int plink) {
 }
 
 /** Set the core flag for a given table entry.
- *  @param ctx is the entry number
+ *  @param ctx is the comtree index
  *  @param f is the new value of the core flag for this entry
  */
 inline void ComtreeTable::setCoreFlag(int ctx, bool f) {

@@ -211,16 +211,22 @@ bool ComtreeTable::read(istream& in) {
 void ComtreeTable::writeEntry(ostream& out, int ctx) const {
 	out << setw(9) << getComtree(ctx) << " "  
 	   << setw(6) << inCore(ctx)
-	   << setw(8) << getPlink(ctx) << " ";
+	   << setw(8) << getPlink(ctx) << "    ";
 
 	set<int>& comtLinks = *tbl[ctx].comtLinks;
-	set<int>::iterator p;
-	for (p = comtLinks.begin(); p != comtLinks.end(); p++)
-		out << getLink(*p) << ", ";
+	set<int>::iterator p = comtLinks.begin();
+	while (p != comtLinks.end()) {
+		out << getLink(*p++);
+		if (p != comtLinks.end()) out << ",";
+	}
 
+	out << "   ";
 	set<int>& coreLinks = *tbl[ctx].coreLinks;
-	for (p = coreLinks.begin(); p != coreLinks.end(); p++)
-		out << getLink(*p) << ", ";
+	p = coreLinks.begin();
+	while (p != coreLinks.end()) {
+		out << getLink(*p++);
+		if (p != coreLinks.end()) out << ",";
+	}
 	out << endl;
 }
 

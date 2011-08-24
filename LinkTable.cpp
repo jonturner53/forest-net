@@ -162,6 +162,6 @@ void LinkTable::write(ostream& out) const {
 	out << links->getNumIn() << endl;
 	out << "# link  iface    peerIp:port     peerType  peerAdr   ";
         out << "  bitRate pktRate\n";
-	for (int i = firstLink(); i <= 0; i = nextLink(i)) 
+	for (int i = firstLink(); i != 0; i = nextLink(i)) 
 		writeEntry(out,i);
 }
