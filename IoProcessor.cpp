@@ -49,10 +49,8 @@ int IoProcessor::receive() {
 // Return next waiting packet or 0 if there is none. 
 	if (nRdy == 0) { // if no ready interface check for new arrivals
 		FD_ZERO(sockets);
-		for (int i = 1; i <= Forest::MAXINTF; i++) {
-			if (ift->valid(i)) {	
-				FD_SET(sock[i],sockets);
-			}
+		for (int i = ift->firstIface(); i != 0; i = ift->nextIface(i)) {
+			FD_SET(sock[i],sockets);
 		}
 		struct timeval zero; zero.tv_sec = zero.tv_usec = 0;
 		int cnt = 0;

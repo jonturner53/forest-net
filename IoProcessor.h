@@ -21,6 +21,8 @@ public:
 			    PacketStore*, StatsModule*);
 		~IoProcessor();
 
+	bool	setup(int);
+
 	int	receive();	
 	void	send(int,int);
 
@@ -37,8 +39,6 @@ private:
 	PacketStore *ps;		///< pointer to packet store
 	StatsModule *sm;		///< pointer to statistics module
 
-	// helper methods
-	bool	setup(int);
 };
 
 

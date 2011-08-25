@@ -131,6 +131,9 @@ inline void StatsModule::cntInLink(int lnk, int len, bool isRtr) {
 inline void StatsModule::cntOutLink(int lnk, int len, bool isRtr) {
 	if (1 <= lnk && lnk <= maxLnk) {
 		lnkCnts[lnk].outByte += len; lnkCnts[lnk].outPkt++;
+		totOutByte += len; totOutPkt++;
+		if (isRtr) { rtrOutByte += len; rtrOutPkt++; }
+		else	   { leafOutByte += len; leafOutPkt++; }
 	}
 }
 

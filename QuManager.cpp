@@ -69,6 +69,7 @@ int QuManager::allocQ(int lnk) {
 	int qid = free; free = quInfo[qid].lnk;
 	quInfo[qid].lnk = lnk;
 	quInfo[qid].pktLim = 0; // non-negative value for assigned queues
+	return qid;
 }
 
 /** Free a queue.
@@ -179,10 +180,14 @@ int QuManager::deq(int& lnk, uint64_t now) {
 	// update the time when lnk can send its next packet
 	uint64_t t = lnkInfo[lnk].nsPerByte; t *= pleng;
 	if (lnkInfo[lnk].minDelta > t) t = lnkInfo[lnk].minDelta;
-	t += active->key(qid);
+	t += active->key(lnk);
 
-	if (hset->empty(lnk)) { active->remove(qid); vactive->insert(qid,t); }
-	else 		    { active->changekey(qid,t); }
+	if (hset->empty(lnk)) {
+		active->remove(lnk);
+		vactive->insert(lnk,t);
+	} else {
+		active->changekey(lnk,t);
+	}
 
 	return p;
 }

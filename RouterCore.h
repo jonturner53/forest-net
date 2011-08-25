@@ -83,11 +83,15 @@ private:
 	StatsModule *sm;		///< class for recording statistics
 
 	// setup 
+	bool	setupIfaces();
+	bool	setupLeafAddresses();
+	bool	setupQueues();
 	bool	checkTables();
 	bool	setAvailRates();
 	void	addLocalRoutes();
 
 	fAdr_t	allocLeafAdr();
+	bool	allocLeafAdr(fAdr_t);
 	void	freeLeafAdr(fAdr_t);
 	bool	validLeafAdr(fAdr_t) const;
 	bool	isFreeLeafAdr(fAdr_t) const;
@@ -115,6 +119,13 @@ inline fAdr_t RouterCore::allocLeafAdr() {
 	return firstLeafAdr + offset - 1;
 }
 
+inline bool RouterCore::allocLeafAdr(fAdr_t adr) {
+	int offset = (adr - firstLeafAdr) + 1;
+	if (!leafAdr->isOut(offset)) return false;
+	leafAdr->swap(offset);
+	return true;
+}
+
 inline void RouterCore::freeLeafAdr(fAdr_t adr) {
 	int offset = (adr - firstLeafAdr) + 1;
 	if (!leafAdr->isIn(offset)) return;
@@ -125,7 +136,8 @@ inline void RouterCore::freeLeafAdr(fAdr_t adr) {
 
 inline bool RouterCore::validLeafAdr(fAdr_t adr) const {
 	int offset = (adr - firstLeafAdr) + 1;
-	return leafAdr->isIn(offset);
+	bool foo = leafAdr->isIn(offset);
+	return foo;
 }
 
 inline bool RouterCore::isFreeLeafAdr(fAdr_t adr) const {

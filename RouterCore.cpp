@@ -49,6 +49,7 @@ Two modes
 
 bool processArgs(int argc, char *argv[], ArgInfo& args) {
 	// set default values
+	args.mode = "local";
 	args.myAdr = args.myIp = args.nmAdr = args.nmIp = 0;
 	args.ccAdr = args.firstLeafAdr = args.lastLeafAdr = 0;
 	args.ifTbl = ""; args.lnkTbl = ""; args.comtTbl = "";
@@ -56,10 +57,12 @@ bool processArgs(int argc, char *argv[], ArgInfo& args) {
 	args.finTime = 0;
 
 	string s;
-	for (int i = 1; i <= argc; i++) {
+	for (int i = 1; i < argc; i++) {
 		s = argv[i];
-		if (s.compare(0,5,"mode=") == 0) {
-			args.mode = &argv[i][5];
+		if (s.compare(0,10,"mode=local") == 0) {
+			args.mode = "local";
+		} else if (s.compare(0,11,"mode=remote") == 0) {
+			args.mode = "remote";
 		} else if (s.compare(0,6,"myAdr=") == 0) {
 			args.myAdr = Forest::forestAdr(&argv[i][6]);
 		} else if (s.compare(0,5,"myIp=") == 0) {
@@ -96,6 +99,7 @@ bool processArgs(int argc, char *argv[], ArgInfo& args) {
 		cerr << "One of the required arguments (myAdr, firstLeafAdr "
 		     << "lastLeafAdr) is missing or lastLeafAdr<firstLeafAdr"
 		     << endl;
+		return false;
 	}
 	return true;
 }
@@ -117,7 +121,7 @@ main(int argc, char *argv[]) {
 		fatal("router: fRouter::init() failed");
 	}
 	router.dump(cout); 		// print tables
-	router.run(1000000*args.finTime);
+	router.run(args.finTime);
 	cout << endl;
 	router.dump(cout); 		// print final tables
 	cout << endl;
@@ -208,9 +212,56 @@ bool RouterCore::init(const ArgInfo& args) {
 		fs.close();
 	}
 
+	if (!setupIfaces()) return false;
+	if (!setupLeafAddresses()) return false;
+	if (!setupQueues()) return false;
 	if (!checkTables()) return false;
 	if (!setAvailRates()) return false;
 	addLocalRoutes();
+	return true;
+}
+
+bool RouterCore::setupIfaces() {
+	for (int iface = ift->firstIface(); iface != 0;
+		 iface = ift->nextIface(iface)) {
+		if (!iop->setup(iface)) {
+			cerr << "RouterCore::setupIfaces: could not "
+				"setup interface " << iface << endl;
+			return false;
+		}
+	}
+	return true;
+}
+
+bool RouterCore::setupLeafAddresses() {
+	for (int lnk = lt->firstLink(); lnk != 0; lnk = lt->nextLink(lnk)) {
+		if (lt->getPeerType(lnk) == ROUTER) continue;
+		if (!allocLeafAdr(lt->getPeerAdr(lnk)))
+			return false;
+	}
+	return true;
+}
+
+bool RouterCore::setupQueues() {
+	// Set link rates in QuManager
+	for (int lnk = lt->firstLink(); lnk != 0; lnk = lt->nextLink(lnk)) {
+		qm->setLinkRates(lnk,lt->getBitRate(lnk),lt->getPktRate(lnk));
+	}
+	int ctx;
+        for (ctx = ctt->firstComtIndex(); ctx != 0;
+             ctx = ctt->nextComtIndex(ctx)) {
+                set<int>& links = ctt->getLinks(ctx);
+                set<int>::iterator p;
+                for (p = links.begin(); p != links.end(); p++) {
+                        int cLnk = *p; int lnk = ctt->getLink(cLnk);
+			int qid = qm->allocQ(lnk);
+			if (qid == 0) return false;
+			ctt->setLinkQ(cLnk,qid);
+			qm->setQRates(qid,Forest::MINBITRATE,
+					  Forest::MINPKTRATE);
+			qm->setQLimits(qid,10,10000);
+		}
+	}
 	return true;
 }
 
@@ -320,7 +371,7 @@ bool RouterCore::checkTables() {
 				     << comt << endl;
 				success = false;
 			}
-			if (!lt->getPeerType(lnk) != ROUTER) {
+			if (lt->getPeerType(lnk) != ROUTER) {
 				cerr << "RouterCore::checkTables: router link "
 				     << lnk << " in comtree " << comt 
 				     << " connects to non-router peer\n";
@@ -486,6 +537,7 @@ void RouterCore::run(uint64_t finishTime) {
 	queue<int> ctlQ;		// queue for control packets
 
 	now = Misc::getTimeNs();
+	finishTime *= 1000000000; // convert from seconds to ns
 	while (finishTime == 0 || now < finishTime) {
 		didNothing = true;
 
@@ -495,7 +547,6 @@ void RouterCore::run(uint64_t finishTime) {
 			didNothing = false;
 			PacketHeader& h = ps->getHeader(p);
 			int ptype = h.getPtype();
-
 			if (evCnt < MAXEVENTS &&
 			    (ptype != CLIENT_DATA || numData <= NUMDATA)) {
 				int p1 = (ptype == CLIENT_DATA ? 
@@ -619,6 +670,7 @@ bool RouterCore::pktCheck(int p, int ctx) {
 	}
 	return true;
 }
+
 /** Lookup routing entry and forward packet accordingly.
  *  There are two contexts in which this method is called.
  *  The most common case is to forward a CLIENT_DATA packet.
@@ -704,20 +756,22 @@ void RouterCore::multiSend(int p, int ctx, int rtx) {
 			qvec[n++] = ctt->getLinkQ(ctt->getPCLink(ctx));
 		}
 		// now, copies for subscribers if any
-		if (rtx == 0) return;
-		set<int>& subLinks = rt->getSubLinks(rtx); 
-		for (lp = subLinks.begin(); lp != subLinks.end(); lp++) {
-			int rcLnk = *lp; int lnk = ctt->getLink(rcLnk);
-			if (lnk == inLink) continue;
-			qvec[n++] = ctt->getLinkQ(rcLnk);
+		if (rtx != 0) {
+			set<int>& subLinks = rt->getSubLinks(rtx); 
+			for (lp = subLinks.begin(); lp !=subLinks.end(); lp++) {
+				int rcLnk = *lp; int lnk = ctt->getLink(rcLnk);
+				if (lnk == inLink) continue;
+				qvec[n++] = ctt->getLinkQ(rcLnk);
+			}
 		}
 	}
 
 	// make copies and queue them
         int p1 = p;
         for (int i = 0; i < n-1; i++) { // process first n-1 copies
-                if (qm->enq(p1,qvec[i],now))
+                if (qm->enq(p1,qvec[i],now)) {
 			p1 = ps->clone(p);
+		}
         }
         // process last copy
         if (!qm->enq(p1,qvec[n-1],now))
@@ -765,8 +819,7 @@ void RouterCore::handleRteReply(int p, int ctx) {
 		return;
 	}
 	int dcLnk = rt->getLink(rtx); int dLnk = ctt->getLink(dcLnk);
-	if (lt->getPeerType(dLnk) != ROUTER &&
-	    !qm->enq(p,ctt->getLinkQ(dcLnk),now))
+	if (lt->getPeerType(dLnk) != ROUTER || !qm->enq(p,dLnk,now))
 		ps->free(p);
 	return;
 }
@@ -832,7 +885,9 @@ void RouterCore::subUnsub(int p, int ctx) {
 	if (propagate && !ctt->inCore(ctx) && ctt->getPlink(ctx) != 0) {
 		ps->payErrUpdate(p);
 		int qid = ctt->getLinkQ(ctt->getPCLink(ctx));
-		if (qm->enq(p,qid,now)) return;
+		if (qm->enq(p,qid,now)) {
+			return;
+		}
 	}
 	ps->free(p); return;
 }
@@ -858,7 +913,7 @@ void RouterCore::handleCtlPkt(int p) {
 		if (lt->getPeerPort(inLnk) == 0) {
 			lt->setPeerPort(inLnk,h.getTunSrcPort());
 		}
-		if (validLeafAdr(h.getSrcAdr())) {
+		if (validLeafAdr(h.getSrcAdr()) && nmAdr != 0) {
 			int p1 = ps->alloc();
 			cp.reset();
 			cp.setCpType(CLIENT_CONNECT);
@@ -875,12 +930,13 @@ void RouterCore::handleCtlPkt(int p) {
 			ps->pack(p1);
 			forward(p1,ctt->getComtIndex(100));
 		}
-		ps->free(p); return;
+		ps->free(p);
+		return;
 	}
 	if (h.getPtype() == DISCONNECT) {
 		if (lt->getPeerPort(inLnk) == h.getTunSrcPort())
 			lt->setPeerPort(inLnk,0);
-		if (validLeafAdr(h.getSrcAdr())) {
+		if (validLeafAdr(h.getSrcAdr()) && nmAdr != 0) {
 			int p1 = ps->alloc();
 			cp.reset();
 			cp.setCpType(CLIENT_DISCONNECT);
@@ -1018,14 +1074,34 @@ void RouterCore::handleCtlPkt(int p) {
 			}
 			lnk = xlnk; padr = lt->getPeerAdr(xlnk);
 		} else { // adding a new link
+			// first ensure that the interface has enough
+			// capacity to support a new link
+			int br = Forest::MINBITRATE;
+			int pr = Forest::MINPKTRATE;
+			if (ift->addAvailBitRate(iface,-br)) {
+				errReply(p,cp1,"add link: requested link "
+					       "exceeds interface capacity");
+				break;
+			}
+			if (ift->addAvailPktRate(iface,-pr)) {
+				errReply(p,cp1,"add link: requested link "
+					       "exceeds interface capacity");
+				break;
+			}
 			if (ntyp == ROUTER && pipp != Forest::ROUTER_PORT ||
 			    ntyp != ROUTER && pipp == Forest::ROUTER_PORT ||
 			    (lnk = lt->addEntry(lnk,pipa,pipp)) == 0) {
+				ift->addAvailBitRate(iface,br);
+				ift->addAvailPktRate(iface,pr);
 				errReply(p,cp1,"add link: cannot add "
 					       "requested link");
 				break;
 			}
+			// note: when lt->addEntry succeeds, link rates are
+			// initializied to Forest minimum rates
 			if (padr != 0 && !isFreeLeafAdr(padr)) {
+				ift->addAvailBitRate(iface,br);
+				ift->addAvailPktRate(iface,pr);
 				lt->removeEntry(lnk);
 				errReply(p,cp1,"add link: specified peer "
 					       "address is in use");
@@ -1033,6 +1109,8 @@ void RouterCore::handleCtlPkt(int p) {
 			}
 			if (padr == 0) padr = allocLeafAdr();
 			if (padr == 0) {
+				ift->addAvailBitRate(iface,br);
+				ift->addAvailPktRate(iface,pr);
 				lt->removeEntry(lnk);
 				errReply(p,cp1,"add link: no available "
 					       "peer addresses");
@@ -1047,14 +1125,19 @@ void RouterCore::handleCtlPkt(int p) {
 		returnToSender(p,cp1.pack(ps->getPayload(p)));
 		break;
 	}
-        case DROP_LINK:
+        case DROP_LINK: {
 		if (!cp.isSet(LINK_NUM)) {
 			errReply(p,cp1,"drop link: missing required attribute");
 			break;
 		}
-		lt->removeEntry(cp.getAttr(LINK_NUM));
+		int lnk = cp.getAttr(LINK_NUM);
+		int iface = lt->getIface(lnk);
+		ift->addAvailBitRate(iface,-lt->getBitRate(lnk));
+		ift->addAvailPktRate(iface,-lt->getPktRate(lnk));
+		lt->removeEntry(lnk);
 		returnToSender(p,cp1.pack(ps->getPayload(p)));
 		break;
+	}
         case GET_LINK: {
 		if (!cp.isSet(LINK_NUM)) {
 			errReply(p,cp1,"get link: missing required attribute");
@@ -1100,10 +1183,27 @@ void RouterCore::handleCtlPkt(int p) {
 				}
 				lt->setPeerPort(link, pp);
 			}
-			if (cp.isSet(BIT_RATE))
-				lt->setBitRate(link, cp.getAttr(BIT_RATE));
-			if (cp.isSet(PKT_RATE))
-				lt->setPktRate(link, cp.getAttr(PKT_RATE));
+			int iface = lt->getIface(link);
+			if (cp.isSet(BIT_RATE)) {
+				int br = cp.getAttr(BIT_RATE);
+				int dbr = br - lt->getBitRate(link);
+				if (!ift->addAvailBitRate(link,-dbr)) {
+					errReply(p,cp1,"mod link: request "
+						 "exceeds interface capacity");
+					return;
+				}
+				lt->setBitRate(link, br); 
+			}
+			if (cp.isSet(PKT_RATE)) {
+				int pr = cp.getAttr(PKT_RATE);
+				int dpr = pr - lt->getPktRate(link);
+				if (!ift->addAvailBitRate(link,-dpr)) {
+					errReply(p,cp1,"mod link: request "
+						 "exceeds interface capacity");
+					return;
+				}
+				lt->setPktRate(link, pr); 
+			}
 			returnToSender(p,cp1.pack(ps->getPayload(p)));
 		} else errReply(p,cp1,"get link: invalid link number");
 		break;
@@ -1126,6 +1226,11 @@ void RouterCore::handleCtlPkt(int p) {
 				       "attribute");
 			break;
 		}
+	// should really remove all comtree links and routes first
+	// currently, no mechanism to track all routes associated with
+	// a comtree
+	// may be ok to let higher level controllers take responsibility
+	// for this
 		int ctx = ctt->getComtIndex(cp.getAttr(COMTREE_NUM));
 		ctt->removeEntry(ctx);
 		returnToSender(p,cp1.pack(ps->getPayload(p)));
@@ -1218,6 +1323,37 @@ void RouterCore::handleCtlPkt(int p) {
 					       "requested comtree link");
 				break;
 			}
+			int cLnk = ctt->getComtLink(ctx,lnk);
+
+			// allocate queue and bind it to lnk and comtree link
+			int qid = qm->allocQ(lnk);
+			if (qid == 0) {
+				ctt->removeLink(ctx,cLnk);
+				errReply(p,cp1,"add comtree link: no queues "
+					       "available for link");
+				break;
+			}
+			ctt->setLinkQ(cLnk,qid);
+
+			// adjust rates for link comtree and queue
+			int br = Forest::MINBITRATE;
+			int pr = Forest::MINPKTRATE;
+			if (!(lt->addAvailInBitRate(lnk, -br) &&
+			      lt->addAvailInPktRate(lnk, -pr) &&
+			      lt->addAvailOutBitRate(lnk, -br) &&
+			      lt->addAvailOutPktRate(lnk, -pr))) {
+				errReply(p,cp1,"add comtree link: request "
+					       "exceeds link capacity");
+				break;
+			}
+			ctt->setInBitRate(cLnk,br);
+			ctt->setInPktRate(cLnk,pr);
+			ctt->setOutBitRate(cLnk,br);
+			ctt->setOutPktRate(cLnk,pr);
+
+			qm->setQRates(qid,br,pr);
+			qm->setQLimits(qid,10,10000);
+
 			returnToSender(p,cp1.pack(ps->getPayload(p)));
 		}
 		break;
@@ -1250,7 +1386,18 @@ void RouterCore::handleCtlPkt(int p) {
 				       "or peer IP and port");
 			break;
 		}
-		ctt->removeLink(ctx,lnk);
+		int cLnk = ctt->getComtLink(comt,lnk);
+
+		// release the link bandwidth used by comtree link
+		lt->addAvailInBitRate(lnk,ctt->getInBitRate(cLnk));
+		lt->addAvailInPktRate(lnk,ctt->getInPktRate(cLnk));
+		lt->addAvailOutBitRate(lnk,ctt->getOutBitRate(cLnk));
+		lt->addAvailOutPktRate(lnk,ctt->getOutPktRate(cLnk));
+
+		// release queue and remove link from comtree
+		int qid = ctt->getLinkQ(cLnk);
+		qm->freeQ(qid);
+		ctt->removeLink(ctx,cLnk);
 		returnToSender(p,cp1.pack(ps->getPayload(p)));
 		break;
 	}
@@ -1368,7 +1515,9 @@ void RouterCore::returnToSender(packet p, int paylen) {
 
 	int cLnk = ctt->getComtLink(h.getComtree(),h.getInLink());
 	int qn = ctt->getLinkQ(cLnk);
-	if (!qm->enq(p,qn,now)) { ps->free(p); }
+	if (!qm->enq(p,qn,now)) {
+		ps->free(p);
+	}
 }
 
 /** Send an error reply to a control packet.
