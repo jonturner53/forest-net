@@ -29,7 +29,7 @@ ComtreeTable::~ComtreeTable() { delete [] tbl; delete comtMap; delete clMap; }
  *  @return the index of the new table entry or 0 on failure
  */
 int ComtreeTable::addEntry(comt_t comt) {
-	int ctx = comtMap->addPair(comt);
+	int ctx = comtMap->addPair(key(comt));
 	if (ctx == 0) return 0;
 
 	tbl[ctx].comt = comt;
@@ -77,6 +77,7 @@ bool ComtreeTable::addLink(int ctx, int lnk, bool rflg, bool cflg) {
 
 	tbl[ctx].comtLinks->insert(cLnk);
 	clTbl[cLnk].ctx = ctx; clTbl[cLnk].lnk = lnk;
+	clTbl[cLnk].dest = 0; clTbl[cLnk].qnum = 0;
 
         if (rflg) tbl[ctx].rtrLinks->insert(cLnk);
         if (cflg) tbl[ctx].coreLinks->insert(cLnk);
@@ -166,7 +167,7 @@ bool ComtreeTable::readEntry(istream& in) {
 
 	int ctx = addEntry(ct);
 	if (ctx == 0) return false;
-	setCoreFlag(ctx,cFlg); setPlink(ctx,plnk);
+	setCoreFlag(ctx,cFlg);
 
 	set<int>::iterator p;
 	for (p = comtLinks.begin(); p != comtLinks.end(); p++) {
@@ -177,6 +178,7 @@ bool ComtreeTable::readEntry(istream& in) {
 		if (coreFlag && !rtrFlag) return false;
 		addLink(ctx,lnk,rtrFlag,coreFlag);
 	}
+	setPlink(ctx,plnk); // must be done after links are defined
 
 	if (!checkEntry(ctx)) { removeEntry(ctx); return false; }
 	

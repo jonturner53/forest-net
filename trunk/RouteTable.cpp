@@ -132,7 +132,8 @@ void RouteTable::writeEntry(ostream& out, int rtx) const {
 			out << ctt->getLink(*p);
 		}
 	} else 
-		out << Forest::fAdr2string(adr,s) << " " << getLink(rtx);
+		out << Forest::fAdr2string(adr,s) << " "
+		    << ctt->getLink(getLink(rtx));
 	out << endl;
 }
 

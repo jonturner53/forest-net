@@ -56,7 +56,8 @@ inline double abs(double x) { return x < 0 ? -x : x; }
 inline void warning(string msg) { cerr << "Warning: " << msg << endl; }
 inline void fatal(string msg) {
 	cerr << "Fatal: " << msg << endl;
-	perror(""); exit(1);
+	if (errno != 0) perror("");
+	exit(1);
 }
 
 double pow(double,double);

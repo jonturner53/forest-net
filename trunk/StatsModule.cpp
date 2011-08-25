@@ -65,11 +65,11 @@ void StatsModule::record(uint32_t now) {
 		}
 		fs << val << " ";
 	}
-	fs << double(now)/1000000 << endl;
+	fs << double(now)/1000000000 << endl;
 	fs.flush();
 }
 
-/** Read an entry from is and store it in the stats table.
+/** Read an entry from in and store it in the stats table.
  *  Return true on success false on failure.
  *  A line is a pure comment line if it starts with a # sign.
  *  A trailing comment is also allowed at the end of a line by
