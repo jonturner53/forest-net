@@ -91,9 +91,9 @@ public:
 	/** router implementation parameters */
 	static const short int MAXINTF= 20;	///< max # of interfaces
 	static const short int MAXLNK = 1000;	///< max # of links per router
-	static const int MINBITRATE = 500; 	///< min link bit rate in Kb/s
+	static const int MINBITRATE = 1000; 	///< min link bit rate in Kb/s
 	static const int MAXBITRATE = 1000000;	///< max link bit rate in Kb/s
-	static const int MINPKTRATE = 500; 	///< min packet rate in p/s
+	static const int MINPKTRATE = 1000; 	///< min packet rate in p/s
 	static const int MAXPKTRATE = 800000;	///< max packet rate in p/s
 	static const uint32_t BUF_SIZ = 1600;	///< size of a packet buffer
 
