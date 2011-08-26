@@ -110,11 +110,10 @@ bool QuManager::enq(int p, int qid, uint64_t now) {
 	if (queues->empty(qid)) {
 		// make link active if need be
 		if (!active->member(lnk)) {
-			uint32_t d;
+			uint64_t d;
 			if (vactive->member(lnk)) {
 				d = vactive->key(lnk);
-				if ((now - d) <= (1 << 31))  // now >= d
-					d = now;
+				if (now >= d) d = now;
 				vactive->remove(lnk);
 			} else d = now;
 			active->insert(lnk,d);

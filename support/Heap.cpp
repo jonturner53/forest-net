@@ -31,8 +31,8 @@ void Heap::insert(item i, keytyp k) {
 void Heap::remove(item i) {
 	int j = h[n--];
 	if (i != j) {
-		if (kee[j] < kee[i]) siftup(j,pos[i]);
-		else if (kee[j] > kee[i]) siftdown(j,pos[i]);
+		if (kee[j] <= kee[i]) siftup(j,pos[i]);
+		else siftdown(j,pos[i]);
 	}
 	pos[i] = 0;
 }
@@ -74,4 +74,14 @@ void Heap::changekey(item i, keytyp k) {
 	if (k == ki) return;
 	if (k < ki) siftup(i,pos[i]);
 	else siftdown(i,pos[i]);
+}
+
+string& Heap::toString(string& s) const {
+	s = "";
+	for (int i = 1; i <= n; i++) {
+		string s1;
+		s += "(" + Misc::num2string(h[i],s1);
+		s += "," + Misc::num2string(kee[h[i]],s1) + ") ";
+	}
+	return s;
 }

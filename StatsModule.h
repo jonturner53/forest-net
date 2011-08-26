@@ -26,7 +26,7 @@ public:
 	void	decQlen(int, int, int);
 
 	// record stats to a file
-	void	record(uint32_t);
+	void	record(uint64_t);
 
 	// input/output 
 	bool read(istream&);
