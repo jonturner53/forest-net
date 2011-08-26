@@ -9,7 +9,7 @@
 #include "Monitor.h"
 
 /** usage:
- *       Monitor extIp intIp rtrIp myAdr rtrAdr finTime [logfile]
+ *       Monitor extIp intIp rtrIp myAdr rtrAdr gridSize finTime [logfile]
  * 
  *  Monitor is a program that monitors a virtual world, tracking
  *  the motion of the avatars within it. The monitored data is
@@ -32,7 +32,9 @@
  *  the Monitor listens on the default IP address. The second is the
  *  IP address used by the Monitor within the Forest overlay. RtrIp
  *  is the route's IP address, myAdr is the Monitor's Forest
- *  address, rtrAdr is the Forest address of the router, and
+ *  address, rtrAdr is the Forest address of the router, 
+ *  gridSize is the number of squares in the virtual world's
+ *  basic grid (actually, the grid is gridSizeXgridSize) and
  *  finTime is the number of seconds to run before terminating.
  */
 main(int argc, char *argv[]) {
@@ -48,7 +50,7 @@ main(int argc, char *argv[]) {
 	    (sscanf(argv[6],"%d", &gridSize) != 1) ||
 	     sscanf(argv[7],"%d", &finTime) != 1)
 		fatal("usage: Monitor extIp intIp rtrIpAdr myAdr rtrAdr "
-		      		    "finTime [logfile]");
+		      		    "gridSize finTime [logfile]");
 	if (extIp == Np4d::ipAddress("127.0.0.1")) extIp = Np4d::myIpAddress(); 
 	if (extIp == 0) fatal("can't retrieve default IP address");
 
@@ -138,10 +140,8 @@ void Monitor::run(int finishTime) {
 
 	now = nextTime = 0; printTime = 1000*UPDATE_PERIOD;
 
-cout << "entering main loop" << endl;
 	while (now <= finishTime) {
 		now = Misc::getTime();
-cout << "now=" << now << " finishTime=" << finishTime << endl;
 
 		check4comtree();
 		while ((p = receiveReport()) != 0) {
@@ -157,7 +157,6 @@ cout << "now=" << now << " finishTime=" << finishTime << endl;
 		if (0 < delay && delay <= 1000*UPDATE_PERIOD) usleep(delay);
 	}
 
-cout << "exiting at " << now << endl;
 	disconnect(); 		// send final disconnect packet
 }
 

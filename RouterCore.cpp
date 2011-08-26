@@ -259,7 +259,7 @@ bool RouterCore::setupQueues() {
 			ctt->setLinkQ(cLnk,qid);
 			qm->setQRates(qid,Forest::MINBITRATE,
 					  Forest::MINPKTRATE);
-			qm->setQLimits(qid,10,10000);
+			qm->setQLimits(qid,100,100000);
 		}
 	}
 	return true;
