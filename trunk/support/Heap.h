@@ -36,6 +36,7 @@ public:		Heap(int);
 	item 	deletemin();
 	void	changekey(item,keytyp);	
 
+	string& toString(string&) const;
 private:
 	const static int D = 8;		// base of heap
 	int	N;			// max number of items in heap

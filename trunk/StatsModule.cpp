@@ -26,7 +26,7 @@ StatsModule::StatsModule(int maxStats1, int maxLnk1, int maxQ1)
 	
 StatsModule::~StatsModule() { delete [] stat; }
 
-void StatsModule::record(uint32_t now) {
+void StatsModule::record(uint64_t now) {
 // Record statistics at time now.
 	int i, val;
 

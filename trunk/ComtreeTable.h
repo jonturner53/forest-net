@@ -81,6 +81,7 @@ public:
 	// input/output of table contents 
 	bool 	read(istream&);
 	void	write(ostream&) const;
+	void	writeEntry(ostream&, const int) const;
 private:
 	int	maxCtx;			///< largest comtree index
 	int	maxComtLink;		///< largest comtLink
@@ -116,7 +117,6 @@ private:
 	uint64_t key(comt_t) const;
 	uint64_t key(comt_t, int) const;
 	bool 	readEntry(istream&);
-	void	writeEntry(ostream&, const int) const;
 	void	readLinks(istream&, set<int>&);	
 	void	writeLinks(ostream&,int) const;
 };

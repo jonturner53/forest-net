@@ -54,6 +54,7 @@ public:
 	// input/output
 	bool read(istream&);
 	void write(ostream&) const;
+	void	writeEntry(ostream&, int) const; 
 private:
 	int	maxRtx;			///< max number of table entries
 	int	myAdr;			///< address of this router
@@ -72,7 +73,6 @@ private:
 	// helper functions
 	uint64_t key(comt_t, fAdr_t) const;  ///< key for use with rteMap
 	bool 	readEntry(istream&);	
-	void	writeEntry(ostream&, int) const; 
 };
 
 /** Verify that a route index is valid.

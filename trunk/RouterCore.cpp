@@ -766,6 +766,8 @@ void RouterCore::multiSend(int p, int ctx, int rtx) {
 		}
 	}
 
+	if (n == 0) { ps->free(p); return; }
+
 	// make copies and queue them
         int p1 = p;
         for (int i = 0; i < n-1; i++) { // process first n-1 copies
@@ -774,8 +776,9 @@ void RouterCore::multiSend(int p, int ctx, int rtx) {
 		}
         }
         // process last copy
-        if (!qm->enq(p1,qvec[n-1],now))
+        if (!qm->enq(p1,qvec[n-1],now)) {
 		ps->free(p1);
+	}
 }
 
 void RouterCore::sendRteReply(int p, int ctx) {
