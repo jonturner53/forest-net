@@ -21,8 +21,8 @@
  *
  *  Information about the use of a link in a comtree can be
  *  accessed using a comtree link number. For example, using
- *  the comtree link number, you can get the qid of the that
- *  is used for packets in a given comtree that a sent on
+ *  the comtree link number, you can get the queue identifier that
+ *  is used for packets in a given comtree that are sent on
  *  on the link. Comtree link numbers can be obtained using
  *  the getComtLink() method.
  */
@@ -56,7 +56,7 @@ public:
 	int	getComtLink(int, int) const;
 	int	getPCLink(int) const;
 	int	getLinkQ(int) const;
-	int	getDest(int) const;
+	fAdr_t	getDest(int) const;
 	int	getInBitRate(int) const;
 	int	getInPktRate(int) const;
 	int	getOutBitRate(int) const;
@@ -202,10 +202,23 @@ inline bool ComtreeTable::isCoreLink(int cLnk) const {
 	return (cl.find(cLnk) != cl.end());
 }
 	
+/** Get the first comtree index.
+ *  This method is used to iterate through all the comtrees.
+ *  The order of the comtree indices is arbitrary.
+ *  @return the first comtree index or 0, if no comtrees
+ *  have been defined
+ */
 inline int ComtreeTable::firstComtIndex() const {
 	return comtMap->firstId();
 }
 
+/** Get the next comtree index.
+ *  This method is used to iterate through all the comtrees.
+ *  The order of the comtree indices is arbitrary.
+ *  @param ctx is a comtree index
+ *  @return the next comtree index following ctx, or 0 if there
+ *  is no next index
+ */
 inline int ComtreeTable::nextComtIndex(int ctx) const {
 	return comtMap->nextId(ctx);
 }
@@ -218,68 +231,139 @@ inline comt_t ComtreeTable::getComtree(int ctx) const {
 	return tbl[ctx].comt;
 }
 
+/** Get the comtree index, based on the comtree number.
+ *  @param comt is the comtree number
+ *  @return the comtree index
+ */
 inline int ComtreeTable::getComtIndex(comt_t comt) const {
 	return comtMap->getId(key(comt));
 }
 
-/** Get the parent link for a given table entry.
+/** Get the number of links that belong to this comtree.
+ *  @param ctx is the comtree index
+ *  @return the number of links in the comtree
+ */
+inline int ComtreeTable::getLinkCount(int ctx) const {
+	return tbl[ctx].comtLinks->size();
+}
+
+/** Get the comtree link number for a given (comtree, link) pair.
+ *  @param comt is a comtree number
+ *  @param lnk is a link number
+ *  @return the comtree link number for the given pair, or 0 if there
+ *  is no comtree link for the given pair
+ */
+inline int ComtreeTable::getComtLink(int comt, int lnk) const {
+	return clMap->getId(key(comt,lnk));
+}
+
+/** Get the parent link for a comtree.
  *  @param ctx is the comtree index
  *  @return the link leading to the parent (in the comtree) of this router;
  *  returns 0 if the router is the root of the comtree
  */
 inline int ComtreeTable::getPlink(int ctx) const { return tbl[ctx].plnk; }
 
-
-inline int ComtreeTable::getLinkCount(int ctx) const {
-	return tbl[ctx].comtLinks->size();
-}
-
-inline int ComtreeTable::getComtLink(int comt, int lnk) const {
-	return clMap->getId(key(comt,lnk));
-}
-
+/** Get the comtree link number for the parent link in a comtree.
+ *  @param ctx is the comtree index
+ *  @return the comtree link number for the link leading to the parent
+ *  (in the comtree) of this router;
+ *  returns 0 if the router is the root of the comtree
+ */
 inline int ComtreeTable::getPCLink(int ctx) const { return tbl[ctx].pCLnk; }
 
+/** Get the link number for a given comtree link.
+ *  @param cLnk is a comtree link number
+ *  @return the number of the associated link
+ */
 inline int ComtreeTable::getLink(int cLnk) const {
 	return (cLnk != 0 ? clTbl[cLnk].lnk : 0);
 }
 
+/** Get the queue identifier for a given comtree link.
+ *  @param cLnk is a comtree link number
+ *  @return the queue identifier assigned to cLnk
+ */
 inline int ComtreeTable::getLinkQ(int cLnk) const {
 	return clTbl[cLnk].qnum;
 }
 
-inline int ComtreeTable::getDest(int cLnk) const {
+/** Get the allowed destination for packets received on a given comtree link.
+ *  @param cLnk is a comtree link number
+ *  @return the forest address of the designated "allowed destination"
+ *  for this link
+ */
+inline fAdr_t ComtreeTable::getDest(int cLnk) const {
 	return clTbl[cLnk].dest;
 }
 
+/** Get the incoming bit rate for a given comtree link.
+ *  @param cLnk is a comtree link number
+ *  @return the incoming bit rate for cLnk
+ */
 inline int ComtreeTable::getInBitRate(int cLnk) const {
 	return clTbl[cLnk].inBitRate;
 }
 
+/** Get the incoming packet rate for a given comtree link.
+ *  @param cLnk is a comtree link number
+ *  @return the incoming packet rate for cLnk
+ */
 inline int ComtreeTable::getInPktRate(int cLnk) const {
 	return clTbl[cLnk].inPktRate;
 }
 
+/** Get the outgoing bit rate for a given comtree link.
+ *  @param cLnk is a comtree link number
+ *  @return the outgoing bit rate for cLnk
+ */
 inline int ComtreeTable::getOutBitRate(int cLnk) const {
 	return clTbl[cLnk].outBitRate;
 }
 
+/** Get the outgoing packet rate for a given comtree link.
+ *  @param cLnk is a comtree link number
+ *  @return the outgoing packet rate for cLnk
+ */
 inline int ComtreeTable::getOutPktRate(int cLnk) const {
 	return clTbl[cLnk].outPktRate;
 }
 
+/** Get a reference to the set of comtree links for a comtree.
+ *  This method is provided to allow the client program
+ *  to iterate through all the links in the comtree.
+ *  It must not be used to modify the set of links.
+ *  @param ctx is a comtree index
+ *  @return a reference to a set of integers, each of
+ *  which is a comtree link number
+ */
 inline set<int>& ComtreeTable::getLinks(int ctx) const {
 	return *tbl[ctx].comtLinks;
 }
 
+/** Get a reference to the set of comtree links leading to another router.
+ *  This method is provided to allow the client program
+ *  to iterate through all the "router links" in the comtree.
+ *  It must not be used to modify the set of links.
+ *  @param ctx is a comtree index
+ *  @return a reference to a set of integers, each of
+ *  which is a comtree link number
+ */
 inline set<int>& ComtreeTable::getRtrLinks(int ctx) const {
 	return *tbl[ctx].rtrLinks;
 }
 
+/** Get a reference to the set of comtree links leading to a core router.
+ *  This method is provided to allow the client program
+ *  to iterate through all the "core links" in the comtree.
+ *  It must not be used to modify the set of links.
+ *  @param ctx is a comtree index
+ *  @return a reference to a set of integers, each of
+ *  which is a comtree link number
+ */
 inline set<int>& ComtreeTable::getCoreLinks(int ctx) const {
 	return *tbl[ctx].coreLinks;
 }
-
 
 /** Set the parent link for a given table entry.
  *  @param ctx is the comtree index
@@ -347,20 +431,20 @@ inline void ComtreeTable::setOutPktRate(int cLnk, int pr) {
 }
 
 /** Compute key for use with comtMap.
- *  @param ct is a comtree number
+ *  @param comt is a comtree number
  *  @return a 64 bit hash key
  */
-inline uint64_t ComtreeTable::key(comt_t ct) const {
-        return (uint64_t(ct) << 32) | ct;
+inline uint64_t ComtreeTable::key(comt_t comt) const {
+        return (uint64_t(comt) << 32) | comt;
 }
 
 /** Compute key for use with clMap.
- *  @param ct is a comtree number
+ *  @param comt is a comtree number
  *  @param lnk is a link number
  *  @return a 64 bit hash key
  */
-inline uint64_t ComtreeTable::key(comt_t ct, int lnk) const {
-        return (uint64_t(ct) << 32) | lnk;
+inline uint64_t ComtreeTable::key(comt_t comt, int lnk) const {
+        return (uint64_t(comt) << 32) | lnk;
 }
 
 #endif

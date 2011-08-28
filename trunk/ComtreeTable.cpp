@@ -18,7 +18,10 @@ ComtreeTable::ComtreeTable(int maxCtx1, int maxComtLink1, LinkTable *lt1)
 	clMap = new IdMap(maxComtLink);
 };
 	
-ComtreeTable::~ComtreeTable() { delete [] tbl; delete comtMap; delete clMap; }
+/** Destructor for ComtreeTable, frees dynamic storage */
+ComtreeTable::~ComtreeTable() {
+	delete [] tbl; delete comtMap; delete [] clTbl; delete clMap;
+}
 
 /** Add a new entry to the table.
  *
@@ -62,9 +65,9 @@ void ComtreeTable::removeEntry(int ctx) {
 	delete tbl[ctx].coreLinks;
 }
 
-/** Add the link to the set of valid links for specified entry
+/** Add the link to the set of links for a comtree.
  *
- *  @param ctx is number of table entry to be modified
+ *  @param ctx is comtree index of the comtree to be modified
  *  @param link is the number of the link to add
  *  @param rflg is true if far end of link is another router
  *  @param cflg is true if far end of link is a core router for this comtree
@@ -85,9 +88,9 @@ bool ComtreeTable::addLink(int ctx, int lnk, bool rflg, bool cflg) {
         return true;
 }
 
-/** Remove a comtree link from the set of valid links for a specified entry.
+/** Remove a comtree link from the set of valid links for a comtree.
  *
- *  @param ctx is number of table entry to be modified
+ *  @param ctx is comtree index of the comtree to be modified
  *  @param cLnk is the number of the comtree link to removed
  */
 void ComtreeTable::removeLink(int ctx, int cLnk) {
@@ -139,7 +142,13 @@ bool ComtreeTable::checkEntry(int ctx) const {
 	return true;
 }
 
-/** Read a list of links.
+/** Read a list of links from an input stream.
+ *  The list consists of integers separated by commas.
+ *  The first number that is not immediately followed by a comma
+ *  is assumed to be the last one on the list.
+ *  @param in is an open input stream
+ *  @param links is a reference to a set of integers; on return,
+ *  it will contain the list of link numbers read from the input
  */
 void ComtreeTable::readLinks(istream& in, set<int>& links) {
 	do {
@@ -149,7 +158,12 @@ void ComtreeTable::readLinks(istream& in, set<int>& links) {
 	} while (Misc::verify(in,','));
 }
 
-/** Read a comtree from in and initialize its table entry.
+/** Read an entry from an input stream and initialize its table entry.
+ *  The entry must be on a line by itself (possibly with a trailing comment).
+ *  An entry consists of a comtree number, a core flag (0 or 1), the link
+ *  number of the link leading to the parent, and two comma-separated lists
+ *  of links.
+ *  @param in is an open input stream
  */
 bool ComtreeTable::readEntry(istream& in) {
 	int ct, cFlg, plnk;
@@ -185,13 +199,16 @@ bool ComtreeTable::readEntry(istream& in) {
         return true;
 }
 
-/** Read comtree table entries from input stream. The first line must contain
+/** Read comtree table entries from an input stream.
+ *  The first line of the input must contain
  *  an integer, giving the number of entries to be read. The input may
  *  include blank lines and comment lines (any text starting with '#').
- *  Each entry must be on a line by itself (possibly with a trailing comment).
- *  An entry consists of a comtree number, a core flag (0 or 1), the link
- *  number of the link leading to the parent, a queue number, a queue quantum,
- *  and three comma-separated lists of links.
+ *  The operation may fail if the input is misformatted or if
+ *  an entry does not pass some basic sanity checks.
+ *  In this case, an error message is printed that identifies the
+ *  entry on which a problem was detected
+ *  @param in is an open input stream
+ *  @return true on success, false on failure
  */
 bool ComtreeTable::read(istream& in) {
 	int num;
@@ -200,15 +217,17 @@ bool ComtreeTable::read(istream& in) {
 	Misc::cflush(in,'\n');
 	for (int i = 1; i <= num; i++) {
 		if (!readEntry(in)) {
-			cerr << "Error reading comtree table entry # "
-			     << i << endl;
+			cerr << "ComtreeTable::read: could not read "
+			     << i << "-th comtree\n";
 			return false;
 		}
 	}
         return true;
 }
 
-/** Write entry for link i
+/** Write a table entry to an output stream.
+ *  @param out is an open output stream
+ *  @param ctx is the comtree index of the comtree to be written
  */
 void ComtreeTable::writeEntry(ostream& out, int ctx) const {
 	out << setw(9) << getComtree(ctx) << " "  
@@ -232,7 +251,8 @@ void ComtreeTable::writeEntry(ostream& out, int ctx) const {
 	out << endl;
 }
 
-/** Output human readable representation of comtree table.
+/** Write the comtree table to an output stream.
+ *  @param out is an open output stream
  */
 void ComtreeTable::write(ostream& out) const {
 	out << comtMap->size() << endl;

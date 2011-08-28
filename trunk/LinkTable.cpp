@@ -55,8 +55,8 @@ int LinkTable::addEntry(int lnk, ipa_t peerIp, ipp_t peerPort) {
 bool LinkTable::setPeerPort(int lnk, ipp_t peerPort) {
 	if (!valid(lnk)) return false;
 	ht->remove(hashkey(getPeerIpAdr(lnk),getPeerPort(lnk)));
-	if (!ht->insert(hashkey(getPeerIpAdr(lnk), peerPort),lnk))
-		ht->insert(hashkey(getPeerIpAdr(lnk), getPeerPort(lnk)),lnk))
+	if (!ht->insert(hashkey(getPeerIpAdr(lnk), peerPort),lnk)) {
+		ht->insert(hashkey(getPeerIpAdr(lnk), getPeerPort(lnk)),lnk);
 		return false;
 	}
 	lnkTbl[lnk].peerPort = peerPort;
