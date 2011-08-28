@@ -81,23 +81,23 @@ typedef uint8_t flgs_t;			///< flags field from packet header
  */
 class Forest {
 public:
-	/** constants related to packet formats */
+	// constants related to packet formats 
 	static const uint8_t FOREST_VERSION = 1;///< version of forest protocol
 	static const int HDR_LENG = 20;		///< header length in bytes
 	static const int OVERHEAD = 24;		///< total overhead
 	static const flgs_t RTE_REQ = 0x01;	///< route request flag
 	static const ipp_t ROUTER_PORT = 30123; ///< port # used by routers
 
-	/** router implementation parameters */
+	// router implementation parameters 
 	static const short int MAXINTF= 20;	///< max # of interfaces
 	static const short int MAXLNK = 1000;	///< max # of links per router
-	static const int MINBITRATE = 1000; 	///< min link bit rate in Kb/s
+	static const int MINBITRATE = 200; 	///< min link bit rate in Kb/s
 	static const int MAXBITRATE = 1000000;	///< max link bit rate in Kb/s
-	static const int MINPKTRATE = 1000; 	///< min packet rate in p/s
+	static const int MINPKTRATE = 200; 	///< min packet rate in p/s
 	static const int MAXPKTRATE = 800000;	///< max packet rate in p/s
 	static const uint32_t BUF_SIZ = 1600;	///< size of a packet buffer
 
-	/** methods for manipulating addresses */
+	// methods for manipulating addresses 
 	static bool validUcastAdr(fAdr_t);
 	static bool mcastAdr(fAdr_t);
 	static int zipCode(fAdr_t);
@@ -109,7 +109,7 @@ public:
 	static bool readForestAdr(istream&, fAdr_t&);
 	static void writeForestAdr(ostream&, fAdr_t);
 
-	/** miscellaneous */
+	// miscellaneous 
 	static int truPktLeng(int);
 	static void addNodeType2string(string&, ntyp_t);
 	static string& nodeType2string(ntyp_t, string&);
