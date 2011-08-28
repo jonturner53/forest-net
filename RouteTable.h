@@ -16,11 +16,19 @@
 
 typedef set<int>::iterator RteLink; 
 
-/** Header file for RouteTable class.
+/** Maintains a set of routes. A unicast route is a triple
+ *  (comtree, address, comtreeLink) where comtree is the comtree number
+ *  associated with the route, address is a unicast address and
+ *  comtreeLink is the comtree link number for some link in the
+ *  comtree (comtree link numbers are maintained by the ComtreeTable).
  * 
- *  Maintains set of tuples of the form (comtree, address, links)
- *  where the links is the either a single link, in the case of a unicast
- *  entry, or a set of links, in the case of a multicast entry.
+ *  A multicast route is similar, except in this case the address
+ *  is a multicast address and comtreeLink is replaced by a list
+ *  of comtree link numbers that represents the subscribers to
+ *  the multicast address.
+ *
+ *  The data for a route is accessed using its "route index",
+ *  which can be obtained using the getRteIndex() method.
  */
 class RouteTable {
 public:
@@ -31,7 +39,6 @@ public:
 	bool	validRteIndex(int) const;
 	bool	isLink(int,int) const;
 	bool	noLinks(int) const;
-	//bool    compareEntry(comt_t,fAdr_t,int);
 
 	// iteration methods
 	int	firstRteIndex() const;
@@ -52,8 +59,8 @@ public:
 	void	setLink(int,int);
 
 	// input/output
-	bool read(istream&);
-	void write(ostream&) const;
+	bool 	read(istream&);
+	void 	write(ostream&) const;
 	void	writeEntry(ostream&, int) const; 
 private:
 	int	maxRtx;			///< max number of table entries
@@ -95,76 +102,126 @@ inline bool RouteTable::isLink(int rtx, int cLnk) const {
 	return lset.find(cLnk) != lset.end();
 }
 
-// Return true if no valid links for this multicast entry.
+/** Determine if a multicast route has no links.
+ *  @return true if the route has no links, else false
+ */
 inline bool RouteTable::noLinks(int rtx) const {
 	return tbl[rtx].links->size() == 0;
 }
 
+/** Get the first route index.
+ *  This method is used to iterate through all the routes in the table.
+ *  The order of routes is arbitrary.
+ *  @return the first route index, or 0 if there are none
+ */
 inline int RouteTable::firstRteIndex() const {
 	return rteMap->firstId();
 }
 
+/** Get the next route index following a given route index.
+ *  This method is used to iterate through all the routes in the table.
+ *  The order of routes is arbitrary.
+ *  @param rtx is a route index
+ *  @return the next route index following rtx, or 0 if there is none
+ */
 inline int RouteTable::nextRteIndex(int rtx) const {
 	return rteMap->nextId(rtx);
 }
 
-// Perform a lookup in the routing table. Comt is the comtree number,
-// adr is the destination address. Returned value is the index
-// of the table entry, or 0 if there is no match. 
+/** Get the route index for a given comtree and destination address.
+ *  @param comt is a comtree number
+ *  @param adr is a forest address
+ *  @return the associated comtree index or 0 if there is none
+ */
 inline int RouteTable::getRteIndex(comt_t comt, fAdr_t adr) const {
         return rteMap->getId(key(comt,adr));
 }   
 
+/** Get the comtree number for a given route.
+ *  @param rtx is a route index
+ *  @return the comtree that the route was defined for
+ */
 inline comt_t RouteTable::getComtree(int rtx) const {
 	return tbl[rtx].ct;
 }
+
+/** Get the destination address for a given route.
+ *  @param rtx is a route index
+ *  @return the address that the route was defined for
+ */
 inline fAdr_t RouteTable::getAddress(int rtx) const {
 	return tbl[rtx].adr;
 }
 
-// Return comtree link for a unicast table entry.
-// Return 0 if this is a multicast entry.
+/** Get the comtree link number for a given unicast route.
+ *  @param rtx is a route index
+ *  @return the comtree link number for the outgoing link
+ */
 inline int RouteTable::getLink(int rtx) const {
 	if (Forest::mcastAdr(tbl[rtx].adr)) return 0;
 	return tbl[rtx].lnk;
 }
 
+/** Get a reference to the set of subscriber links for a given multicast route.
+ *  This method is provided to allow client programs to efficiently
+ *  iterate through all the subscriber links in the route.
+ *  It must not be used to modify the set of subscriber links.
+ *  @param rtx is a route index
+ *  @return a reference to a set of integers, where each integer in the
+ *  set is a comtree link number
+ */
 inline set<int>& RouteTable::getSubLinks(int rtx) const {
 	return *tbl[rtx].links;
 }
-	
 
+/** Set the link for a unicast route.
+ *  @param rtx is the route number
+ *  @param cLnk is the comtree link number for the new outgoing link
+ */
 inline void RouteTable::setLink(int rtx, int cLnk) {
-// Set the link field for a unicast table entry. Return true on success,
-// false if entry is not a unicast entry.
-	if (Forest::mcastAdr(tbl[rtx].adr)) return;
+	if (!validRteIndex(rtx) || !ctt->validComtLink(cLnk) ||
+	    Forest::mcastAdr(tbl[rtx].adr))
+		return;
 	tbl[rtx].lnk = cLnk;
 }
 
-// Add a comtree link to a multicast table entry. Return true on success,
-// false if entry is not a multicast entry.
+/** Add a subscriber link to a multicast route.
+ *  @param rtx is the route number
+ *  @param cLnk is the comtree link number for the new subscriber
+ *  @return true on success, false on failure
+ */
 inline bool RouteTable::addLink(int rtx, int cLnk) {
-	if (!Forest::mcastAdr(tbl[rtx].adr)) return false;
+	if (!validRteIndex(rtx) || !ctt->validComtLink(cLnk) ||
+	    !Forest::mcastAdr(tbl[rtx].adr))
+		return false;
 	tbl[rtx].links->insert(cLnk);
 	return true;
 }
 
-// Remove a comtree link from a multicast table entry. Return true on success,
-// false if entry is not a multicast entry.
+/** Remove a subscriber link from a multicast route.
+ *  @param rtx is the route number
+ *  @param cLnk is the comtree link number for the link to be removed
+ *  @return true on success, false on failure
+ */
 inline void RouteTable::removeLink(int rtx, int cLnk) {
-	if (!Forest::mcastAdr(tbl[rtx].adr)) return;
+	if (!validRteIndex(rtx) || !ctt->validComtLink(cLnk) ||
+	    !Forest::mcastAdr(tbl[rtx].adr))
+		return;
 	tbl[rtx].links->erase(cLnk);
 }
 
-inline uint64_t RouteTable::key(comt_t ct, fAdr_t fa) const {
-// Return the key for the specified comtree and address
-	if (!Forest::mcastAdr(fa)) {
-		int zip = Forest::zipCode(fa);
+/** Compute a key for a specified (comtree,address) pair.
+ *  @param comt is a comtree number
+ *  @param adr is an address
+ *  @return a 64 bit integer suitable for use as a lookup key
+ */
+inline uint64_t RouteTable::key(comt_t comt, fAdr_t adr) const {
+	if (!Forest::mcastAdr(adr)) {
+		int zip = Forest::zipCode(adr);
 		if (zip != Forest::zipCode(myAdr))
-			fa = Forest::forestAdr(zip,0);
+			adr = Forest::forestAdr(zip,0);
 	}
-	return (uint64_t(ct) << 32) | (uint64_t(fa) & 0xffffffff);
-
+	return (uint64_t(comt) << 32) | (uint64_t(adr) & 0xffffffff);
 }
 
 #endif

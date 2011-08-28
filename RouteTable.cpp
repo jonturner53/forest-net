@@ -9,22 +9,29 @@
 #include "RouteTable.h"
 
 /** Constructor for RouteTable, allocates space and initializes table.
- *  Nte1 is the number of routing table entries.
+ *  @param maxRtx1 is the maximum number of entries in the table
+ *  @param myAdr1 is the forest of the address of the router
+ *  @param ctt1 is a pointer to the comtree table
  */
 RouteTable::RouteTable(int maxRtx1, fAdr_t myAdr1, ComtreeTable* ctt1)
 		      : maxRtx(maxRtx1), myAdr(myAdr1), ctt(ctt1) {
-	int i;
 	tbl = new RouteEntry[maxRtx+1];
 	rteMap = new IdMap(maxRtx);
 };
 	
+/** Destructor for RouteTable, frees dynamic storage. */
 RouteTable::~RouteTable() { delete [] tbl; delete rteMap; }
 
-// Insert routing table entry for given comtree and address,
-// with specified comtree link. For multicast entries,
-// if lnk=0, make the link set empty.
-// Return index of routing table entry or 0 on failure.
+/** Add a new route to the table.
+ *  @param comt is the comtree number for the route
+ *  @param adr is the destination address for the route
+ *  @param cLnk is a comtree link number for a link in the comtree;
+ *  for multicast routes, this designates an initial subscriber link;
+ *  if cLnk=0, there is no initial subscriber link
+ *  @return the index of the new route, or 0 if the operation fails
+ */
 int RouteTable::addEntry(comt_t comt, fAdr_t adr, int cLnk) {
+	if (!ctt->validComtLink(cLnk)) return 0;
 	int rtx = rteMap->addPair(key(comt,adr));
 	if (rtx == 0) return 0;
 	tbl[rtx].ct = comt;
@@ -41,27 +48,26 @@ int RouteTable::addEntry(comt_t comt, fAdr_t adr, int cLnk) {
 	return rtx;
 }
 
-// Remove entry rtx from routing table.
+/** Remove a route from the table.
+ *  @param rtx is the route index of the route to be removed.
+ */
 void RouteTable::removeEntry(int rtx) {
 	if (!validRteIndex(rtx)) return;
 	if (Forest::mcastAdr(tbl[rtx].adr)) delete tbl[rtx].links;
 	rteMap->dropPair(key(tbl[rtx].ct,tbl[rtx].adr));
 }
 
-/*
-bool RouteTable::compareEntry(comt_t comt, fAdr_t adr, int lnk) {
-        int rtx = rteMap->getId(hashkey(comt,adr));
-        if(rtx == 0) return false;
-        return tbl[te].ct == comt && tbl[te].adr == adr && tbl[te].lnk == lnk;
-}
-*/
-
+/** Read an entry from an input stream and add a routing table entry for it.
+ *  An entry consists of a comtree number, a forest address and
+ *  either a single link number, or a comma-separated list of links.
+ *  The forest address may be a unicast address in dotted decimal
+ *  notation, or a multicast address, which is a single negative integer.
+ *  An entry must appear on one line. Lines may contain comments,
+ *  which start wigth a # sign and continue to the end of the line.
+ *  @param in is an open input stream
+ *  @return true on success, false on failure
+ */
 bool RouteTable::readEntry(istream& in) {
-// Read an entry from in and create a routing table entry for it.
-// A line is a pure comment line if it starts with a # sign.
-// A trailing comment is also allowed at the end of a line by
-// including a # sign. All lines that are not pure comment lines
-// or blank are assumed to contain a complete routing table entry.
 	int comt, lnk; fAdr_t adr;
         Misc::skipBlank(in);
         if (!Misc::readNum(in, comt) || !Forest::readForestAdr(in,adr)) 
@@ -90,16 +96,10 @@ bool RouteTable::readEntry(istream& in) {
 	return true;
 }
 
-/** Read routing table entrys from input stream. The first line must contain
- *  an integer, giving the number of entries to be read. The input may
- *  include blank lines and comment lines (any text starting with '#').
- *  Each entry must be on a line by itself (possibly with a trailing comment).
- *  Each entry consists of a comtree number, an address and one or more
- *  link numbers. The comtree number is a decimal number. The address
- *  is in the form a.b where a and b are both decimal values. For multicast
- *  addresses, the a part must be at least 32,768 (2^15). The link numbers
- *  are given as decimal values. If the address is a unicast address,
- *  only the first link number on the line is considered.
+/** Read routing table entries from input stream.
+ *  The first input line must contain an integer, giving the number
+ *  of entries to be read.
+ *  @param in is an open input stream
  */
 bool RouteTable::read(istream& in) {
 	int num;
@@ -115,7 +115,10 @@ bool RouteTable::read(istream& in) {
         return true;
 }
 
-// Print entry number rtx.
+/** Write a route table entry to an output stream.
+ *  @param out is an open output stream
+ *  @param rtx is the route index for the route to be written
+ */
 void RouteTable::writeEntry(ostream& out, int rtx) const {
 	string s;
 	out << getComtree(rtx) << " ";
@@ -137,8 +140,10 @@ void RouteTable::writeEntry(ostream& out, int rtx) const {
 	out << endl;
 }
 
+/** Write the entire route table to an output stream.
+ *  @param out is an open output stream
+ */
 void RouteTable::write(ostream& out) const {
-// Output human readable representation of routing table.
 	out << rteMap->size() << endl;
 	for (int rtx = firstRteIndex(); rtx != 0; rtx = nextRteIndex(rtx))
                 writeEntry(out,rtx);

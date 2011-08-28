@@ -24,32 +24,33 @@
 #include "IoProcessor.h"
 #include "StatsModule.h"
 
-struct ArgInfo {
-        string  mode;
+/** Structure used to carry information about a router. */
+struct RouterInfo {
+        string  mode; 		///< router operation mode (local or remote)
 
-        fAdr_t  myAdr;
-        ipa_t   myIp;
-        fAdr_t  nmAdr;
-        ipa_t   nmIp;
-        fAdr_t  ccAdr;
-        fAdr_t  firstLeafAdr;
-        fAdr_t  lastLeafAdr;
+        fAdr_t  myAdr; 		///< forest address of the router
+        ipa_t   myIp; 		///< IP address of the router 
+        fAdr_t  nmAdr; 		///< forest address of the network manager
+        ipa_t   nmIp; 		///< IP address of the network manager
+        fAdr_t  ccAdr; 		///< forest address of the comtree controller
+        fAdr_t  firstLeafAdr; 	///< first assignable leaf address
+        fAdr_t  lastLeafAdr; 	///< last assignable leaf address
 
-        string  ifTbl;
-        string  lnkTbl;
-        string  comtTbl;
-        string  rteTbl;
-        string  statSpec;
+        string  ifTbl; 		///< name of interface table file
+        string  lnkTbl; 	///< name of link table file
+        string  comtTbl; 	///< name of comtree table file
+        string  rteTbl; 	///< name of route table file
+        string  statSpec; 	///< name of statistics specification file
 
-        int     finTime;
+        int     finTime; 	///< number of seconds for router to run
 };
 
 class RouterCore {
 public:
-		RouterCore(const ArgInfo&);
+		RouterCore(const RouterInfo&);
 		~RouterCore();
 
-	bool	init(const ArgInfo&);
+	bool	init(const RouterInfo&);
 	void	run(uint64_t);
 	void	dump(ostream& os);
 private:
@@ -112,6 +113,10 @@ private:
 	void	returnToSender(packet,int);
 };
 
+/** Allocate a new leaf address.
+ *  @return a previously unused address in the range of assignable
+ *  leaf addresses for this router, or 0 if all addresses are in use
+ */
 inline fAdr_t RouterCore::allocLeafAdr() {
 	int offset = leafAdr->firstOut();
 	if (offset == 0) return 0;
@@ -119,6 +124,11 @@ inline fAdr_t RouterCore::allocLeafAdr() {
 	return firstLeafAdr + offset - 1;
 }
 
+/** Allocate a specified leaf address.
+ *  @param adr is an address in the range of assignable addresses
+ *  @return true of the adr is available for use and was successfully
+ *  allocated, else false
+ */
 inline bool RouterCore::allocLeafAdr(fAdr_t adr) {
 	int offset = (adr - firstLeafAdr) + 1;
 	if (!leafAdr->isOut(offset)) return false;
@@ -126,6 +136,9 @@ inline bool RouterCore::allocLeafAdr(fAdr_t adr) {
 	return true;
 }
 
+/** De-allocate a leaf address.
+ *  @param adr is a previously allocated address.
+ */
 inline void RouterCore::freeLeafAdr(fAdr_t adr) {
 	int offset = (adr - firstLeafAdr) + 1;
 	if (!leafAdr->isIn(offset)) return;
@@ -133,13 +146,19 @@ inline void RouterCore::freeLeafAdr(fAdr_t adr) {
 	return;
 }
 
-
+/** Determine if a given address is currently assigned.
+ *  @param adr is a forest unicast address
+ *  @return true if adr is one that had been previously assigned
+ */
 inline bool RouterCore::validLeafAdr(fAdr_t adr) const {
 	int offset = (adr - firstLeafAdr) + 1;
-	bool foo = leafAdr->isIn(offset);
-	return foo;
+	return leafAdr->isIn(offset);
 }
 
+/** Determine if a given address is currently unassigned.
+ *  @param adr is a forest unicast address
+ *  @return true if adr is not currently assigned.
+ */
 inline bool RouterCore::isFreeLeafAdr(fAdr_t adr) const {
 	int offset = (adr - firstLeafAdr) + 1;
 	return leafAdr->isOut(offset);

@@ -8,46 +8,17 @@
 
 #include "RouterCore.h"
 
-/*
-Notes
-
-Planned transition to having the router obtain its configuration
-from NetManager. Support both local and remote configuration.
-More flexible command-line args: param=value form.
-
-Arguments
-
-mode (local or remote)
- - in both modes, read files if present
- - in remote mode, send initialize request to netMgr and accept
-   packets from netMgr independent of normal router links;
-   modify IpProcessor to handle this; maybe have separate
-   packet processing loop; only call run after netMgr sends
-   start message
- - in both modes, NetMgr can send control packets; this allows
-   use of local mode with incremental addition of clients
-
-myAdr (required)
-myIp
-nmIp
-nmAdr
-ccAdr
-cliAdrRange
-
-ifTbl
-lnkTbl
-comtTbl
-rteTbl
-statSpec
-
-finTime - default to 0
-
-Two modes
-- local config mode - ifTbl, lnkTbl and comtTbl are required
-- remote config mode - netMgrIp is required
-*/
-
-bool processArgs(int argc, char *argv[], ArgInfo& args) {
+/** Process command line arguments for starting a forest router.
+ *  All arguments are strings of the form "name=value".
+ *  @param argc is the number of arguments (including the command name)
+ *  @param argv contains the command line arguments as C-style strings
+ *  @param is a reference to a RouterInfo structure; on return, it will
+ *  contain all the values that were specified on the command line;
+ *  unspecified numeric values are set to 0 and unspecified string
+ *  values are set to the empty string
+ *  @return true on success, false on failure
+ */
+bool processArgs(int argc, char *argv[], RouterInfo& args) {
 	// set default values
 	args.mode = "local";
 	args.myAdr = args.myIp = args.nmAdr = args.nmIp = 0;
@@ -105,12 +76,10 @@ bool processArgs(int argc, char *argv[], ArgInfo& args) {
 }
 
 
-/** usage:
- * 	fRouter arguments
- * 
+/** Main program for starting a forest router.
  */
 main(int argc, char *argv[]) {
-	ArgInfo args;
+	RouterInfo args;
 	
 	if (!processArgs(argc, argv, args))
 		fatal("fRouter: error processing command line arguments");
@@ -127,18 +96,21 @@ main(int argc, char *argv[]) {
 	cout << endl;
 }
 
-
-RouterCore::RouterCore(const ArgInfo& args) {
+/** Constructor for RouterCore, initializes key parameters and allocates space.
+ *  @param config is a RouterInfo structure which has been initialized to
+ *  specify various router parameters
+ */
+RouterCore::RouterCore(const RouterInfo& config) {
 	nIfaces = 50; nLnks = 1000;
 	nComts = 5000; nRts = 100000;
 	nPkts = 200000; nBufs = 100000; nQus = 10000;
 
-	myAdr = args.myAdr;
-	myIp = args.myIp;
-	nmAdr = args.nmAdr;
-	nmIp = args.nmIp;
-	ccAdr = args.ccAdr;
-	firstLeafAdr = args.firstLeafAdr;
+	myAdr = config.myAdr;
+	myIp = config.myIp;
+	nmAdr = config.nmAdr;
+	nmIp = config.nmIp;
+	ccAdr = config.ccAdr;
+	firstLeafAdr = config.firstLeafAdr;
 	
 	ps = new PacketStore(nPkts, nBufs);
 	ift = new IfaceTable(nIfaces);
@@ -149,7 +121,7 @@ RouterCore::RouterCore(const ArgInfo& args) {
 	iop = new IoProcessor(nIfaces, ift, lt, ps, sm);
 	qm = new QuManager(nLnks, nPkts, nQus, min(10,nPkts/(2*nLnks)), ps, sm);
 
-	leafAdr = new UiSetPair((args.lastLeafAdr - firstLeafAdr) + 1);
+	leafAdr = new UiSetPair((config.lastLeafAdr - firstLeafAdr) + 1);
 }
 
 RouterCore::~RouterCore() {
@@ -158,16 +130,22 @@ RouterCore::~RouterCore() {
 	if (leafAdr != 0) delete leafAdr;
 }
 
-/** Initialize router.
+/** Complete router initialization.
+ *  This method reads initial router configuration files (if present)
+ *  and configures router tables as specified. It also invokes
+ *  several setup and verification methods to ensure that the
+ *  initial configuration is fully consistent.
+ *  @param config is a RouterInfo structure which has been initialized to
+ *  specify various router parameters
  */
-bool RouterCore::init(const ArgInfo& args) {
-	if (args.mode.compare("remote") == 0) {
+bool RouterCore::init(const RouterInfo& config) {
+	if (config.mode.compare("remote") == 0) {
 		cerr << "remote configuration mode not yet implemented";
 		return false;
 	}
 
-	if (args.ifTbl.compare("") != 0) {
-		ifstream fs; fs.open(args.ifTbl.c_str());
+	if (config.ifTbl.compare("") != 0) {
+		ifstream fs; fs.open(config.ifTbl.c_str());
 		if (fs.fail() || !ift->read(fs)) {
 			cerr << "RouterCore::init: can't read "
 			     << "interface table\n";
@@ -175,8 +153,8 @@ bool RouterCore::init(const ArgInfo& args) {
 		}
 		fs.close();
 	}
-	if (args.lnkTbl.compare("") != 0) {
-		ifstream fs; fs.open(args.lnkTbl.c_str());
+	if (config.lnkTbl.compare("") != 0) {
+		ifstream fs; fs.open(config.lnkTbl.c_str());
 		if (fs.fail() || !lt->read(fs)) {
 			cerr << "RouterCore::init: can't read "
 			     << "link table\n";
@@ -184,8 +162,8 @@ bool RouterCore::init(const ArgInfo& args) {
 		}
 		fs.close();
 	}
-	if (args.comtTbl.compare("") != 0) {
-		ifstream fs; fs.open(args.comtTbl.c_str());
+	if (config.comtTbl.compare("") != 0) {
+		ifstream fs; fs.open(config.comtTbl.c_str());
 		if (fs.fail() || !ctt->read(fs)) {
 			cerr << "RouterCore::init: can't read "
 			     << "comtree table\n";
@@ -193,8 +171,8 @@ bool RouterCore::init(const ArgInfo& args) {
 		}
 		fs.close();
 	}
-	if (args.rteTbl.compare("") != 0) {
-		ifstream fs; fs.open(args.rteTbl.c_str());
+	if (config.rteTbl.compare("") != 0) {
+		ifstream fs; fs.open(config.rteTbl.c_str());
 		if (fs.fail() || !rt->read(fs)) {
 			cerr << "RouterCore::init: can't read "
 			     << "routing table\n";
@@ -202,8 +180,8 @@ bool RouterCore::init(const ArgInfo& args) {
 		}
 		fs.close();
 	}
-	if (args.statSpec.compare("") != 0) {
-		ifstream fs; fs.open(args.statSpec.c_str());
+	if (config.statSpec.compare("") != 0) {
+		ifstream fs; fs.open(config.statSpec.c_str());
 		if (fs.fail() || !sm->read(fs)) {
 			cerr << "RouterCore::init: can't read "
 			     << "statistics spec\n";
@@ -221,6 +199,10 @@ bool RouterCore::init(const ArgInfo& args) {
 	return true;
 }
 
+/** Setup interfaces specified in the interface table.
+ *  This involves opening a separate UDP socket for each interface.
+ *  @return true on success, false on failure
+ */
 bool RouterCore::setupIfaces() {
 	for (int iface = ift->firstIface(); iface != 0;
 		 iface = ift->nextIface(iface)) {
@@ -233,6 +215,11 @@ bool RouterCore::setupIfaces() {
 	return true;
 }
 
+/** Allocate addresses to peers specified in the initial link table.
+ *  Verifies that the initial peer addresses are in the range of
+ *  assignable leaf addresses, and allocates them if they are.
+ *  @return true on success, false on failure
+ */
 bool RouterCore::setupLeafAddresses() {
 	for (int lnk = lt->firstLink(); lnk != 0; lnk = lt->nextLink(lnk)) {
 		if (lt->getPeerType(lnk) == ROUTER) continue;
@@ -242,6 +229,12 @@ bool RouterCore::setupLeafAddresses() {
 	return true;
 }
 
+/** Setup queues as needed to support initial comtree configuration.
+ *  For each defined comtree, a queue is allocated to each of its links.
+ *  For each comtree link, initial rates are the minimum bit rate and
+ *  packet rate allowed.
+ *  @return true on success, false on failure
+ */
 bool RouterCore::setupQueues() {
 	// Set link rates in QuManager
 	for (int lnk = lt->firstLink(); lnk != 0; lnk = lt->nextLink(lnk)) {
@@ -463,8 +456,9 @@ bool RouterCore::setAvailRates() {
 	return success;
 }
 
-// Add routes for all directly attached hosts for all comtrees.
-// Also add routes to adjacent routers in different zip codes.
+/** Add routes to neighboring leaf nodes and to routers in foreign zip codes.
+ *  Routes are added in all comtrees. 
+ */
 void RouterCore::addLocalRoutes() {
 	for (int ctx = ctt->firstComtIndex(); ctx != 0;
 	     	 ctx = ctt->nextComtIndex(ctx)) {
@@ -485,6 +479,9 @@ void RouterCore::addLocalRoutes() {
 	}
 }
 
+/** Write the contents of all router tables to an output stream.
+ *  @param out is an open output stream
+ */
 void RouterCore::dump(ostream& out) {
 	out << "Interface Table\n\n"; ift->write(out); out << endl;
 	out << "Link Table\n\n"; lt->write(out); out << endl;
@@ -494,7 +491,7 @@ void RouterCore::dump(ostream& out) {
 }
 
 /** Main router processing loop.
- *  This program executes a loop that does three primary things:
+ *  This method executes a loop that does three primary things:
  *   - checks to see if a packet has arrived and if so, processes it;
  *     this typically results in the packet being placed in one or more queues
  *   - checks to see if any of the links is ready to send a packet,
@@ -507,7 +504,7 @@ void RouterCore::dump(ostream& out) {
  *  number of packets received and sent. These are printed to cout after
  *  the main loop exits, to facilitate debugging.
  *  
- *  Time is managed through a free-running microsecond clock, derived
+ *  Time is managed through a free-running clock, derived
  *  from the time value returned by gettimeofday. The clock is updated
  *  on each iteration of the loop.
  * 
@@ -582,7 +579,7 @@ void RouterCore::run(uint64_t finishTime) {
 			if (evCnt < MAXEVENTS &&
 			    (h.getPtype() != CLIENT_DATA || numData<=NUMDATA)) {
 				int p2 = (h.getPtype() == CLIENT_DATA ? 
-						ps->clone(p) : ps->fullCopy(p));
+					  ps->clone(p) : ps->fullCopy(p));
 				events[evCnt].sendFlag = 1;
 				events[evCnt].link = lnk;
 				events[evCnt].time = now;
@@ -640,9 +637,12 @@ void RouterCore::run(uint64_t finishTime) {
 	     << sm->oPktCnt(-2) << " to clients\n";
 }
 
+/** Perform error checks on forest packet.
+ *  @param p is a packet number
+ *  @param ctx is the comtree index for p's comtree
+ *  @return true if all checks pass, else false
+ */
 bool RouterCore::pktCheck(int p, int ctx) {
-// Perform error checks on forest packet.
-// Return true if all checks pass, else false.
 	PacketHeader& h = ps->getHeader(p);
 	// check version and  length
 	if (h.getVersion() != Forest::FOREST_VERSION) return false;
@@ -781,8 +781,13 @@ void RouterCore::multiSend(int p, int ctx, int rtx) {
 	}
 }
 
+/** Send route reply back towards p's source.
+ *  The reply is sent on the link on which p was received and
+ *  is addressed to p's original sender.
+ *  @param p is a packet number
+ *  @param ctx is the comtree index for p's comtree
+ */
 void RouterCore::sendRteReply(int p, int ctx) {
-// Send route reply back towards p's source.
 	PacketHeader& h = ps->getHeader(p);
 
 	int p1 = ps->alloc();
@@ -802,8 +807,15 @@ void RouterCore::sendRteReply(int p, int ctx) {
 	qm->enq(p1,ctt->getLinkQ(cLnk),now);
 }
 
+/** Handle a route reply packet.
+ *  Adds a route to the destination of the original packet that
+ *  triggered the route reply, if no route is currently defined.
+ *  If there is no route to the destination address in the packet,
+ *  the packet is flooded to neighboring routers.
+ *  If there is a route to the destination, it is forwarded along
+ *  that route, so long as the next hop is another router.
+ */
 void RouterCore::handleRteReply(int p, int ctx) {
-// Handle route reply packet p.
 	PacketHeader& h = ps->getHeader(p);
 	int rtx = rt->getRteIndex(h.getComtree(), h.getDstAdr());
 	int cLnk = ctt->getComtLink(ctt->getComtree(ctx),h.getInLink());
@@ -827,10 +839,13 @@ void RouterCore::handleRteReply(int p, int ctx) {
 	return;
 }
 
-// Perform subscription processing on p.
-// Ctte is the comtree table entry for the packet.
-// First payload word contains add/drop counts;
-// these must sum to at most 350 and must match packet length
+/** Perform subscription processing on a packet.
+ *  The packet contains two lists of multicast addresses,
+ *  each preceded by its length. The combined list lengths
+ *  is limited to 350.
+ *  @param p is a packet number
+ *  @param ctx is the comtree index for p's comtree
+ */
 void RouterCore::subUnsub(int p, int ctx) {
 	PacketHeader& h = ps->getHeader(p);
 	uint32_t *pp = ps->getPayload(p);
@@ -904,6 +919,7 @@ void RouterCore::subUnsub(int p, int ctx) {
  *  Still need to add error checking for modify messages.
  *  This requires extensions to ioProc and lnkTbl to
  *  track available bandwidth.
+ *  @param p is a packet number
  */
 void RouterCore::handleCtlPkt(int p) {
 	int ctx, rtx;
@@ -1404,6 +1420,73 @@ void RouterCore::handleCtlPkt(int p) {
 		returnToSender(p,cp1.pack(ps->getPayload(p)));
 		break;
 	}
+	case RESIZE_COMTREE_LINK: {
+		if (!(cp.isSet(COMTREE_NUM) && cp.isSet(LINK_NUM))) {
+			errReply(p,cp1,"resize comtree link: missing required "
+				       "attribute");
+			break;
+		}
+		comt_t comt = cp.getAttr(COMTREE_NUM);
+		int ctx = ctt->getComtIndex(comt);
+		if (ctx == 0) {
+			errReply(p,cp1,"resize comtree link: invalid comtree");
+			break;
+		}
+		int lnk = cp.getAttr(LINK_NUM);
+		int cLnk = ctt->getComtLink(comt,lnk);
+		if (cLnk == 0) {
+			errReply(p,cp1,"resize comtree link: specified link "
+				       "not defined in specified comtree");
+			break;
+		}
+
+		int ibr = ctt->getInBitRate(cLnk);
+		int ipr = ctt->getInPktRate(cLnk);
+		int obr = ctt->getOutBitRate(cLnk);
+		int opr = ctt->getOutPktRate(cLnk);
+
+		bool isPlnk = (lnk == ctt->getPlink(ctx));
+		if (cp.isSet(isPlnk ? BIT_RATE_DOWN : BIT_RATE_UP))
+			ibr = cp.getAttr(isPlnk ? BIT_RATE_DOWN : BIT_RATE_UP);
+		if (cp.isSet(isPlnk ? PKT_RATE_DOWN : PKT_RATE_UP))
+			ipr = cp.getAttr(isPlnk ? PKT_RATE_DOWN : PKT_RATE_UP);
+		if (cp.isSet(isPlnk ? BIT_RATE_UP : BIT_RATE_DOWN))
+			obr = cp.getAttr(isPlnk ? BIT_RATE_UP : BIT_RATE_DOWN);
+		if (cp.isSet(isPlnk ? PKT_RATE_UP : PKT_RATE_DOWN))
+			opr = cp.getAttr(isPlnk ? PKT_RATE_UP : PKT_RATE_DOWN);
+
+		int dibr = ibr - ctt->getInBitRate(cLnk);
+		int dipr = ipr - ctt->getInPktRate(cLnk);
+		int dobr = obr - ctt->getOutBitRate(cLnk);
+		int dopr = opr - ctt->getOutPktRate(cLnk);
+
+		if (dibr != 0 && !lt->addAvailInBitRate(lnk,-dibr)) {
+			errReply(p,cp1,"resize comtree link: increase in input "
+				       "bit rate exceeds link capacity");
+			break;
+		}
+		if (dipr != 0 && !lt->addAvailInPktRate(lnk,-dipr)) {
+			errReply(p,cp1,"resize comtree link: increase in input "
+				       "packet rate exceeds link capacity");
+			break;
+		}
+		if (dobr != 0 && !lt->addAvailOutBitRate(lnk,-dobr)) {
+			errReply(p,cp1,"resize comtree link: increase in output"
+				       " bit rate exceeds link capacity");
+			break;
+		}
+		if (dopr != 0 && !lt->addAvailOutPktRate(lnk,-dopr)) {
+			errReply(p,cp1,"resize comtree link: increase in output"
+				       " packet rate exceeds link capacity");
+			break;
+		}
+
+		if (dibr != 0) ctt->setInBitRate(cLnk,ibr);
+		if (dipr != 0) ctt->setInPktRate(cLnk,ipr);
+		if (dobr != 0) ctt->setOutBitRate(cLnk,obr);
+		if (dopr != 0) ctt->setOutPktRate(cLnk,opr);
+
+	}
         case ADD_ROUTE: {
 		if (!(cp.isSet(COMTREE_NUM) && cp.isSet(DEST_ADR) &&
 		      cp.isSet(LINK_NUM))) {
@@ -1524,11 +1607,12 @@ void RouterCore::returnToSender(packet p, int paylen) {
 }
 
 /** Send an error reply to a control packet.
- *  Reply packet re-uses the request packet p and its buffer.
- *  The string *s is included in the reply packet.
+ *  Reply packet re-uses the request packet and its buffer.
+ *  @param p is a packet number
+ *  @param cp is a reference to a control packet object for p
+ *  @param s points to an error message to be included in the reply
  */
 void RouterCore::errReply(packet p, CtlPkt& cp, const char *s) {
 	cp.setRrType(NEG_REPLY); cp.setErrMsg(s);
 	returnToSender(p,4*cp.pack(ps->getPayload(p)));
 }
-
