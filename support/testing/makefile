@@ -26,5 +26,8 @@ TestUiSetPair: TestUiSetPair.o ../lib
 TestHeapSet: TestHeapSet.o ../lib
 	${CXX} ${CXXFLAGS} $< ../lib -o $@
 
+TestQueue: TestQueue.o ../lib
+	${CXX} ${CXXFLAGS} $< ../lib -o $@
+
 clean :
 	rm -f *.o
