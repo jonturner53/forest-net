@@ -28,7 +28,7 @@ StatsModule::~StatsModule() { delete [] stat; }
 
 void StatsModule::record(uint64_t now) {
 // Record statistics at time now.
-	int i, val;
+	int i, val, cLnk, qid;
 
 	if (n == 0) return;
 	for (i = 1; i <= n; i++) {
@@ -58,9 +58,16 @@ void StatsModule::record(uint64_t now) {
 				else if (s.lnk == -2) val = leafOutByte;
 				else val = lnkCnts[s.lnk].outByte;
 				break;
-// add code to convert lnk+qnum to global qnum
-			case qPkt:   val = qCnts[s.qnum].pktLen; break;
-			case qByt:   val = qCnts[s.qnum].bytLen; break;
+			case qPkt:   
+				cLnk = ctt->getComtLink(s.comt,s.lnk);
+				qid = ctt->getLinkQ(cLnk);
+				val = getQlen(qid);
+				break;
+			case qByt:
+				cLnk = ctt->getComtLink(s.comt,s.lnk);
+				qid = ctt->getLinkQ(cLnk);
+				val = getQbytes(qid);
+				break;
 			default: break;
 		}
 		fs << val << " ";
@@ -82,8 +89,8 @@ void StatsModule::record(uint64_t now) {
  *  outPkt L	number of packets sent on output link L
  *   inByt L	number of bytes received on input link L
  *  outByt L	number of bytes sent on output link L
- *    qPkt L Q	number of packets in queue Q on output link L
- *    qByt L Q	number of bytes in queue Q on output link L
+ *    qPkt L C	number of packets for comtree C output link L
+ *    qByt L C	number of bytes for comtree C on output link L
  * 
  *  If inPkt, outPkt, inByt, outByt are given with a link # of 0,
  *  the statistics for the router as a whole are reported. If the
@@ -96,7 +103,7 @@ void StatsModule::record(uint64_t now) {
  *  queued for the given link (over all queues) is reported.
  */ 
 bool StatsModule::readStat(istream& in) {
-	int lnk, qnum, lcIn, lcOut;
+	int lnk, comt, lcIn, lcOut;
 	cntrTyp typ; string typStr, fname;
 	char buf[32];
 
@@ -116,7 +123,7 @@ bool StatsModule::readStat(istream& in) {
 		if (!Misc::readNum(in,lnk)) return false;
 		break;
 	case qPkt: case qByt:
-		if (!Misc::readNum(in,lnk) || !Misc::readNum(in,qnum))
+		if (!Misc::readNum(in,lnk) || !Misc::readNum(in,comt))
 			return false;
 		break;
 	}
@@ -128,7 +135,7 @@ bool StatsModule::readStat(istream& in) {
 	StatItem& s = stat[n];
 	s.typ = typ;
 	s.lnk = lnk;
-	s.qnum = qnum;
+	s.comt = comt;
 
 	return true;
 }
@@ -169,11 +176,11 @@ void StatsModule::writeStat(ostream& out, int i) const {
 		break;
 	case   qPkt:
 		out << "  qPkt " << setw(2) << s.lnk
-		   << " " << setw(2) << s.qnum << endl;
+		   << " " << setw(2) << s.comt << endl;
 		break;
 	case   qByt:
 		out << "  qByt " << setw(2) << s.lnk
-		   << " " << setw(2) << s.qnum << endl;
+		   << " " << setw(2) << s.comt << endl;
 		break;
 	}
 }

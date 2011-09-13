@@ -190,7 +190,12 @@ bool ComtreeTable::readEntry(istream& in) {
 		bool rtrFlag = (lt->getPeerType(lnk) == ROUTER);
 		bool coreFlag = (coreLinks.find(lnk) != coreLinks.end());
 		if (coreFlag && !rtrFlag) return false;
-		addLink(ctx,lnk,rtrFlag,coreFlag);
+		if (!addLink(ctx,lnk,rtrFlag,coreFlag)) return false;
+		int cLnk = getComtLink(ct,lnk);
+		setInBitRate(cLnk,Forest::MINBITRATE);
+		setInPktRate(cLnk,Forest::MINPKTRATE);
+		setOutBitRate(cLnk,Forest::MINBITRATE);
+		setOutPktRate(cLnk,Forest::MINPKTRATE);
 	}
 	setPlink(ctx,plnk); // must be done after links are defined
 

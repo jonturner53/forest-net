@@ -36,7 +36,7 @@ enum CpTypeIndex {
 	/** packet types to manage comtrees at routers */
 	ADD_COMTREE, DROP_COMTREE, GET_COMTREE, MOD_COMTREE,
 	ADD_COMTREE_LINK, DROP_COMTREE_LINK,
-	RESIZE_COMTREE_LINK,
+	RESIZE_COMTREE_LINK, GET_COMTREE_LINK,
 
 	/** packet types to manage routes at routers */
 	ADD_ROUTE, DROP_ROUTE, GET_ROUTE, MOD_ROUTE,

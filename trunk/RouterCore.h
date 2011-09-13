@@ -103,6 +103,7 @@ private:
 	void	multiSend(int,int,int);
 
 	// inband control
+	void 	handleConnDisc(int);
 	void 	handleRteReply(int, int);
 	void	sendRteReply(int,int);	
 	void	subUnsub(int,int);

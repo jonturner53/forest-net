@@ -80,7 +80,7 @@ int IoProcessor::receive() {
 	int lnk;	  	// # of link on which packet received
 
 	packet p = ps->alloc();
-        if (p == 0) return 0;
+        if (p == 0) { return 0; }
         PacketHeader& h = ps->getHeader(p);
         buffer_t& b = ps->getBuffer(p);
 

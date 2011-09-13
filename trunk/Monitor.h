@@ -24,7 +24,7 @@ public:
 		Monitor(ipa_t, ipa_t , ipa_t, fAdr_t, fAdr_t, int);
 		~Monitor();
 
-	bool	init(char*);		///< open and setup socket
+	bool	init();			///< open and setup socket
 	void	run(int); 		///< run avatar
 private:
 	const static short MON_PORT = 30124;///< port# for connection to GUI
@@ -46,9 +46,6 @@ private:
 
 	comt_t	comt;			///< comtree number
 
-	bool	logging;		///< true if logging requested
-	ofstream logFile;		///< output stream for optional log file
-
 	const static int MAX_REPORTS = 5; ///< max # of reports per status pkt
 	uint32_t *statPkt;		///< pointer to buffer for status packet
 	int	repCnt;			///< number of reports in status packet
@@ -61,7 +58,7 @@ private:
 	int	y;		///< y coordinate in virtual world
 	int	dir;		///< direction avatar is facing in degrees
 	int	speed;		///< speed moving in UNITS/sec
-	int	numVisible;	///< number of visible avatars + number of nearby avatars
+	int	numVisible;	///< number of visible avatars + # nearby 
 	int	numNear;	///< number of nearby avatars
 	comt_t	comt;		///< comtree that avatar appears in
 	} *avData;		
@@ -85,8 +82,6 @@ private:
 
 	void	updateStatus(int,int);
 	void	updateSubscriptions(comt_t,comt_t);
-
-	void	writeStatus(int);
 };
 
 #endif

@@ -18,11 +18,20 @@
 enum CpAttrIndex {
 	CPA_START,			///< marker preceding first index
 
+	AVAIL_BIT_RATE,		///< available bit rate in Kb/s
+	AVAIL_PKT_RATE,		///< avaialable packet rate in p/s
+	AVAIL_BIT_RATE_IN,	///< available input bit rate in Kb/s
+	AVAIL_PKT_RATE_IN,	///< avaialable input packet rate in p/s
+	AVAIL_BIT_RATE_OUT,	///< available input bit rate in Kb/s
+	AVAIL_PKT_RATE_OUT,	///< avaialable input packet rate in p/s
 	BIT_RATE,		///< bit rate in Kb/s
 	BIT_RATE_DOWN,		///< downstream bit rate in Kb/s
 	BIT_RATE_UP,		///< upstream bit rate in Kb/s
+	BIT_RATE_IN,		///< input bit rate in Kb/s
+	BIT_RATE_OUT,		///< output bit rate in Kb/s
 	CLIENT_ADR,		///< forest address assigned to a client
 	CLIENT_IP,		///< IP address of a client
+	CLIENT_PORT,		///< IP address of a client
 	COMTREE_NUM,		///< a comtree number
 	COMTREE_OWNER,		///< the comtree owner
 	CORE_FLAG,		///< core flag for a comtree
@@ -45,6 +54,7 @@ enum CpAttrIndex {
 	MAX_PKT_RATE,		///< max packet rate of an interface in p/s
 	PARENT_LINK,		///< link to parent in a comtree
 	PEER_ADR,		///< address of a link's peer node
+	PEER_CORE_FLAG,		///< true if comtree peer is in core
 	PEER_DEST,		///< restricted destination address for peer
 	PEER_IP,		///< IP address of a link's peer node
 	PEER_PORT,		///< UDP port number of a link's peer node
@@ -52,6 +62,8 @@ enum CpAttrIndex {
 	PKT_RATE,		///< packet rate in p/s
 	PKT_RATE_DOWN,		///< downstream packet rate in p/s
 	PKT_RATE_UP,		///< upstream packet rate in p/s
+	PKT_RATE_IN,		///< input packet rate in p/s
+	PKT_RATE_OUT,		///< output packet rate in p/s
 	QUEUE_NUM,		///< queue number
 	RTR_ADR,		///< forest address of a router
 	RTR_IP,			///< IP address of a router

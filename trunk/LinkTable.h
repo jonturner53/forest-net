@@ -307,8 +307,8 @@ inline bool LinkTable::setAvailOutPktRate(int lnk, int pr) {
 inline bool LinkTable::addAvailInBitRate(int lnk, int br) {
 	if (!valid(lnk)) return false;
 	int s = br + lnkTbl[lnk].avInBitRate;
-	if (s > lnkTbl[lnk].bitRate) return false;
-	lnkTbl[lnk].avInBitRate = max(0,s);
+	if (s < 0 || s > lnkTbl[lnk].bitRate) return false;
+	lnkTbl[lnk].avInBitRate = s;
 	return true;
 }
 
@@ -321,8 +321,8 @@ inline bool LinkTable::addAvailInBitRate(int lnk, int br) {
 inline bool LinkTable::addAvailInPktRate(int lnk, int pr) {
 	if (!valid(lnk)) return false;
 	int s = pr + lnkTbl[lnk].avInPktRate;
-	if (s > lnkTbl[lnk].pktRate) return false;
-	lnkTbl[lnk].avInPktRate = max(0,s);
+	if (s < 0 || s > lnkTbl[lnk].pktRate) return false;
+	lnkTbl[lnk].avInPktRate = s;
 	return true;
 }
 
@@ -335,8 +335,8 @@ inline bool LinkTable::addAvailInPktRate(int lnk, int pr) {
 inline bool LinkTable::addAvailOutBitRate(int lnk, int br) {
 	if (!valid(lnk)) return false;
 	int s = br + lnkTbl[lnk].avOutBitRate;
-	if (s > lnkTbl[lnk].bitRate) return false;
-	lnkTbl[lnk].avOutBitRate = max(0,s);
+	if (s < 0 || s > lnkTbl[lnk].bitRate) return false;
+	lnkTbl[lnk].avOutBitRate = s;
 	return true;
 }
 
@@ -349,8 +349,8 @@ inline bool LinkTable::addAvailOutBitRate(int lnk, int br) {
 inline bool LinkTable::addAvailOutPktRate(int lnk, int pr) {
 	if (!valid(lnk)) return false;
 	int s = pr + lnkTbl[lnk].avOutPktRate;
-	if (s > lnkTbl[lnk].pktRate) return false;
-	lnkTbl[lnk].avOutPktRate = max(0,s);
+	if (s < 0 || s > lnkTbl[lnk].pktRate) return false;
+	lnkTbl[lnk].avOutPktRate = s;
 	return true;
 }
 
