@@ -50,6 +50,8 @@ private:
 	int	nP;			///< total # of packets in the system
 	int	nQ;			///< number of queues per link
 	int	maxppl;			///< max # of packets per link
+	int	qCnt;			///< number of allocated queues
+int limbo; // for debugging
 
 	UiListSet *queues;		///< collection of lists of packets
 	int	free;			///< first queue in the free list

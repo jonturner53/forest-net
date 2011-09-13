@@ -40,10 +40,18 @@ CpType::CpTypeInfo CpType::typeInfo[] = {
 									   (1ull << INT_PKT_RATE_DOWN)|
 									   (1ull << INT_PKT_RATE_UP),
 									   (1ull << COMTREE_NUM), 0},
-	{ CLIENT_JOIN_COMTREE,	14,	"client join comtree",	   "cjc",  (1ull << COMTREE_NUM),
-									   (1ull << COMTREE_NUM), 0},
-	{ CLIENT_LEAVE_COMTREE,	15,	"client leave comtree",	   "clc",  (1ull << COMTREE_NUM),
-									   (1ull << COMTREE_NUM), 0},
+	{ CLIENT_JOIN_COMTREE,	14,	"client join comtree",	   "cjc",  (1ull << COMTREE_NUM)|
+									   (1ull << PEER_IP)|
+									   (1ull << PEER_PORT),
+									   (1ull << COMTREE_NUM)|
+									   (1ull << PEER_IP)|
+									   (1ull << PEER_PORT), 0},
+	{ CLIENT_LEAVE_COMTREE,	15,	"client leave comtree",	   "clc",  (1ull << COMTREE_NUM)|
+									   (1ull << PEER_IP)|
+									   (1ull << PEER_PORT),
+									   (1ull << COMTREE_NUM)|
+									   (1ull << PEER_IP)|
+									   (1ull << PEER_PORT), 0},
 	{ CLIENT_RESIZE_COMTREE,16,	"client	resize comtree",   "crc",  (1ull << COMTREE_NUM),
 									   (1ull << COMTREE_NUM), 0},
 	{ CLIENT_GET_LEAF_RATE,	17,	"client	get leaf rate",	   "cglr", (1ull << COMTREE_NUM)|
@@ -79,6 +87,8 @@ CpType::CpTypeInfo CpType::typeInfo[] = {
 									   (1ull << IFACE_NUM),
 									   (1ull << IFACE_NUM)|
 									   (1ull << LOCAL_IP)|
+									   (1ull << AVAIL_BIT_RATE)|
+									   (1ull << AVAIL_PKT_RATE)|
 									   (1ull << MAX_BIT_RATE)|
 									   (1ull << MAX_PKT_RATE)},
 	{ MOD_IFACE,		33,	"modify interface",	   "mi",   (1ull << IFACE_NUM)|
@@ -90,7 +100,8 @@ CpType::CpTypeInfo CpType::typeInfo[] = {
 									   (1ull << LINK_NUM)|
 									   (1ull << PEER_TYPE)|
 									   (1ull << PEER_IP)|
-									   (1ull << PEER_ADR),
+									   (1ull << PEER_ADR)|
+									   (1ull << PEER_PORT),
 									   (1ull << PEER_TYPE)|
 									   (1ull << PEER_IP),
 									   (1ull << LINK_NUM)|
@@ -106,13 +117,13 @@ CpType::CpTypeInfo CpType::typeInfo[] = {
 									   (1ull << PEER_IP)|
 									   (1ull << PEER_ADR)|
 									   (1ull << PEER_PORT)|
-									   (1ull << PEER_DEST)|
+									   (1ull << AVAIL_BIT_RATE_IN)|
+									   (1ull << AVAIL_PKT_RATE_IN)|
+									   (1ull << AVAIL_BIT_RATE_OUT)|
+									   (1ull << AVAIL_PKT_RATE_OUT)|
 									   (1ull << BIT_RATE)|
 									   (1ull << PKT_RATE)},
 	{ MOD_LINK,		43,	"modify link",		   "ml",   (1ull << LINK_NUM)|
-									   (1ull << PEER_TYPE)|
-									   (1ull << PEER_PORT)|
-									   (1ull << PEER_DEST)|
 									   (1ull << BIT_RATE)|
 									   (1ull << PKT_RATE),
 									   (1ull << LINK_NUM), 0},
@@ -126,30 +137,42 @@ CpType::CpTypeInfo CpType::typeInfo[] = {
 									   (1ull << COMTREE_NUM)|
 									   (1ull << CORE_FLAG)|
 									   (1ull << PARENT_LINK)|
-									   (1ull << LINK_COUNT)|
-									   (1ull << QUEUE_NUM)},
+									   (1ull << LINK_COUNT)},
 	{ MOD_COMTREE,		53,	"modify comtree",	   "mc",   (1ull << COMTREE_NUM)|
 									   (1ull << CORE_FLAG)|
-									   (1ull << PARENT_LINK)|
-									   (1ull << QUEUE_NUM),
+									   (1ull << PARENT_LINK),
 									   (1ull << COMTREE_NUM), 0},
 	{ ADD_COMTREE_LINK,	54,	"add comtree link",	   "acl",  (1ull << COMTREE_NUM)|
 									   (1ull << LINK_NUM)|
-									   (1ull << CORE_FLAG)|
-									   (1ull << PEER_ADR),
+									   (1ull << PEER_CORE_FLAG)|
+									   (1ull << PEER_IP)|
+									   (1ull << PEER_PORT),
 									   (1ull << COMTREE_NUM), 0},
 	{ DROP_COMTREE_LINK,	55,	"drop comtree link",	   "dcl",  (1ull << COMTREE_NUM)|
 									   (1ull << LINK_NUM)|
-									   (1ull << PEER_ADR),
+									   (1ull << PEER_IP)|
+									   (1ull << PEER_PORT),
 									   (1ull << COMTREE_NUM), 0},
 	{ RESIZE_COMTREE_LINK,	56,	"resize comtree link",	   "rcl",  (1ull << COMTREE_NUM)|
 									   (1ull << LINK_NUM)|
-									   (1ull << BIT_RATE_DOWN)|
-									   (1ull << BIT_RATE_UP)|
-									   (1ull << PKT_RATE_DOWN)|
-									   (1ull << PKT_RATE_UP),
+									   (1ull << BIT_RATE_IN)|
+									   (1ull << BIT_RATE_OUT)|
+									   (1ull << PKT_RATE_IN)|
+									   (1ull << PKT_RATE_OUT),
 									   (1ull << COMTREE_NUM)|
 									   (1ull << LINK_NUM), 0},
+	{ GET_COMTREE_LINK,	57,	"get comtree link",	   "gcl",  (1ull << COMTREE_NUM)|
+									   (1ull << LINK_NUM),
+									   (1ull << COMTREE_NUM)|
+									   (1ull << LINK_NUM),
+									   (1ull << COMTREE_NUM)|
+									   (1ull << LINK_NUM)|
+									   (1ull << BIT_RATE_IN)|
+									   (1ull << BIT_RATE_OUT)|
+									   (1ull << PKT_RATE_IN)|
+									   (1ull << PKT_RATE_OUT)|
+									   (1ull << QUEUE_NUM)|
+									   (1ull << PEER_DEST)},
 
 	{ ADD_ROUTE,		70,	"add route",		   "ar",   (1ull << DEST_ADR)|
 									   (1ull << COMTREE_NUM)|
@@ -167,8 +190,7 @@ CpType::CpTypeInfo CpType::typeInfo[] = {
 									   (1ull << COMTREE_NUM),
 									   (1ull << DEST_ADR)|
 									   (1ull << COMTREE_NUM)|
-									   (1ull << LINK_NUM)|
-									   (1ull << QUEUE_NUM) },
+									   (1ull << LINK_NUM)},
 	{ MOD_ROUTE,		73,	"modify route",		   "mr",   (1ull << DEST_ADR)|
 									   (1ull << COMTREE_NUM)|
 									   (1ull << LINK_NUM)|
@@ -188,8 +210,10 @@ CpType::CpTypeInfo CpType::typeInfo[] = {
 									   (1ull << COMTREE_NUM)|
 									   (1ull << LINK_NUM), 0},
 
-	{ NEW_CLIENT,		100,	"new client",		   "ncl",  (1ull << CLIENT_IP),
-									   (1ull << CLIENT_IP),
+	{ NEW_CLIENT,		100,	"new client",		   "ncl",  (1ull << CLIENT_IP)|
+									   (1ull << PEER_PORT),
+									   (1ull << CLIENT_IP)|
+									   (1ull << PEER_PORT),
 								           (1ull << CLIENT_ADR)|
 								           (1ull << RTR_IP)|
 								           (1ull << RTR_ADR)},
@@ -210,36 +234,14 @@ void CpType::check() {
 	if (!firstCall) return;
 	firstCall = false;
 	for (int i = CPT_START+1; i < CPT_END; i++) {
-		if (typeInfo[i].index != CpTypeIndex(i))
+		if (typeInfo[i].index != CpTypeIndex(i)) {
+			cerr << "typeInfo[" << i << "]=" << typeInfo[i].index
+			     << " CpTypeIndex(" << i << ")=" << CpTypeIndex(i)
+			     << endl;
 			fatal("CpType::check: mismatched index values");
+		}
 	}
 }
-
-//bool CpType::validIndex(CpTypeIndex i) {
-//	if (firstCall) check();
-//	return i > CPT_START && i < CPT_END;
-//}
-//
-///** Get the code for a given control packet type index
-// */
-//int CpType::getCode(CpTypeIndex i) {
-//	if (firstCall) check();
-//	return (validIndex(i) ? typeInfo[i].code : 0);
-//}
-//
-///** Get the name for a given control packet type index
-// */
-//const char* CpType::getName(CpTypeIndex i) {
-//	if (firstCall) check();
-//	return (validIndex(i) ? typeInfo[i].name : "undefined");
-//}
-//
-///** Get the abbreviation for a given control packet type index
-// */
-//const char* CpType::getAbbrev(CpTypeIndex i) {
-//	if (firstCall) check();
-//	return (validIndex(i) ?  typeInfo[i].abbrev : "undefined");
-//}
 
 CpTypeIndex CpType::getIndexByCode(int c) {
 	for (int i = CPT_START+1; i < CPT_END; i++) {

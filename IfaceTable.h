@@ -188,7 +188,7 @@ inline void IfaceTable::setMaxPktRate(int iface, int r) {
  */
 inline bool IfaceTable::setAvailBitRate(int iface, int r) {
 	if (r > ift[iface].maxbitrate) return false;
-	ift[iface].avbitrate = min(0,r);
+	ift[iface].avbitrate = max(0,r);
 	return true;
 }
 
@@ -200,7 +200,7 @@ inline bool IfaceTable::setAvailBitRate(int iface, int r) {
  */
 inline bool IfaceTable::setAvailPktRate(int iface, int r) {
 	if (r > ift[iface].maxpktrate) return false;
-	ift[iface].avpktrate = min(0,r);
+	ift[iface].avpktrate = max(0,r);
 	return true;
 }
 
@@ -212,8 +212,8 @@ inline bool IfaceTable::setAvailPktRate(int iface, int r) {
  */
 inline bool IfaceTable::addAvailBitRate(int iface, int r) {
 	int s = r + ift[iface].avbitrate;
-	if (s > ift[iface].maxbitrate) return false;
-	ift[iface].avbitrate = min(0,s);
+	if (s < 0 || s > ift[iface].maxbitrate) return false;
+	ift[iface].avbitrate = s;
 	return true;
 }
 
@@ -225,8 +225,8 @@ inline bool IfaceTable::addAvailBitRate(int iface, int r) {
  */
 inline bool IfaceTable::addAvailPktRate(int iface, int r) {
 	int s = r + ift[iface].avpktrate;
-	if (s > ift[iface].maxpktrate) return false;
-	ift[iface].avpktrate = min(0,s);
+	if (s < 0 || s > ift[iface].maxpktrate) return false;
+	ift[iface].avpktrate = s;
 	return true;
 }
 

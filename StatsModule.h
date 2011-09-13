@@ -4,6 +4,7 @@
 #define STATSMODULE_H
 
 #include "CommonDefs.h"
+#include "ComtreeTable.h"
 
 class StatsModule {
 public:
@@ -39,12 +40,12 @@ private:
 
 	enum cntrTyp {
 	inPkt, outPkt, inByt, outByt,  	// input/output counts
-      	qPkt, qByt,		 	// packets/bytes in queues
+      	qPkt, qByt		 	// packets/bytes in queues
 	};		
 
 	struct StatItem {
 	int	lnk;			// link number for stat
-	int	qnum;			// for queue length stats
+	int	comt;			// for queue length stats
 	cntrTyp	typ;			// type of counter for this stat
 	};
 	StatItem  *stat;		// stat[i] is statistic number i
@@ -60,10 +61,10 @@ private:
 	LinkCounts *lnkCnts;
 
 	struct QueueCounts {
-	int	bytLen;
-	int	pktLen;
-	};
-	QueueCounts *qCnts;
+        int     bytLen;
+        int     pktLen;
+        };
+        QueueCounts *qCnts;
 
 	// system-wide counts
 	int	totInByte;
@@ -78,6 +79,8 @@ private:
 	int	rtrOutPkt;
 	int	leafOutByte;
 	int	leafOutPkt;
+
+	ComtreeTable *ctt;
 
 	// helper functions
 	bool	readStat(istream&);	 	// read one new statistic

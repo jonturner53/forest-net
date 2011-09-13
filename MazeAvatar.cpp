@@ -70,10 +70,6 @@ MazeAvatar::MazeAvatar(ipa_t mipa, ipa_t ripa, fAdr_t ma, fAdr_t ra, comt_t ct, 
 	ps = new PacketStore(nPkts+1, nPkts+1);
 
 	// initialize avatar to random position
-	struct timeval tv;
-	if (gettimeofday(&tv, NULL) < 0)
-		fatal("MazeAvatar::MazeAvatar: gettimeofday failure");
-	//srand(tv.tv_usec);
 	srand(myAdr);
 	x = randint(0,SIZE-1); y = randint(0,SIZE-1);
 	direction = (double) randint(0,359);
@@ -140,6 +136,7 @@ bool MazeAvatar::init() {
  */
 void MazeAvatar::run(int finishTime) {
 	connect(); 		// send initial connect packet
+	updateSubscriptions();  // establish initial set of subscriptions
 
 	uint32_t now;    	// free-running microsecond time
 	uint32_t nextTime;	// time of next operational cycle
@@ -163,7 +160,6 @@ void MazeAvatar::run(int finishTime) {
 		sendStatus(now);
 
 		nextTime += 1000*UPDATE_PERIOD;
-		cerr << nextTime << endl;
 		useconds_t delay = nextTime - now;
 		if (delay < (1 << 31)) usleep(delay);
 		else nextTime = now + 1000*UPDATE_PERIOD;

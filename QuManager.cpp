@@ -53,6 +53,7 @@ QuManager::QuManager(int nL1, int nP1, int nQ1, int maxppl1,
 		quInfo[qid].pktLim = -1; // used to identify unassigned queues
 	}
 	quInfo[nQ].lnk = 0; free = 1;
+	qCnt = 0;
 }
 		
 QuManager::~QuManager() {
@@ -65,10 +66,14 @@ QuManager::~QuManager() {
  *  @return the qid of the assigned queue, or 0 no queues are available
  */
 int QuManager::allocQ(int lnk) {
+if (qCnt > .9*nQ) {
+cerr << "running out of queues qCnt=" << qCnt << " limbo=" << limbo << "\n";
+}
 	if (free == 0) return 0;
 	int qid = free; free = quInfo[qid].lnk;
 	quInfo[qid].lnk = lnk;
 	quInfo[qid].pktLim = 0; // non-negative value for assigned queues
+	qCnt++;
 	return qid;
 }
 
@@ -80,8 +85,9 @@ int QuManager::allocQ(int lnk) {
  */
 void QuManager::freeQ(int qid) {
 	if (queues->empty(qid)) {
-		quInfo[qid].lnk = free; free = qid;
+		quInfo[qid].lnk = free; free = qid; qCnt--;
 	} 
+else limbo++; // for debugging
 	quInfo[qid].pktLim = -1; // negative value for free queues
 }
 
@@ -165,7 +171,8 @@ int QuManager::deq(int& lnk, uint64_t now) {
 		hset->deleteMin(lnk);
 		if (q.pktLim < 0) {
 			// move queue to the free list
-			q.lnk = free; free = qid;
+			q.lnk = free; free = qid; qCnt--;
+limbo--;
 		}
 	} else {
 		int np = queues->first(qid);

@@ -442,9 +442,10 @@ bool RouterCore::setAvailRates() {
 			int ipr = ctt->getInPktRate(cLnk);
 			int obr = ctt->getOutBitRate(cLnk);
 			int opr = ctt->getOutPktRate(cLnk);
+cerr << "setAvailRates lnk=" << lnk << " ibr=" << ibr << " ipr=" << ipr << " obr=" << obr << " opr=" << opr << endl;
 			if (!lt->addAvailInBitRate(lnk,-ibr) ||
 			    !lt->addAvailInPktRate(lnk,-ipr) ||
-			    !lt->addAvailOutPktRate(lnk,-obr) ||
+			    !lt->addAvailOutBitRate(lnk,-obr) ||
 			    !lt->addAvailOutPktRate(lnk,-opr)) {
 				cerr << "RouterCore::setAvailRates: "
 					"oversubscribing link "
@@ -564,6 +565,8 @@ void RouterCore::run(uint64_t finishTime) {
 				subUnsub(p,ctx);
 			} else if (ptype == RTE_REPLY) {
 				handleRteReply(p,ctx);
+			} else if (ptype == CONNECT || ptype == DISCONNECT) {
+				handleConnDisc(p);
 			} else if (h.getDstAdr() != myAdr) {
 				forward(p,ctx);
 			} else {
@@ -910,6 +913,61 @@ void RouterCore::subUnsub(int p, int ctx) {
 	ps->free(p); return;
 }
 
+/** Handle a CONNECT or DISCONNECT packet.
+ *  @param p is the packet number of the packet to be handled.
+ */
+void RouterCore::handleConnDisc(int p) {
+	PacketHeader& h = ps->getHeader(p);
+	int inLnk = h.getInLink();
+	buffer_t& b = ps->getBuffer(p);
+
+	if (!validLeafAdr(h.getSrcAdr())) {
+		ps->free(p); return;
+	}
+	if (h.getPtype() == CONNECT) {
+		if (lt->getPeerPort(inLnk) == 0)
+			lt->setPeerPort(inLnk,h.getTunSrcPort());
+		if (nmAdr != 0) {
+			int p1 = ps->alloc();
+			CtlPkt cp;
+			cp.setCpType(CLIENT_CONNECT);
+			cp.setRrType(REQUEST);
+			cp.setAttr(CLIENT_ADR,h.getSrcAdr());
+			cp.setAttr(RTR_ADR,myAdr);
+			int paylen = cp.pack(ps->getPayload(p1));
+			PacketHeader& h1 = ps->getHeader(p1);
+			h1.setComtree(100);
+			h1.setFlags(0); h1.setInLink(0);
+			h1.setPtype(NET_SIG);
+			h1.setLength(Forest::OVERHEAD + paylen);
+			h1.setDstAdr(nmAdr); h1.setSrcAdr(myAdr);
+			ps->pack(p1);
+			forward(p1,ctt->getComtIndex(100));
+		}
+	} else if (h.getPtype() == DISCONNECT) {
+		if (lt->getPeerPort(inLnk) == h.getTunSrcPort())
+			lt->setPeerPort(inLnk,0);
+		if (nmAdr != 0) {
+			int p1 = ps->alloc();
+			CtlPkt cp;
+			cp.setCpType(CLIENT_DISCONNECT);
+			cp.setRrType(REQUEST);
+			cp.setAttr(CLIENT_ADR,h.getSrcAdr());
+			cp.setAttr(RTR_ADR,myAdr);
+			int paylen = cp.pack(ps->getPayload(p1));
+			PacketHeader& h1 = ps->getHeader(p1);
+			h1.setComtree(100);
+			h1.setFlags(0); h1.setInLink(0);
+			h1.setPtype(NET_SIG);
+			h1.setLength(Forest::OVERHEAD + paylen);
+			h1.setDstAdr(nmAdr); h1.setSrcAdr(myAdr);
+			ps->pack(p1);
+			forward(p1,ctt->getComtIndex(100));
+		}
+	}
+	ps->free(p); return;
+}
+
 /** Handle all control packets addressed to the router.
  *  with the exception of SUB_UNSUB and RTE_REPLY which
  *  are handled "inline".
@@ -927,58 +985,11 @@ void RouterCore::handleCtlPkt(int p) {
 	int inLnk = h.getInLink();
 	buffer_t& b = ps->getBuffer(p);
 	CtlPkt cp;
-	// first handle special cases of CONNECT/DISCONNECT
-	if (h.getPtype() == CONNECT) {
-		if (lt->getPeerPort(inLnk) == 0) {
-			lt->setPeerPort(inLnk,h.getTunSrcPort());
-		}
-		if (validLeafAdr(h.getSrcAdr()) && nmAdr != 0) {
-			int p1 = ps->alloc();
-			cp.reset();
-			cp.setCpType(CLIENT_CONNECT);
-			cp.setRrType(REQUEST);
-			cp.setAttr(CLIENT_ADR,h.getSrcAdr());
-			cp.setAttr(RTR_ADR,myAdr);
-			int paylen = cp.pack(ps->getPayload(p1));
-			PacketHeader& h1 = ps->getHeader(p1);
-			h1.setComtree(100);
-			h1.setFlags(0); h1.setInLink(0);
-			h1.setPtype(NET_SIG);
-			h1.setLength(Forest::OVERHEAD + paylen);
-			h1.setDstAdr(nmAdr); h1.setSrcAdr(myAdr);
-			ps->pack(p1);
-			forward(p1,ctt->getComtIndex(100));
-		}
-		ps->free(p);
-		return;
-	}
-	if (h.getPtype() == DISCONNECT) {
-		if (lt->getPeerPort(inLnk) == h.getTunSrcPort())
-			lt->setPeerPort(inLnk,0);
-		if (validLeafAdr(h.getSrcAdr()) && nmAdr != 0) {
-			int p1 = ps->alloc();
-			cp.reset();
-			cp.setCpType(CLIENT_DISCONNECT);
-			cp.setRrType(REQUEST);
-			cp.setAttr(CLIENT_ADR,h.getSrcAdr());
-			cp.setAttr(RTR_ADR,myAdr);
-			int paylen = cp.pack(ps->getPayload(p1));
-			PacketHeader& h1 = ps->getHeader(p1);
-			h1.setComtree(100);
-			h1.setFlags(0); h1.setInLink(0);
-			h1.setPtype(NET_SIG);
-			h1.setLength(Forest::OVERHEAD + paylen);
-			h1.setDstAdr(nmAdr); h1.setSrcAdr(myAdr);
-			ps->pack(p1);
-			forward(p1,ctt->getComtIndex(100));
-		}
-		ps->free(p); return;
-	}
 
-	// then onto normal signalling packets
 	int len = h.getLength() - (Forest::HDR_LENG + 4);
 	if (!cp.unpack(ps->getPayload(p), len)) {
-		cerr << "misformatted control packet";
+		cerr << "RouterCore::handleCtlPkt: misformatted control "
+			" packet\n";
 		cp.write(cerr);
 		errReply(p,cp,"misformatted control packet");
 		return;
@@ -1045,6 +1056,8 @@ void RouterCore::handleCtlPkt(int p) {
 		if (ift->valid(iface)) {
 			cp1.setAttr(IFACE_NUM,iface);
 			cp1.setAttr(LOCAL_IP,ift->getIpAdr(iface));
+			cp1.setAttr(AVAIL_BIT_RATE,ift->getAvailBitRate(iface));
+			cp1.setAttr(AVAIL_PKT_RATE,ift->getAvailPktRate(iface));
 			cp1.setAttr(MAX_BIT_RATE,ift->getMaxBitRate(iface));
 			cp1.setAttr(MAX_PKT_RATE,ift->getMaxPktRate(iface));
 			returnToSender(p,cp1.pack(ps->getPayload(p)));
@@ -1097,12 +1110,12 @@ void RouterCore::handleCtlPkt(int p) {
 			// capacity to support a new link
 			int br = Forest::MINBITRATE;
 			int pr = Forest::MINPKTRATE;
-			if (ift->addAvailBitRate(iface,-br)) {
+			if (!ift->addAvailBitRate(iface,-br)) {
 				errReply(p,cp1,"add link: requested link "
 					       "exceeds interface capacity");
 				break;
 			}
-			if (ift->addAvailPktRate(iface,-pr)) {
+			if (!ift->addAvailPktRate(iface,-pr)) {
 				errReply(p,cp1,"add link: requested link "
 					       "exceeds interface capacity");
 				break;
@@ -1135,12 +1148,13 @@ void RouterCore::handleCtlPkt(int p) {
 					       "peer addresses");
 				break;
 			}
+			lt->setIface(lnk,iface);
 			lt->setPeerType(lnk,ntyp);
 			lt->setPeerAdr(lnk,padr);
 		}
 		cp1.setAttr(LINK_NUM,lnk);
 		cp1.setAttr(PEER_ADR,padr);
-		cp1.setAttr(RTR_IP,myIp);
+		cp1.setAttr(RTR_IP,ift->getIpAdr(iface));
 		returnToSender(p,cp1.pack(ps->getPayload(p)));
 		break;
 	}
@@ -1163,6 +1177,7 @@ void RouterCore::handleCtlPkt(int p) {
 			break;
 		}
 		int link = cp.getAttr(LINK_NUM);
+cerr << "processing get link on link " << link << endl;
 		if (lt->valid(link)) {
 			cp1.setAttr(LINK_NUM, link);
 			cp1.setAttr(IFACE_NUM, lt->getIface(link));
@@ -1170,8 +1185,17 @@ void RouterCore::handleCtlPkt(int p) {
 			cp1.setAttr(PEER_TYPE, lt->getPeerType(link));
 			cp1.setAttr(PEER_PORT, lt->getPeerPort(link));
 			cp1.setAttr(PEER_ADR, lt->getPeerAdr(link));
+			cp1.setAttr(AVAIL_BIT_RATE_IN,
+					lt->getAvailInBitRate(link));
+			cp1.setAttr(AVAIL_PKT_RATE_IN,
+					lt->getAvailInPktRate(link));
+			cp1.setAttr(AVAIL_BIT_RATE_OUT,
+					lt->getAvailOutBitRate(link));
+			cp1.setAttr(AVAIL_PKT_RATE_OUT,
+					lt->getAvailOutPktRate(link));
 			cp1.setAttr(BIT_RATE, lt->getBitRate(link));
 			cp1.setAttr(PKT_RATE, lt->getPktRate(link));
+cerr << "sending positive reply " << link << endl;
 			returnToSender(p,cp1.pack(ps->getPayload(p)));
 		} else errReply(p,cp1,"get link: invalid link number");
 		break;
@@ -1185,43 +1209,30 @@ void RouterCore::handleCtlPkt(int p) {
 		int link = cp.getAttr(LINK_NUM);
 		if (lt->valid(link)) {
 			cp1.setAttr(LINK_NUM,link);
-			if (cp.isSet(PEER_TYPE)) {
-				ntyp_t pt = (ntyp_t) cp.getAttr(PEER_TYPE);
-				if (pt != CLIENT && pt != SERVER &&
-				    pt != ROUTER && pt != CONTROLLER) {
-					errReply(p,cp1,"mod link:bad peerType");
-					return;
-				}
-				lt->setPeerType(link,pt);
-			}
-			if (cp.isSet(PEER_PORT)) {
-				int pp = cp.getAttr(PEER_PORT);
-				if (pp > 65535) {
-					errReply(p,cp1,"mod link:bad peerPort");
-					return;
-				}
-				lt->setPeerPort(link, pp);
-			}
 			int iface = lt->getIface(link);
 			if (cp.isSet(BIT_RATE)) {
 				int br = cp.getAttr(BIT_RATE);
 				int dbr = br - lt->getBitRate(link);
-				if (!ift->addAvailBitRate(link,-dbr)) {
+				if (!ift->addAvailBitRate(iface,-dbr)) {
 					errReply(p,cp1,"mod link: request "
 						 "exceeds interface capacity");
 					return;
 				}
 				lt->setBitRate(link, br); 
+				lt->addAvailInBitRate(link, dbr); 
+				lt->addAvailOutBitRate(link, dbr); 
 			}
 			if (cp.isSet(PKT_RATE)) {
 				int pr = cp.getAttr(PKT_RATE);
 				int dpr = pr - lt->getPktRate(link);
-				if (!ift->addAvailBitRate(link,-dpr)) {
+				if (!ift->addAvailBitRate(iface,-dpr)) {
 					errReply(p,cp1,"mod link: request "
 						 "exceeds interface capacity");
 					return;
 				}
 				lt->setPktRate(link, pr); 
+				lt->addAvailInPktRate(link, dpr); 
+				lt->addAvailOutPktRate(link, dpr); 
 			}
 			returnToSender(p,cp1.pack(ps->getPayload(p)));
 		} else errReply(p,cp1,"get link: invalid link number");
@@ -1283,10 +1294,22 @@ void RouterCore::handleCtlPkt(int p) {
 		comt_t comt = cp.getAttr(COMTREE_NUM);
 		int ctx = ctt->getComtIndex(comt);
 		if (ctx != 0) {
-			if (cp.isSet(CORE_FLAG) != 0)
+			if (cp.isSet(CORE_FLAG))
 				ctt->setCoreFlag(ctx,cp.getAttr(CORE_FLAG));
-			if (cp.isSet(PARENT_LINK) != 0)
+			if (cp.isSet(PARENT_LINK)) {
+				int plnk = cp.getAttr(PARENT_LINK);
+				if (!ctt->isLink(ctx,plnk)) {
+					errReply(p,cp1,"specified link does "
+						"not belong to comtree");
+					break;
+				}
+				if (!ctt->isRtrLink(ctx,plnk)) {
+					errReply(p,cp1,"specified link does "
+						"not connect to a router");
+					break;
+				}
 				ctt->setPlink(ctx,cp.getAttr(PARENT_LINK));
+			}
 			returnToSender(p,cp1.pack(ps->getPayload(p)));
 		} else errReply(p,cp1,"modify comtree: invalid comtree");
 		break;
@@ -1322,11 +1345,11 @@ void RouterCore::handleCtlPkt(int p) {
 		bool isRtr = (lt->getPeerType(lnk) == ROUTER);
 		bool isCore = false;
 		if(isRtr) {
-			if(!cp.isSet(CORE_FLAG)) {
-				errReply(p,cp1,"add comtree link: router had "
-					       "no core flag set");
+			if(!cp.isSet(PEER_CORE_FLAG)) {
+				errReply(p,cp1,"add comtree link: must specify "
+					       "core flag on links to routers");
 				break;
-			} else isCore = cp.getAttr(CORE_FLAG);
+			} else isCore = cp.getAttr(PEER_CORE_FLAG);
 		}
 		int cLnk = ctt->getComtLink(comt,lnk);
 		if (cLnk != 0) {
@@ -1334,15 +1357,15 @@ void RouterCore::handleCtlPkt(int p) {
 			    ctt->isCoreLink(cLnk) == isCore)
 				returnToSender(p,cp1.pack(ps->getPayload(p)));
 			else
-				errReply(p,cp1,"add comtree link: ct link "
-					       "already exists");
+				errReply(p,cp1,"add comtree link: specified "
+					       "link already in comtree");
 		} else {
 			if (ctt->addLink(ctx,lnk,isRtr,isCore) == 0) {
 				errReply(p,cp1,"add comtree link: cannot add "
 					       "requested comtree link");
 				break;
 			}
-			int cLnk = ctt->getComtLink(ctx,lnk);
+			int cLnk = ctt->getComtLink(comt,lnk);
 
 			// allocate queue and bind it to lnk and comtree link
 			int qid = qm->allocQ(lnk);
@@ -1433,6 +1456,10 @@ void RouterCore::handleCtlPkt(int p) {
 			break;
 		}
 		int lnk = cp.getAttr(LINK_NUM);
+		if (!lt->valid(lnk)) {
+			errReply(p,cp1,"get comtree link: invalid link number");
+			break;
+		}
 		int cLnk = ctt->getComtLink(comt,lnk);
 		if (cLnk == 0) {
 			errReply(p,cp1,"resize comtree link: specified link "
@@ -1446,14 +1473,14 @@ void RouterCore::handleCtlPkt(int p) {
 		int opr = ctt->getOutPktRate(cLnk);
 
 		bool isPlnk = (lnk == ctt->getPlink(ctx));
-		if (cp.isSet(isPlnk ? BIT_RATE_DOWN : BIT_RATE_UP))
-			ibr = cp.getAttr(isPlnk ? BIT_RATE_DOWN : BIT_RATE_UP);
-		if (cp.isSet(isPlnk ? PKT_RATE_DOWN : PKT_RATE_UP))
-			ipr = cp.getAttr(isPlnk ? PKT_RATE_DOWN : PKT_RATE_UP);
-		if (cp.isSet(isPlnk ? BIT_RATE_UP : BIT_RATE_DOWN))
-			obr = cp.getAttr(isPlnk ? BIT_RATE_UP : BIT_RATE_DOWN);
-		if (cp.isSet(isPlnk ? PKT_RATE_UP : PKT_RATE_DOWN))
-			opr = cp.getAttr(isPlnk ? PKT_RATE_UP : PKT_RATE_DOWN);
+		if (cp.isSet(BIT_RATE_IN))
+			ibr = cp.getAttr(BIT_RATE_IN);
+		if (cp.isSet(PKT_RATE_IN))
+			ipr = cp.getAttr(PKT_RATE_IN);
+		if (cp.isSet(BIT_RATE_OUT))
+			ibr = cp.getAttr(BIT_RATE_OUT);
+		if (cp.isSet(PKT_RATE_OUT))
+			ipr = cp.getAttr(PKT_RATE_OUT);
 
 		int dibr = ibr - ctt->getInBitRate(cLnk);
 		int dipr = ipr - ctt->getInPktRate(cLnk);
@@ -1466,16 +1493,22 @@ void RouterCore::handleCtlPkt(int p) {
 			break;
 		}
 		if (dipr != 0 && !lt->addAvailInPktRate(lnk,-dipr)) {
+			lt->addAvailInBitRate(lnk,dibr); // de-allocate link bw
 			errReply(p,cp1,"resize comtree link: increase in input "
 				       "packet rate exceeds link capacity");
 			break;
 		}
 		if (dobr != 0 && !lt->addAvailOutBitRate(lnk,-dobr)) {
+			lt->addAvailInBitRate(lnk,dibr); // de-allocate link bw
+			lt->addAvailInPktRate(lnk,dipr);
 			errReply(p,cp1,"resize comtree link: increase in output"
 				       " bit rate exceeds link capacity");
 			break;
 		}
 		if (dopr != 0 && !lt->addAvailOutPktRate(lnk,-dopr)) {
+			lt->addAvailInBitRate(lnk,dibr); // de-allocate link bw
+			lt->addAvailInPktRate(lnk,dipr);
+			lt->addAvailOutBitRate(lnk,dobr);
 			errReply(p,cp1,"resize comtree link: increase in output"
 				       " packet rate exceeds link capacity");
 			break;
@@ -1484,8 +1517,43 @@ void RouterCore::handleCtlPkt(int p) {
 		if (dibr != 0) ctt->setInBitRate(cLnk,ibr);
 		if (dipr != 0) ctt->setInPktRate(cLnk,ipr);
 		if (dobr != 0) ctt->setOutBitRate(cLnk,obr);
-		if (dopr != 0) ctt->setOutPktRate(cLnk,opr);
 
+		returnToSender(p,cp1.pack(ps->getPayload(p)));
+	}
+	case GET_COMTREE_LINK: {
+		if (!(cp.isSet(COMTREE_NUM) && cp.isSet(LINK_NUM))) {
+			errReply(p,cp1,"get comtree link: missing required "
+				       "attribute");
+			break;
+		}
+		comt_t comt = cp.getAttr(COMTREE_NUM);
+		int ctx = ctt->getComtIndex(comt);
+		if (ctx == 0) {
+			errReply(p,cp1,"get comtree link: invalid comtree");
+			break;
+		}
+		int lnk = cp.getAttr(LINK_NUM);
+		if (!lt->valid(lnk)) {
+			errReply(p,cp1,"get comtree link: invalid link number");
+			break;
+		}
+		int cLnk = ctt->getComtLink(comt,lnk);
+		if (cLnk == 0) {
+			errReply(p,cp1,"get comtree link: specified link "
+				       "not defined in specified comtree");
+			break;
+		}
+		cp1.setAttr(COMTREE_NUM,comt);
+		cp1.setAttr(LINK_NUM,lnk);
+		cp1.setAttr(QUEUE_NUM,ctt->getLinkQ(cLnk));
+		cp1.setAttr(PEER_DEST,ctt->getDest(cLnk));
+		cp1.setAttr(BIT_RATE_IN,ctt->getInBitRate(cLnk));
+		cp1.setAttr(PKT_RATE_IN,ctt->getInPktRate(cLnk));
+		cp1.setAttr(BIT_RATE_OUT,ctt->getOutBitRate(cLnk));
+		cp1.setAttr(PKT_RATE_OUT,ctt->getOutPktRate(cLnk));
+
+		returnToSender(p,cp1.pack(ps->getPayload(p)));
+		break;
 	}
         case ADD_ROUTE: {
 		if (!(cp.isSet(COMTREE_NUM) && cp.isSet(DEST_ADR) &&
@@ -1591,19 +1659,21 @@ void RouterCore::handleCtlPkt(int p) {
  */
 void RouterCore::returnToSender(packet p, int paylen) {
 	PacketHeader& h = ps->getHeader(p);
+	if (paylen == 0) {
+		cerr << "RouterCore::returnToSender: control packet formatting "
+			"error, zero payload length\n";
+		ps->free(p);
+	}
 	h.setLength(Forest::HDR_LENG + paylen + sizeof(uint32_t));
 
-	fAdr_t temp = h.getDstAdr();
 	h.setDstAdr(h.getSrcAdr());
-	h.setSrcAdr(temp);
+	h.setSrcAdr(myAdr);
 
 	ps->pack(p);
 
 	int cLnk = ctt->getComtLink(h.getComtree(),h.getInLink());
 	int qn = ctt->getLinkQ(cLnk);
-	if (!qm->enq(p,qn,now)) {
-		ps->free(p);
-	}
+	if (!qm->enq(p,qn,now)) { ps->free(p); }
 }
 
 /** Send an error reply to a control packet.

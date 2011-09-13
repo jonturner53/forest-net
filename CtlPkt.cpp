@@ -148,7 +148,8 @@ void CtlPkt::writeAvPair(ostream& out, CpAttrIndex ii) {
 	    ii == PEER_ADR || ii == PEER_DEST ||
 	    ii == DEST_ADR) {
 		Forest::writeForestAdr(out,(fAdr_t) val);
-	} else if (ii == LOCAL_IP || ii == PEER_IP) {
+	} else if (ii == LOCAL_IP || ii == PEER_IP ||
+		   ii == RTR_IP) {
 		string s; Np4d::addIp2string(s,val);
 		out << s;
 	} else {

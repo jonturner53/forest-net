@@ -256,7 +256,7 @@ public class MazeWorld {
 		processArgs(args);
 				
 		// Open channel to monitor and make it nonblocking
-	/*	try {
+		try {
 			monChan = SocketChannel.open(monSockAdr);
 			monChan.configureBlocking(false);
 		} catch (Exception e) {
@@ -264,7 +264,7 @@ public class MazeWorld {
 			System.out.println(e);
 			System.exit(1);
 		}
-*/
+
 		// setup canvas
 		comtree = 0;
 		StdDraw.setCanvasSize(700,700);

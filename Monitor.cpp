@@ -41,7 +41,7 @@ main(int argc, char *argv[]) {
 	ipa_t intIp, extIp, rtrIp; fAdr_t myAdr, rtrAdr;
 	int comt, finTime, gridSize;
 
-	if (argc < 8 || argc > 9 ||
+	if (argc !=8 ||
   	    (extIp  = Np4d::ipAddress(argv[1])) == 0 ||
   	    (intIp  = Np4d::ipAddress(argv[2])) == 0 ||
 	    (rtrIp  = Np4d::ipAddress(argv[3])) == 0 ||
@@ -50,14 +50,12 @@ main(int argc, char *argv[]) {
 	    (sscanf(argv[6],"%d", &gridSize) != 1) ||
 	     sscanf(argv[7],"%d", &finTime) != 1)
 		fatal("usage: Monitor extIp intIp rtrIpAdr myAdr rtrAdr "
-		      		    "gridSize finTime [logfile]");
+		      		    "gridSize finTime");
 	if (extIp == Np4d::ipAddress("127.0.0.1")) extIp = Np4d::myIpAddress(); 
 	if (extIp == 0) fatal("can't retrieve default IP address");
 
 	Monitor mon(extIp,intIp,rtrIp,myAdr,rtrAdr,gridSize);
-	char logFileName[101];
-	strncpy(logFileName,(argc == 9 ? argv[8] : ""),100);
-	if (!mon.init(logFileName)) {
+	if (!mon.init()) {
 		perror("perror");
 		fatal("Monitor: initialization failure");
 	}
@@ -89,10 +87,9 @@ Monitor::~Monitor() {
 }
 
 /** Initialize sockets and open log file for writing.
- *  @param logFileName is the name of the file to use for logging or EOS
  *  @return true on success, false on failure
  */
-bool Monitor::init(char *logFileName) {
+bool Monitor::init() {
 	intSock = Np4d::datagramSocket();
 	if (intSock < 0 || 
 	    !Np4d::bind4d(intSock,intIp,0) ||
@@ -103,17 +100,6 @@ bool Monitor::init(char *logFileName) {
 	usleep(1000000);	// 1 second delay provided for use in SPP
 				// delay gives SPP linecard the time it needs
 				// to setup NAT filters before second packet
-
-	if (logFileName[0] == EOS) {
-		logging = false;
-        } else {
-		logFile.open(logFileName);
-		if (logFile.fail()) {
-			cerr << "Monitor::init: can't open log file\n";
-			return false;
-		}
-		logging = true;
-	}
 
 	// setup external TCP socket for use by remote GUI
 	extSock = Np4d::streamSocket();
@@ -147,9 +133,6 @@ void Monitor::run(int finishTime) {
 		while ((p = receiveReport()) != 0) {
 			updateStatus(p,now);
 			ps->free(p);
-		}
-		if (now > printTime) {
-			writeStatus(now); printTime += 1000*UPDATE_PERIOD;
 		}
 
 		nextTime += 1000*UPDATE_PERIOD;
@@ -366,17 +349,3 @@ void Monitor::disconnect() {
 
 	send2router(p); ps->free(p);
 }
-
-void Monitor::writeStatus(int now) {
-	if (comt == 0 || logging == false) return;
-	for (int i = 1; i < nextAvatar; i++) {
-		struct avatarData *ad = & avData[i];
-		if (ad->comt != comt) continue;
-		string s; Forest::addFadr2string(s,ad->adr);
-		logFile << now << " " << s << " " << ad->ts << " "
-			<< ad->x << " " << ad->y << " "
-			<< ad->dir << " " << ad->speed << " "
-			<< ad->numNear << endl;
-	}
-}
-
