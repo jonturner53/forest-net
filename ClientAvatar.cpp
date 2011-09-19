@@ -76,13 +76,10 @@ Avatar::Avatar(ipa_t mipa, ipa_t cmipa, int gridSize, char * walls, comt_t cmt,c
 void Avatar::setup() {
 	int nPkts = 10000;
 	ps = new PacketStore(nPkts+1, nPkts+1);
+	srand(myAdr);
+	int comt = randint(comt1,comt2);
 	sendCtlPkt2CC(true,comt);
 	// initialize avatar to random position
-	struct timeval tv;
-	if (gettimeofday(&tv, NULL) < 0)
-		fatal("Avatar::Avatar: gettimeofday failure");
-	//srand(tv.tv_usec);
-	srand(myAdr);
 	x = randint(0,SIZE-1); y = randint(0,SIZE-1);
 	direction = (double) randint(0,359);
 	deltaDir = 0;
@@ -133,11 +130,12 @@ bool Avatar::init() {
 	Controller_sock = Np4d::streamSocket();
 	sock = Np4d::datagramSocket();
 	if(CM_sock < 0 || sock < 0 || Controller_sock < 0) return false;
-	if(!Np4d::bind4d(Controller_sock,Np4d::myIpAddress(),port)) return false;
+	//if(!Np4d::bind4d(Controller_sock,Np4d::myIpAddress(),port))
+	//	return false;
 	return	Np4d::bind4d(sock,myIpAdr,0) &&
 		Np4d::nonblock(sock) &&
-		Np4d::listen4d(Controller_sock) &&
-		Np4d::nonblock(Controller_sock) &&
+	//	Np4d::listen4d(Controller_sock) &&
+	//	Np4d::nonblock(Controller_sock) &&
         	Np4d::bind4d(CM_sock, myIpAdr, 0) &&
 		Np4d::connect4d(CM_sock,cliMgrIpAdr,CLIMGR_PORT);
 }
@@ -150,10 +148,12 @@ bool Avatar::init() {
  */
 void Avatar::login(string uname, string pword, bool newuser) {
 	string buf;
+	string portString;
+	Misc::num2string(Np4d::getSockPort(sock),portString);
 	if(newuser) {
-		buf = "n " + uname + " " + pword;
+		buf = "n " + uname + " " + pword + " " + portString;
 	} else {
-		buf = "o " + uname + " " + pword;
+		buf = "o " + uname + " " + pword + " " + portString;
 	}
 	Np4d::sendBufBlock(CM_sock,(char *) buf.c_str(),buf.size()+1);
 	//receive rtrAdr, myAdr,rtrIp, CC_Adr
@@ -161,6 +161,7 @@ void Avatar::login(string uname, string pword, bool newuser) {
 	Np4d::recvIntBlock(CM_sock,(uint32_t&)myAdr);
 	Np4d::recvIntBlock(CM_sock,(uint32_t&)rtrIpAdr);
 	Np4d::recvIntBlock(CM_sock,(uint32_t&)CC_Adr);
+	cerr << "assigned address ";
 	Forest::writeForestAdr(cerr,myAdr); cerr << endl;
 	close(CM_sock);
 	usleep(2000000);
@@ -181,7 +182,7 @@ void Avatar::run(int finishTime) {
 	uint32_t now;    	// free-running microsecond time
 	uint32_t nextTime;	// time of next operational cycle
 	uint32_t lastComtSwitch;// time of the last time a comt switched
-	int comtSwitchTime = randint(5,15);
+	int comtSwitchTime = randint(30,40);
 	now = nextTime = lastComtSwitch = 0;
 	while (now <= finishTime) {
 		//reset hashtables and report
@@ -226,6 +227,7 @@ void Avatar::run(int finishTime) {
 				unsubAll();
 				switchComtree(newcomt);
 			}
+			comtSwitchTime = randint(30,40);
 		}
 		now = Misc::getTime();
 		useconds_t delay = nextTime - now;
@@ -288,6 +290,8 @@ void Avatar::sendCtlPkt2CC(bool join, int comtree) {
                 fatal("Avatar::sendCtlPkt2CC: Not enough space to alloc packet");
         CtlPkt cp;
         cp.setAttr(COMTREE_NUM,comtree);
+        cp.setAttr(PEER_IP,myIpAdr);
+        cp.setAttr(PEER_PORT,Np4d::getSockPort(sock));
         if(join)
                 cp.setCpType(CLIENT_JOIN_COMTREE);
         else
@@ -295,7 +299,8 @@ void Avatar::sendCtlPkt2CC(bool join, int comtree) {
         cp.setRrType(REQUEST);
         cp.setSeqNum(1);
         int len = cp.pack(ps->getPayload(p));
-        PacketHeader& h = ps->getHeader(p); h.setLength(Forest::HDR_LENG + len + sizeof(uint32_t));
+        PacketHeader& h = ps->getHeader(p);
+	h.setLength(Forest::OVERHEAD + len);
         h.setPtype(CLIENT_SIG); h.setFlags(0);
         h.setComtree(1); h.setSrcAdr(myAdr);
         h.setDstAdr(CC_Adr);

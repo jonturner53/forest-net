@@ -211,9 +211,9 @@ CpType::CpTypeInfo CpType::typeInfo[] = {
 									   (1ull << LINK_NUM), 0},
 
 	{ NEW_CLIENT,		100,	"new client",		   "ncl",  (1ull << CLIENT_IP)|
-									   (1ull << PEER_PORT),
+									   (1ull << CLIENT_PORT),
 									   (1ull << CLIENT_IP)|
-									   (1ull << PEER_PORT),
+									   (1ull << CLIENT_PORT),
 								           (1ull << CLIENT_ADR)|
 								           (1ull << RTR_IP)|
 								           (1ull << RTR_ADR)},

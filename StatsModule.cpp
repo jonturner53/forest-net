@@ -8,8 +8,10 @@
 
 #include "StatsModule.h"
 
-StatsModule::StatsModule(int maxStats1, int maxLnk1, int maxQ1)
-		         : maxStats(maxStats1), maxLnk(maxLnk1), maxQ(maxQ1) {
+StatsModule::StatsModule(int maxStats1, int maxLnk1, int maxQ1,
+			 ComtreeTable* ctt1)
+		         : maxStats(maxStats1), maxLnk(maxLnk1), maxQ(maxQ1),
+			   ctt(ctt1) {
 	stat = new StatItem[maxStats+1];
 	lnkCnts = new LinkCounts[maxLnk+1];
 	qCnts = new QueueCounts[maxQ+1];

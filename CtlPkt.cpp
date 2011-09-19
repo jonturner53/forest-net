@@ -146,11 +146,15 @@ void CtlPkt::writeAvPair(ostream& out, CpAttrIndex ii) {
 	int32_t val = getAttr(ii);
 	if (ii == COMTREE_OWNER || ii == LEAF_ADR ||
 	    ii == PEER_ADR || ii == PEER_DEST ||
+	    ii == RTR_ADR || ii == CLIENT_ADR ||
 	    ii == DEST_ADR) {
 		Forest::writeForestAdr(out,(fAdr_t) val);
 	} else if (ii == LOCAL_IP || ii == PEER_IP ||
-		   ii == RTR_IP) {
+		   ii == CLIENT_IP || ii == RTR_IP) {
 		string s; Np4d::addIp2string(s,val);
+		out << s;
+	} else if (ii == PEER_TYPE) {
+		string s; Forest::nodeType2string((ntyp_t) val,s);
 		out << s;
 	} else {
 		out << val;

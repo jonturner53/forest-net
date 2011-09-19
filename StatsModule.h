@@ -8,7 +8,7 @@
 
 class StatsModule {
 public:
-		StatsModule(int, int, int);
+		StatsModule(int, int, int, ComtreeTable*);
 		~StatsModule();
 
 	// access statistics

@@ -78,7 +78,14 @@ inline int HeapSet::nodeMinPos(int p) const {
 // Return item at top of heap
 inline int HeapSet::findMin(int h) const {
 	if (hSize[h] == 0) return 0;
+if (root[h] == -1)
+cerr << "HeapSet::findMin: non-empty heap has root=-1\n";
 	int p = nodeMinPos(root[h]);
+if (p < 0) {
+cerr << "HeapSet::findMin: nodeMinPos returned " << p
+     << " h=" << h << " root[h]=" << root[h] << " heaps[" << root[h] << "]="
+     << heaps[root[h]] << " hSize[h]=" << hSize[h] << endl;
+}
 	return (p < 0 ? 0 : heaps[p]);
 }
 

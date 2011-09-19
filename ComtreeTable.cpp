@@ -249,6 +249,8 @@ void ComtreeTable::writeEntry(ostream& out, int ctx) const {
 	out << "   ";
 	set<int>& coreLinks = *tbl[ctx].coreLinks;
 	p = coreLinks.begin();
+	if (p == coreLinks.end())
+		out << "0";
 	while (p != coreLinks.end()) {
 		out << getLink(*p++);
 		if (p != coreLinks.end()) out << ",";

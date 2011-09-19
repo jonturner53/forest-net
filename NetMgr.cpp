@@ -275,7 +275,7 @@ cerr << "handler " << pthread_self() << " got packet\n";
 		if (h.getSrcAdr() == 0) {
 			success = handleConsReq(p, cp, inQ, outQ);
 		} else {
-			switch (h.getPtype()) {
+			switch (cp.getCpType()) {
 			case NEW_CLIENT:
 				success = handleNewClient(p,cp,inQ,outQ);
 				break;
@@ -376,14 +376,15 @@ bool handleConDisc(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 	plen = cp2.pack(ps->getPayload(p2));
 
 	PacketHeader& h2 = ps->getHeader(p2);
-	h1.setLength(Forest::OVERHEAD + plen);
-	h1.setComtree(100);
-	h1.setDstAdr(cliMgrAdr);
-	h1.setSrcAdr(myAdr);
-	h1.pack(ps->getBuffer(p2));
+	h2.setLength(Forest::OVERHEAD + plen);
+	h2.setComtree(100);
+	h2.setDstAdr(cliMgrAdr);
+	h2.setSrcAdr(myAdr);
+	h2.pack(ps->getBuffer(p2));
 
 	int reply = sendAndWait(p2,cp2,inQ,outQ);
 	if (reply == -1) {
+		ps->free(p2);
 		cerr << "handleRtrReq: no reply from client manager\n";
 		return false;
 	}
@@ -393,9 +394,10 @@ bool handleConDisc(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 	if (cpr.getRrType() == NEG_REPLY) {
 		cerr << "handleRtrReq: negative reply from client ";
 			"manager\n";
-		ps->free(reply);
+		ps->free(p2); ps->free(reply);
 		return false;
 	}
+	ps->free(p2); ps->free(reply);
 	return true;
 }
 
@@ -428,6 +430,7 @@ bool handleNewClient(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 		return true;
 	}
 	ipa_t clientIp = cp.getAttr(CLIENT_IP);
+	ipp_t clientPort = cp.getAttr(CLIENT_PORT);
 	fAdr_t rtrAdr;
 	if (!findCliRtr(clientIp,rtrAdr)) {
 		errReply(p,cp,outQ,"No router assigned to client's IP");
@@ -441,8 +444,9 @@ bool handleNewClient(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 	cp1.setRrType(REQUEST);
 	cp1.setCpType(ADD_LINK);
 	cp1.setAttr(PEER_IP,clientIp);
+	cp1.setAttr(PEER_PORT,clientPort);
 	cp1.setAttr(PEER_TYPE,CLIENT);
-	int plen = cp1.pack(ps->getPayload(p));
+	int plen = cp1.pack(ps->getPayload(p1));
 
 	PacketHeader& h1 = ps->getHeader(p1);
 	h1.setPtype(NET_SIG);
@@ -455,6 +459,7 @@ bool handleNewClient(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 
 	int reply = sendAndWait(p1,cp1,inQ,outQ);
 	if (reply == -1) {
+		ps->free(p1);
 		cerr << "handleCMReq: no reply from router\n";
 		errReply(p,cp,outQ,"no reply from router");
 		return true;
@@ -467,11 +472,45 @@ bool handleNewClient(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 		ps->free(reply);
 		return true;
 	}
-
 	int clientLink = cpr.getAttr(LINK_NUM);
-	fAdr_t clientAdr = cpr.getAttr(CLIENT_ADR);
+	fAdr_t clientAdr = cpr.getAttr(PEER_ADR);
 	ipa_t clientRtrIp = cpr.getAttr(RTR_IP);
 	ps->free(reply);
+
+	// now set rates on new link - for now, just 5*(min rates) - re-using p1
+	cp1.reset();
+	cp1.setRrType(REQUEST);
+	cp1.setCpType(MOD_LINK);
+	cp1.setAttr(LINK_NUM,clientLink);
+	cp1.setAttr(BIT_RATE,5*Forest::MINBITRATE);
+	cp1.setAttr(PKT_RATE,5*Forest::MINPKTRATE);
+	plen = cp1.pack(ps->getPayload(p1));
+
+	h1.setPtype(NET_SIG);
+	h1.setLength(plen + Forest::OVERHEAD);
+	h1.setFlags(0);
+	h1.setDstAdr(rtrAdr);
+	h1.setSrcAdr(myAdr);
+	h1.setComtree(100);
+	h1.pack(ps->getBuffer(p1));
+
+	int reply1 = sendAndWait(p1,cp1,inQ,outQ);
+	if (reply1 == -1) {
+		ps->free(p1);
+		cerr << "handleCMReq: no reply from router\n";
+		errReply(p,cp,outQ,"no reply from router");
+		return true;
+	}
+	PacketHeader& hr1 = ps->getHeader(reply1);
+	CtlPkt cpr1;
+	cpr1.unpack(ps->getPayload(reply1),hr1.getLength() - Forest::OVERHEAD);
+	if (cpr1.getRrType() == NEG_REPLY) {
+		errReply(p,cp,outQ,"Router could not add set link rates "
+				   " for new client link");
+		ps->free(p1);
+		ps->free(reply1);
+		return true;
+	}
 
 	// now add the new client to the user signalling comtree, re-using p1
 	cp1.reset();
@@ -479,7 +518,7 @@ bool handleNewClient(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 	cp1.setCpType(ADD_COMTREE_LINK);
 	cp1.setAttr(COMTREE_NUM,1);
 	cp1.setAttr(LINK_NUM,clientLink);
-	plen = cp1.pack(ps->getPayload(p));
+	plen = cp1.pack(ps->getPayload(p1));
 
 	h1.setPtype(NET_SIG);
 	h1.setLength(plen + Forest::OVERHEAD);
@@ -490,7 +529,7 @@ bool handleNewClient(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 	h1.pack(ps->getBuffer(p1));
 
 	int reply2 = sendAndWait(p1,cp1,inQ,outQ);
-	ps->free(p1);
+	ps->free(p1); // now, done with p1
 	if (reply2 == -1) {
 		cerr << "handleCMReq: no reply from router\n";
 		errReply(p,cp,outQ,"no reply from router");

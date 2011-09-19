@@ -90,8 +90,15 @@ void ClientMgr::initializeAvatar() {
 	char buf[100];
 	Np4d::recvBufBlock(avaSock,buf,100);
 	string uname; string pword; string s(buf);
-	uname = s.substr(2,s.find(' ',2)-2);
-	pword = s.substr(3+uname.size(),s.size()-uname.size());
+	int space1 = s.find(' ',2);
+	int space2 = s.find(' ',space1+1);
+	uname = s.substr(2,space1-2);
+	pword = s.substr(space1+1,space2-(space1+1));
+	string fPortStr = s.substr(space2+1);
+
+cerr << "uname=" << uname << " pword=" << pword << " fPortStr=" << fPortStr << endl;
+	ipp_t avForestPort = atoi(fPortStr.c_str());
+cerr << "avForestPort=" << avForestPort << endl;
 	//o is for old, n is for new
 	if(buf[0] == 'o') {
 		map<string,string>::iterator it = unames->find(uname);
@@ -101,6 +108,7 @@ void ClientMgr::initializeAvatar() {
 				return;
 			}
 		} else {
+cerr << "uname=" << uname << endl;
 			cerr << "not a known user" << endl;
 			return;
 		}
@@ -115,22 +123,26 @@ void ClientMgr::initializeAvatar() {
 	}
 	(*clients)[++highLvlSeqNum].uname = uname;
 	(*clients)[highLvlSeqNum].pword = pword;
-	requestAvaInfo(avIp);
+	requestAvaInfo(avIp,avForestPort);
 }
 /** Requests the router information from a network manager
  *  @param aip is the IP address of the client to receive information about
  */
-void ClientMgr::requestAvaInfo(ipa_t aip) {
+void ClientMgr::requestAvaInfo(ipa_t aip, ipp_t aport) {
 	packet p = ps->alloc();
 	if(p == 0) fatal("ClientMgr::requestAvaInfo failed to alloc packet");
 	CtlPkt cp;
 	cp.setRrType(REQUEST); cp.setSeqNum(((++lowLvlSeqNum) << 32)|(highLvlSeqNum & 0xffffffff));
 	cp.setCpType(NEW_CLIENT); cp.setAttr(CLIENT_IP,aip);
+	cp.setAttr(CLIENT_PORT,aport);
 	int len = cp.pack(ps->getPayload(p));
 	PacketHeader &h = ps->getHeader(p); h.setLength(Forest::OVERHEAD + len);
 	h.setPtype(NET_SIG); h.setFlags(0);
 	h.setComtree(100); h.setSrcAdr(myAdr);
 	h.setDstAdr(netMgrAdr); h.pack(ps->getBuffer(p));
+ps->pack(p);
+cerr << "sending new client request to NetMgr\n";
+h.write(cerr,ps->getBuffer(p));
 	send(p);
 }
 

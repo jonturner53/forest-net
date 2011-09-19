@@ -44,13 +44,15 @@ QuManager::QuManager(int nL1, int nP1, int nQ1, int maxppl1,
 	hset = new HeapSet(nQ,nL);
 
 	for (int lnk = 1; lnk <= nL; lnk++) {
-		lnkInfo[lnk].vt = 0; setLinkRates(lnk, 1, 1);
+		lnkInfo[lnk].vt = 0; 
+		setLinkRates(lnk, Forest::MINBITRATE, Forest::MINPKTRATE);
 	}
 
 	// build free list of queues using lnk field
 	for (int qid = 1; qid < nQ; qid++) {
 		quInfo[qid].lnk = qid+1;
 		quInfo[qid].pktLim = -1; // used to identify unassigned queues
+		quInfo[qid].vft = 0;
 	}
 	quInfo[nQ].lnk = 0; free = 1;
 	qCnt = 0;
@@ -66,9 +68,6 @@ QuManager::~QuManager() {
  *  @return the qid of the assigned queue, or 0 no queues are available
  */
 int QuManager::allocQ(int lnk) {
-if (qCnt > .9*nQ) {
-cerr << "running out of queues qCnt=" << qCnt << " limbo=" << limbo << "\n";
-}
 	if (free == 0) return 0;
 	int qid = free; free = quInfo[qid].lnk;
 	quInfo[qid].lnk = lnk;
@@ -84,10 +83,10 @@ cerr << "running out of queues qCnt=" << qCnt << " limbo=" << limbo << "\n";
  *  queue will be returned to the free list.
  */
 void QuManager::freeQ(int qid) {
+	if (qid == 0) return;
 	if (queues->empty(qid)) {
 		quInfo[qid].lnk = free; free = qid; qCnt--;
 	} 
-else limbo++; // for debugging
 	quInfo[qid].pktLim = -1; // negative value for free queues
 }
 
@@ -102,8 +101,6 @@ else limbo++; // for debugging
 bool QuManager::enq(int p, int qid, uint64_t now) {
 	int pleng = Forest::truPktLeng((ps->getHeader(p)).getLength());
 	QuInfo& q = quInfo[qid]; int lnk = q.lnk;
-
-	if (quInfo[qid].pktLim == -1) return false;
 
 	// don't queue it if too many packets for link
 	// or if queue is past its limits
@@ -121,7 +118,10 @@ bool QuManager::enq(int p, int qid, uint64_t now) {
 				d = vactive->key(lnk);
 				if (now >= d) d = now;
 				vactive->remove(lnk);
-			} else d = now;
+			} else {
+				d = now;
+				lnkInfo[lnk].avgPktTime = lnkInfo[lnk].minDelta;
+			}
 			active->insert(lnk,d);
 		}
 		// set virtual finish time of queue
@@ -130,7 +130,12 @@ bool QuManager::enq(int p, int qid, uint64_t now) {
 		q.vft = max(q.vft, lnkInfo[lnk].vt) + d;
 
 		// add queue to scheduling heap for link
-		hset->insert(qid,q.vft,lnk);
+		if (!hset->insert(qid,q.vft,lnk)) {
+			string s;
+			cerr << "enq attempt to insert in hset failed qid="
+			     << qid << " lnk=" << lnk << " hset="
+			     << hset->toString(lnk,s);
+		}
 	} 
 
 	// add packet to queue
@@ -148,6 +153,7 @@ bool QuManager::enq(int p, int qid, uint64_t now) {
  */
 int QuManager::deq(int& lnk, uint64_t now) {
 	// first process virtually active links that should now be idle
+	//
 	int vl = vactive->findmin(); uint64_t d = vactive->key(vl);
 	while (vl != 0 && now >= d) {
 		vactive->remove(vl);
@@ -172,7 +178,6 @@ int QuManager::deq(int& lnk, uint64_t now) {
 		if (q.pktLim < 0) {
 			// move queue to the free list
 			q.lnk = free; free = qid; qCnt--;
-limbo--;
 		}
 	} else {
 		int np = queues->first(qid);
@@ -185,7 +190,10 @@ limbo--;
 
 	// update the time when lnk can send its next packet
 	uint64_t t = lnkInfo[lnk].nsPerByte; t *= pleng;
-	if (lnkInfo[lnk].minDelta > t) t = lnkInfo[lnk].minDelta;
+	lnkInfo[lnk].avgPktTime = (t/16) + (15*(lnkInfo[lnk].avgPktTime/16));
+	if (lnkInfo[lnk].avgPktTime < lnkInfo[lnk].minDelta &&
+	    t < lnkInfo[lnk].minDelta)
+		t = lnkInfo[lnk].minDelta;
 	t += active->key(lnk);
 
 	if (hset->empty(lnk)) {

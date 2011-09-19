@@ -117,9 +117,9 @@ RouterCore::RouterCore(const RouterInfo& config) {
 	lt = new LinkTable(nLnks);
 	ctt = new ComtreeTable(nComts,10*nComts,lt);
 	rt = new RouteTable(nRts,myAdr,ctt);
-	sm = new StatsModule(1000, nLnks, nQus);
+	sm = new StatsModule(1000, nLnks, nQus, ctt);
 	iop = new IoProcessor(nIfaces, ift, lt, ps, sm);
-	qm = new QuManager(nLnks, nPkts, nQus, min(10,nPkts/(2*nLnks)), ps, sm);
+	qm = new QuManager(nLnks, nPkts, nQus, min(50,nPkts/(2*nLnks)), ps, sm);
 
 	leafAdr = new UiSetPair((config.lastLeafAdr - firstLeafAdr) + 1);
 }
@@ -252,7 +252,7 @@ bool RouterCore::setupQueues() {
 			ctt->setLinkQ(cLnk,qid);
 			qm->setQRates(qid,Forest::MINBITRATE,
 					  Forest::MINPKTRATE);
-			qm->setQLimits(qid,100,100000);
+			qm->setQLimits(qid,10,10000);
 		}
 	}
 	return true;
@@ -442,7 +442,9 @@ bool RouterCore::setAvailRates() {
 			int ipr = ctt->getInPktRate(cLnk);
 			int obr = ctt->getOutBitRate(cLnk);
 			int opr = ctt->getOutPktRate(cLnk);
+/*
 cerr << "setAvailRates lnk=" << lnk << " ibr=" << ibr << " ipr=" << ipr << " obr=" << obr << " opr=" << opr << endl;
+*/
 			if (!lt->addAvailInBitRate(lnk,-ibr) ||
 			    !lt->addAvailInPktRate(lnk,-ipr) ||
 			    !lt->addAvailOutBitRate(lnk,-obr) ||
@@ -558,6 +560,18 @@ void RouterCore::run(uint64_t finishTime) {
 			}
 			int ctx = ctt->getComtIndex(h.getComtree());
 			if (ctx == 0 || !pktCheck(p,ctx)) {
+/*
+static int count = 0;
+if (count++ < 20) {
+if (ctx == 0) {
+cerr << "got packet with unknown comtree\n";
+h.write(cerr,ps->getBuffer(p));
+} else {
+cerr << "packet failed pktCheck\n";
+h.write(cerr,ps->getBuffer(p));
+}
+}
+*/
 				ps->free(p);
 			} else if (ptype == CLIENT_DATA) {
 				forward(p,ctx);
@@ -568,8 +582,20 @@ void RouterCore::run(uint64_t finishTime) {
 			} else if (ptype == CONNECT || ptype == DISCONNECT) {
 				handleConnDisc(p);
 			} else if (h.getDstAdr() != myAdr) {
+/*
+if (ptype == CLIENT_SIG || ptype == NET_SIG) {
+cerr << "forwarding signalling packet\n";
+h.write(cerr,ps->getBuffer(p));
+}
+*/
 				forward(p,ctx);
 			} else {
+/*
+if (ptype == CLIENT_SIG || ptype == NET_SIG) {
+cerr << "received signalling packet\n";
+h.write(cerr,ps->getBuffer(p));
+}
+*/
 				ctlQ.push(p);
 			}
 		}
@@ -579,6 +605,12 @@ void RouterCore::run(uint64_t finishTime) {
 		while ((p = qm->deq(lnk, now)) != 0) {
 			didNothing = false;
 			PacketHeader& h = ps->getHeader(p);
+/*
+if (h.getPtype() == CLIENT_SIG || h.getPtype() == NET_SIG) {
+cerr << "transmitting signalling packet\n";
+h.write(cerr,ps->getBuffer(p));
+}
+*/
 			if (evCnt < MAXEVENTS &&
 			    (h.getPtype() != CLIENT_DATA || numData<=NUMDATA)) {
 				int p2 = (h.getPtype() == CLIENT_DATA ? 
@@ -610,11 +642,7 @@ void RouterCore::run(uint64_t finishTime) {
 		}
 
 		// if did nothing on that pass, sleep for a millisecond.
-		if (didNothing) {
-			struct timespec sleeptime, rem;
-			sleeptime.tv_sec = 0; sleeptime.tv_nsec = 1000000;
-			nanosleep(&sleeptime,&rem);
-		}
+		//if (didNothing) { usleep(1000); }
 
 		// update current time
 		now = Misc::getTimeNs();
@@ -659,12 +687,14 @@ bool RouterCore::pktCheck(int p, int ctx) {
 
 	int inLink = h.getInLink();
 	if (inLink == 0) return false;
+	int cLnk = ctt->getComtLink(ctt->getComtree(ctx),inLink);
+	if (cLnk == 0) return false;
+
 	// extra checks for packets from untrusted peers
 	if (lt->getPeerType(inLink) < TRUSTED) {
 		// check for spoofed source address
 		if (lt->getPeerAdr(inLink) != h.getSrcAdr()) return false;
 		// and that destination restrictions are respected
-		int cLnk = ctt->getComtLink(ctt->getComtree(ctx),inLink);
 		fAdr_t dest = ctt->getDest(cLnk);
 		if (dest!=0 && h.getDstAdr() != dest && h.getDstAdr() != myAdr)
 			return false;
@@ -698,8 +728,9 @@ void RouterCore::forward(int p, int ctx) {
 			int rcLnk = rt->getLink(rtx);
 			int lnk = ctt->getLink(rcLnk);
 			int qid = ctt->getLinkQ(rcLnk);
-			if (lnk == h.getInLink() || !qm->enq(p,qid,now))
+			if (lnk == h.getInLink() || !qm->enq(p,qid,now)) {
 				ps->free(p);
+			}
 			return;
 		}
 		// multicast data packet
@@ -1221,6 +1252,7 @@ cerr << "sending positive reply " << link << endl;
 				lt->setBitRate(link, br); 
 				lt->addAvailInBitRate(link, dbr); 
 				lt->addAvailOutBitRate(link, dbr); 
+				qm->setLinkRates(link,br,lt->getPktRate(link));
 			}
 			if (cp.isSet(PKT_RATE)) {
 				int pr = cp.getAttr(PKT_RATE);
@@ -1233,6 +1265,7 @@ cerr << "sending positive reply " << link << endl;
 				lt->setPktRate(link, pr); 
 				lt->addAvailInPktRate(link, dpr); 
 				lt->addAvailOutPktRate(link, dpr); 
+				qm->setLinkRates(link,lt->getBitRate(link),pr);
 			}
 			returnToSender(p,cp1.pack(ps->getPayload(p)));
 		} else errReply(p,cp1,"get link: invalid link number");
@@ -1360,12 +1393,12 @@ cerr << "sending positive reply " << link << endl;
 				errReply(p,cp1,"add comtree link: specified "
 					       "link already in comtree");
 		} else {
-			if (ctt->addLink(ctx,lnk,isRtr,isCore) == 0) {
+			if (!ctt->addLink(ctx,lnk,isRtr,isCore)) {
 				errReply(p,cp1,"add comtree link: cannot add "
 					       "requested comtree link");
 				break;
 			}
-			int cLnk = ctt->getComtLink(comt,lnk);
+			cLnk = ctt->getComtLink(comt,lnk);
 
 			// allocate queue and bind it to lnk and comtree link
 			int qid = qm->allocQ(lnk);
