@@ -56,7 +56,6 @@ main(int argc, char *argv[]) {
 
 	Monitor mon(extIp,intIp,rtrIp,myAdr,rtrAdr,gridSize);
 	if (!mon.init()) {
-		perror("perror");
 		fatal("Monitor: initialization failure");
 	}
 	mon.run(1000000*(finTime-1)); // -1 to compensate for delay in init
@@ -64,8 +63,10 @@ main(int argc, char *argv[]) {
 }
 
 // Constructor for Monitor, allocates space and initializes private data
-Monitor::Monitor(ipa_t xipa, ipa_t iipa, ipa_t ripa, fAdr_t ma, fAdr_t ra, int gs)
-		: extIp(xipa), intIp(iipa), rtrIp(ripa), myAdr(ma), rtrAdr(ra), SIZE(GRID*gs) {
+Monitor::Monitor(ipa_t xipa, ipa_t iipa, ipa_t ripa, fAdr_t ma, fAdr_t ra,
+		 int gs)
+		 : extIp(xipa), intIp(iipa), rtrIp(ripa), myAdr(ma), rtrAdr(ra),
+		   SIZE(GRID*gs) {
 	int nPkts = 10000;
 	ps = new PacketStore(nPkts+1, nPkts+1);
 
@@ -104,7 +105,8 @@ bool Monitor::init() {
 	// setup external TCP socket for use by remote GUI
 	extSock = Np4d::streamSocket();
 	if (extSock < 0) return false;
-	bool status = Np4d::bind4d(extSock,extIp,MON_PORT);
+	bool status;
+	status = Np4d::bind4d(extSock,extIp,MON_PORT);
 	if (!status) {
 		return false;
 	}
@@ -117,7 +119,6 @@ bool Monitor::init() {
  *  Print a record of all avatar's status, once per second. 
  */
 void Monitor::run(int finishTime) {
-
 	int p;
 
 	uint32_t now;    	// free-running microsecond time
@@ -170,6 +171,13 @@ void Monitor::check4comtree() {
 		if (connSock < 0) return;
 		if (!Np4d::nonblock(connSock))
 			fatal("can't make connection socket nonblocking");
+		bool status; int ndVal = 1;
+		status = setsockopt(extSock,IPPROTO_TCP,TCP_NODELAY,
+			    (void *) &ndVal,sizeof(int));
+		if (status != 0) {
+			cerr << "setsockopt for no-delay failed\n";
+			perror("");
+		}
 	}
 	comt_t newComt;
         int nbytes = read(connSock, (char *) &newComt, sizeof(uint32_t));

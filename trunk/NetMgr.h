@@ -62,7 +62,7 @@ Queue	out;
 };
 
 // defines thread pool
-static const int TPSIZE = 5; // increase after debugging
+static const int TPSIZE = 200;	///< number of concurrent threads at NetMgr
 struct ThreadPool {
 pthread_t th;			///< thread
 QueuePair qp;			///< associated queue pair

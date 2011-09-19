@@ -51,7 +51,7 @@ private:
 	int	nQ;			///< number of queues per link
 	int	maxppl;			///< max # of packets per link
 	int	qCnt;			///< number of allocated queues
-int limbo; // for debugging
+
 
 	UiListSet *queues;		///< collection of lists of packets
 	int	free;			///< first queue in the free list
@@ -61,6 +61,7 @@ int limbo; // for debugging
 	struct LinkInfo {		///< information on links
 	uint32_t nsPerByte;		///< ns of delay per data byte
 	uint32_t minDelta;		///< min # of ns between packets
+	uint64_t avgPktTime;		///< average time to send recent packets
 	uint64_t vt;			///< virtual time for link
 	};
 	LinkInfo *lnkInfo;		///< lnkInfo[lnk] hold info on lnk

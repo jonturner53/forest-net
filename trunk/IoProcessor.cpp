@@ -103,7 +103,8 @@ int IoProcessor::receive() {
         h.setInLink(lnk); h.setIoBytes(nbytes);
         h.setTunSrcIp(sIpAdr); h.setTunSrcPort(sPort);
 
-        sm->cntInLink(lnk,nbytes, (lt->getPeerType(lnk) == ROUTER));
+        sm->cntInLink(lnk,Forest::truPktLeng(nbytes),
+		      (lt->getPeerType(lnk) == ROUTER));
 
         return p;
 }
@@ -127,6 +128,7 @@ void IoProcessor::send(int p, int lnk) {
 		     << errno << ")\n";
 		exit(1);
 	}
-	sm->cntOutLink(lnk,length, (lt->getPeerType(lnk) == ROUTER));
+	sm->cntOutLink(lnk,Forest::truPktLeng(length),
+		       (lt->getPeerType(lnk) == ROUTER));
 	ps->free(p);
 }

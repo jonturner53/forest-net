@@ -52,7 +52,7 @@ void PacketHeader::payErrUpdate(buffer_t& b) {
 }
 
 bool PacketHeader::read(istream& in, buffer_t& b) {
-// Read an input packet from is and initialize (*this) and buffer *b.
+// Read an input packet from in and initialize (*this) and buffer *b.
 	int lng, ptyp, flgs, comt; fAdr_t src, dst; string ptypString;
 	Misc::skipBlank(in);
 	if (!Misc::readNum(in,lng) ||

@@ -71,7 +71,8 @@ ComtreeController_NetInfo::ComtreeController_NetInfo(ipa_t eIp, ipa_t iIp, ipa_t
 	NUMITEMS=4;
 	repCnt = 0;
 	statPkt= new uint32_t[500];
-	topology = new vector< vector<string> >();
+	// NetInfo(maxNode, maxLink, maxRtr, maxCtl, maxComtree)
+	net = new NetInfo(1000, 100000, 100, 50, 10000);
 	int nPkts = 10000;
         ps = new PacketStore(nPkts+1, nPkts+1);
 	connSock=-1;
@@ -84,6 +85,7 @@ ComtreeController_NetInfo::~ComtreeController_NetInfo() {delete statPkt; delete 
  */
 bool ComtreeController_NetInfo::init() {
 	intSock = Np4d::datagramSocket();
+cerr << "created datagram socket " << intSock << endl;
 	if (intSock < 0 || 
 	    !Np4d::bind4d(intSock,intIp,0) ||
 	    !Np4d::nonblock(intSock))
@@ -95,6 +97,7 @@ bool ComtreeController_NetInfo::init() {
 
 	// setup external TCP socket for use by remote GUI
 	extSock = Np4d::streamSocket();
+cerr << "created stream socket " << extSock << endl;
 	if (extSock < 0) return false;
 
 return 	Np4d::bind4d(extSock,extIp, NM_PORT) &&
@@ -109,11 +112,12 @@ void ComtreeController_NetInfo::parse(string filename){
 	fb.open(filename.c_str(), ios::in);
 	istream is(&fb);
 	net->read(is);
-	cerr<<"topology.txt read"<<endl;
+	cerr<< "read " << filename <<endl;
+	fb.close();
 	fb.open ("test.txt",ios::out);
 	ostream os(&fb);
 	net->write(os);
-	cerr<<"topology.txt written"<<endl;
+	cerr<< "wrote copy of netInfo to test.txt"<<endl;
 }
 
 /** Run the ComtreeController_NetInfo.
@@ -133,6 +137,16 @@ void ComtreeController_NetInfo::run(int finishTime) {
 	string fAdr[1000];
 	int counter[1000];
 	int i;
+
+	// build a table of router addresses, indexed by zip code
+	fAdr_t rtrAddresses[1000];
+	for (int r = net->firstRouter(); r != 0; r = net->nextRouter(r)) {
+		int zip = Forest::zipCode(net->getNodeAdr(r));
+		if (zip > 999) fatal("can't handle zip codes >999");
+		rtrAddresses[zip] = net->getNodeAdr(r);
+	}
+
+/*
         for(i = 0; i < topology->size(); i++){
 		if(topology->at(i).at(0).compare("nodes:")==0){
 			int n;
@@ -194,12 +208,17 @@ void ComtreeController_NetInfo::run(int finishTime) {
 			}
         	}
 	}
+*/
 	
+cerr << "entering run loop\n";
+	int seqNum;
 	while(now <= finishTime){
 		now = Misc::getTime();	
 		int p = rcvFromForest();
 		if(p != 0){
 			PacketHeader& h = ps->getHeader(p);
+cerr << "got packet\n";
+h.write(cerr,ps->getBuffer(p));
 			int zipcode = Forest::zipCode(h.getSrcAdr());
 			CtlPkt cp;
 			int payload_ln = h.getLength()-(Forest::HDR_LENG+sizeof(uint32_t));
@@ -218,16 +237,18 @@ void ComtreeController_NetInfo::run(int finishTime) {
 				//send positive reply packet back to the client
 				returnToSender(p,cp1.pack(ps->getPayload(p)));	
 					
-				cp2.setCpType(cp.getCpType());
 				cp2.setRrType(REQUEST);
+				cp2.setSeqNum(seqNum++);
 				cp2.setAttr(COMTREE_NUM,comtree);
 				cp2.setAttr(PEER_ADR,avaAdr);
+				cp2.setAttr(PEER_IP,cp.getAttr(PEER_IP));
+				cp2.setAttr(PEER_PORT,cp.getAttr(PEER_PORT));
 				if(CLIENT_JOIN_COMTREE == cp.getCpType())
 					cp2.setCpType(ADD_COMTREE_LINK);
 				else
 					cp2.setCpType(DROP_COMTREE_LINK);
 				int len = cp2.pack(ps->getPayload(p));
-				h.setDstAdr(Forest::forestAdr(fAdr[zipcode].c_str()));
+				h.setDstAdr(rtrAddresses[zipcode]);
 				h.setSrcAdr(myAdr); h.setLength(Forest::OVERHEAD + len);
 				h.setPtype(NET_SIG); h.setComtree(100);
 		

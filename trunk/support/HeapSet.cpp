@@ -65,6 +65,7 @@ HeapSet::HeapSet(int maxItem1, int maxHeap1)
 	hSize = new int[maxHeap+1];
 
 	for (int h = 1; h <= maxHeap; h++) hSize[h] = 0;
+	for (int p = 0; p < numNodes*D; p++) heaps[p] = 0;
 
 	// build free list using "parent pointer" of each "node"
 	for (int i = 0; i < numNodes-1; i++)
@@ -87,12 +88,13 @@ HeapSet::~HeapSet() {
  */
 bool HeapSet::insert(item i, keytyp k, int h) {
 	key[i] = k;
+	if (i == 0) return false;
 	int n = hSize[h]; int r = (n-1)%D;
 	if (n != 0 && r != D-1) {
 		// no new node required
 		int p = bot[h] + r + 1;
 		child[p] = -1;
-		hSize[h]++;
+		(hSize[h])++;
 		siftup(i,p);
 		return true;
 	}
@@ -100,8 +102,8 @@ bool HeapSet::insert(item i, keytyp k, int h) {
 	if (free < 0) return false;
 	int p = free; free = parent[free/D];
 	heaps[p] = i; child[p] = -1;
-	hSize[h]++;
-	for (int j = 1; j < D; j++) heaps[p+j] = 0;
+	(hSize[h])++;
+	//for (int j = 1; j < D; j++) heaps[p+j] = 0;
 	if (n == 0) {
 		root[h] = bot[h] = p;
 		pred[p/D] = parent[p/D] = -1;
@@ -135,14 +137,16 @@ int HeapSet::deleteMin(int h) {
 
         p = nodeMinPos(root[h]); i = heaps[p];
         if (n <= D) { // single node with at least 2 items
-                heaps[p] = heaps[--hSize[h]];
+                heaps[p] = heaps[root[h]+(--n)];
+		heaps[root[h]+n] = 0;
+		hSize[h] = n;
                 return i;
         }
 
         // so, must be at least two nodes
         int q = bot[h]; int r = (n-1)%D;
         int j = heaps[q+r]; heaps[q+r] = 0;
-        hSize[h]--;
+        (hSize[h])--;
         if (r == 0) { // return last node to free list
 		if (parent[q/D] >= 0) child[parent[q/D]] = -1;
 		bot[h] = pred[q/D];
@@ -151,7 +155,6 @@ int HeapSet::deleteMin(int h) {
 
         // sift the last item down from the top
         siftdown(j, p);
-
         return i;
 }
 
@@ -183,7 +186,9 @@ void HeapSet::changeKeyMin(keytyp k, int h) {
 
 string& HeapSet::toString(int h, string& s) const {
 	s = "";
-	if (hSize[h] == 0) return s;
+	if (hSize[h] == 0) {
+		s = "[]"; return s;
+	}
 
 	list<int> nodeList;
 	for (int p = bot[h]; p != -1; p = pred[p/D])

@@ -254,7 +254,8 @@ inline int ComtreeTable::getLinkCount(int ctx) const {
  *  is no comtree link for the given pair
  */
 inline int ComtreeTable::getComtLink(int comt, int lnk) const {
-	return clMap->getId(key(comt,lnk));
+	int cLnk = clMap->getId(key(comt,lnk));
+	return cLnk;
 }
 
 /** Get the parent link for a comtree.
