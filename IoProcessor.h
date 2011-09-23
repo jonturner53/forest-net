@@ -22,11 +22,17 @@ public:
 		~IoProcessor();
 
 	bool	setup(int);
+	bool	setupBootSock(ipa_t, ipa_t);
+	void	closeBootSock();
 
-	int	receive();	
-	void	send(int,int);
+	int	receive(bool);	
+	void	send(int,int,bool);
 
 private:
+	ipp_t	bootIp;			///< IP address used to boot router
+	ipp_t	nmIp;			///< IP address used by netMgr
+	int	bootSock;		///< associated socket
+
 	int	maxIface;		///< largest interface number
 	int	maxSockNum;		///< largest socket num opened by ioProc
 	fd_set	*sockets;		///< file descr set for open sockets

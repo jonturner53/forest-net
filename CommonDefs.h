@@ -88,14 +88,15 @@ public:
 	static const int OVERHEAD = 24;		///< total overhead
 	static const flgs_t RTE_REQ = 0x01;	///< route request flag
 	static const ipp_t ROUTER_PORT = 30123; ///< port # used by routers
+	static const ipp_t NM_PORT = 30122; 	///< port # used by netMgr
 
 	// router implementation parameters 
 	static const short int MAXINTF= 20;	///< max # of interfaces
 	static const short int MAXLNK = 1000;	///< max # of links per router
-	static const int MINBITRATE = 200; 	///< min link bit rate in Kb/s
-	static const int MAXBITRATE = 1000000;	///< max link bit rate in Kb/s
-	static const int MINPKTRATE = 200; 	///< min packet rate in p/s
-	static const int MAXPKTRATE = 800000;	///< max packet rate in p/s
+	static const int MINBITRATE = 20; 	///< min link bit rate in Kb/s
+	static const int MAXBITRATE = 900000;	///< max link bit rate in Kb/s
+	static const int MINPKTRATE = 10; 	///< min packet rate in p/s
+	static const int MAXPKTRATE = 450000;	///< max packet rate in p/s
 	static const uint32_t BUF_SIZ = 1600;	///< size of a packet buffer
 
 	// methods for manipulating addresses 

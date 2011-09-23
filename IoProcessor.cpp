@@ -16,6 +16,7 @@ IoProcessor::IoProcessor(int maxIface1, IfaceTable *ift1, LinkTable *lt1,
 	nRdy = 0; maxSockNum = -1;
 	sockets = new fd_set;
 	sock = new int[maxIface+1];
+	bootSock = -1;
 }
 
 IoProcessor::~IoProcessor() {
@@ -45,8 +46,52 @@ bool IoProcessor::setup(int i) {
 	return true;
 }
 
-int IoProcessor::receive() { 
+bool IoProcessor::setupBootSock(ipa_t bootIp, ipa_t nmIp1) {
+	nmIp = nmIp1;
+	// open datagram socket
+	bootSock =Np4d::datagramSocket();
+	if (bootSock < 0) {
+		cerr << "IoProcessor::setupBootSock: socket call failed\n";
+		return false;
+	}
+	// bind it to the bootIp
+        if (!Np4d::bind4d(bootSock, bootIp, 0)) {
+		cerr << "IoProcessor::setupBootIp: bind call failed, "
+		     << "check boot IP address\n";
+                return false;
+        }
+	return true;
+}
+
+int IoProcessor::receive(bool booting) { 
 // Return next waiting packet or 0 if there is none. 
+	if (booting) {
+		int nbytes;	  	// number of bytes in received packet
+		int lnk;	  	// # of link on which packet received
+	
+		packet p = ps->alloc();
+	        if (p == 0) { return 0; }
+	        PacketHeader& h = ps->getHeader(p);
+	        buffer_t& b = ps->getBuffer(p);
+	
+		ipa_t sIpAdr; ipp_t sPort;
+		nbytes = Np4d::recvfrom4d(bootSock, (void *) &b[0], 1500,
+					  sIpAdr, sPort);
+		if (nbytes < 0) {
+			if (errno == EAGAIN) {
+				ps->free(p); return 0;
+			}
+			fatal("IoProcessor::receive: error in recvfrom call");
+		}
+		if (sIpAdr != nmIp || sPort != Forest::NM_PORT) {
+			ps->free(p); return 0;
+		}
+		ps->unpack(p);
+	        if (!ps->hdrErrCheck(p)) { ps->free(p); return 0; }
+        	h.setTunSrcIp(sIpAdr); h.setTunSrcPort(sPort);
+		return p;
+	}
+	// proceed to normal case, when we're not booting
 	if (nRdy == 0) { // if no ready interface check for new arrivals
 		FD_ZERO(sockets);
 		for (int i = ift->firstIface(); i != 0; i = ift->nextIface(i)) {
@@ -109,8 +154,22 @@ int IoProcessor::receive() {
         return p;
 }
 
-void IoProcessor::send(int p, int lnk) {
+void IoProcessor::send(int p, int lnk, bool booting) {
 // Send packet on specified link and recycle storage.
+	if (booting) {
+		int rv, lim = 0;
+		int length = ps->getHeader(p).getLength();
+		do {
+			rv = Np4d::sendto4d(bootSock,
+				(void *) ps->getBuffer(p), length,
+				nmIp, Forest::NM_PORT);
+		} while (rv == -1 && errno == EAGAIN && lim++ < 10);
+		if (rv == -1) {
+			perror("IoProcessor:: send: failure in sendto");
+			exit(1);
+		}
+		ps->free(p);
+	}
 	ipp_t farPort = lt->getPeerPort(lnk);
 	if (farPort == 0) { ps->free(p); return; }
 

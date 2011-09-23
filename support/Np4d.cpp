@@ -174,7 +174,7 @@ bool Np4d::bind4d(int sock, ipa_t ipa, ipp_t ipp) {
  *  @param sock is socket number
  *  @return true on success, false on failure
  */
-bool Np4d::listen4d(int sock) { return (listen(sock, 5) == 0); }
+bool Np4d::listen4d(int sock) { return (listen(sock, 200) == 0); }
 
 /** Accept the next waiting connection request.
  *  Uses accept system call but hides the ugliness.

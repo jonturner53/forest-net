@@ -61,14 +61,27 @@ void StatsModule::record(uint64_t now) {
 				else val = lnkCnts[s.lnk].outByte;
 				break;
 			case qPkt:   
+				if (s.comt == 0) {
+					val = getLinkQlen(s.lnk);
+					break;
+				}
 				cLnk = ctt->getComtLink(s.comt,s.lnk);
 				qid = ctt->getLinkQ(cLnk);
 				val = getQlen(qid);
 				break;
 			case qByt:
+				if (s.comt == 0) {
+					val = discCnt(s.lnk);
+					break;
+				}
 				cLnk = ctt->getComtLink(s.comt,s.lnk);
 				qid = ctt->getLinkQ(cLnk);
-				val = getQbytes(qid);
+				val = qDiscCnt(qid);
+				break;
+			case disc:
+				cLnk = ctt->getComtLink(s.comt,s.lnk);
+				qid = ctt->getLinkQ(cLnk);
+				val = getQlen(qid);
 				break;
 			default: break;
 		}
@@ -93,16 +106,17 @@ void StatsModule::record(uint64_t now) {
  *  outByt L	number of bytes sent on output link L
  *    qPkt L C	number of packets for comtree C output link L
  *    qByt L C	number of bytes for comtree C on output link L
+ *    disc L C 	number of packets discarded for comtree C on link L
  * 
  *  If inPkt, outPkt, inByt, outByt are given with a link # of 0,
  *  the statistics for the router as a whole are reported. If the
  *  link # is -1, the statistics for packets to/from other routers
  *  is reported. If the link # is -2, the statistics for packets
- *  to/from leaf nodes is reported. Note, the current implementation
- *  does not support byte counts for the statistics to/from other
- *  routers or to/from other clients. In the queue length statistics, if the
- *  given queue number is zero, then the total number of packets (bytes)
- *  queued for the given link (over all queues) is reported.
+ *  to/from leaf nodes is reported. In the queue packet length statistics,
+ *  if the given comtree number is zero, then the total number of packets (bytes)
+ *  queued for the given link (over all queues) is reported. Similarly,
+ *  for the discard statistic, a comtree of 0 reports all discards for
+ *  the link.
  */ 
 bool StatsModule::readStat(istream& in) {
 	int lnk, comt, lcIn, lcOut;
@@ -118,13 +132,14 @@ bool StatsModule::readStat(istream& in) {
         else if (typStr == "outByt") typ = outByt;
         else if (typStr ==   "qPkt") typ = qPkt;
         else if (typStr ==   "qByt") typ = qByt;
+        else if (typStr ==   "disc") typ = disc;
         else return false;
 
 	switch (typ) {
 	case inPkt: case outPkt: case inByt: case outByt:
 		if (!Misc::readNum(in,lnk)) return false;
 		break;
-	case qPkt: case qByt:
+	case qPkt: case qByt: case disc:
 		if (!Misc::readNum(in,lnk) || !Misc::readNum(in,comt))
 			return false;
 		break;

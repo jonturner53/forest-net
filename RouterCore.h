@@ -29,7 +29,7 @@ struct RouterInfo {
         string  mode; 		///< router operation mode (local or remote)
 
         fAdr_t  myAdr; 		///< forest address of the router
-        ipa_t   myIp; 		///< IP address of the router 
+        ipa_t   bootIp; 		///< IP address of the router 
         fAdr_t  nmAdr; 		///< forest address of the network manager
         ipa_t   nmIp; 		///< IP address of the network manager
         fAdr_t  ccAdr; 		///< forest address of the comtree controller
@@ -50,17 +50,23 @@ public:
 		RouterCore(const RouterInfo&);
 		~RouterCore();
 
-	bool	init(const RouterInfo&);
+	bool	readTables(const RouterInfo&);
+	bool	setup();
+	bool	setBooting(bool state) { booting = state; }
 	void	run(uint64_t);
 	void	dump(ostream& os);
 private:
-	ipa_t	myIp;			///< IP address of this router
+	ipa_t	bootIp;			///< IP address used during booting
 	fAdr_t	myAdr;			///< forest address of this router
 	ipa_t	nmIp;			///< IP address of the netMgr
 	fAdr_t	nmAdr;			///< forest address of the netMgr
 	fAdr_t	ccAdr;			///< address of comtree controller
 
+	bool 	booting;		///< true when booting from netMgr
+
 	uint64_t now;			///< current time in 64 bit form
+
+	uint64_t seqNum;		///< seq # for outgoing control packets
 
 	fAdr_t	firstLeafAdr;		///< first leaf address
 	UiSetPair *leafAdr;		///< offsets for in-use and free leaf
@@ -110,6 +116,31 @@ private:
 
 	// signalling packets
 	void	handleCtlPkt(int);
+	bool	addIface(int, CtlPkt&, CtlPkt&);
+	bool	dropIface(int, CtlPkt&, CtlPkt&);
+	bool	getIface(int, CtlPkt&, CtlPkt&);
+	bool	modIface(int, CtlPkt&, CtlPkt&);
+	bool	addLink(int, CtlPkt&, CtlPkt&);
+	bool	dropLink(int, CtlPkt&, CtlPkt&);
+	bool	getLink(int, CtlPkt&, CtlPkt&);
+	bool	modLink(int, CtlPkt&, CtlPkt&);
+	bool	addComtree(int, CtlPkt&, CtlPkt&);
+	bool	dropComtree(int, CtlPkt&, CtlPkt&);
+	bool	getComtree(int, CtlPkt&, CtlPkt&);
+	bool	modComtree(int, CtlPkt&, CtlPkt&);
+	bool	addComtreeLink(int, CtlPkt&, CtlPkt&);
+	bool	dropComtreeLink(int, CtlPkt&, CtlPkt&);
+	bool	modComtreeLink(int, CtlPkt&, CtlPkt&);
+	bool	getComtreeLink(int, CtlPkt&, CtlPkt&);
+	bool	addRoute(int, CtlPkt&, CtlPkt&);
+	bool	dropRoute(int, CtlPkt&, CtlPkt&);
+	bool	getRoute(int, CtlPkt&, CtlPkt&);
+	bool	modRoute(int, CtlPkt&, CtlPkt&);
+
+	void	sendCpReq(int);
+	void	resendCpReq();
+	void	handleCpReply(int);
+
 	void	errReply(packet,CtlPkt&,const char*);
 	void	returnToSender(packet,int);
 };

@@ -21,7 +21,7 @@
 bool processArgs(int argc, char *argv[], RouterInfo& args) {
 	// set default values
 	args.mode = "local";
-	args.myAdr = args.myIp = args.nmAdr = args.nmIp = 0;
+	args.myAdr = args.bootIp = args.nmAdr = args.nmIp = 0;
 	args.ccAdr = args.firstLeafAdr = args.lastLeafAdr = 0;
 	args.ifTbl = ""; args.lnkTbl = ""; args.comtTbl = "";
 	args.rteTbl = ""; args.statSpec = ""; 
@@ -36,8 +36,8 @@ bool processArgs(int argc, char *argv[], RouterInfo& args) {
 			args.mode = "remote";
 		} else if (s.compare(0,6,"myAdr=") == 0) {
 			args.myAdr = Forest::forestAdr(&argv[i][6]);
-		} else if (s.compare(0,5,"myIp=") == 0) {
-			args.myIp = Np4d::ipAddress(&argv[i][5]);
+		} else if (s.compare(0,7,"bootIp=") == 0) {
+			args.bootIp = Np4d::ipAddress(&argv[i][5]);
 		} else if (s.compare(0,6,"nmAdr=") == 0) {
 			args.nmAdr = Forest::forestAdr(&argv[i][6]);
 		} else if (s.compare(0,5,"nmIp=") == 0) {
@@ -86,10 +86,17 @@ main(int argc, char *argv[]) {
 
 	RouterCore router(args);
 
-	if (!router.init(args)) {
-		fatal("router: fRouter::init() failed");
+	if (!router.readTables(args))
+		fatal("router: could not read config files");
+	if (args.mode.compare("local") == 0) {
+		if (!router.setup())
+			fatal("router: inconsistency in config files");
+	} else {
+		if (args.bootIp == 0 && args.nmIp == 0 && args.nmAdr == 0) 
+			fatal("remote configuration requires bootIp, "
+			      "netMgr IP and Forest address");
+		router.setBooting(true);
 	}
-	router.dump(cout); 		// print tables
 	router.run(args.finTime);
 	cout << endl;
 	router.dump(cout); 		// print final tables
@@ -106,11 +113,13 @@ RouterCore::RouterCore(const RouterInfo& config) {
 	nPkts = 200000; nBufs = 100000; nQus = 10000;
 
 	myAdr = config.myAdr;
-	myIp = config.myIp;
+	bootIp = config.bootIp;
 	nmAdr = config.nmAdr;
 	nmIp = config.nmIp;
 	ccAdr = config.ccAdr;
 	firstLeafAdr = config.firstLeafAdr;
+
+	booting = false;
 	
 	ps = new PacketStore(nPkts, nBufs);
 	ift = new IfaceTable(nIfaces);
@@ -119,9 +128,11 @@ RouterCore::RouterCore(const RouterInfo& config) {
 	rt = new RouteTable(nRts,myAdr,ctt);
 	sm = new StatsModule(1000, nLnks, nQus, ctt);
 	iop = new IoProcessor(nIfaces, ift, lt, ps, sm);
-	qm = new QuManager(nLnks, nPkts, nQus, min(50,nPkts/(2*nLnks)), ps, sm);
+	qm = new QuManager(nLnks, nPkts, nQus, min(50,5*nPkts/nLnks), ps, sm);
 
 	leafAdr = new UiSetPair((config.lastLeafAdr - firstLeafAdr) + 1);
+
+	seqNum = 1;
 }
 
 RouterCore::~RouterCore() {
@@ -130,15 +141,13 @@ RouterCore::~RouterCore() {
 	if (leafAdr != 0) delete leafAdr;
 }
 
-/** Complete router initialization.
+/** Read router configuration tables from files.
  *  This method reads initial router configuration files (if present)
- *  and configures router tables as specified. It also invokes
- *  several setup and verification methods to ensure that the
- *  initial configuration is fully consistent.
+ *  and configures router tables as specified.
  *  @param config is a RouterInfo structure which has been initialized to
  *  specify various router parameters
  */
-bool RouterCore::init(const RouterInfo& config) {
+bool RouterCore::readTables(const RouterInfo& config) {
 	if (config.mode.compare("remote") == 0) {
 		cerr << "remote configuration mode not yet implemented";
 		return false;
@@ -189,13 +198,21 @@ bool RouterCore::init(const RouterInfo& config) {
 		}
 		fs.close();
 	}
+	return true;
+}
 
+/** Setup router after tables and interfaces have been configured.
+ *  Invokes several setup and verification methods to ensure that the
+ *  initial configuration is fully consistent.
+ */
+bool RouterCore::setup() {
 	if (!setupIfaces()) return false;
 	if (!setupLeafAddresses()) return false;
 	if (!setupQueues()) return false;
 	if (!checkTables()) return false;
 	if (!setAvailRates()) return false;
 	addLocalRoutes();
+
 	return true;
 }
 
@@ -214,6 +231,7 @@ bool RouterCore::setupIfaces() {
 	}
 	return true;
 }
+
 
 /** Allocate addresses to peers specified in the initial link table.
  *  Verifies that the initial peer addresses are in the range of
@@ -252,7 +270,11 @@ bool RouterCore::setupQueues() {
 			ctt->setLinkQ(cLnk,qid);
 			qm->setQRates(qid,Forest::MINBITRATE,
 					  Forest::MINPKTRATE);
-			qm->setQLimits(qid,10,10000);
+			if (lt->getPeerType(lnk) == ROUTER)
+				qm->setQLimits(qid,100,200000);
+			else
+				qm->setQLimits(qid,10,20000);
+			sm->clearQuStats(qid);
 		}
 	}
 	return true;
@@ -428,6 +450,7 @@ bool RouterCore::setAvailRates() {
 		lt->setAvailInPktRate(lnk,lt->getPktRate(lnk));
 		lt->setAvailOutBitRate(lnk,lt->getBitRate(lnk));
 		lt->setAvailOutPktRate(lnk,lt->getPktRate(lnk));
+		sm->clearLnkStats(lnk);
 	}
 	if (!success) return false;
 	int ctx;
@@ -522,8 +545,11 @@ void RouterCore::dump(ostream& out) {
  *  if it is zero, the router runs without stopping (until killed)
  */
 void RouterCore::run(uint64_t finishTime) {
+	if (booting) {
+		iop->setupBootSock(bootIp,nmIp);
+	}
 	// record of first packet receptions, transmissions for debugging
-	const int MAXEVENTS = 1000;
+	const int MAXEVENTS = 10000;
 	const int NUMDATA = 500;
 	struct {
 		int sendFlag; uint64_t time; int link, pkt;
@@ -542,7 +568,7 @@ void RouterCore::run(uint64_t finishTime) {
 		didNothing = true;
 
 		// input processing
-		int p = iop->receive();
+		int p = iop->receive(booting);
 		if (p != 0) {
 			didNothing = false;
 			PacketHeader& h = ps->getHeader(p);
@@ -622,14 +648,13 @@ h.write(cerr,ps->getBuffer(p));
 				evCnt++;
 				if (h.getPtype() == CLIENT_DATA) numData++;
 			}
-			iop->send(p,lnk);
+			iop->send(p,lnk,booting);
 		}
 
 		// control packet processing
-		if (!ctlQ.empty() && (didNothing || --controlCount <= 0)) {
+		if (!ctlQ.empty() && (booting || didNothing || --controlCount <= 0)) {
 			handleCtlPkt(ctlQ.front());
 			ctlQ.pop();
-			didNothing = false;
 			controlCount = 20; // do one control packet for
 					   // every 20 iterations when busy
 		}
@@ -681,6 +706,14 @@ bool RouterCore::pktCheck(int p, int ctx) {
 	if (h.getLength() != h.getIoBytes() || h.getLength() < Forest::HDR_LENG)
 		return false;
 
+	if (booting) {
+		if (h.getSrcAdr() != nmAdr) return false;
+		if (h.getDstAdr() != myAdr) return false;
+		if (h.getPtype() != NET_SIG) return false;
+		if (h.getComtree() != 100) return false;
+		return true;
+	}
+
 	fAdr_t adr = h.getDstAdr();
 	if (!Forest::validUcastAdr(adr) && !Forest::mcastAdr(adr))
 		return false;
@@ -698,8 +731,12 @@ bool RouterCore::pktCheck(int p, int ctx) {
 		fAdr_t dest = ctt->getDest(cLnk);
 		if (dest!=0 && h.getDstAdr() != dest && h.getDstAdr() != myAdr)
 			return false;
-		// don't let untrusted peers send network signalling packets
-		if (h.getPtype() >= NET_SIG) return false;
+		// verify that type is valid
+		ptyp_t ptype = h.getPtype();
+		if (ptype != CLIENT_DATA &&
+		    ptype != CONNECT && ptype != DISCONNECT &&
+		    ptype != SUB_UNSUB && ptype != CLIENT_SIG)
+			return false;
 	}
 	return true;
 }
@@ -958,11 +995,12 @@ void RouterCore::handleConnDisc(int p) {
 	if (h.getPtype() == CONNECT) {
 		if (lt->getPeerPort(inLnk) == 0)
 			lt->setPeerPort(inLnk,h.getTunSrcPort());
-		if (nmAdr != 0) {
+		if (nmAdr != 0 && lt->getPeerType(inLnk) == CLIENT) {
 			int p1 = ps->alloc();
 			CtlPkt cp;
 			cp.setCpType(CLIENT_CONNECT);
 			cp.setRrType(REQUEST);
+			cp.setSeqNum(seqNum++);
 			cp.setAttr(CLIENT_ADR,h.getSrcAdr());
 			cp.setAttr(RTR_ADR,myAdr);
 			int paylen = cp.pack(ps->getPayload(p1));
@@ -978,11 +1016,12 @@ void RouterCore::handleConnDisc(int p) {
 	} else if (h.getPtype() == DISCONNECT) {
 		if (lt->getPeerPort(inLnk) == h.getTunSrcPort())
 			lt->setPeerPort(inLnk,0);
-		if (nmAdr != 0) {
+		if (nmAdr != 0 && lt->getPeerType(inLnk) == CLIENT) {
 			int p1 = ps->alloc();
 			CtlPkt cp;
 			cp.setCpType(CLIENT_DISCONNECT);
 			cp.setRrType(REQUEST);
+			cp.setSeqNum(seqNum++);
 			cp.setAttr(CLIENT_ADR,h.getSrcAdr());
 			cp.setAttr(RTR_ADR,myAdr);
 			int paylen = cp.pack(ps->getPayload(p1));
@@ -1021,7 +1060,7 @@ void RouterCore::handleCtlPkt(int p) {
 	if (!cp.unpack(ps->getPayload(p), len)) {
 		cerr << "RouterCore::handleCtlPkt: misformatted control "
 			" packet\n";
-		cp.write(cerr);
+		h.write(cerr,ps->getBuffer(p));
 		errReply(p,cp,"misformatted control packet");
 		return;
 	}
@@ -1030,659 +1069,861 @@ void RouterCore::handleCtlPkt(int p) {
 		// reject signalling packets on comtrees outside 100-999 range
 		ps->free(p); return;
 	}
+	if (cp.getRrType() != REQUEST) { // need to handle replies later
+		ps->free(p); return;
+	}
 	
 	// Prepare positive reply packet for use where appropriate
-	CtlPkt cp1;
-	cp1.setCpType(cp.getCpType());
-	cp1.setRrType(POS_REPLY);
-	cp1.setSeqNum(cp.getSeqNum());
+	CtlPkt reply;
+	reply.setCpType(cp.getCpType());
+	reply.setRrType(POS_REPLY);
+	reply.setSeqNum(cp.getSeqNum());
 	switch (cp.getCpType()) {
 	// Configuring logical interfaces
-	case ADD_IFACE: {
-		if (!cp.isSet(IFACE_NUM) || !cp.isSet(LOCAL_IP) ||
-		    !cp.isSet(MAX_BIT_RATE) || !cp.isSet(MAX_PKT_RATE)) {
-			errReply(p,cp1,"add iface: missing required attribute");
-			break;
-		}
-		int iface = cp.getAttr(IFACE_NUM);
-		ipa_t localIp = cp.getAttr(LOCAL_IP);
-		int bitRate = cp.getAttr(MAX_BIT_RATE);
-		int pktRate = cp.getAttr(MAX_PKT_RATE);
-		bitRate = max(bitRate, Forest::MINBITRATE);
-		pktRate = max(pktRate, Forest::MINPKTRATE);
-		bitRate = min(bitRate, Forest::MAXBITRATE);
-		pktRate = min(pktRate, Forest::MAXPKTRATE);
-		if (ift->valid(iface)) {
-			if (localIp != ift->getIpAdr(iface) ||
-			    bitRate != ift->getMaxBitRate(iface) ||
-			    pktRate != ift->getMaxPktRate(iface)) {
-				errReply(p,cp1,"add iface: requested interface "
-					       "conflicts with existing "
-					       "interface");
-				break;
-			}
-		} else if (!ift->addEntry(iface, localIp, bitRate, pktRate)) {
-			errReply(p,cp1,"add iface: cannot add interface");
-			break;
-		}
-		returnToSender(p,cp1.pack(ps->getPayload(p)));
+	case ADD_IFACE: 	addIface(p,cp,reply); break;
+        case DROP_IFACE:	dropIface(p,cp,reply); break;
+        case GET_IFACE:		getIface(p,cp,reply); break;
+        case MOD_IFACE:		modIface(p,cp,reply); break;
+        case ADD_LINK:		addLink(p,cp,reply); break;
+        case DROP_LINK:		dropLink(p,cp,reply); break;
+        case GET_LINK:		getLink(p,cp,reply); break;
+        case MOD_LINK:		modLink(p,cp,reply); break;
+        case ADD_COMTREE:	addComtree(p,cp,reply); break;
+        case DROP_COMTREE:	dropComtree(p,cp,reply); break;
+        case GET_COMTREE:	getComtree(p,cp,reply); break;
+        case MOD_COMTREE:	modComtree(p,cp,reply); break;
+	case ADD_COMTREE_LINK:	addComtreeLink(p,cp,reply); break;
+	case DROP_COMTREE_LINK:	dropComtreeLink(p,cp,reply); break;
+	case GET_COMTREE_LINK:	getComtreeLink(p,cp,reply); break;
+	case MOD_COMTREE_LINK:	modComtreeLink(p,cp,reply); break;
+        case ADD_ROUTE:		addRoute(p,cp,reply); break;
+        case DROP_ROUTE:	dropRoute(p,cp,reply); break;
+        case GET_ROUTE:		getRoute(p,cp,reply); break;
+        case MOD_ROUTE:		modRoute(p,cp,reply); break;
+	default:
+		cerr << "unrecognized control packet type " << cp.getCpType()
+		     << endl;
+		reply.setErrMsg("invalid control packet for router");
+		reply.setRrType(NEG_REPLY);
 		break;
 	}
-        case DROP_IFACE: {
-		if (!cp.isSet(IFACE_NUM)) {
-			errReply(p,cp1,"add iface: missing required attribute");
-			break;
-		}
-		int iface = cp.getAttr(IFACE_NUM);
-		ift->removeEntry(iface);
-		returnToSender(p,cp1.pack(ps->getPayload(p)));
-		break;
+	int paylen = reply.pack(ps->getPayload(p));
+	if (paylen == 0) {
+		cerr << "RouterCore::handleCtlPkt: control packet packing "
+			"error\n";
+		ps->free(p);
+		return;
 	}
-        case GET_IFACE: {
-		if (!cp.isSet(IFACE_NUM)) {
-			errReply(p,cp1,"add iface: missing required attribute");
-			break;
-		}
-		int iface = cp.getAttr(IFACE_NUM);
-		if (ift->valid(iface)) {
-			cp1.setAttr(IFACE_NUM,iface);
-			cp1.setAttr(LOCAL_IP,ift->getIpAdr(iface));
-			cp1.setAttr(AVAIL_BIT_RATE,ift->getAvailBitRate(iface));
-			cp1.setAttr(AVAIL_PKT_RATE,ift->getAvailPktRate(iface));
-			cp1.setAttr(MAX_BIT_RATE,ift->getMaxBitRate(iface));
-			cp1.setAttr(MAX_PKT_RATE,ift->getMaxPktRate(iface));
-			returnToSender(p,cp1.pack(ps->getPayload(p)));
-		} else errReply(p,cp1,"get iface: invalid interface");
-		break;
+	h.setLength(Forest::OVERHEAD + paylen);
+	h.setFlags(0);
+	h.setDstAdr(h.getSrcAdr());
+	h.setSrcAdr(myAdr);
+
+	ps->pack(p);
+
+	int cLnk = ctt->getComtLink(h.getComtree(),h.getInLink());
+	int qid = ctt->getLinkQ(cLnk);
+	if (!qm->enq(p,qid,now)) { ps->free(p); }
+	return;
+}
+
+/** Handle an ADD_IFACE control packet.
+ *  Adds the specified interface and prepares a reply packet.
+ *  @param p is a packet number
+ *  @param cp is the control packet structure for p (already unpacked)
+ *  @param reply is a control packet structure for the reply, which
+ *  the cpType has been set to match cp, the rrType is POS_REPLY
+ *  and the seqNum has been set to match cp.
+ *  @param return true on success, false on failure; on a successful
+ *  return, all appropriate attributes in reply are set; on a failure
+ *  return, the errMsg field of reply is set.
+ */
+bool RouterCore::addIface(int p, CtlPkt& cp, CtlPkt& reply) {
+	if (!cp.isSet(IFACE_NUM) || !cp.isSet(LOCAL_IP) ||
+	    !cp.isSet(MAX_BIT_RATE) || !cp.isSet(MAX_PKT_RATE)) {
+		reply.setErrMsg("add iface: missing required attribute");
+		reply.setRrType(NEG_REPLY);
+		return false;
 	}
-        case MOD_IFACE: {
-		if (!cp.isSet(IFACE_NUM)) {
-			errReply(p,cp1,"add iface: missing required attribute");
-			break;
+	int iface = cp.getAttr(IFACE_NUM);
+	ipa_t localIp = cp.getAttr(LOCAL_IP);
+	int bitRate = cp.getAttr(MAX_BIT_RATE);
+	int pktRate = cp.getAttr(MAX_PKT_RATE);
+	bitRate = max(bitRate, Forest::MINBITRATE);
+	pktRate = max(pktRate, Forest::MINPKTRATE);
+	bitRate = min(bitRate, Forest::MAXBITRATE);
+	pktRate = min(pktRate, Forest::MAXPKTRATE);
+	if (ift->valid(iface)) {
+		if (localIp != ift->getIpAdr(iface) ||
+		    bitRate != ift->getMaxBitRate(iface) ||
+		    pktRate != ift->getMaxPktRate(iface)) {
+			reply.setErrMsg("add iface: requested interface "
+				 	"conflicts with existing interface");
+			reply.setRrType(NEG_REPLY);
+			return false;
 		}
-		int iface = cp.getAttr(IFACE_NUM);
-		if (ift->valid(iface)) {
-			if (cp.isSet(MAX_BIT_RATE))
-				ift->setMaxBitRate(iface,
-						   cp.getAttr(MAX_BIT_RATE));
-			if (cp.isSet(MAX_PKT_RATE))
-				ift->setMaxPktRate(iface,
-						   cp.getAttr(MAX_PKT_RATE));
-		} else errReply(p,cp1,"mod iface: invalid interface");
-		break;
+	} else if (!ift->addEntry(iface, localIp, bitRate, pktRate)) {
+		reply.setErrMsg("add iface: cannot add interface");
+		reply.setRrType(NEG_REPLY);
+		return false;
 	}
-        case ADD_LINK: {
-		if (!cp.isSet(PEER_IP) || !cp.isSet(PEER_TYPE)) {
-			errReply(p,cp1,"add link: missing required attribute");
-			break;
-		}
-		ntyp_t ntyp = (ntyp_t) cp.getAttr(PEER_TYPE);
-		ipa_t  pipa = cp.getAttr(PEER_IP);
-		int lnk = (cp.isSet(LINK_NUM) ? cp.getAttr(LINK_NUM) : 0);
-		int iface = (cp.isSet(IFACE_NUM) ? cp.getAttr(IFACE_NUM) :
-					  	   ift->getDefaultIface());
-		ipp_t pipp = (cp.isSet(PEER_PORT) ? cp.getAttr(PEER_PORT) :
-			      (ntyp == ROUTER ? Forest::ROUTER_PORT : 0));
-		fAdr_t padr = (cp.isSet(PEER_ADR) ? cp.getAttr(PEER_ADR): 0);
-		int xlnk = lt->lookup(pipa,pipp);
-		if (xlnk != 0) { // this link already exists
-			if ((lnk != 0 && lnk != xlnk) ||
-			    (ntyp != lt->getPeerType(xlnk)) ||
-			    (cp.isSet(IFACE_NUM) &&
-			     cp.getAttr(IFACE_NUM) != lt->getIface(xlnk)) ||
-			    (padr != 0 && padr != lt->getPeerAdr(xlnk))) {
-				errReply(p,cp1,"add link: new link conflicts "
-					       "with existing link");
-				break;
-			}
-			lnk = xlnk; padr = lt->getPeerAdr(xlnk);
-		} else { // adding a new link
-			// first ensure that the interface has enough
-			// capacity to support a new link
-			int br = Forest::MINBITRATE;
-			int pr = Forest::MINPKTRATE;
-			if (!ift->addAvailBitRate(iface,-br)) {
-				errReply(p,cp1,"add link: requested link "
-					       "exceeds interface capacity");
-				break;
-			}
-			if (!ift->addAvailPktRate(iface,-pr)) {
-				errReply(p,cp1,"add link: requested link "
-					       "exceeds interface capacity");
-				break;
-			}
-			if (ntyp == ROUTER && pipp != Forest::ROUTER_PORT ||
-			    ntyp != ROUTER && pipp == Forest::ROUTER_PORT ||
-			    (lnk = lt->addEntry(lnk,pipa,pipp)) == 0) {
-				ift->addAvailBitRate(iface,br);
-				ift->addAvailPktRate(iface,pr);
-				errReply(p,cp1,"add link: cannot add "
-					       "requested link");
-				break;
-			}
-			// note: when lt->addEntry succeeds, link rates are
-			// initializied to Forest minimum rates
-			if (padr != 0 && !isFreeLeafAdr(padr)) {
-				ift->addAvailBitRate(iface,br);
-				ift->addAvailPktRate(iface,pr);
-				lt->removeEntry(lnk);
-				errReply(p,cp1,"add link: specified peer "
-					       "address is in use");
-				break;
-			}
-			if (padr == 0) padr = allocLeafAdr();
-			if (padr == 0) {
-				ift->addAvailBitRate(iface,br);
-				ift->addAvailPktRate(iface,pr);
-				lt->removeEntry(lnk);
-				errReply(p,cp1,"add link: no available "
-					       "peer addresses");
-				break;
-			}
-			lt->setIface(lnk,iface);
-			lt->setPeerType(lnk,ntyp);
-			lt->setPeerAdr(lnk,padr);
-		}
-		cp1.setAttr(LINK_NUM,lnk);
-		cp1.setAttr(PEER_ADR,padr);
-		cp1.setAttr(RTR_IP,ift->getIpAdr(iface));
-		returnToSender(p,cp1.pack(ps->getPayload(p)));
-		break;
+	return true;
+}
+
+bool RouterCore::dropIface(int p, CtlPkt& cp, CtlPkt& reply) {
+	if (!cp.isSet(IFACE_NUM)) {
+		reply.setErrMsg("drop iface: missing required "
+					"attribute");
+		reply.setRrType(NEG_REPLY);
+		return false;
 	}
-        case DROP_LINK: {
-		if (!cp.isSet(LINK_NUM)) {
-			errReply(p,cp1,"drop link: missing required attribute");
-			break;
-		}
-		int lnk = cp.getAttr(LINK_NUM);
-		int iface = lt->getIface(lnk);
-		ift->addAvailBitRate(iface,-lt->getBitRate(lnk));
-		ift->addAvailPktRate(iface,-lt->getPktRate(lnk));
-		lt->removeEntry(lnk);
-		returnToSender(p,cp1.pack(ps->getPayload(p)));
-		break;
+	int iface = cp.getAttr(IFACE_NUM);
+	ift->removeEntry(iface);
+	return true;
+}
+
+bool RouterCore::getIface(int p, CtlPkt& cp, CtlPkt& reply) {
+	if (!cp.isSet(IFACE_NUM)) {
+		reply.setErrMsg("get iface: missing required "
+					"attribute");
+		reply.setRrType(NEG_REPLY);
+		return false;
 	}
-        case GET_LINK: {
-		if (!cp.isSet(LINK_NUM)) {
-			errReply(p,cp1,"get link: missing required attribute");
-			break;
-		}
-		int link = cp.getAttr(LINK_NUM);
-cerr << "processing get link on link " << link << endl;
-		if (lt->valid(link)) {
-			cp1.setAttr(LINK_NUM, link);
-			cp1.setAttr(IFACE_NUM, lt->getIface(link));
-			cp1.setAttr(PEER_IP, lt->getPeerIpAdr(link));
-			cp1.setAttr(PEER_TYPE, lt->getPeerType(link));
-			cp1.setAttr(PEER_PORT, lt->getPeerPort(link));
-			cp1.setAttr(PEER_ADR, lt->getPeerAdr(link));
-			cp1.setAttr(AVAIL_BIT_RATE_IN,
-					lt->getAvailInBitRate(link));
-			cp1.setAttr(AVAIL_PKT_RATE_IN,
-					lt->getAvailInPktRate(link));
-			cp1.setAttr(AVAIL_BIT_RATE_OUT,
-					lt->getAvailOutBitRate(link));
-			cp1.setAttr(AVAIL_PKT_RATE_OUT,
-					lt->getAvailOutPktRate(link));
-			cp1.setAttr(BIT_RATE, lt->getBitRate(link));
-			cp1.setAttr(PKT_RATE, lt->getPktRate(link));
-cerr << "sending positive reply " << link << endl;
-			returnToSender(p,cp1.pack(ps->getPayload(p)));
-		} else errReply(p,cp1,"get link: invalid link number");
-		break;
+	int iface = cp.getAttr(IFACE_NUM);
+	if (ift->valid(iface)) {
+		reply.setAttr(IFACE_NUM,iface);
+		reply.setAttr(LOCAL_IP,ift->getIpAdr(iface));
+		reply.setAttr(AVAIL_BIT_RATE,ift->getAvailBitRate(iface));
+		reply.setAttr(AVAIL_PKT_RATE,ift->getAvailPktRate(iface));
+		reply.setAttr(MAX_BIT_RATE,ift->getMaxBitRate(iface));
+		reply.setAttr(MAX_PKT_RATE,ift->getMaxPktRate(iface));
+		return true;
 	}
-        case MOD_LINK: {
-		if (!cp.isSet(LINK_NUM)) {
-			errReply(p,cp1,"modify link: missing required "
-				       "attribute");
-			break;
+	reply.setErrMsg("get iface: invalid interface");
+	reply.setRrType(NEG_REPLY);
+	return false;
+}
+
+bool RouterCore::modIface(int p, CtlPkt& cp, CtlPkt& reply) {
+	if (!cp.isSet(IFACE_NUM)) {
+		reply.setErrMsg("add iface: missing required "
+					"attribute");
+		reply.setRrType(NEG_REPLY);
+		return false;
+	}
+	int iface = cp.getAttr(IFACE_NUM);
+	if (ift->valid(iface)) {
+		if (cp.isSet(MAX_BIT_RATE))
+			ift->setMaxBitRate(iface,cp.getAttr(MAX_BIT_RATE));
+		if (cp.isSet(MAX_PKT_RATE))
+			ift->setMaxPktRate(iface,cp.getAttr(MAX_PKT_RATE));
+		return true;
+	}
+	reply.setErrMsg("mod iface: invalid interface");
+	reply.setRrType(NEG_REPLY);
+	return false;
+}
+
+bool RouterCore::addLink(int p, CtlPkt& cp, CtlPkt& reply) {
+	if (!cp.isSet(PEER_IP) || !cp.isSet(PEER_TYPE)) {
+		reply.setErrMsg("add link: missing required attribute");
+		reply.setRrType(NEG_REPLY);
+		return false;
+	}
+	ntyp_t ntyp = (ntyp_t) cp.getAttr(PEER_TYPE);
+	ipa_t  pipa = cp.getAttr(PEER_IP);
+	int lnk = (cp.isSet(LINK_NUM) ? cp.getAttr(LINK_NUM) : 0);
+	int iface = (cp.isSet(IFACE_NUM) ? cp.getAttr(IFACE_NUM) :
+				  	   ift->getDefaultIface());
+	ipp_t pipp = (cp.isSet(PEER_PORT) ? cp.getAttr(PEER_PORT) :
+		      (ntyp == ROUTER ? Forest::ROUTER_PORT : 0));
+	fAdr_t padr = (cp.isSet(PEER_ADR) ? cp.getAttr(PEER_ADR): 0);
+	int xlnk = lt->lookup(pipa,pipp);
+	if (xlnk != 0) { // this link already exists
+		if ((lnk != 0 && lnk != xlnk) ||
+		    (ntyp != lt->getPeerType(xlnk)) ||
+		    (cp.isSet(IFACE_NUM) &&
+		     cp.getAttr(IFACE_NUM) != lt->getIface(xlnk)) ||
+		    (padr != 0 && padr != lt->getPeerAdr(xlnk))) {
+			reply.setErrMsg("add link: new link conflicts "
+						"with existing link");
+			reply.setRrType(NEG_REPLY);
+			return false;
 		}
-		int link = cp.getAttr(LINK_NUM);
-		if (lt->valid(link)) {
-			cp1.setAttr(LINK_NUM,link);
-			int iface = lt->getIface(link);
-			if (cp.isSet(BIT_RATE)) {
-				int br = cp.getAttr(BIT_RATE);
-				int dbr = br - lt->getBitRate(link);
-				if (!ift->addAvailBitRate(iface,-dbr)) {
-					errReply(p,cp1,"mod link: request "
-						 "exceeds interface capacity");
-					return;
+		lnk = xlnk; padr = lt->getPeerAdr(xlnk);
+	} else { // adding a new link
+		// first ensure that the interface has enough
+		// capacity to support a new link
+		int br = Forest::MINBITRATE;
+		int pr = Forest::MINPKTRATE;
+		if (!ift->addAvailBitRate(iface,-br)) {
+			reply.setErrMsg("add link: requested link "
+						"exceeds interface capacity");
+			reply.setRrType(NEG_REPLY);
+			return false;
+		}
+		if (!ift->addAvailPktRate(iface,-pr)) {
+			reply.setErrMsg("add link: requested link "
+						"exceeds interface capacity");
+			reply.setRrType(NEG_REPLY);
+			return false;
+		}
+		if (ntyp == ROUTER && pipp != Forest::ROUTER_PORT ||
+		    ntyp != ROUTER && pipp == Forest::ROUTER_PORT ||
+		    (lnk = lt->addEntry(lnk,pipa,pipp)) == 0) {
+			ift->addAvailBitRate(iface,br);
+			ift->addAvailPktRate(iface,pr);
+			reply.setErrMsg("add link: cannot add "
+				 		"requested link");
+			reply.setRrType(NEG_REPLY);
+			return false;
+		}
+		// note: when lt->addEntry succeeds, link rates are
+		// initializied to Forest minimum rates
+		if (padr != 0 && !isFreeLeafAdr(padr)) {
+			ift->addAvailBitRate(iface,br);
+			ift->addAvailPktRate(iface,pr);
+			lt->removeEntry(lnk);
+			reply.setErrMsg("add link: specified peer "
+						"address is in use");
+			reply.setRrType(NEG_REPLY);
+			return false;
+		}
+		if (padr == 0) padr = allocLeafAdr();
+		if (padr == 0) {
+			ift->addAvailBitRate(iface,br);
+			ift->addAvailPktRate(iface,pr);
+			lt->removeEntry(lnk);
+			reply.setErrMsg("add link: no available "
+						"peer addresses");
+			reply.setRrType(NEG_REPLY);
+			return false;
+		}
+		lt->setIface(lnk,iface);
+		lt->setPeerType(lnk,ntyp);
+		lt->setPeerAdr(lnk,padr);
+		sm->clearLnkStats(lnk);
+	}
+	reply.setAttr(LINK_NUM,lnk);
+	reply.setAttr(PEER_ADR,padr);
+	reply.setAttr(RTR_IP,ift->getIpAdr(iface));
+	return true;
+}
+
+bool RouterCore::dropLink(int p, CtlPkt& cp, CtlPkt& reply) {
+	if (!cp.isSet(LINK_NUM)) {
+		reply.setErrMsg("drop link: missing required "
+					"attribute");
+		reply.setRrType(NEG_REPLY);
+		return false;
+	}
+	int lnk = cp.getAttr(LINK_NUM);
+	int iface = lt->getIface(lnk);
+	ift->addAvailBitRate(iface,-lt->getBitRate(lnk));
+	ift->addAvailPktRate(iface,-lt->getPktRate(lnk));
+	lt->removeEntry(lnk);
+	return true;
+}
+
+bool RouterCore::getLink(int p, CtlPkt& cp, CtlPkt& reply) {
+	if (!cp.isSet(LINK_NUM)) {
+		reply.setErrMsg("get link: missing required attribute");
+		reply.setRrType(NEG_REPLY);
+		return false;
+	}
+	int link = cp.getAttr(LINK_NUM);
+	if (lt->valid(link)) {
+		reply.setAttr(LINK_NUM, link);
+		reply.setAttr(IFACE_NUM, lt->getIface(link));
+		reply.setAttr(PEER_IP, lt->getPeerIpAdr(link));
+		reply.setAttr(PEER_TYPE, lt->getPeerType(link));
+		reply.setAttr(PEER_PORT, lt->getPeerPort(link));
+		reply.setAttr(PEER_ADR, lt->getPeerAdr(link));
+		reply.setAttr(AVAIL_BIT_RATE_IN,
+				lt->getAvailInBitRate(link));
+		reply.setAttr(AVAIL_PKT_RATE_IN,
+				lt->getAvailInPktRate(link));
+		reply.setAttr(AVAIL_BIT_RATE_OUT,
+				lt->getAvailOutBitRate(link));
+		reply.setAttr(AVAIL_PKT_RATE_OUT,
+				lt->getAvailOutPktRate(link));
+		reply.setAttr(BIT_RATE, lt->getBitRate(link));
+		reply.setAttr(PKT_RATE, lt->getPktRate(link));
+		return true;
+	} 
+	reply.setErrMsg("get link: invalid link number");
+	reply.setRrType(NEG_REPLY);
+	return false;
+}
+
+bool RouterCore::modLink(int p, CtlPkt& cp, CtlPkt& reply) {
+	if (!cp.isSet(LINK_NUM)) {
+		reply.setErrMsg("modify link: missing required "
+					"attribute");
+		reply.setRrType(NEG_REPLY);
+		return false;
+	}
+	int link = cp.getAttr(LINK_NUM);
+	if (lt->valid(link)) {
+		reply.setAttr(LINK_NUM,link);
+		int iface = lt->getIface(link);
+		int br, dbr;
+		if (cp.isSet(BIT_RATE)) {
+			br = cp.getAttr(BIT_RATE);
+			dbr = br - lt->getBitRate(link);
+			if (!ift->addAvailBitRate(iface,-dbr)) {
+				reply.setErrMsg("mod link: request "
+						"exceeds interface capacity");
+				reply.setRrType(NEG_REPLY);
+				return false;
+			}
+			lt->setBitRate(link, br); 
+			lt->addAvailInBitRate(link, dbr); 
+			lt->addAvailOutBitRate(link, dbr); 
+			qm->setLinkRates(link,br,lt->getPktRate(link));
+		}
+		if (cp.isSet(PKT_RATE)) {
+			int pr = cp.getAttr(PKT_RATE);
+			int dpr = pr - lt->getPktRate(link);
+			if (!ift->addAvailBitRate(iface,-dpr)) {
+				if (cp.isSet(BIT_RATE)) { //undo earlier changes
+					ift->addAvailBitRate(iface,dbr);
+					lt->setBitRate(link,br-dbr);
+					lt->addAvailInBitRate(link, -dbr);
+					lt->addAvailOutBitRate(link, -dbr);
+					qm->setLinkRates(link,br-dbr,
+							 lt->getPktRate(link));
 				}
-				lt->setBitRate(link, br); 
-				lt->addAvailInBitRate(link, dbr); 
-				lt->addAvailOutBitRate(link, dbr); 
-				qm->setLinkRates(link,br,lt->getPktRate(link));
+				reply.setErrMsg("mod link: request "
+					 "exceeds interface capacity");
+				reply.setRrType(NEG_REPLY);
+				return false;
 			}
-			if (cp.isSet(PKT_RATE)) {
-				int pr = cp.getAttr(PKT_RATE);
-				int dpr = pr - lt->getPktRate(link);
-				if (!ift->addAvailBitRate(iface,-dpr)) {
-					errReply(p,cp1,"mod link: request "
-						 "exceeds interface capacity");
-					return;
-				}
-				lt->setPktRate(link, pr); 
-				lt->addAvailInPktRate(link, dpr); 
-				lt->addAvailOutPktRate(link, dpr); 
-				qm->setLinkRates(link,lt->getBitRate(link),pr);
-			}
-			returnToSender(p,cp1.pack(ps->getPayload(p)));
-		} else errReply(p,cp1,"get link: invalid link number");
-		break;
-	}
-        case ADD_COMTREE: {
-		if (!cp.isSet(COMTREE_NUM)) {
-			errReply(p,cp1,"add comtree: missing required "
-				       "attribute");
-			break;
+			lt->setPktRate(link, pr); 
+			lt->addAvailInPktRate(link, dpr); 
+			lt->addAvailOutPktRate(link, dpr); 
+			qm->setLinkRates(link,lt->getBitRate(link),pr);
 		}
-		int comt = cp.getAttr(COMTREE_NUM);
-		if(ctt->validComtree(comt) || ctt->addEntry(comt) != 0)
-			returnToSender(p,cp1.pack(ps->getPayload(p)));
-		else errReply(p,cp1,"add comtree: cannot add comtree");
-		break;
+		return true;
+	} 
+	reply.setErrMsg("get link: invalid link number");
+	reply.setRrType(NEG_REPLY);
+	return false;
+}
+
+bool RouterCore::addComtree(int p, CtlPkt& cp, CtlPkt& reply) {
+	if (!cp.isSet(COMTREE_NUM)) {
+		reply.setErrMsg("add comtree: missing required "
+			       "attribute");
+		reply.setRrType(NEG_REPLY);
+		return false;
 	}
-        case DROP_COMTREE: {
-		if (!cp.isSet(COMTREE_NUM)) {
-			errReply(p,cp1,"drop comtree: missing required "
-				       "attribute");
-			break;
-		}
+	int comt = cp.getAttr(COMTREE_NUM);
+	if(ctt->validComtree(comt) || ctt->addEntry(comt) != 0)
+		return true;
+	reply.setErrMsg("add comtree: cannot add comtree");
+	reply.setRrType(NEG_REPLY);
+	return false;
+}
+
+bool RouterCore::dropComtree(int p, CtlPkt& cp, CtlPkt& reply) {
+	if (!cp.isSet(COMTREE_NUM)) {
+		reply.setErrMsg("drop comtree: missing required "
+			       "attribute");
+		reply.setRrType(NEG_REPLY);
+		return false;
+	}
 	// should really remove all comtree links and routes first
 	// currently, no mechanism to track all routes associated with
 	// a comtree
 	// may be ok to let higher level controllers take responsibility
 	// for this
-		int ctx = ctt->getComtIndex(cp.getAttr(COMTREE_NUM));
-		ctt->removeEntry(ctx);
-		returnToSender(p,cp1.pack(ps->getPayload(p)));
-		break;
+	int ctx = ctt->getComtIndex(cp.getAttr(COMTREE_NUM));
+	ctt->removeEntry(ctx);
+	return true;
+}
+
+bool RouterCore::getComtree(int p, CtlPkt& cp, CtlPkt& reply) {
+	if (!cp.isSet(COMTREE_NUM)) {
+		reply.setErrMsg("get comtree: missing required "
+					"attribute");
+		reply.setRrType(NEG_REPLY);
+		return false;
 	}
-        case GET_COMTREE: {
-		if (!cp.isSet(COMTREE_NUM)) {
-			errReply(p,cp1,"get comtree: missing required "
-				       "attribute");
-			break;
-		}
-		comt_t comt = cp.getAttr(COMTREE_NUM);
-		ctx = ctt->getComtIndex(comt);
-		if (ctx == 0) {
-			errReply(p,cp1,"get comtree: invalid comtree");
-		} else {
-			cp1.setAttr(COMTREE_NUM,comt);
-			cp1.setAttr(CORE_FLAG,ctt->inCore(ctx));
-			cp1.setAttr(PARENT_LINK,ctt->getPlink(ctx));
-			cp1.setAttr(LINK_COUNT,ctt->getLinkCount(ctx));
-			returnToSender(p,cp1.pack(ps->getPayload(p)));
-		}
-		break;
+	comt_t comt = cp.getAttr(COMTREE_NUM);
+	int ctx = ctt->getComtIndex(comt);
+	if (ctx == 0) {
+		reply.setErrMsg("get comtree: invalid comtree");
+		reply.setRrType(NEG_REPLY); 
+		return false;
 	}
-        case MOD_COMTREE: {
-		if (!cp.isSet(COMTREE_NUM)) {
-			errReply(p,cp1,"modify comtree: missing required "
-				       "attribute");
-			break;
-		}
-		comt_t comt = cp.getAttr(COMTREE_NUM);
-		int ctx = ctt->getComtIndex(comt);
-		if (ctx != 0) {
-			if (cp.isSet(CORE_FLAG))
-				ctt->setCoreFlag(ctx,cp.getAttr(CORE_FLAG));
-			if (cp.isSet(PARENT_LINK)) {
-				int plnk = cp.getAttr(PARENT_LINK);
-				if (!ctt->isLink(ctx,plnk)) {
-					errReply(p,cp1,"specified link does "
+	reply.setAttr(COMTREE_NUM,comt);
+	reply.setAttr(CORE_FLAG,ctt->inCore(ctx));
+	reply.setAttr(PARENT_LINK,ctt->getPlink(ctx));
+	reply.setAttr(LINK_COUNT,ctt->getLinkCount(ctx));
+	return true;
+}
+
+bool RouterCore::modComtree(int p, CtlPkt& cp, CtlPkt& reply) {
+	if (!cp.isSet(COMTREE_NUM)) {
+		reply.setErrMsg("modify comtree: missing required "
+					"attribute");
+		reply.setRrType(NEG_REPLY);
+		return false;
+	}
+	comt_t comt = cp.getAttr(COMTREE_NUM);
+	int ctx = ctt->getComtIndex(comt);
+	if (ctx != 0) {
+		if (cp.isSet(CORE_FLAG))
+			ctt->setCoreFlag(ctx,cp.getAttr(CORE_FLAG));
+		if (cp.isSet(PARENT_LINK)) {
+			int plnk = cp.getAttr(PARENT_LINK);
+			if (!ctt->isLink(ctx,plnk)) {
+				reply.setErrMsg("specified link does "
 						"not belong to comtree");
-					break;
-				}
-				if (!ctt->isRtrLink(ctx,plnk)) {
-					errReply(p,cp1,"specified link does "
+				reply.setRrType(NEG_REPLY);
+				return false;
+			}
+			if (!ctt->isRtrLink(ctx,plnk)) {
+				reply.setErrMsg("specified link does "
 						"not connect to a router");
-					break;
-				}
-				ctt->setPlink(ctx,cp.getAttr(PARENT_LINK));
+				reply.setRrType(NEG_REPLY);
+				return false;
 			}
-			returnToSender(p,cp1.pack(ps->getPayload(p)));
-		} else errReply(p,cp1,"modify comtree: invalid comtree");
-		break;
+			ctt->setPlink(ctx,cp.getAttr(PARENT_LINK));
+		}
+		return true;
+	} 
+	reply.setErrMsg("modify comtree: invalid comtree");
+	reply.setRrType(NEG_REPLY);
+	return false;
+}
+
+bool RouterCore::addComtreeLink(int p, CtlPkt& cp, CtlPkt& reply) {
+	// Note: we require either the link number or
+	// the peerIP and peerPort
+	if (!(cp.isSet(COMTREE_NUM) &&
+	      (cp.isSet(LINK_NUM) ||
+	        (cp.isSet(PEER_IP) && cp.isSet(PEER_PORT))))) {
+		reply.setErrMsg("add comtree link: missing required "
+					"attribute");
+		reply.setRrType(NEG_REPLY);
+		return false;
 	}
-	case ADD_COMTREE_LINK: {
-		// Note: we require either the link number or
-		// the peerIP and peerPort
-		if (!(cp.isSet(COMTREE_NUM) &&
-		      (cp.isSet(LINK_NUM) ||
-		        (cp.isSet(PEER_IP) && cp.isSet(PEER_PORT))))) {
-			errReply(p,cp1,"add comtree link: missing required "
-				       "attribute");
-			break;
-		}
-		comt_t comt = cp.getAttr(COMTREE_NUM);
-		int ctx = ctt->getComtIndex(comt);
-		if (ctx == 0) {
-			errReply(p,cp1,"add comtree link: invalid comtree");
-			break;
-		}
-		int lnk = 0; 
-		if (cp.isSet(LINK_NUM)) {
-			lnk = cp.getAttr(LINK_NUM);
-		} else if (cp.isSet(PEER_IP) && cp.isSet(PEER_PORT)) {
-			lnk = lt->lookup(cp.getAttr(PEER_IP),
-					 cp.getAttr(PEER_PORT));
-		}
-		if (!lt->valid(lnk)) {
-			errReply(p,cp1,"add comtree link: invalid link or "
-				       "peer IP and port");
-			break;
-		}
-		bool isRtr = (lt->getPeerType(lnk) == ROUTER);
-		bool isCore = false;
-		if(isRtr) {
-			if(!cp.isSet(PEER_CORE_FLAG)) {
-				errReply(p,cp1,"add comtree link: must specify "
-					       "core flag on links to routers");
-				break;
-			} else isCore = cp.getAttr(PEER_CORE_FLAG);
-		}
-		int cLnk = ctt->getComtLink(comt,lnk);
-		if (cLnk != 0) {
-			if (ctt->isRtrLink(cLnk) == isRtr &&
-			    ctt->isCoreLink(cLnk) == isCore)
-				returnToSender(p,cp1.pack(ps->getPayload(p)));
-			else
-				errReply(p,cp1,"add comtree link: specified "
-					       "link already in comtree");
-		} else {
-			if (!ctt->addLink(ctx,lnk,isRtr,isCore)) {
-				errReply(p,cp1,"add comtree link: cannot add "
-					       "requested comtree link");
-				break;
-			}
-			cLnk = ctt->getComtLink(comt,lnk);
-
-			// allocate queue and bind it to lnk and comtree link
-			int qid = qm->allocQ(lnk);
-			if (qid == 0) {
-				ctt->removeLink(ctx,cLnk);
-				errReply(p,cp1,"add comtree link: no queues "
-					       "available for link");
-				break;
-			}
-			ctt->setLinkQ(cLnk,qid);
-
-			// adjust rates for link comtree and queue
-			int br = Forest::MINBITRATE;
-			int pr = Forest::MINPKTRATE;
-			if (!(lt->addAvailInBitRate(lnk, -br) &&
-			      lt->addAvailInPktRate(lnk, -pr) &&
-			      lt->addAvailOutBitRate(lnk, -br) &&
-			      lt->addAvailOutPktRate(lnk, -pr))) {
-				errReply(p,cp1,"add comtree link: request "
-					       "exceeds link capacity");
-				break;
-			}
-			ctt->setInBitRate(cLnk,br);
-			ctt->setInPktRate(cLnk,pr);
-			ctt->setOutBitRate(cLnk,br);
-			ctt->setOutPktRate(cLnk,pr);
-
-			qm->setQRates(qid,br,pr);
-			qm->setQLimits(qid,10,10000);
-
-			returnToSender(p,cp1.pack(ps->getPayload(p)));
-		}
-		break;
+	comt_t comt = cp.getAttr(COMTREE_NUM);
+	int ctx = ctt->getComtIndex(comt);
+	if (ctx == 0) {
+		reply.setErrMsg("add comtree link: invalid comtree");
+		reply.setRrType(NEG_REPLY);
+		return false;
 	}
-	case DROP_COMTREE_LINK: {
-		// Note: we require either the link number or
-		// the peerIP and peerPort
-		if (!(cp.isSet(COMTREE_NUM) &&
-		      (cp.isSet(LINK_NUM) ||
-		        (cp.isSet(PEER_IP) && cp.isSet(PEER_PORT))))) {
-			errReply(p,cp1,"add comtree link: missing required "
-				       "attribute");
-			break;
+	int lnk = 0; 
+	if (cp.isSet(LINK_NUM)) {
+		lnk = cp.getAttr(LINK_NUM);
+	} else if (cp.isSet(PEER_IP) && cp.isSet(PEER_PORT)) {
+		lnk = lt->lookup(cp.getAttr(PEER_IP),
+				 cp.getAttr(PEER_PORT));
+	}
+	if (!lt->valid(lnk)) {
+		reply.setErrMsg("add comtree link: invalid link or "
+					"peer IP and port");
+		reply.setRrType(NEG_REPLY);
+		return false;
+	}
+	bool isRtr = (lt->getPeerType(lnk) == ROUTER);
+	bool isCore = false;
+	if(isRtr) {
+		if(!cp.isSet(PEER_CORE_FLAG)) {
+			reply.setErrMsg("add comtree link: must "
+				"specify core flag on links to routers");
+			reply.setRrType(NEG_REPLY);
+			return false;
 		}
-		comt_t comt = cp.getAttr(COMTREE_NUM);
-		int ctx = ctt->getComtIndex(comt);
-		if (ctx == 0) {
-			errReply(p,cp1,"drop comtree link: invalid comtree");
-			break;
-		}
-		int lnk;
-		if (cp.isSet(LINK_NUM)) {
-			lnk = cp.getAttr(LINK_NUM);
+		isCore = cp.getAttr(PEER_CORE_FLAG);
+	}
+	int cLnk = ctt->getComtLink(comt,lnk);
+	if (cLnk != 0) {
+		if (ctt->isRtrLink(cLnk) == isRtr &&
+		    ctt->isCoreLink(cLnk) == isCore) {
+			return true;
 		} else {
-			lnk = lt->lookup(cp.getAttr(PEER_IP),
-					 cp.getAttr(PEER_PORT));
+			reply.setErrMsg("add comtree link: specified "
+				       "link already in comtree");
+			reply.setRrType(NEG_REPLY);
+			return false;
 		}
-		if (!lt->valid(lnk)) {
-			errReply(p,cp1,"drop comtree link: invalid link "
-				       "or peer IP and port");
-			break;
-		}
-		int cLnk = ctt->getComtLink(comt,lnk);
+	}
+	// define new comtree link
+	if (!ctt->addLink(ctx,lnk,isRtr,isCore)) {
+		reply.setErrMsg("add comtree link: cannot add "
+					"requested comtree link");
+		reply.setRrType(NEG_REPLY);
+		return false;
+	}
+	cLnk = ctt->getComtLink(comt,lnk);
 
-		// release the link bandwidth used by comtree link
-		lt->addAvailInBitRate(lnk,ctt->getInBitRate(cLnk));
-		lt->addAvailInPktRate(lnk,ctt->getInPktRate(cLnk));
-		lt->addAvailOutBitRate(lnk,ctt->getOutBitRate(cLnk));
-		lt->addAvailOutPktRate(lnk,ctt->getOutPktRate(cLnk));
-
-		// release queue and remove link from comtree
-		int qid = ctt->getLinkQ(cLnk);
-		qm->freeQ(qid);
+	// allocate queue and bind it to lnk and comtree link
+	int qid = qm->allocQ(lnk);
+	if (qid == 0) {
 		ctt->removeLink(ctx,cLnk);
-		returnToSender(p,cp1.pack(ps->getPayload(p)));
-		break;
+		reply.setErrMsg("add comtree link: no queues "
+					"available for link");
+		reply.setRrType(NEG_REPLY);
+		return false;
 	}
-	case RESIZE_COMTREE_LINK: {
-		if (!(cp.isSet(COMTREE_NUM) && cp.isSet(LINK_NUM))) {
-			errReply(p,cp1,"resize comtree link: missing required "
-				       "attribute");
-			break;
-		}
-		comt_t comt = cp.getAttr(COMTREE_NUM);
-		int ctx = ctt->getComtIndex(comt);
-		if (ctx == 0) {
-			errReply(p,cp1,"resize comtree link: invalid comtree");
-			break;
-		}
-		int lnk = cp.getAttr(LINK_NUM);
-		if (!lt->valid(lnk)) {
-			errReply(p,cp1,"get comtree link: invalid link number");
-			break;
-		}
-		int cLnk = ctt->getComtLink(comt,lnk);
-		if (cLnk == 0) {
-			errReply(p,cp1,"resize comtree link: specified link "
-				       "not defined in specified comtree");
-			break;
-		}
+	ctt->setLinkQ(cLnk,qid);
 
-		int ibr = ctt->getInBitRate(cLnk);
-		int ipr = ctt->getInPktRate(cLnk);
-		int obr = ctt->getOutBitRate(cLnk);
-		int opr = ctt->getOutPktRate(cLnk);
-
-		bool isPlnk = (lnk == ctt->getPlink(ctx));
-		if (cp.isSet(BIT_RATE_IN))
-			ibr = cp.getAttr(BIT_RATE_IN);
-		if (cp.isSet(PKT_RATE_IN))
-			ipr = cp.getAttr(PKT_RATE_IN);
-		if (cp.isSet(BIT_RATE_OUT))
-			ibr = cp.getAttr(BIT_RATE_OUT);
-		if (cp.isSet(PKT_RATE_OUT))
-			ipr = cp.getAttr(PKT_RATE_OUT);
-
-		int dibr = ibr - ctt->getInBitRate(cLnk);
-		int dipr = ipr - ctt->getInPktRate(cLnk);
-		int dobr = obr - ctt->getOutBitRate(cLnk);
-		int dopr = opr - ctt->getOutPktRate(cLnk);
-
-		if (dibr != 0 && !lt->addAvailInBitRate(lnk,-dibr)) {
-			errReply(p,cp1,"resize comtree link: increase in input "
-				       "bit rate exceeds link capacity");
-			break;
-		}
-		if (dipr != 0 && !lt->addAvailInPktRate(lnk,-dipr)) {
-			lt->addAvailInBitRate(lnk,dibr); // de-allocate link bw
-			errReply(p,cp1,"resize comtree link: increase in input "
-				       "packet rate exceeds link capacity");
-			break;
-		}
-		if (dobr != 0 && !lt->addAvailOutBitRate(lnk,-dobr)) {
-			lt->addAvailInBitRate(lnk,dibr); // de-allocate link bw
-			lt->addAvailInPktRate(lnk,dipr);
-			errReply(p,cp1,"resize comtree link: increase in output"
-				       " bit rate exceeds link capacity");
-			break;
-		}
-		if (dopr != 0 && !lt->addAvailOutPktRate(lnk,-dopr)) {
-			lt->addAvailInBitRate(lnk,dibr); // de-allocate link bw
-			lt->addAvailInPktRate(lnk,dipr);
-			lt->addAvailOutBitRate(lnk,dobr);
-			errReply(p,cp1,"resize comtree link: increase in output"
-				       " packet rate exceeds link capacity");
-			break;
-		}
-
-		if (dibr != 0) ctt->setInBitRate(cLnk,ibr);
-		if (dipr != 0) ctt->setInPktRate(cLnk,ipr);
-		if (dobr != 0) ctt->setOutBitRate(cLnk,obr);
-
-		returnToSender(p,cp1.pack(ps->getPayload(p)));
+	// adjust rates for link comtree and queue
+	int br = Forest::MINBITRATE;
+	int pr = Forest::MINPKTRATE;
+	if (!(lt->addAvailInBitRate(lnk, -br) &&
+	      lt->addAvailInPktRate(lnk, -pr) &&
+	      lt->addAvailOutBitRate(lnk, -br) &&
+	      lt->addAvailOutPktRate(lnk, -pr))) {
+		reply.setErrMsg("add comtree link: request "
+					"exceeds link capacity");
+		reply.setRrType(NEG_REPLY);
+		return false;
 	}
-	case GET_COMTREE_LINK: {
-		if (!(cp.isSet(COMTREE_NUM) && cp.isSet(LINK_NUM))) {
-			errReply(p,cp1,"get comtree link: missing required "
-				       "attribute");
-			break;
-		}
-		comt_t comt = cp.getAttr(COMTREE_NUM);
-		int ctx = ctt->getComtIndex(comt);
-		if (ctx == 0) {
-			errReply(p,cp1,"get comtree link: invalid comtree");
-			break;
-		}
-		int lnk = cp.getAttr(LINK_NUM);
-		if (!lt->valid(lnk)) {
-			errReply(p,cp1,"get comtree link: invalid link number");
-			break;
-		}
-		int cLnk = ctt->getComtLink(comt,lnk);
-		if (cLnk == 0) {
-			errReply(p,cp1,"get comtree link: specified link "
-				       "not defined in specified comtree");
-			break;
-		}
-		cp1.setAttr(COMTREE_NUM,comt);
-		cp1.setAttr(LINK_NUM,lnk);
-		cp1.setAttr(QUEUE_NUM,ctt->getLinkQ(cLnk));
-		cp1.setAttr(PEER_DEST,ctt->getDest(cLnk));
-		cp1.setAttr(BIT_RATE_IN,ctt->getInBitRate(cLnk));
-		cp1.setAttr(PKT_RATE_IN,ctt->getInPktRate(cLnk));
-		cp1.setAttr(BIT_RATE_OUT,ctt->getOutBitRate(cLnk));
-		cp1.setAttr(PKT_RATE_OUT,ctt->getOutPktRate(cLnk));
+	ctt->setInBitRate(cLnk,br);
+	ctt->setInPktRate(cLnk,pr);
+	ctt->setOutBitRate(cLnk,br);
+	ctt->setOutPktRate(cLnk,pr);
 
-		returnToSender(p,cp1.pack(ps->getPayload(p)));
-		break;
+	qm->setQRates(qid,br,pr);
+	if (isRtr) qm->setQLimits(qid,100,200000);
+	else	   qm->setQLimits(qid,10,20000);
+	sm->clearQuStats(qid);
+	return true;
+}
+
+bool RouterCore::dropComtreeLink(int p, CtlPkt& cp, CtlPkt& reply) {
+	// Note: we require either the link number or
+	// the peerIP and peerPort
+	if (!(cp.isSet(COMTREE_NUM) &&
+	      (cp.isSet(LINK_NUM) ||
+	        (cp.isSet(PEER_IP) && cp.isSet(PEER_PORT))))) {
+		reply.setErrMsg("add comtree link: missing required "
+			  		"attribute");
+		reply.setRrType(NEG_REPLY);
+		return false;
 	}
-        case ADD_ROUTE: {
-		if (!(cp.isSet(COMTREE_NUM) && cp.isSet(DEST_ADR) &&
-		      cp.isSet(LINK_NUM))) {
-			errReply(p,cp1,"add route: missing required "
-				       "attribute");
-			break;
+	comt_t comt = cp.getAttr(COMTREE_NUM);
+	int ctx = ctt->getComtIndex(comt);
+	if (ctx == 0) {
+		reply.setErrMsg("drop comtree link: invalid comtree");
+		reply.setRrType(NEG_REPLY);
+		return false;
+	}
+	int lnk;
+	if (cp.isSet(LINK_NUM)) lnk = cp.getAttr(LINK_NUM);
+	else lnk = lt->lookup(cp.getAttr(PEER_IP),cp.getAttr(PEER_PORT));
+	if (!lt->valid(lnk)) {
+		reply.setErrMsg("drop comtree link: invalid link "
+			       "or peer IP and port");
+		reply.setRrType(NEG_REPLY);
+		return false;
+	}
+	int cLnk = ctt->getComtLink(comt,lnk);
+
+	// release the link bandwidth used by comtree link
+	lt->addAvailInBitRate(lnk,ctt->getInBitRate(cLnk));
+	lt->addAvailInPktRate(lnk,ctt->getInPktRate(cLnk));
+	lt->addAvailOutBitRate(lnk,ctt->getOutBitRate(cLnk));
+	lt->addAvailOutPktRate(lnk,ctt->getOutPktRate(cLnk));
+
+	// release queue and remove link from comtree
+	int qid = ctt->getLinkQ(cLnk);
+	qm->freeQ(qid);
+	ctt->removeLink(ctx,cLnk);
+	return true;
+}
+
+bool RouterCore::modComtreeLink(int p, CtlPkt& cp, CtlPkt& reply) {
+	if (!(cp.isSet(COMTREE_NUM) && cp.isSet(LINK_NUM))) {
+		reply.setErrMsg("modify comtree link: missing required "
+			  		"attribute");
+		reply.setRrType(NEG_REPLY);
+		return false;
+	}
+	comt_t comt = cp.getAttr(COMTREE_NUM);
+	int ctx = ctt->getComtIndex(comt);
+	if (ctx == 0) {
+		reply.setErrMsg("modify comtree link: invalid comtree");
+		reply.setRrType(NEG_REPLY);
+		return false;
+	}
+	int lnk = cp.getAttr(LINK_NUM);
+	if (!lt->valid(lnk)) {
+		reply.setErrMsg("modify comtree link: invalid link "
+					"number");
+		reply.setRrType(NEG_REPLY);
+		return false;
+	}
+	int cLnk = ctt->getComtLink(comt,lnk);
+	if (cLnk == 0) {
+		reply.setErrMsg("resize comtree link: specified link "
+			       "not defined in specified comtree");
+		reply.setRrType(NEG_REPLY);
+		return false;
+	}
+
+	int ibr = ctt->getInBitRate(cLnk);
+	int ipr = ctt->getInPktRate(cLnk);
+	int obr = ctt->getOutBitRate(cLnk);
+	int opr = ctt->getOutPktRate(cLnk);
+
+	bool isPlnk = (lnk == ctt->getPlink(ctx));
+	if (cp.isSet(BIT_RATE_IN)) ibr = cp.getAttr(BIT_RATE_IN);
+	if (cp.isSet(PKT_RATE_IN)) ipr = cp.getAttr(PKT_RATE_IN);
+	if (cp.isSet(BIT_RATE_OUT)) ibr = cp.getAttr(BIT_RATE_OUT);
+	if (cp.isSet(PKT_RATE_OUT)) ipr = cp.getAttr(PKT_RATE_OUT);
+
+	int dibr = ibr - ctt->getInBitRate(cLnk);
+	int dipr = ipr - ctt->getInPktRate(cLnk);
+	int dobr = obr - ctt->getOutBitRate(cLnk);
+	int dopr = opr - ctt->getOutPktRate(cLnk);
+
+	if (dibr != 0 && !lt->addAvailInBitRate(lnk,-dibr)) {
+		reply.setErrMsg("resize comtree link: increase in "
+					"input bit rate exceeds link capacity");
+		reply.setRrType(NEG_REPLY);
+		return false;
+	}
+	if (dipr != 0 && !lt->addAvailInPktRate(lnk,-dipr)) {
+		lt->addAvailInBitRate(lnk,dibr); // de-allocate link bw
+		reply.setErrMsg("resize comtree link: increase in "
+				"input packet rate exceeds link capacity");
+		reply.setRrType(NEG_REPLY);
+		return false;
+	}
+	if (dobr != 0 && !lt->addAvailOutBitRate(lnk,-dobr)) {
+		lt->addAvailInBitRate(lnk,dibr); // de-allocate link bw
+		lt->addAvailInPktRate(lnk,dipr);
+		reply.setErrMsg("resize comtree link: increase in "
+				"output bit rate exceeds link capacity");
+		reply.setRrType(NEG_REPLY);
+		return false;
+	}
+	if (dopr != 0 && !lt->addAvailOutPktRate(lnk,-dopr)) {
+		lt->addAvailInBitRate(lnk,dibr); // de-allocate link bw
+		lt->addAvailInPktRate(lnk,dipr);
+		lt->addAvailOutBitRate(lnk,dobr);
+		reply.setErrMsg("resize comtree link: increase in "
+				"output packet rate exceeds link capacity");
+		reply.setRrType(NEG_REPLY);
+		return false;
+	}
+
+	if (dibr != 0) ctt->setInBitRate(cLnk,ibr);
+	if (dipr != 0) ctt->setInPktRate(cLnk,ipr);
+	if (dobr != 0) ctt->setOutBitRate(cLnk,obr);
+	return true;
+}
+
+bool RouterCore::getComtreeLink(int p, CtlPkt& cp, CtlPkt& reply) {
+	if (!(cp.isSet(COMTREE_NUM) && cp.isSet(LINK_NUM))) {
+		reply.setErrMsg("get comtree link: missing required "
+					"attribute");
+		reply.setRrType(NEG_REPLY);
+		return false;
+	}
+	comt_t comt = cp.getAttr(COMTREE_NUM);
+	int ctx = ctt->getComtIndex(comt);
+	if (ctx == 0) {
+		reply.setErrMsg("get comtree link: invalid comtree");
+		reply.setRrType(NEG_REPLY);
+		return false;
+	}
+	int lnk = cp.getAttr(LINK_NUM);
+	if (!lt->valid(lnk)) {
+		reply.setErrMsg("get comtree link: invalid link "
+					"number");
+		reply.setRrType(NEG_REPLY);
+		return false;
+	}
+	int cLnk = ctt->getComtLink(comt,lnk);
+	if (cLnk == 0) {
+		reply.setErrMsg("get comtree link: specified link "
+			  	"not defined in specified comtree");
+		reply.setRrType(NEG_REPLY);
+		return false;
+	}
+	reply.setAttr(COMTREE_NUM,comt);
+	reply.setAttr(LINK_NUM,lnk);
+	reply.setAttr(QUEUE_NUM,ctt->getLinkQ(cLnk));
+	reply.setAttr(PEER_DEST,ctt->getDest(cLnk));
+	reply.setAttr(BIT_RATE_IN,ctt->getInBitRate(cLnk));
+	reply.setAttr(PKT_RATE_IN,ctt->getInPktRate(cLnk));
+	reply.setAttr(BIT_RATE_OUT,ctt->getOutBitRate(cLnk));
+	reply.setAttr(PKT_RATE_OUT,ctt->getOutPktRate(cLnk));
+
+	return true;
+}
+
+bool RouterCore::addRoute(int p, CtlPkt& cp, CtlPkt& reply) {
+	if (!(cp.isSet(COMTREE_NUM) && cp.isSet(DEST_ADR) &&
+	      cp.isSet(LINK_NUM))) {
+		reply.setErrMsg("add route: missing required "
+			 		"attribute");
+		reply.setRrType(NEG_REPLY);
+		return false;
+	}
+	comt_t comt = cp.getAttr(COMTREE_NUM);
+	if (!ctt->validComtree(comt)) {
+		reply.setErrMsg("comtree not defined at this router\n");
+		reply.setRrType(NEG_REPLY);
+		return false;
+	}
+	fAdr_t dest = cp.getAttr(DEST_ADR);
+	if (!Forest::validUcastAdr(dest) && !Forest::mcastAdr(dest)) {
+		reply.setErrMsg("invalid address\n");
+		reply.setRrType(NEG_REPLY);
+		return false;
+	}
+	int lnk = cp.getAttr(LINK_NUM);
+	int cLnk = ctt->getComtLink(comt,lnk);
+	int rtx = rt->getRteIndex(comt,dest);
+	if (rtx != 0) {
+	   	if ((Forest::validUcastAdr(dest) && rt->getLink(rtx) == cLnk) ||
+		    (Forest::mcastAdr(dest) && rt->isLink(rtx,cLnk))) {
+			return true;
+		} else {
+			reply.setErrMsg("add route: requested route "
+				        "conflicts with existing route");
+			reply.setRrType(NEG_REPLY);
+			return false;
 		}
-		int comt = cp.getAttr(COMTREE_NUM);
-		fAdr_t dest = cp.getAttr(DEST_ADR);
-		int lnk = cp.getAttr(LINK_NUM);
-		int cLnk = ctt->getComtLink(comt,lnk);
-		int rtx = rt->getRteIndex(comt,dest);
-		if (rtx != 0) {
-		   	if ((Forest::validUcastAdr(dest) && 
-			     rt->getLink(rtx) == cLnk) ||
-			    (Forest::mcastAdr(dest) &&
-			     rt->isLink(rtx,cLnk))) {
-				returnToSender(p,cp1.pack(ps->getPayload(p)));
-			} else {
-				errReply(p,cp1,"add route: requested route "
-					       "conflicts with existing route");
+	} else if (rt->addEntry(comt, dest, lnk)) {
+		return true;
+	}
+	reply.setErrMsg("add route: cannot add route");
+	reply.setRrType(NEG_REPLY);
+	return false;
+}
+
+bool RouterCore::dropRoute(int p, CtlPkt& cp, CtlPkt& reply) {
+	if (!(cp.isSet(COMTREE_NUM) && cp.isSet(DEST_ADR))) {
+		reply.setErrMsg("drop route: missing required "
+		 			"attribute");
+		reply.setRrType(NEG_REPLY);
+		return false;
+	}
+	comt_t comt = cp.getAttr(COMTREE_NUM);
+	if (!ctt->validComtree(comt)) {
+		reply.setErrMsg("comtree not defined at this router\n");
+		reply.setRrType(NEG_REPLY);
+		return false;
+	}
+	fAdr_t dest = cp.getAttr(DEST_ADR);
+	if (!Forest::validUcastAdr(dest) && !Forest::mcastAdr(dest)) {
+		reply.setErrMsg("invalid address\n");
+		reply.setRrType(NEG_REPLY);
+		return false;
+	}
+	int rtx = rt->getRteIndex(comt,dest);
+	if (rtx != 0) rt->removeEntry(rtx);
+	return true;
+}
+
+bool RouterCore::getRoute(int p, CtlPkt& cp, CtlPkt& reply) {
+	if (!(cp.isSet(COMTREE_NUM) && cp.isSet(DEST_ADR))) {
+		reply.setErrMsg("get route: missing required "
+					"attribute");
+		reply.setRrType(NEG_REPLY);
+		return false;
+	}
+	comt_t comt = cp.getAttr(COMTREE_NUM);
+	if (!ctt->validComtree(comt)) {
+		reply.setErrMsg("comtree not defined at this router\n");
+		reply.setRrType(NEG_REPLY);
+		return false;
+	}
+	fAdr_t dest = cp.getAttr(DEST_ADR);
+	if (!Forest::validUcastAdr(dest) && !Forest::mcastAdr(dest)) {
+		reply.setErrMsg("invalid address\n");
+		reply.setRrType(NEG_REPLY);
+		return false;
+	}
+	int rtx = rt->getRteIndex(comt,dest);
+	if (rtx != 0) {
+		reply.setAttr(COMTREE_NUM,comt);
+		reply.setAttr(DEST_ADR,dest);
+		if (Forest::validUcastAdr(dest)) {
+			int lnk = ctt->getLink(rt->getLink(rtx));
+			reply.setAttr(LINK_NUM,lnk);
+		} else {
+			reply.setAttr(LINK_NUM,0);
+		}
+		return true;
+	}
+	reply.setErrMsg("get route: no route for specified address");
+	reply.setRrType(NEG_REPLY);
+	return false;
+}
+        
+bool RouterCore::modRoute(int p, CtlPkt& cp, CtlPkt& reply) {
+	if (!(cp.isSet(COMTREE_NUM) && cp.isSet(DEST_ADR))) {
+		reply.setErrMsg("mod route: missing required "
+					"attribute");
+		reply.setRrType(NEG_REPLY);
+		return false;
+	}
+	comt_t comt = cp.getAttr(COMTREE_NUM);
+	if (!ctt->validComtree(comt)) {
+		reply.setErrMsg("comtree not defined at this router\n");
+		reply.setRrType(NEG_REPLY);
+		return false;
+	}
+	fAdr_t dest = cp.getAttr(DEST_ADR);
+	if (!Forest::validUcastAdr(dest) && !Forest::mcastAdr(dest)) {
+		reply.setErrMsg("invalid address\n");
+		reply.setRrType(NEG_REPLY);
+		return false;
+	}
+	int rtx = rt->getRteIndex(comt,dest);
+	if (rtx != 0) {
+		if (cp.isSet(LINK_NUM)) {
+			if (Forest::mcastAdr(dest)) {
+				reply.setErrMsg("modify route: cannot "
+					       	"set link in multicast route");
+				reply.setRrType(NEG_REPLY);
+				return false;
 			}
-		} else if (rt->addEntry(comt, dest, lnk)) {
-			returnToSender(p,cp1.pack(ps->getPayload(p)));
-		} else errReply(p,cp1,"add route: cannot add route");
-		break;
-	}
-        case DROP_ROUTE:
-		if (!(cp.isSet(COMTREE_NUM) && cp.isSet(DEST_ADR))) {
-			errReply(p,cp1,"drop route: missing required "
-				       "attribute");
-			break;
+			rt->setLink(rtx,cp.getAttr(LINK_NUM));
 		}
-		rtx = rt->getRteIndex(cp.getAttr(COMTREE_NUM),
-				      cp.getAttr(DEST_ADR));
-		if (rtx != 0) rt->removeEntry(rtx);
-		returnToSender(p,cp1.pack(ps->getPayload(p)));
-		break;
-        case GET_ROUTE: {
-		if (!(cp.isSet(COMTREE_NUM) && cp.isSet(DEST_ADR))) {
-			errReply(p,cp1,"get route: missing required "
-				       "attribute");
-			break;
-		}
-		comt_t comt = cp.getAttr(COMTREE_NUM);
-		fAdr_t dest = cp.getAttr(DEST_ADR);
-		rtx = rt->getRteIndex(comt,dest);
-		if (rtx != 0) {
-			cp1.setAttr(COMTREE_NUM,comt);
-			cp1.setAttr(DEST_ADR,dest);
-			if (Forest::validUcastAdr(dest)) {
-				int lnk = ctt->getLink(rt->getLink(rtx));
-				cp1.setAttr(LINK_NUM,lnk);
-			} else {
-				cp1.setAttr(LINK_NUM,0);
-			}
-			returnToSender(p,cp1.pack(ps->getPayload(p)));
-		} else errReply(p,cp1,"get route: invalid route");
-		break;
+		return true;
 	}
-        case MOD_ROUTE: {
-		if (!(cp.isSet(COMTREE_NUM) && cp.isSet(DEST_ADR))) {
-			errReply(p,cp1,"ifyget route: missing required "
-				       "attribute");
-			break;
-		}
-		comt_t comt = cp.getAttr(COMTREE_NUM);
-		fAdr_t dest = cp.getAttr(DEST_ADR);
-		rtx = rt->getRteIndex(comt,dest);
-		if (rtx != 0) {
-			if (cp.isSet(LINK_NUM)) {
-				if (!Forest::validUcastAdr(dest)) {
-					errReply(p,cp1,"modify route: cannot "
-						       "set link in multicast "
-						       "route");
-					break;
-				}
-				rt->setLink(rtx,cp.getAttr(LINK_NUM));
-			}
-			returnToSender(p,cp1.pack(ps->getPayload(p)));
-		} else errReply(p,cp1,"modify route: invalid route");
-		break;
-	}
-	case CLIENT_CONNECT: // for now, just ignore replies
-		ps->free(p);
-		break;
-	case CLIENT_DISCONNECT: // for now, just ignore replies
-		ps->free(p);
-		break;
-	default:
-		cerr << "unrecognized control packet " << h.getPtype();
-		ps->free(p);
-		break;
-	}
-	return;
+	reply.setErrMsg("modify route: invalid route");
+	reply.setRrType(NEG_REPLY);
+	return false;
+}
+
+void RouterCore::sendCpReq(int p) {
+	// make a copy of the packet and save its packet number in a list
+	// of pending request packets, along with a timestamp and sequence #
+	// the main loop will periodically call another routine to
+	// check for expired timestamps and re-send
+	// when replies are received, need to free stored state and
+	// then do something based on the reply
+	// For replies to connect, disconnect packets, we can just discard
+	// the reply. When we get a reply from a boot request packet,
+	// we can also just discard. Well, in both cases should print
+	// an error message in the case of a negative reply or no reply.
+	// But these should not happen, and if they do, we exit.
+	// When the NM is done with the initialization, it will send
+	// a boot complete message. We respond to this by checking the
+	// tables and exiting the booting state. This goes through the
+	// standard handler.
+}
+
+void RouterCore::resendCpReq() {
+	// go through the list of pending control packet requests
+	// and retransmit any whose timestamp has expired
+}
+
+void RouterCore::handleCpReply(int p) {
+	// This routine handles incoming replies to control packets.
 }
 
 /** Send packet back to sender.

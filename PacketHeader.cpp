@@ -87,13 +87,16 @@ void PacketHeader::write(ostream& out, buffer_t& b) const {
 // Prints PacketHeader fields and first 8 payload words of buffer.
         out << "len=" << setw(3) << getLength();
         out << " typ=";
+
         if (getPtype() == CLIENT_DATA)     out << "data      ";
         else if (getPtype() == SUB_UNSUB)  out << "sub_unsub ";
+        else if (getPtype() == CLIENT_SIG) out << "client_sig";
         else if (getPtype() == CONNECT)    out << "connect   ";
         else if (getPtype() == DISCONNECT) out << "disconnect";
-        else if (getPtype() == RTE_REPLY)  out << "rteRep    ";
-        else if (getPtype() == CLIENT_SIG) out << "client_sig";
         else if (getPtype() == NET_SIG)    out << "net_sig   ";
+        else if (getPtype() == RTE_REPLY)  out << "rteRep    ";
+        else if (getPtype() == RTR_CTL)    out << "rtr_ctl   ";
+        else if (getPtype() == VOQSTATUS)  out << "voq_status";
         else                            out << "--------- ";
         out << " flags=" << int(getFlags());
         out << " comt=" << setw(3) << getComtree();

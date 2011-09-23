@@ -153,7 +153,7 @@ CpType::CpTypeInfo CpType::typeInfo[] = {
 									   (1ull << PEER_IP)|
 									   (1ull << PEER_PORT),
 									   (1ull << COMTREE_NUM), 0},
-	{ RESIZE_COMTREE_LINK,	56,	"resize comtree link",	   "rcl",  (1ull << COMTREE_NUM)|
+	{ MOD_COMTREE_LINK,	56,	"resize comtree link",	   "rcl",  (1ull << COMTREE_NUM)|
 									   (1ull << LINK_NUM)|
 									   (1ull << BIT_RATE_IN)|
 									   (1ull << BIT_RATE_OUT)|
@@ -220,13 +220,11 @@ CpType::CpTypeInfo CpType::typeInfo[] = {
 	{ CLIENT_CONNECT,	101,	"client connected",	   "cc",   (1ull << CLIENT_ADR)|
 									   (1ull << RTR_ADR),
 									   (1ull << CLIENT_ADR)|
-									   (1ull << RTR_ADR),
-									   (1ull << RTR_ADR)},
+									   (1ull << RTR_ADR), 0},
 	{ CLIENT_DISCONNECT,	102,	"client disconnected",	   "cd",   (1ull << CLIENT_ADR)|
 									   (1ull << RTR_ADR),
 									   (1ull << CLIENT_ADR)|
-									   (1ull << RTR_ADR),
-									   (1ull << RTR_ADR)},
+									   (1ull << RTR_ADR), 0},
 	{ CPT_END,	 	255,	"ctl pkt end",	   	   "cpe",  0,0,0 }
 };
 

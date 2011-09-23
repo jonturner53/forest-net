@@ -75,7 +75,6 @@ public:
 
 	/** getters */
 	CpTypeIndex getCpType();
-	int 	    getCpCode();
 	CpRrType    getRrType();
 	int64_t     getSeqNum();
 	int32_t	    getAttr(CpAttrIndex);
@@ -125,13 +124,6 @@ inline bool CtlPkt::isSet(CpAttrIndex i) {
  *  @return true the type index.
  */
 inline CpTypeIndex CtlPkt::getCpType() { return cpType; }
-
-/** Get the conrol packet code number of a control packet.
- *  The code number is the value that is sent in packet headers
- *  to identify the type of a control packet.
- *  @return true the code value
- */
-inline int CtlPkt::getCpCode() { return cpCode; }
 
 /** Get the request/return type of the packet.
  *  @return true the request/return type
