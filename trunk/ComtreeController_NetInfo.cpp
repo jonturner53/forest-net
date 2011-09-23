@@ -85,7 +85,6 @@ ComtreeController_NetInfo::~ComtreeController_NetInfo() {delete statPkt; delete 
  */
 bool ComtreeController_NetInfo::init() {
 	intSock = Np4d::datagramSocket();
-cerr << "created datagram socket " << intSock << endl;
 	if (intSock < 0 || 
 	    !Np4d::bind4d(intSock,intIp,0) ||
 	    !Np4d::nonblock(intSock))
@@ -97,7 +96,6 @@ cerr << "created datagram socket " << intSock << endl;
 
 	// setup external TCP socket for use by remote GUI
 	extSock = Np4d::streamSocket();
-cerr << "created stream socket " << extSock << endl;
 	if (extSock < 0) return false;
 
 return 	Np4d::bind4d(extSock,extIp, NM_PORT) &&
@@ -210,15 +208,12 @@ void ComtreeController_NetInfo::run(int finishTime) {
 	}
 */
 	
-cerr << "entering run loop\n";
 	int seqNum;
 	while(now <= finishTime){
 		now = Misc::getTime();	
 		int p = rcvFromForest();
 		if(p != 0){
 			PacketHeader& h = ps->getHeader(p);
-cerr << "got packet\n";
-h.write(cerr,ps->getBuffer(p));
 			int zipcode = Forest::zipCode(h.getSrcAdr());
 			CtlPkt cp;
 			int payload_ln = h.getLength()-(Forest::HDR_LENG+sizeof(uint32_t));

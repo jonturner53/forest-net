@@ -100,7 +100,7 @@ bool init() {
 	// setup external TCP socket for use by remote GUI
 	extSock = Np4d::streamSocket();
 	if (extSock < 0) return false;
-	return	Np4d::bind4d(extSock,extIp,NM_PORT) &&
+	return	Np4d::bind4d(extSock,extIp,Forest::NM_PORT) &&
 		Np4d::listen4d(extSock) && 
 		Np4d::nonblock(extSock);
 }
@@ -123,7 +123,7 @@ void* run(void* finTimeP) {
 	uint64_t finishTime = *((uint32_t *) finTimeP);
 	finishTime *= 1000000000; // convert to ns
 	connSock = -1;
-cerr << "run: entering main loop\n"; cerr.flush();
+//cerr << "run: entering main loop\n"; cerr.flush();
 	while (finishTime == 0 || now <= finishTime) {
 		bool nothing2do = true;
 
@@ -132,27 +132,27 @@ cerr << "run: entering main loop\n"; cerr.flush();
 		if (p != 0) {
 			// let handler know this is from remote console
 			ps->getHeader(p).setSrcAdr(0);
-cerr << "run: got packet from console\n"; cerr.flush();
-ps->getHeader(p).write(cerr,ps->getBuffer(p));
+//cerr << "run: got packet from console\n"; cerr.flush();
+//ps->getHeader(p).write(cerr,ps->getBuffer(p));
 		} else {
 			p = rcvFromForest();
-if (p != 0) {
-cerr << "run: got packet from forest\n"; cerr.flush();
-ps->getHeader(p).write(cerr,ps->getBuffer(p));
-}
+//if (p != 0) {
+//cerr << "run: got packet from forest\n"; cerr.flush();
+//ps->getHeader(p).write(cerr,ps->getBuffer(p));
+//}
 		}
 		if (p != 0) {
 			// send p to a thread, possibly assigning one
 			PacketHeader& h = ps->getHeader(p);
 			if (h.getPtype() == NET_SIG) {
-				CtlPkt cp;
+				CtlPkt cp; 
 				cp.unpack(ps->getPayload(p),
 					  h.getLength()-Forest::OVERHEAD);
 				int t;
 				if (cp.getRrType() == REQUEST) {
 					t = threads->firstOut();
 					if (t != 0) {
-cerr << "run: sending packet to thread " << pool[t].th << "\n"; cerr.flush();
+//cerr << "run: sending packet to thread " << pool[t].th << "\n"; cerr.flush();
 						threads->swap(t);
 						pool[t].seqNum = 0;
 						pool[t].qp.in.enq(p);
@@ -164,7 +164,7 @@ cerr << "run: sending packet to thread " << pool[t].th << "\n"; cerr.flush();
 				} else {
 					t = tMap->getId(cp.getSeqNum());
 					if (t != 0) {
-cerr << "run: sending packet to thread " << pool[t].th << "\n"; cerr.flush();
+//cerr << "run: sending packet to thread " << pool[t].th << "\n"; cerr.flush();
 						tMap->dropPair(cp.getSeqNum());
 						pool[t].seqNum = 0;
 						pool[t].qp.in.enq(p);
@@ -183,16 +183,16 @@ cerr << "run: sending packet to thread " << pool[t].th << "\n"; cerr.flush();
 			 t = threads->nextIn(t)) {
 			if (pool[t].qp.out.empty()) continue;
 			int p1 = pool[t].qp.out.deq();
-cerr << "read packet " << p1 << " from thread " << pool[t].th << "'s queue\n";
+//cerr << "read packet " << p1 << " from thread " << pool[t].th << "'s queue\n";
 			if (p1 == 0) { // means thread is done
-cerr << "run: thread " << pool[t].th << " reports done\n"; cerr.flush();
+//cerr << "run: thread " << pool[t].th << " reports done\n"; cerr.flush();
 				pool[t].qp.in.reset();
 				threads->swap(t);
 				continue;
 			}
 			nothing2do = false;
 			PacketHeader& h1 = ps->getHeader(p1);
-			CtlPkt cp1;
+			CtlPkt cp1; 
 			cp1.unpack(ps->getPayload(p1),
 				   h1.getLength()-Forest::OVERHEAD);
 			if (h1.getDstAdr() == 0) {
@@ -210,14 +210,14 @@ cerr.flush();
 				pool[t].seqNum = seqNum;
 				pool[t].ts = now + 2000000000; // 2 sec timeout
 				seqNum++;
-cerr << "run: sending request to forest for thread " << pool[t].th << "\n";
-h1.write(cerr,ps->getBuffer(p1));
-cerr.flush();
+//cerr << "run: sending request to forest for thread " << pool[t].th << "\n";
+//h1.write(cerr,ps->getBuffer(p1));
+//cerr.flush();
 				sendToForest(p1);
 			} else {
-cerr << "run: sending reply to forest for thread " << pool[t].th << "\n";
-h1.write(cerr,ps->getBuffer(p1));
-cerr.flush();
+//cerr << "run: sending reply to forest for thread " << pool[t].th << "\n";
+//h1.write(cerr,ps->getBuffer(p1));
+//cerr.flush();
 				sendToForest(p1);
 			}
 		}
@@ -226,23 +226,22 @@ cerr.flush();
 		for (int t = threads->firstIn(); t != 0;
 			 t = threads->nextIn(t)) {
 			if (pool[t].seqNum != 0 && pool[t].ts < now) {
-cerr << "run: timeout on request sent to router for thread " << pool[t].th << "\n";
+//cerr << "run: timeout on request sent to router for thread " << pool[t].th << "\n";
 				tMap->dropPair(pool[t].seqNum);
 				pool[t].seqNum = 0;
 			}
 		}
 		sched_yield();
-usleep(50000); // to reduce debugging output
 /*
 		if (nothing2do) {
-cerr << "main thread going to sleep\n";
-			usleep(200000); // cut to 1 ms after debug
-cerr << "main thread waking up\n";
+//cerr << "main thread going to sleep\n";
+			usleep(1000); // cut to 1 ms after debug
+//cerr << "main thread waking up\n";
 		}
 */
 		now = Misc::getTimeNs();
 	}
-cerr << "exiting main loop\n"; cerr.flush();
+//cerr << "exiting main loop\n"; cerr.flush();
 	disconnect();
 }
 
@@ -265,11 +264,11 @@ void* handler(void *qp) {
 	Queue& outQ = ((QueuePair *) qp)->out;
 
 	while (true) {
-cerr << "handler " << pthread_self() << " entering deq\n";
+//cerr << "handler " << pthread_self() << " entering deq\n";
 		int p = inQ.deq();
-cerr << "handler " << pthread_self() << " got packet\n";
+//cerr << "handler " << pthread_self() << " got packet\n";
 		PacketHeader& h = ps->getHeader(p);
-		CtlPkt cp;
+		CtlPkt cp; 
 		cp.unpack(ps->getPayload(p),h.getLength()-Forest::OVERHEAD);
 		bool success;
 		if (h.getSrcAdr() == 0) {
@@ -294,7 +293,7 @@ cerr << "handler " << pthread_self() << " got packet\n";
 			h.write(cerr,ps->getBuffer(p));
 		}
 		ps->free(p); // release p now that we're done
-cerr << "handler " << pthread_self() << " finishing\n";
+//cerr << "handler " << pthread_self() << " finishing\n";
 		outQ.enq(0); // signal completion to main thread
 	}
 }
@@ -308,14 +307,14 @@ cerr << "handler " << pthread_self() << " finishing\n";
  *  @param return true on successful completion, else false
  */
 bool handleConsReq(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
-cerr << "handleConsReq: sending console request to Forest " << pthread_self() << endl;
+//cerr << "handleConsReq: sending console request to Forest " << pthread_self() << endl;
 	int reply = sendAndWait(p,cp,inQ,outQ);
 if (reply == 0)
-cerr << "handlleConsReq: got no reply\n";
+//cerr << "handlleConsReq: got no reply\n";
 	if (reply != 0) {
 		PacketHeader& h = ps->getHeader(reply);
-cerr << "handleConsReq: got reply" << endl;
-h.write(cerr,ps->getBuffer(p));
+//cerr << "handleConsReq: got reply" << endl;
+//h.write(cerr,ps->getBuffer(p));
 		// use 0 destination address to tell main thread to send
 		// this packet to remote console
 		h.setDstAdr(0); ps->pack(reply);
@@ -355,11 +354,18 @@ bool handleConDisc(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 	cp1.setRrType(POS_REPLY);
 	cp1.setSeqNum(cp.getSeqNum());
 	int plen = cp1.pack(ps->getPayload(p1));
+	if (plen == 0) {
+		cerr << "handleConDisc: control packet packing error\n";
+		ps->free(p1);
+		return false;
+	}
 
 	PacketHeader& h1 = ps->getHeader(p1);
 	h1.setLength(Forest::OVERHEAD + plen);
-	h1.setComtree(100);
-	h1.setDstAdr(rtrAdr);
+	h1.setPtype(h.getPtype());
+	h1.setFlags(0);
+	h1.setComtree(h.getComtree());
+	h1.setDstAdr(h.getSrcAdr());
 	h1.setSrcAdr(myAdr);
 	h1.pack(ps->getBuffer(p1));
 
@@ -374,9 +380,16 @@ bool handleConDisc(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 	cp2.setAttr(CLIENT_ADR,clientAdr);
 	cp2.setAttr(RTR_ADR,rtrAdr);
 	plen = cp2.pack(ps->getPayload(p2));
+	if (plen == 0) {
+		cerr << "handleConDisc: control packet packing error\n";
+		ps->free(p2);
+		return false;
+	}
 
 	PacketHeader& h2 = ps->getHeader(p2);
 	h2.setLength(Forest::OVERHEAD + plen);
+	h2.setPtype(NET_SIG);
+	h2.setFlags(0);
 	h2.setComtree(100);
 	h2.setDstAdr(cliMgrAdr);
 	h2.setSrcAdr(myAdr);
@@ -385,14 +398,14 @@ bool handleConDisc(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 	int reply = sendAndWait(p2,cp2,inQ,outQ);
 	if (reply == -1) {
 		ps->free(p2);
-		cerr << "handleRtrReq: no reply from client manager\n";
+		cerr << "handleConDisc: no reply from client manager\n";
 		return false;
 	}
 	PacketHeader& hr = ps->getHeader(reply);
 	CtlPkt cpr;
 	cpr.unpack(ps->getPayload(reply),hr.getLength()-Forest::OVERHEAD);
 	if (cpr.getRrType() == NEG_REPLY) {
-		cerr << "handleRtrReq: negative reply from client ";
+		cerr << "handleConDisc: negative reply from client manager";
 			"manager\n";
 		ps->free(p2); ps->free(reply);
 		return false;
@@ -449,18 +462,18 @@ bool handleNewClient(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 	int plen = cp1.pack(ps->getPayload(p1));
 
 	PacketHeader& h1 = ps->getHeader(p1);
-	h1.setPtype(NET_SIG);
 	h1.setLength(plen + Forest::OVERHEAD);
+	h1.setPtype(NET_SIG);
 	h1.setFlags(0);
+	h1.setComtree(100);
 	h1.setDstAdr(rtrAdr);
 	h1.setSrcAdr(myAdr);
-	h1.setComtree(100);
 	h1.pack(ps->getBuffer(p1));
 
 	int reply = sendAndWait(p1,cp1,inQ,outQ);
 	if (reply == -1) {
 		ps->free(p1);
-		cerr << "handleCMReq: no reply from router\n";
+		cerr << "handleNewClient: no reply from router\n";
 		errReply(p,cp,outQ,"no reply from router");
 		return true;
 	}
@@ -477,27 +490,27 @@ bool handleNewClient(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 	ipa_t clientRtrIp = cpr.getAttr(RTR_IP);
 	ps->free(reply);
 
-	// now set rates on new link - for now, just 5*(min rates) - re-using p1
+	// now set rates on new link - for now, 500 Kb/s and 250 p/s
 	cp1.reset();
 	cp1.setRrType(REQUEST);
 	cp1.setCpType(MOD_LINK);
 	cp1.setAttr(LINK_NUM,clientLink);
-	cp1.setAttr(BIT_RATE,5*Forest::MINBITRATE);
-	cp1.setAttr(PKT_RATE,5*Forest::MINPKTRATE);
+	cp1.setAttr(BIT_RATE,500); // default value of 500 Kb/s
+	cp1.setAttr(PKT_RATE,250); // 250 p/s
 	plen = cp1.pack(ps->getPayload(p1));
 
-	h1.setPtype(NET_SIG);
 	h1.setLength(plen + Forest::OVERHEAD);
+	h1.setPtype(NET_SIG);
 	h1.setFlags(0);
+	h1.setComtree(100);
 	h1.setDstAdr(rtrAdr);
 	h1.setSrcAdr(myAdr);
-	h1.setComtree(100);
 	h1.pack(ps->getBuffer(p1));
 
 	int reply1 = sendAndWait(p1,cp1,inQ,outQ);
 	if (reply1 == -1) {
 		ps->free(p1);
-		cerr << "handleCMReq: no reply from router\n";
+		cerr << "handleNewClient: no reply from router\n";
 		errReply(p,cp,outQ,"no reply from router");
 		return true;
 	}
@@ -520,18 +533,18 @@ bool handleNewClient(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 	cp1.setAttr(LINK_NUM,clientLink);
 	plen = cp1.pack(ps->getPayload(p1));
 
-	h1.setPtype(NET_SIG);
 	h1.setLength(plen + Forest::OVERHEAD);
+	h1.setPtype(NET_SIG);
 	h1.setFlags(0);
+	h1.setComtree(100);
 	h1.setDstAdr(rtrAdr);
 	h1.setSrcAdr(myAdr);
-	h1.setComtree(100);
 	h1.pack(ps->getBuffer(p1));
 
 	int reply2 = sendAndWait(p1,cp1,inQ,outQ);
 	ps->free(p1); // now, done with p1
 	if (reply2 == -1) {
-		cerr << "handleCMReq: no reply from router\n";
+		cerr << "handleNewClient: no reply from router\n";
 		errReply(p,cp,outQ,"no reply from router");
 		return true;
 	}
@@ -556,12 +569,12 @@ bool handleNewClient(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 	cpr2.setAttr(RTR_ADR,rtrAdr);
 	plen = cpr2.pack(ps->getPayload(reply2));
 
-	hr2.setPtype(NET_SIG);
 	hr2.setLength(plen + Forest::OVERHEAD);
+	hr2.setPtype(NET_SIG);
 	hr2.setFlags(0);
+	hr2.setComtree(100);
 	hr2.setDstAdr(requestorAdr);
 	hr2.setSrcAdr(myAdr);
-	hr2.setComtree(100);
 	hr2.pack(ps->getBuffer(reply2));
 
 	outQ.enq(reply2);
@@ -588,33 +601,34 @@ int sendAndWait(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 
 	// make copy of packet and send the copy
 	int copy = ps->fullCopy(p);
-	if (copy == 0) return false;
-	buffer_t& bc = ps->getBuffer(copy);
-	for (int j = 0; j < nwords; j++) bc[j] = b[j];
+	if (copy == 0) {
+		cerr << "sendAndWait: no packets left in packet store\n";
+		return -1;
+	}
 
-cerr << "sendAndWait: sending request for thread " << pthread_self() << "\n";
-h.write(cerr,ps->getBuffer(p));
+//cerr << "sendAndWait: sending request for thread " << pthread_self() << "\n";
+//h.write(cerr,ps->getBuffer(p));
 	outQ.enq(copy);
 
 	for (int i = 1; i < 3; i++) {
 		int reply = inQ.deq(1000000000); // 1 sec timeout
 		if (reply == -1) { // timeout
-cerr << "sendAndWait: timeout\n";
+//cerr << "sendAndWait: timeout\n";
 			// no reply, make new copy and send
-			int copy = ps->alloc();
+			int retry = ps->fullCopy(p);
 			if (copy == 0) {
 				cerr << "sendAndWait: no packets "
 					"left in packet store\n";
 				return -1;
 			}
-			buffer_t& bc = ps->getBuffer(copy);
-			for (int j = 0; j < nwords; j++) bc[j] = b[j];
-			outQ.enq(copy);
+			outQ.enq(retry);
 		} else {
-cerr << "sendAndWait: got reply\n";
+//cerr << "sendAndWait: got reply\n";
 			return reply;
 		}
 	}
+cerr << "sendAndWait failing after 3 attempts\n";
+(ps->getHeader(p)).write(cerr,ps->getBuffer(p));
 	return -1;
 }
 
@@ -701,7 +715,7 @@ int recvFromCons() {
 		if (connSock < 0) return 0;
 		if (!Np4d::nonblock(connSock))
 			fatal("can't make connection socket nonblocking");
-cerr << "connection socket established, connSock=" << connSock << endl;
+//cerr << "connection socket established, connSock=" << connSock << endl;
 	}
 
 	int p = ps->alloc();
@@ -724,10 +738,12 @@ cerr << "connection socket established, connSock=" << connSock << endl;
  *  @param p is the packet to be sent to the CLI
  */
 void sendToCons(int p) {
-	buffer_t& buf = ps->getBuffer(p);
-	int length = ps->getHeader(p).getLength();
-	ps->pack(p);
-	Np4d::sendBuf(connSock, (char *) &buf, length);
+	if (connSock >= 0) {
+		buffer_t& buf = ps->getBuffer(p);
+		int length = ps->getHeader(p).getLength();
+		ps->pack(p);
+		Np4d::sendBuf(connSock, (char *) &buf, length);
+	}
 	ps->free(p);
 }
 

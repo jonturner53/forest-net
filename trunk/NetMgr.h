@@ -24,8 +24,6 @@
  */
 
 
-const static short NM_PORT = 30122; ///< port# used by remote console
-
 ipa_t	extIp;			///< IP address for remote console
 ipa_t	intIp;			///< IP address for Forest net
 ipa_t	rtrIp;			///< IP address of router

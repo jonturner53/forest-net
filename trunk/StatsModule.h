@@ -14,6 +14,8 @@ public:
 	// access statistics
 	int	iPktCnt(int) const;
 	int	oPktCnt(int) const;
+	int	discCnt(int) const;
+	int	qDiscCnt(int) const;
 	int	iByteCnt(int) const;
 	int	oByteCnt(int) const;
 	int	getQlen(int) const;
@@ -21,8 +23,11 @@ public:
 	int	getLinkQlen(int) const;
 
 	// update statistics counts
+	void	clearLnkStats(int);
+	void	clearQuStats(int);
 	void	cntInLink(int, int, bool);
 	void	cntOutLink(int, int, bool);
+	void	cntDiscards(int, int, bool);
 	void	incQlen(int, int, int);
 	void	decQlen(int, int, int);
 
@@ -40,7 +45,8 @@ private:
 
 	enum cntrTyp {
 	inPkt, outPkt, inByt, outByt,  	// input/output counts
-      	qPkt, qByt		 	// packets/bytes in queues
+      	qPkt, qByt,		 	// packets/bytes in queues
+	disc				// discards from queues
 	};		
 
 	struct StatItem {
@@ -56,6 +62,7 @@ private:
 	int	outByte;
 	int	inPkt;
 	int	outPkt;
+	int	discards;
 	int	numPkt;
 	};
 	LinkCounts *lnkCnts;
@@ -63,12 +70,14 @@ private:
 	struct QueueCounts {
         int     bytLen;
         int     pktLen;
+	int	discards;
         };
         QueueCounts *qCnts;
 
 	// system-wide counts
 	int	totInByte;
 	int	totInPkt;
+	int	totDiscards;
 	int	rtrInByte;
 	int	rtrInPkt;
 	int	leafInByte;
@@ -77,8 +86,10 @@ private:
 	int	totOutPkt;
 	int	rtrOutByte;
 	int	rtrOutPkt;
+	int	rtrDiscards;
 	int	leafOutByte;
 	int	leafOutPkt;
+	int	leafDiscards;
 
 	ComtreeTable *ctt;
 
@@ -110,16 +121,35 @@ inline int StatsModule::oByteCnt(int lnk) const {
 		(lnk == -1 ? rtrOutByte :
 		 (lnk == -2 ? leafOutByte : lnkCnts[lnk].outByte)));
 }
-inline int StatsModule::getQlen(int q) const {
-	return qCnts[q].pktLen;
+
+inline int StatsModule::discCnt(int lnk) const {
+	return lnkCnts[lnk].discards;
 }
 
-inline int StatsModule::getQbytes(int q) const {
-	return qCnts[q].bytLen;
+inline int StatsModule::qDiscCnt(int qid) const {
+	return qCnts[qid].discards;
+}
+
+inline int StatsModule::getQlen(int qid) const {
+	return qCnts[qid].pktLen;
+}
+
+inline int StatsModule::getQbytes(int qid) const {
+	return qCnts[qid].bytLen;
 }
 
 inline int StatsModule::getLinkQlen(int lnk) const {
 	return lnkCnts[lnk].numPkt;
+}
+
+inline void StatsModule::clearLnkStats(int lnk) {
+	lnkCnts[lnk].inByte = lnkCnts[lnk].outByte = 0;
+	lnkCnts[lnk].inPkt = lnkCnts[lnk].outPkt = 0;
+	lnkCnts[lnk].numPkt = lnkCnts[lnk].discards = 0;
+}
+	
+inline void StatsModule::clearQuStats(int qid) {
+	qCnts[qid].bytLen = qCnts[qid].pktLen = qCnts[qid].discards = 0;
 }
 
 inline void StatsModule::cntInLink(int lnk, int len, bool isRtr) {
@@ -140,17 +170,28 @@ inline void StatsModule::cntOutLink(int lnk, int len, bool isRtr) {
 	}
 }
 
-inline void StatsModule::incQlen(int qn, int lnk, int len) {
-	if (1 <= lnk && lnk <= maxLnk) lnkCnts[lnk].numPkt++;
-	if (1 <= qn && qn <= maxQ) {
-		qCnts[qn].bytLen += len; qCnts[qn].pktLen++;
+inline void StatsModule::cntDiscards(int qid, int lnk, bool isRtr) {
+	if (1 <= lnk && lnk <= maxLnk) {
+		totDiscards++;
+		lnkCnts[lnk].discards++;
+		if (isRtr) rtrDiscards++;
+		else	   leafDiscards++;
+		if (1 <= qid && qid <= maxQ) 
+			qCnts[qid].discards++;
 	}
 }
 
-inline void StatsModule::decQlen(int qn, int lnk, int len) {
+inline void StatsModule::incQlen(int qid, int lnk, int len) {
+	if (1 <= lnk && lnk <= maxLnk) lnkCnts[lnk].numPkt++;
+	if (1 <= qid && qid <= maxQ) {
+		qCnts[qid].bytLen += len; qCnts[qid].pktLen++;
+	}
+}
+
+inline void StatsModule::decQlen(int qid, int lnk, int len) {
 	if (1 <= lnk && lnk <= maxLnk) lnkCnts[lnk].numPkt--;
-	if (1 <= qn && qn <= maxQ) {
-		qCnts[qn].bytLen -= len; qCnts[qn].pktLen--;
+	if (1 <= qid && qid <= maxQ) {
+		qCnts[qid].bytLen -= len; qCnts[qid].pktLen--;
 	}
 }
 
