@@ -13,6 +13,7 @@
 #include "CommonDefs.h"
 #include "PacketHeader.h"
 #include "PacketStoreTs.h"
+#include "NetInfo.h"
 #include "UiSetPair.h"
 #include "IdMap.h"
 #include "Queue.h"
@@ -37,6 +38,8 @@ int	connSock;		///< external connection socket
 
 PacketStoreTs *ps;		///< pointer to packet store
 
+NetInfo *net;			///< global view of net topology
+
 // Information relating client addresses and router addresses
 // This is a temporary expedient and will be replaced later
 int	numPrefixes;
@@ -60,26 +63,28 @@ Queue	out;
 };
 
 // defines thread pool
-static const int TPSIZE = 200;	///< number of concurrent threads at NetMgr
-struct ThreadPool {
-pthread_t th;			///< thread
-QueuePair qp;			///< associated queue pair
-uint64_t seqNum;		///< sequence number of pending request
-uint64_t ts;			///< timestamp of pending request
+static const int TPSIZE = 500;	///< number of concurrent threads at NetMgr
+struct ThreadInfo {
+	pthread_t thid;		///< thread id
+	QueuePair qp;		///< associated queue pair
+	uint64_t seqNum;	///< sequence number of pending request
+	uint64_t ts;		///< timestamp of pending request
 };
-ThreadPool *pool;		///< pool[i]: i-th thread in pool
+ThreadInfo *pool;		///< pool[i]: i-th thread in pool
 UiSetPair *threads;		///< in-use and unused thread indices
 
 IdMap	*tMap;			///< maps sequence numbers to thread #
 
 bool	init();
 void	cleanup();
-bool	readPrefixInfo(char*);	///< reads the prefix file and stores
+bool	readPrefixInfo(char*);
 void*	run(void*); 
+
 void* 	handler(void *);
 bool 	handleConsReq(int,CtlPkt&, Queue&, Queue&);
 bool 	handleConDisc(int,CtlPkt&, Queue&, Queue&);
 bool 	handleNewClient(int,CtlPkt&, Queue&, Queue&);
+int	sendCtlPkt(CtlPkt&, comt_t, fAdr_t, Queue&, Queue&);
 int 	sendAndWait(int,CtlPkt&,Queue&,Queue&);
 void 	errReply(int,CtlPkt&,Queue&, const char*);
 
@@ -93,6 +98,5 @@ void	sendToForest(int);
 int 	rcvFromForest();
 
 bool	findCliRtr(ipa_t,fAdr_t&); ///< gives the rtrAdr of the prefix
-
 
 #endif

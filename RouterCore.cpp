@@ -91,6 +91,7 @@ main(int argc, char *argv[]) {
 	if (args.mode.compare("local") == 0) {
 		if (!router.setup())
 			fatal("router: inconsistency in config files");
+		router.dump(cout); // log the config files
 	} else {
 		if (args.bootIp == 0 && args.nmIp == 0 && args.nmAdr == 0) 
 			fatal("remote configuration requires bootIp, "
@@ -936,7 +937,8 @@ void RouterCore::subUnsub(int p, int ctx) {
 
 	// add subscriptions
 	int addcnt = ntohl(pp[0]);
-	if (addcnt < 0 || addcnt > 350 || (addcnt + 8)*4 > h.getLength()) {
+	if (addcnt < 0 || addcnt > 350 ||
+	    Forest::OVERHEAD + (addcnt + 2)*4 > h.getLength()) {
 		ps->free(p); return;
 	}
 	for (int i = 1; i <= addcnt; i++) {
@@ -949,12 +951,12 @@ void RouterCore::subUnsub(int p, int ctx) {
 		} else if (!rt->isLink(rtx,cLnk)) {
 			rt->addLink(rtx,cLnk);
 			pp[i] = 0; // so, parent will ignore
-		} 
+		}
 	}
 	// remove subscriptions
 	int dropcnt = ntohl(pp[addcnt+1]);
 	if (dropcnt < 0 || addcnt + dropcnt > 350 ||
-	    (addcnt + dropcnt + 8)*4 > h.getLength() ) {
+	    Forest::OVERHEAD + (addcnt + dropcnt + 2)*4 > h.getLength()) {
 		ps->free(p); return;
 	}
 	for (int i = addcnt + 2; i <= addcnt + dropcnt + 1; i++) {
@@ -1500,8 +1502,8 @@ bool RouterCore::modComtree(int p, CtlPkt& cp, CtlPkt& reply) {
 }
 
 bool RouterCore::addComtreeLink(int p, CtlPkt& cp, CtlPkt& reply) {
-	// Note: we require either the link number or
-	// the peerIP and peerPort
+	// Note: we require either the comtree number and
+	// either the link number or the peerIP and peerPort
 	if (!(cp.isSet(COMTREE_NUM) &&
 	      (cp.isSet(LINK_NUM) ||
 	        (cp.isSet(PEER_IP) && cp.isSet(PEER_PORT))))) {
@@ -1561,6 +1563,21 @@ bool RouterCore::addComtreeLink(int p, CtlPkt& cp, CtlPkt& reply) {
 		return false;
 	}
 	cLnk = ctt->getComtLink(comt,lnk);
+
+	// add unicast route to cLnk if peer is a leaf or a router
+	// in a different zip code
+	fAdr_t peerAdr = lt->getPeerAdr(lnk);
+	if (lt->getPeerType(lnk) != ROUTER) {
+		int rtx = rt->getRteIndex(comt,peerAdr);
+		if (rtx == 0) rt->addEntry(comt,peerAdr,cLnk);
+	} else {
+		int zipPeer = Forest::zipCode(peerAdr);
+		if (zipPeer != Forest::zipCode(myAdr)) {
+			fAdr_t dest = Forest::forestAdr(zipPeer,0);
+			int rtx = rt->getRteIndex(comt,dest);
+			if (rtx == 0) rt->addEntry(comt,dest,cLnk);
+		}
+	}
 
 	// allocate queue and bind it to lnk and comtree link
 	int qid = qm->allocQ(lnk);
@@ -1631,6 +1648,20 @@ bool RouterCore::dropComtreeLink(int p, CtlPkt& cp, CtlPkt& reply) {
 	lt->addAvailInPktRate(lnk,ctt->getInPktRate(cLnk));
 	lt->addAvailOutBitRate(lnk,ctt->getOutBitRate(cLnk));
 	lt->addAvailOutPktRate(lnk,ctt->getOutPktRate(cLnk));
+
+	// remove unicast route for this comtree
+	fAdr_t peerAdr = lt->getPeerAdr(lnk);
+	if (lt->getPeerType(lnk) != ROUTER) {
+		int rtx = rt->getRteIndex(comt,peerAdr);
+		if (rtx != 0) rt->removeEntry(rtx);
+	} else {
+		int zipPeer = Forest::zipCode(peerAdr);
+		if (zipPeer != Forest::zipCode(myAdr)) {
+			fAdr_t dest = Forest::forestAdr(zipPeer,0);
+			int rtx = rt->getRteIndex(comt,dest);
+			if (rtx != 0) rt->removeEntry(rtx);
+		}
+	}
 
 	// release queue and remove link from comtree
 	int qid = ctt->getLinkQ(cLnk);

@@ -50,8 +50,8 @@ inline int max(int x, int y) { return x > y ? x : y; }
 inline double max(double x, double y) { return x > y ? x : y; }
 inline int min(int x, int y) { return x < y ? x : y; }
 inline double min(double x, double y) { return x < y ? x : y; }
-inline int abs(int x) { return x < 0 ? -x : x; }
-inline double abs(double x) { return x < 0 ? -x : x; }
+//inline int abs(int x) { return x < 0 ? -x : x; }
+//inline double abs(double x) { return x < 0 ? -x : x; }
 
 inline void warning(string msg) { cerr << "Warning: " << msg << endl; }
 inline void fatal(string msg) {

@@ -65,9 +65,11 @@ enum CpRrType { REQUEST=1, POS_REPLY=2, NEG_REPLY=3 };
 class CtlPkt {
 public:
 		CtlPkt();
+		CtlPkt(CpTypeIndex,CpRrType,uint64_t);
 		~CtlPkt();
 
 	void	reset();
+	void	reset(CpTypeIndex,CpRrType,uint64_t);
 	int	pack(uint32_t*);	
 	bool	unpack(uint32_t*, int);	
 	/** predicates */
@@ -93,7 +95,6 @@ public:
 	void	write(ostream&) ; 
 private:
 	CpTypeIndex cpType;		///< control packet type index
-	int cpCode;			///< control packet type code
 	CpRrType rrType;		///< request/return type
 	int64_t seqNum;			///< sequence number
 
@@ -101,7 +102,7 @@ private:
 	bool 	aSet[CPA_END+1];	///< mark attributes that have been set
 
 	uint32_t* payload;		///< pointer to start of packet payload
-	int	pp;			///< index into payload used by pack/unpack
+	int	pp;			///< index in payload used by pack/unpack
 
 	static const int MAX_MSG_LEN=500; ///< bound on error message length
 	char	errMsg[MAX_MSG_LEN+1];	///< buffer for error messages

@@ -11,17 +11,14 @@
  *  The CtlPkt class is used to pack and unpack forest control messages.
  *  The class has a public field for every field that can be used in
  *  in a control packet. To create a control packet, the user
- *  constructs a CtlPkt object with a pointer to the payload part
- *  of the buffer as the constructor argument. The user then sets
- *  selected fields to non-zero values and calls pack,
- *  which packs the appropriate fields into the packet's payload
- *  and returns the number of 32 bit words that were packed.
+ *  constructs a CtlPkt object. The user then specifies
+ *  selected fields and calls pack, which packs the specified
+ *  fields into the packet's payload the length of the payload.
  *  
  *  To unpack a buffer, the user constructs a CtlPkt object
- *  and then calls unpack, specifying the number of 32 bit words
- *  in the payload that are to be unpacked. The control packet fields
- *  can then be retrieved from the corresponding fields of the CtlPkt
- *  object.
+ *  and then calls unpack, specifying the length of the payload.
+ *  The control packet fields can then be retrieved from the
+ *  corresponding fields of the CtlPkt object.
  */
 
 #include "CtlPkt.h"
@@ -30,6 +27,11 @@
  */
 CtlPkt::CtlPkt() { payload = 0; reset(); }
 
+CtlPkt::CtlPkt(CpTypeIndex cpt, CpRrType rrt, uint64_t seq) 
+		: cpType(cpt), rrType(rrt), seqNum(seq) {
+	payload = 0; reset();
+}
+
 /** Destructor for CtlPkt. */
 CtlPkt::~CtlPkt() { } 
 
@@ -37,6 +39,10 @@ CtlPkt::~CtlPkt() { }
  */
 void CtlPkt::reset() {
 	for (int i = CPA_START; i < CPA_END; i++) aSet[i] = false;
+}
+void CtlPkt::reset(CpTypeIndex cpt, CpRrType rrt, uint64_t seq) {
+	cpType = cpt; rrType = rrt; seqNum = seq;
+	payload = 0; reset();
 }
 
 /** Pack CtlPkt fields into buffer.

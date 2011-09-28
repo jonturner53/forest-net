@@ -30,32 +30,31 @@ class AvatarGraphic {
 	}
 	
 	/** Draw a graphic representation of the Avatar.
-	 *  Avataris drawn as a circle with a radius that represents
-	 *  its visibility range. A line is drawn from the center to
+	 *  Avatar is drawn as a circle.
+	 *  A line is drawn from the center to
 	 *  the circumference, to show the direction in which the 
 	 *  Avatar is moving. The Avatar's Forest address is displayed
-	 *  in the upper left quadrant of the circle and the number
-	 *  of other Avatars it can "see" is displayed in the bottom
-	 *  right quadrant.
+	 *  in the top half of the circle and the number of nearby
+	 *  and visibile avatars in the bottom half.
 	 */
 	public void draw() {
-		double scaleFactor = 2*Math.PI/360; // for converting degrees to radians
+		double scaleFactor = 2*Math.PI/360; // degrees to radians
 			
 		StdDraw.setPenColor(Color.GRAY);
 		StdDraw.circle(avaStatus.x,avaStatus.y,SIZE);		
 		StdDraw.line(avaStatus.x, avaStatus.y,
-			     avaStatus.x + SIZE*Math.sin(avaStatus.dir*scaleFactor),
-			     avaStatus.y + SIZE*Math.cos(avaStatus.dir*scaleFactor));
+			avaStatus.x + SIZE*Math.sin(avaStatus.dir*scaleFactor),
+			avaStatus.y + SIZE*Math.cos(avaStatus.dir*scaleFactor));
 		
 		StdDraw.setPenColor(Color.BLACK);
 		StdDraw.filledCircle(avaStatus.x,avaStatus.y,.005);
 
-		StdDraw.text(avaStatus.x,avaStatus.y+SIZE/3,
+		StdDraw.text(avaStatus.x,avaStatus.y+.4*SIZE,
 			     ((avaStatus.id >> 16) & 0xffff) + "." +
 			     (avaStatus.id & 0xffff));
-		StdDraw.text(avaStatus.x+SIZE/3,avaStatus.y-SIZE/3,
+		StdDraw.text(avaStatus.x+SIZE/3,avaStatus.y-.4*SIZE,
 			    ((Integer) avaStatus.numVisible).toString());
-		StdDraw.text(avaStatus.x-SIZE/3,avaStatus.y-SIZE/3,
+		StdDraw.text(avaStatus.x-SIZE/3,avaStatus.y-.4*SIZE,
                             ((Integer) avaStatus.numNear).toString()); 
 	}
 }

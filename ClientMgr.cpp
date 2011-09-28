@@ -43,7 +43,8 @@ int main(int argc, char ** argv) {
 	char * unamesFile = argv[8];
 	char * acctFile = argv[9];
 	ClientMgr climgr(netMgrAdr,rtrIp,rtrAdr,CC_Adr,myIp, myAdr, unamesFile,acctFile);
-	if(!climgr.init()) fatal("ClientMgr::init: Failed to initialize ClientMgr");
+	if(!climgr.init()) 
+		fatal("ClientMgr::init: Failed to initialize ClientMgr");
 	climgr.run(1000000*finTime);
 	return 0;
 }
@@ -83,12 +84,22 @@ bool ClientMgr::init() {
 
 /** Receieves the login string and the avatar's IP address
  */
-void ClientMgr::initializeAvatar() {
+bool ClientMgr::initializeAvatar() {
 	ipa_t avIp; ipp_t avPort;
 	avaSock = Np4d::accept4d(extSock, avIp, avPort);
-	if(avaSock < 0) return;
+	if (avaSock < 0) {
+		if (errno == EAGAIN) return false;
+		fatal("intializeAvatar: accept on external socket failed");
+	}
 	char buf[100];
-	Np4d::recvBufBlock(avaSock,buf,100);
+	if (Np4d::recvBufBlock(avaSock,buf,100) <= 0) {
+		string s;
+		cerr << "bad login string from " << Np4d::ip2string(avIp,s)
+		     << ":" << avPort<< "\n";
+		close(avaSock); avaSock = -1;
+		return false; // abandon attempt for this avatar
+	}
+		
 	string uname; string pword; string s(buf);
 	int space1 = s.find(' ',2);
 	int space2 = s.find(' ',space1+1);
@@ -96,21 +107,20 @@ void ClientMgr::initializeAvatar() {
 	pword = s.substr(space1+1,space2-(space1+1));
 	string fPortStr = s.substr(space2+1);
 
-cerr << "uname=" << uname << " pword=" << pword << " fPortStr=" << fPortStr << endl;
 	ipp_t avForestPort = atoi(fPortStr.c_str());
-cerr << "avForestPort=" << avForestPort << endl;
 	//o is for old, n is for new
 	if(buf[0] == 'o') {
 		map<string,string>::iterator it = unames->find(uname);
 		if(it != unames->end()) {
 			if(it->second != pword) {
 				cerr << "incorrect password" << endl;
-				return;
+				close(avaSock); avaSock = -1;
+				return false;
 			}
 		} else {
-cerr << "uname=" << uname << endl;
 			cerr << "not a known user" << endl;
-			return;
+			close(avaSock); avaSock = -1;
+			return false;
 		}
 	} else {
 		//write new uname to file (append)
@@ -118,21 +128,31 @@ cerr << "uname=" << uname << endl;
 		if(ofs.good()) {
 			ofs << uname << " " << pword << endl;
 			ofs.close();
-		} else
-			fatal("couldn't write to file");
+		} else {
+			cerr <<"couldn't write to file\n";
+			return true;
+		}
 	}
 	(*clients)[++highLvlSeqNum].uname = uname;
 	(*clients)[highLvlSeqNum].pword = pword;
-	requestAvaInfo(avIp,avForestPort);
+	if (!requestAvaInfo(avIp,avForestPort)) {
+		close(avaSock); avaSock = -1;
+		return false;
+	}
+	return true;
 }
 /** Requests the router information from a network manager
  *  @param aip is the IP address of the client to receive information about
  */
-void ClientMgr::requestAvaInfo(ipa_t aip, ipp_t aport) {
+bool ClientMgr::requestAvaInfo(ipa_t aip, ipp_t aport) {
 	packet p = ps->alloc();
-	if(p == 0) fatal("ClientMgr::requestAvaInfo failed to alloc packet");
+	if(p == 0) {
+		cerr << "ClientMgr::requestAvaInfo failed to alloc packet\n";
+		return false;
+	}
 	CtlPkt cp;
-	cp.setRrType(REQUEST); cp.setSeqNum(((++lowLvlSeqNum) << 32)|(highLvlSeqNum & 0xffffffff));
+	cp.setRrType(REQUEST);
+	cp.setSeqNum(((++lowLvlSeqNum) << 32)|(highLvlSeqNum & 0xffffffff));
 	cp.setCpType(NEW_CLIENT); cp.setAttr(CLIENT_IP,aip);
 	cp.setAttr(CLIENT_PORT,aport);
 	int len = cp.pack(ps->getPayload(p));
@@ -140,10 +160,8 @@ void ClientMgr::requestAvaInfo(ipa_t aip, ipp_t aport) {
 	h.setPtype(NET_SIG); h.setFlags(0);
 	h.setComtree(100); h.setSrcAdr(myAdr);
 	h.setDstAdr(netMgrAdr); h.pack(ps->getBuffer(p));
-ps->pack(p);
-cerr << "sending new client request to NetMgr\n";
-h.write(cerr,ps->getBuffer(p));
 	send(p);
+	return true;
 }
 
 /** Writes information about connection control packets to a file
@@ -152,8 +170,10 @@ h.write(cerr,ps->getBuffer(p));
 void ClientMgr::writeToAcctFile(CtlPkt cp) {
 	if(acctFileStream.good()) {
 		if(cp.getCpType() == NEW_CLIENT && cp.getRrType() == POS_REPLY) {
-			acctFileStream << Misc::getTime() << " Client "; Forest::writeForestAdr(acctFileStream,cp.getAttr(CLIENT_ADR));
-			acctFileStream << " added to router "; Forest::writeForestAdr(acctFileStream,cp.getAttr(RTR_ADR));
+			acctFileStream << Misc::getTime() << " Client ";
+			Forest::writeForestAdr(acctFileStream,cp.getAttr(CLIENT_ADR));
+			acctFileStream << " added to router ";
+			Forest::writeForestAdr(acctFileStream,cp.getAttr(RTR_ADR));
 			acctFileStream << endl;
 		} else if(cp.getCpType() == CLIENT_CONNECT) {
 			acctFileStream << Misc::getTime() << " Client "; Forest::writeForestAdr(acctFileStream,cp.getAttr(CLIENT_ADR));
@@ -202,21 +222,36 @@ void ClientMgr::send(int p) {
  *
  */
 void ClientMgr::run(int finTime) {
-	uint32_t now;
+	uint32_t now, requestTime;
 	now = 0;
 	while(now <= finTime) {
 		now = Misc::getTime();
-		if(avaSock < 0) initializeAvatar();
+		if (avaSock < 0) {
+			if (initializeAvatar())
+				requestTime = now;
+		} else if (now - requestTime > 2000000) {
+			// give up if no reply after 2 seconds
+			close(avaSock); avaSock = -1;
+		}
+			
 		int p = recvFromForest();
 		if(p != 0) {
 			CtlPkt cp; cp.unpack(ps->getPayload(p),1500);
-			if(cp.getCpType() == CLIENT_CONNECT || cp.getCpType() == CLIENT_DISCONNECT) {
+			if(cp.getRrType() == REQUEST &&
+			   (cp.getCpType() == CLIENT_CONNECT ||
+			    cp.getCpType() == CLIENT_DISCONNECT)) {
 				writeToAcctFile(cp);
-				uint64_t highLvlSeq = cp.getSeqNum() & 0xffffffff;
-				lowLvlSeqNum = cp.getSeqNum() >> 32;
-				cp.setSeqNum((++lowLvlSeqNum << 32)|(highLvlSeq & 0xffffffff));
+				uint64_t seqNum = cp.getSeqNum();
+				CpTypeIndex cpTyp = cp.getCpType();
+				cp.reset();
+				cp.setCpType(cpTyp);
+				cp.setSeqNum(seqNum);
 				cp.setRrType(POS_REPLY);
 				int len = cp.pack(ps->getPayload(p));
+				if (len == 0) {
+					cerr << "run: control packet packing error\n";
+					ps->free(p);
+				}
 				PacketHeader &h = ps->getHeader(p);
 				h.setLength(Forest::OVERHEAD + len);
 				h.setDstAdr(netMgrAdr);
@@ -238,8 +273,19 @@ void ClientMgr::run(int finTime) {
 				Np4d::sendInt(avaSock,avaAdr);
 				Np4d::sendInt(avaSock,avaRtrIp);
 				Np4d::sendInt(avaSock,CC_Adr);
-				close(avaSock);
+				char dummyBuf[10];
+				while (recv(avaSock,(void *) &dummyBuf[0], 10, 0) > 0) {
+					; // expect first call to block until client closes
+				}
+				close(avaSock); // now, we can close without going into TIME_WAIT
 				avaSock = -1;
+			} else if(cp.getCpType() == NEW_CLIENT && cp.getRrType() == NEG_REPLY) {
+				cerr << "NetMgr could not add client: "
+				     << cp.getErrMsg() << endl;
+				ps->free(p);
+				close(avaSock); avaSock = -1;
+			} else {
+				ps->free(p);
 			}
 		}
 	}

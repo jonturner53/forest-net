@@ -112,6 +112,7 @@ bool Monitor::init() {
 	}
 	return Np4d::listen4d(extSock) && Np4d::nonblock(extSock);
 }
+
 /** Run the monitor, stopping after finishTime
  *  Operate on a cycle with a period of UPDATE_PERIOD milliseconds,
  *  Each cycle, process all the packets that came in during
@@ -247,15 +248,24 @@ void Monitor::updateSubscriptions(comt_t oldcomt, comt_t newcomt) {
 		int nunsub = 0;
 		for (int x = 0; x < SIZE; x += GRID) {
 			for (int y = 0; y < SIZE; y += GRID) {
-				if (nunsub > 350) fatal("too many subscriptions");
-				pp[++nunsub+1] = htonl(-groupNum(x,y));
+				nunsub++;
+				if (nunsub > 350) {
+					pp[0] = 0; pp[1] = htonl(nunsub-1);
+					h.setLength(Forest::OVERHEAD +
+						    4*(1+nunsub));
+					h.setPtype(SUB_UNSUB); h.setFlags(0);
+					h.setComtree(oldcomt);
+					h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
+					send2router(p);
+					nunsub = 1;
+				}
+				pp[nunsub+1] = htonl(-groupNum(x,y));
 			}
 		}
 		pp[0] = 0; pp[1] = htonl(nunsub);
-	
-		h.setLength(4*(8+nunsub)); h.setPtype(SUB_UNSUB); h.setFlags(0);
+		h.setLength(Forest::OVERHEAD + 4*(1+nunsub));
+		h.setPtype(SUB_UNSUB); h.setFlags(0);
 		h.setComtree(oldcomt); h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
-	
 		send2router(p);
 	}
 
@@ -264,13 +274,24 @@ void Monitor::updateSubscriptions(comt_t oldcomt, comt_t newcomt) {
 		int nsub = 0;
 		for (int x = 0; x < SIZE; x += GRID) {
 			for (int y = 0; y < SIZE; y += GRID) {
-				if (nsub > 350) fatal("too many subscriptions");
-				pp[++nsub] = htonl(-groupNum(x,y));
+				nsub++;
+				if (nsub > 350) {
+					pp[0] = htonl(nsub-1); pp[nsub] = 0;
+					h.setLength(Forest::OVERHEAD +
+						    4*(1+nsub));
+					h.setPtype(SUB_UNSUB); h.setFlags(0);
+					h.setComtree(newcomt);
+					h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
+					send2router(p);
+					nsub = 1;
+				}
+				pp[nsub] = htonl(-groupNum(x,y));
 			}
 		}
 		pp[0] = htonl(nsub); pp[nsub+1] = 0;
 	
-		h.setLength(4*(8+nsub)); h.setPtype(SUB_UNSUB); h.setFlags(0);
+		h.setLength(Forest::OVERHEAD + 4*(2+nsub));
+		h.setPtype(SUB_UNSUB); h.setFlags(0);
 		h.setComtree(newcomt); h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
 	
 		send2router(p);

@@ -30,7 +30,7 @@ private:
 	const static short MON_PORT = 30124;///< port# for connection to GUI
 	const static int NUMITEMS = 9;	///<number of distinct items in a status packet
 	int SIZE;			///< xy extent of virtual world
-	const static int GRID = 200000;	///< xy extent of one grid square
+	const static int GRID = 10000;	///< xy extent of one grid square
 
 	const static int UPDATE_PERIOD = 50;	///< # ms between status updates
 	const static int MAX_AVATARS = 1000;	///< max # of avatars to monitor
