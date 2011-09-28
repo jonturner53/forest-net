@@ -38,11 +38,11 @@ public:
 private:
 	void writeToAcctFile(CtlPkt); ///< write contents of ctlpkt to accounting file
 	void send(int);		///< send packet to forest router
-	void requestAvaInfo(ipa_t,ipp_t);///< send ctlpkt asking for client info
+	bool requestAvaInfo(ipa_t,ipp_t);///< send ctlpkt asking for client info
 	int recvFromForest();	///< receive packet from Forest
 	void connect();		///< connect to forest network
 	void disconnect();	///< disconnect from forest network
 	void readUsernames();	///< read filenames and store
-	void initializeAvatar();///< try to connect to and initialize ClientAvatar
+	bool initializeAvatar();///< try to connect to and initialize ClientAvatar
 };
 #endif

@@ -29,11 +29,11 @@ public class MazeWorld {
 	private static int gridSize;	//number of squares in map (x or y direction)
 	private static final int MON_PORT = 30124; // port number used by monitor
 	private static Scanner mazeFile; // filename of maze
-	private static int[] walls; // list of walls in bitset form
+	private static int[] walls; 	// list of walls
 	private static SocketChannel monChan = null;	// channel to remote monitor
 	private static ByteBuffer repBuf = null; 	// buffer for report packets
 	private static AvatarStatus rep = null;		// most recent report
-	private static int GRID = 200000;		// size of one grid space
+	private static final int GRID = 10000;		// size of one grid space
 	private static boolean needData = true;		// true when getReport() needs
 							// more data to process
 	private static Set<Integer> recentIds;		//list of recently seen ids
@@ -78,7 +78,6 @@ public class MazeWorld {
 		rep.numVisible = repBuf.getInt();
 		rep.numNear = repBuf.getInt();
 		rep.comtree = repBuf.getInt();
-		//rep.type = repBuf.getInt();
 		if (repBuf.remaining() < 36) needData = true;
 
 		recentIds.add(rep.id);
@@ -101,7 +100,7 @@ public class MazeWorld {
 		int firstTimeStamp = (rep != null ? rep.when : -1);
 		while (rep != null) {
 			if (rep.when > bound) {		
-				lastRep = rep; return firstTimeStamp;
+				lastRep = rep; break;
 			}
 			AvatarGraphic m = status.get(rep.id);
 			if (m == null) {
@@ -111,18 +110,16 @@ public class MazeWorld {
 				m.update(rep);
 			}
 			rep = getReport();
-			idCounter = (++idCounter)%50;
-			if(idCounter==49) {
-				Set<Integer> temp = new HashSet<Integer>();
-				for(Iterator<Integer> iter = status.keySet().iterator();iter.hasNext();) {
-					Integer i = iter.next();
-					if(!recentIds.contains(i))
-						temp.add(i);
-				}
-				for(Integer i : temp)
-					status.remove(i);
-				recentIds.clear();
+		}
+		// clear an item from status, if no report in 4 frames
+		idCounter = (++idCounter)%4;
+		if (idCounter == 3) {
+			Iterator<Integer> iter = status.keySet().iterator();
+			while (iter.hasNext()) {
+				Integer i = iter.next();
+				if(!recentIds.contains(i)) iter.remove();
 			}
+			recentIds.clear();
 		}
 		return firstTimeStamp;
 	}
@@ -138,7 +135,7 @@ public class MazeWorld {
 		try {
 			if (inStream == null) {
 				inStream = new BufferedReader(
-						new InputStreamReader(System.in));
+					   new InputStreamReader(System.in));
 				System.out.print("\ncomtree=");
 				comtree = Integer.parseInt(inStream.readLine());
 			} else if (inStream.ready()) {
@@ -166,24 +163,28 @@ public class MazeWorld {
 				String temp = mazeFile.nextLine();
 				if(walls==null) {
 					gridSize = temp.length();
+					SIZE = gridSize*GRID;
 					walls = new int[gridSize*gridSize];
 				}
 				for(int i = 0; i < gridSize; i++) {
 					if(temp.charAt(i)=='+') {
-						walls[(gridSize-counter)*gridSize+i] = 1;
+						walls[(gridSize-counter)
+							*gridSize+i] = 3;
 					} else if(temp.charAt(i)=='-') {
-						walls[(gridSize-counter)*gridSize+i] = 2;
+						walls[(gridSize-counter)
+							*gridSize+i] = 2;
 					} else if(temp.charAt(i)=='|') {
-						walls[(gridSize-counter)*gridSize+i] = 3;
+						walls[(gridSize-counter)
+							*gridSize+i] = 1;
 					} else if(temp.charAt(i)==' ') {
-						walls[(gridSize-counter)*gridSize+i] = 4;
+						walls[(gridSize-counter)
+							*gridSize+i] = 0;
 					} else {
 						System.out.println("Unrecognized symbol in map file!");
 					}
 				}
 				counter++;
 			}
-			SIZE = GRID*gridSize;
 		} catch (Exception e) {
 			System.out.println("usage: ShowWorldNet monIp walls size");
 			System.out.println(e);
@@ -219,6 +220,7 @@ public class MazeWorld {
 	 */
 	private static void drawGrid(Color c) {
 		StdDraw.clear(c);
+		StdDraw.setPenRadius(.002);
 		StdDraw.setPenColor(Color.GRAY);
 		double frac = 1.0/gridSize;
 		for (int i = 0; i <= gridSize; i++) {
@@ -227,14 +229,17 @@ public class MazeWorld {
 		}
 		StdDraw.setPenColor(Color.BLACK);
 		StdDraw.setPenRadius(.006);
+		StdDraw.line(0,0,0,1); StdDraw.line(0,0,1,0);
+		StdDraw.line(1,1,0,1); StdDraw.line(1,1,1,0);
 		for(int i = 0; i < gridSize*gridSize; i++) {
-			if(walls[i]==1) {
-				StdDraw.line(frac*(i%gridSize),frac*(i/gridSize)+frac,frac*(i%gridSize)+frac,frac*(i/gridSize)+frac);
-				StdDraw.line(frac*(i%gridSize),frac*(i/gridSize),frac*(i%gridSize),frac*(i/gridSize)+frac);
-			} else if(walls[i]==2) {
-				StdDraw.line(frac*(i%gridSize),frac*(i/gridSize)+frac,frac*(i%gridSize)+frac,frac*(i/gridSize)+frac);
-			} else if(walls[i]==3) {
-				StdDraw.line(frac*(i%gridSize),frac*(i/gridSize),frac*(i%gridSize),frac*(i/gridSize)+frac);
+			int row = i/gridSize; int col = i%gridSize;
+			if(walls[i] == 1 || walls[i] == 3) {
+				StdDraw.line(frac*col,frac*row,
+					     frac*col,frac*(row+1));
+			} 
+			if(walls[i]==2 || walls[i] == 3) {
+				StdDraw.line(frac*col,     frac*(row+1),
+					     frac*(col+1), frac*(row+1));
 			}
 		}
 		StdDraw.setPenRadius(.003);

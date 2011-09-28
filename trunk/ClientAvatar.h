@@ -29,27 +29,26 @@
  */ 
 class Avatar {
 public:
-		Avatar(ipa_t, ipa_t, int,char *, comt_t,comt_t,comt_t,ipp_t);
+		Avatar(ipa_t, ipa_t, comt_t, comt_t, ipp_t);
 		~Avatar();
 
 	bool	init();
-	void	setup();
+	void	setup(const char*);
 	void	run(int);
 	void	login(string,string,bool); ///< send login string and get fAddress back
 	const static int STATUS_REPORT = 1; ///< status report payload
 private:
-	const int SIZE;		   	///< xy extent of virtual world
-	const static int GRID = 200000;	///< xy extent of one grid square
-	char* WALLS; 			///< list of walls
-	bitset<10000> wallsSet;		///< bitset of the walls
-	const static int UNIT = 1;	///< basic length unit
-	const static int SLOW = 8000;	///< slow avatar speed in UNITS/sec
-	const static int MEDIUM =25000;	///< medium avatar speed
-	const static int FAST = 80000;	///< fast avatar speed
+	const static int GRID = 10000;	///< xy extent of one grid square
+	int SIZE;		   	///< xy extent of virtual world
+	int* WALLS; 			///< list of walls
+	// speeds below are the amount avatar moves during an update period
+	const static int SLOW  =100;	///< slow avatar speed
+	const static int MEDIUM=250;	///< medium avatar speed
+	const static int FAST  =600;	///< fast avatar speed
 
 	const static int UPDATE_PERIOD = 50;  ///< # ms between status updates
-	const static int CLIMGR_PORT = 30140; ///< port number with which to connect to CliMgr.cpp
-	const static int CONTROLLER_PORT = 30130; ///< port number to connect to remote controller
+	const static int CLIMGR_PORT = 30140; ///< port number for CliMgr.cpp
+	const static int CONTROLLER_PORT = 30130;///< port for remote controller
 	// network parameters 
 	ipa_t	myIpAdr;		///< IP address of interface
 	ipa_t	cliMgrIpAdr;		///< IP address of the Client Manager
@@ -61,9 +60,10 @@ private:
 	fAdr_t	CC_Adr;			///< forest address of ComtreeController
 	int	sock;			///< socket number for forest network
 	int	CM_sock;		///< socket number for the ClientMgr
-	int	Controller_sock;	///< socket number to listen for remote Controllers
-	int	controllerConnSock;	///< socket number which is connects to remote Controllers
-	comt_t	comt;			///< comtree number
+	int	Controller_sock;	///< listen socket for remote Controller
+	int	controllerConnSock;	///< connect socket for Controllers
+	int gridSize;			///< # of grid squares vertically or horizontally
+	comt_t	comt;			///< current comtree
 	comt_t	comt1;			///< lower range of comtrees
 	comt_t	comt2;			///< upper range of comtrees
 
@@ -72,7 +72,7 @@ private:
 	int	y;			///< y coordinate in virtual world
 	double	direction;		///< direction avatar is facing in deg
 	double	deltaDir;		///< change in direction per period
-	double	speed;			///< speed moving in UNITS/sec
+	double	speed;			///< speed moving in UNITS/update period
 
 	uint32_t * statPkt;		///< packet to be sent to Gui
 					///< maximum # of multicast groups
@@ -97,7 +97,8 @@ private:
 	void	updateSubscriptions();	///< send multicast subscription packets
 	void	updateNearby(int);	///< update set of nearby avatars
 	
-	void	unsubAll();		///< unsubscribe from everything	
+	void	unsubAll();		///< unsubscribe from everything
+	void	setupWalls(const char*);///< read walls from wallfile
 	void	switchComtree(int);	///< switch this avatar to this comtree
 	void	sendCtlPkt2CC(bool,int);///< tell ComtreeController that Avatar is switching comtrees
 	void	send2Controller();	///< send statPkt to Gui
