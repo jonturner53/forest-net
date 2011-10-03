@@ -49,6 +49,20 @@ NetInfo::~NetInfo() {
 	delete [] comtree; delete comtreeMap;
 }
 
+/** Get the interface associated with a given local link number.
+ *  @param llnk is a local link number
+ *  @param rtr is a router
+ *  @return the number of the interface that hosts llnk
+ */
+int NetInfo::getIface(int llnk, int rtr) {
+	for (int i = 1; i < getNumIf(rtr); i++) {
+		if (validIf(i,rtr) && llnk >= getIfFirstLink(rtr)
+				   && llnk <= getIfLastLink(rtr))
+			return i;
+	}
+	return 0;
+;
+
 /** Add a new router to the NetInfo object.
  *  A new router object is allocated and assigned a name.
  *  @param name is the name of the new router

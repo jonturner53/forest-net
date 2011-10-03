@@ -711,7 +711,7 @@ bool RouterCore::pktCheck(int p, int ctx) {
 		if (h.getSrcAdr() != nmAdr) return false;
 		if (h.getDstAdr() != myAdr) return false;
 		if (h.getPtype() != NET_SIG) return false;
-		if (h.getComtree() != 100) return false;
+		if (h.getComtree() != Forest::NET_SIG_COMT) return false;
 		return true;
 	}
 
@@ -1007,13 +1007,13 @@ void RouterCore::handleConnDisc(int p) {
 			cp.setAttr(RTR_ADR,myAdr);
 			int paylen = cp.pack(ps->getPayload(p1));
 			PacketHeader& h1 = ps->getHeader(p1);
-			h1.setComtree(100);
+			h1.setComtree(Forest::NET_SIG_COMT);
 			h1.setFlags(0); h1.setInLink(0);
 			h1.setPtype(NET_SIG);
 			h1.setLength(Forest::OVERHEAD + paylen);
 			h1.setDstAdr(nmAdr); h1.setSrcAdr(myAdr);
 			ps->pack(p1);
-			forward(p1,ctt->getComtIndex(100));
+			forward(p1,ctt->getComtIndex(Forest::NET_SIG_COMT));
 		}
 	} else if (h.getPtype() == DISCONNECT) {
 		if (lt->getPeerPort(inLnk) == h.getTunSrcPort())
@@ -1028,13 +1028,13 @@ void RouterCore::handleConnDisc(int p) {
 			cp.setAttr(RTR_ADR,myAdr);
 			int paylen = cp.pack(ps->getPayload(p1));
 			PacketHeader& h1 = ps->getHeader(p1);
-			h1.setComtree(100);
+			h1.setComtree(Forest::NET_SIG_COMT);
 			h1.setFlags(0); h1.setInLink(0);
 			h1.setPtype(NET_SIG);
 			h1.setLength(Forest::OVERHEAD + paylen);
 			h1.setDstAdr(nmAdr); h1.setSrcAdr(myAdr);
 			ps->pack(p1);
-			forward(p1,ctt->getComtIndex(100));
+			forward(p1,ctt->getComtIndex(Forest::NET_SIG_COMT));
 		}
 	}
 	ps->free(p); return;
@@ -1066,9 +1066,7 @@ void RouterCore::handleCtlPkt(int p) {
 		errReply(p,cp,"misformatted control packet");
 		return;
 	}
-	if (h.getPtype() != NET_SIG ||
-	    h.getComtree() < 100 || h.getComtree() > 999) {
-		// reject signalling packets on comtrees outside 100-999 range
+	if (h.getPtype() != NET_SIG || h.getComtree() != Forest::NET_SIG_COMT) {
 		ps->free(p); return;
 	}
 	if (cp.getRrType() != REQUEST) { // need to handle replies later

@@ -99,6 +99,12 @@ public:
 	static const int MAXPKTRATE = 450000;	///< max packet rate in p/s
 	static const uint32_t BUF_SIZ = 1600;	///< size of a packet buffer
 
+	// comtrees used for control
+	static const comt_t CLIENT_CON_COMT = 1; ///< used for connect packets
+	static const comt_t CLIENT_SIG_COMT = 2; ///< for comtree signaling
+	static const comt_t NET_SIG_COMT = 100;  ///< for internal signaling
+
+
 	// methods for manipulating addresses 
 	static bool validUcastAdr(fAdr_t);
 	static bool mcastAdr(fAdr_t);
