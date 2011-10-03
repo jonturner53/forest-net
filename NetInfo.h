@@ -88,6 +88,8 @@ public:
 	int	nextRouter(int) const;
 	// access router attributes
 	int	getMaxRouter() const;
+	int	getNumRouter() const;
+	int	getIface(int, int);
 	int	getNumIf(int) const;
 	fAdr_t	getFirstCliAdr(int) const;
 	fAdr_t	getLastCliAdr(int) const;
@@ -500,6 +502,11 @@ inline int NetInfo::nextRouter(int r) const { return routers->nextIn(r); }
  *  @return the largest router number for this network
  */
 inline int NetInfo::getMaxRouter() const { return maxRtr; }
+
+/** Get the number of routers in this network.
+ *  @return the largest router number for this network
+ */
+inline int NetInfo::getNumRouter() const { return routers->getNumIn(); }
 
 /** Get the first address in a router's range of client addresses.
  *  Each router is assigned a range of Forest addresses for its clients.

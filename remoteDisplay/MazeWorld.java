@@ -142,9 +142,11 @@ public class MazeWorld {
 				comtree = Integer.parseInt(inStream.readLine());
 			} else return -1;
 		} catch(Exception e) {
-			System.out.println("input error: type comtree number\n" + e);
+			System.out.println("input error: type comtree " +
+					   "number\n" + e);
 		}
-		System.out.print("\ncomtree=");
+		if (comtree == 0) return 0;
+		System.out.print("comtree=");
 		return comtree;
 	}
 	
@@ -294,7 +296,7 @@ public class MazeWorld {
 		long localTime = System.nanoTime()/1000000;
 		long targetLocalTime = localTime;
 
-		while (true) {
+		while (comtree != 0) {
 			processFrame(monTime+INTERVAL);
 			Set<Integer> idSet = status.keySet();
 			drawGrid(c);
@@ -320,5 +322,11 @@ public class MazeWorld {
 				comtree = newComtree; sendComtree(comtree);
 			}
 		}
+		try { monChan.socket().close(); monChan.close(); }
+		catch (Exception e) {
+			System.out.println("Can't close channel to monitor");
+			System.out.println(e);
+		}
+		System.exit(1);
 	}
 }

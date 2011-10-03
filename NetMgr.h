@@ -32,6 +32,8 @@ fAdr_t	myAdr;			///< forest address of this host
 fAdr_t	rtrAdr;			///< forest address of router
 fAdr_t  cliMgrAdr;		///< forest address of the cliMgr
 
+bool	booting;		///< true until all routers are booted
+
 int	intSock;		///< internal socket number
 int	extSock;		///< external listening socket
 int	connSock;		///< external connection socket
