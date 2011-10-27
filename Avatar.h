@@ -37,11 +37,11 @@ public:
 	void	run(int);
 	void	login(string,string); 	///< send login string and get forest
 					///< address, and router info back
+	const static int STATUS_REPORT = 1; ///< status report payload code
 private:
 	const static int UPDATE_PERIOD = 50;  ///< # ms between status updates
 	const static int CLIMGR_PORT = 30140; ///< port number for client mgr
 	const static int CONTROLLER_PORT = 30130;///< port for remote controller
-	const static int STATUS_REPORT = 1; ///< status report payload code
 	const static int GRID = 10000;	///< xy extent of one grid square
 	int	SIZE;		   	///< xy extent of virtual world
 	int*	WALLS; 			///< array of walls
