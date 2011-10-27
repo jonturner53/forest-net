@@ -37,7 +37,7 @@ bool processArgs(int argc, char *argv[], RouterInfo& args) {
 		} else if (s.compare(0,6,"myAdr=") == 0) {
 			args.myAdr = Forest::forestAdr(&argv[i][6]);
 		} else if (s.compare(0,7,"bootIp=") == 0) {
-			args.bootIp = Np4d::ipAddress(&argv[i][5]);
+			args.bootIp = Np4d::ipAddress(&argv[i][7]);
 		} else if (s.compare(0,6,"nmAdr=") == 0) {
 			args.nmAdr = Forest::forestAdr(&argv[i][6]);
 		} else if (s.compare(0,5,"nmIp=") == 0) {
@@ -65,11 +65,18 @@ bool processArgs(int argc, char *argv[], RouterInfo& args) {
 			return false;
 		}
 	}
-	if (args.myAdr == 0 || args.firstLeafAdr == 0 || args.lastLeafAdr ==0 ||
-	    args.lastLeafAdr < args.firstLeafAdr) {
-		cerr << "One of the required arguments (myAdr, firstLeafAdr "
-		     << "lastLeafAdr) is missing or lastLeafAdr<firstLeafAdr"
-		     << endl;
+	if (args.mode.compare("local") == 0 &&
+	    (args.myAdr == 0 || args.firstLeafAdr == 0 ||
+	     args.lastLeafAdr ==0 || args.lastLeafAdr < args.firstLeafAdr)) {
+		cerr << "processArgs: local configuration requires myAdr, "
+			"firstLeafAdr, lastLeafAdr and that firstLeafAdr "
+			"be no larger than lastLeafAdr\n";
+		return false;
+	} else if (args.mode.compare("remote") &&
+		   (args.bootIp == 0 || args.myAdr == 0 ||
+		    args.nmIp == 0 || args.nmAdr == 0)) {
+		cerr << "processArgs: remote configuration requires bootIp, "
+		      	"myAdr, netMgrIp and netMgrAdr\n";
 		return false;
 	}
 	return true;
@@ -84,19 +91,14 @@ main(int argc, char *argv[]) {
 	if (!processArgs(argc, argv, args))
 		fatal("fRouter: error processing command line arguments");
 
-	RouterCore router(args);
+	bool booting = args.mode.compare("remote") == 0;
+	RouterCore router(booting,args);
 
 	if (!router.readTables(args))
-		fatal("router: could not read config files");
-	if (args.mode.compare("local") == 0) {
+		fatal("router: could not read specified config files");
+	if (!booting) {
 		if (!router.setup())
 			fatal("router: inconsistency in config files");
-		router.dump(cout); // log the config files
-	} else {
-		if (args.bootIp == 0 && args.nmIp == 0 && args.nmAdr == 0) 
-			fatal("remote configuration requires bootIp, "
-			      "netMgr IP and Forest address");
-		router.setBooting(true);
 	}
 	router.run(args.finTime);
 	cout << endl;
@@ -108,7 +110,8 @@ main(int argc, char *argv[]) {
  *  @param config is a RouterInfo structure which has been initialized to
  *  specify various router parameters
  */
-RouterCore::RouterCore(const RouterInfo& config) {
+RouterCore::RouterCore(bool booting1, const RouterInfo& config)
+			: booting(booting1) {
 	nIfaces = 50; nLnks = 1000;
 	nComts = 5000; nRts = 100000;
 	nPkts = 200000; nBufs = 100000; nQus = 10000;
@@ -120,8 +123,6 @@ RouterCore::RouterCore(const RouterInfo& config) {
 	ccAdr = config.ccAdr;
 	firstLeafAdr = config.firstLeafAdr;
 
-	booting = false;
-	
 	ps = new PacketStore(nPkts, nBufs);
 	ift = new IfaceTable(nIfaces);
 	lt = new LinkTable(nLnks);
@@ -130,10 +131,13 @@ RouterCore::RouterCore(const RouterInfo& config) {
 	sm = new StatsModule(1000, nLnks, nQus, ctt);
 	iop = new IoProcessor(nIfaces, ift, lt, ps, sm);
 	qm = new QuManager(nLnks, nPkts, nQus, min(50,5*nPkts/nLnks), ps, sm);
+	pktLog = new PacketLog(5000,500,ps);
 
-	leafAdr = new UiSetPair((config.lastLeafAdr - firstLeafAdr) + 1);
+	if (!booting)
+		leafAdr = new UiSetPair((config.lastLeafAdr - firstLeafAdr)+1);
 
 	seqNum = 1;
+	pending = new map<uint64_t,CpInfo>;
 }
 
 RouterCore::~RouterCore() {
@@ -149,11 +153,6 @@ RouterCore::~RouterCore() {
  *  specify various router parameters
  */
 bool RouterCore::readTables(const RouterInfo& config) {
-	if (config.mode.compare("remote") == 0) {
-		cerr << "remote configuration mode not yet implemented";
-		return false;
-	}
-
 	if (config.ifTbl.compare("") != 0) {
 		ifstream fs; fs.open(config.ifTbl.c_str());
 		if (fs.fail() || !ift->read(fs)) {
@@ -207,6 +206,7 @@ bool RouterCore::readTables(const RouterInfo& config) {
  *  initial configuration is fully consistent.
  */
 bool RouterCore::setup() {
+	dump(cout);
 	if (!setupIfaces()) return false;
 	if (!setupLeafAddresses()) return false;
 	if (!setupQueues()) return false;
@@ -241,7 +241,7 @@ bool RouterCore::setupIfaces() {
  */
 bool RouterCore::setupLeafAddresses() {
 	for (int lnk = lt->firstLink(); lnk != 0; lnk = lt->nextLink(lnk)) {
-		if (lt->getPeerType(lnk) == ROUTER) continue;
+		if (booting || lt->getPeerType(lnk) == ROUTER) continue;
 		if (!allocLeafAdr(lt->getPeerAdr(lnk)))
 			return false;
 	}
@@ -466,9 +466,6 @@ bool RouterCore::setAvailRates() {
 			int ipr = ctt->getInPktRate(cLnk);
 			int obr = ctt->getOutBitRate(cLnk);
 			int opr = ctt->getOutPktRate(cLnk);
-/*
-cerr << "setAvailRates lnk=" << lnk << " ibr=" << ibr << " ipr=" << ipr << " obr=" << obr << " opr=" << opr << endl;
-*/
 			if (!lt->addAvailInBitRate(lnk,-ibr) ||
 			    !lt->addAvailInPktRate(lnk,-ipr) ||
 			    !lt->addAvailOutBitRate(lnk,-obr) ||
@@ -546,16 +543,15 @@ void RouterCore::dump(ostream& out) {
  *  if it is zero, the router runs without stopping (until killed)
  */
 void RouterCore::run(uint64_t finishTime) {
+	now = Misc::getTimeNs();
 	if (booting) {
-		iop->setupBootSock(bootIp,nmIp);
+		if (!iop->setupBootSock(bootIp,nmIp))
+			fatal("RouterCore:run: could not setup boot socket\n");
+		CtlPkt cp(BOOT_REQUEST,REQUEST,0);
+		if (!sendCpReq(cp,nmAdr))
+			fatal("RouterCore::run: could not send boot request\n");
 	}
-	// record of first packet receptions, transmissions for debugging
-	const int MAXEVENTS = 10000;
-	const int NUMDATA = 500;
-	struct {
-		int sendFlag; uint64_t time; int link, pkt;
-	} events[MAXEVENTS];
-	int evCnt = 0; int numData = 0;
+	// create packet log to record a sample of packets handled
 
 	uint64_t statsTime = 0;		// time statistics were last processed
 	bool didNothing;
@@ -569,37 +565,21 @@ void RouterCore::run(uint64_t finishTime) {
 		didNothing = true;
 
 		// input processing
-		int p = iop->receive(booting);
+		int p = iop->receive();
 		if (p != 0) {
 			didNothing = false;
 			PacketHeader& h = ps->getHeader(p);
 			int ptype = h.getPtype();
-			if (evCnt < MAXEVENTS &&
-			    (ptype != CLIENT_DATA || numData <= NUMDATA)) {
-				int p1 = (ptype == CLIENT_DATA ? 
-						ps->clone(p) : ps->fullCopy(p));
-				events[evCnt].sendFlag = 0;
-				events[evCnt].link = h.getInLink();
-				events[evCnt].time = now;
-				events[evCnt].pkt = p1;
-				evCnt++;
-				if (ptype == CLIENT_DATA) numData++;
-			}
+			pktLog->log(p,h.getInLink(),false,now);
 			int ctx = ctt->getComtIndex(h.getComtree());
-			if (ctx == 0 || !pktCheck(p,ctx)) {
-/*
-static int count = 0;
-if (count++ < 20) {
-if (ctx == 0) {
-cerr << "got packet with unknown comtree\n";
-h.write(cerr,ps->getBuffer(p));
-} else {
-cerr << "packet failed pktCheck\n";
+			if (!pktCheck(p,ctx)) {
+if (!booting) {
+cerr << "pkt check rejected packet received after booting\n";
 h.write(cerr,ps->getBuffer(p));
 }
-}
-*/
 				ps->free(p);
+			} else if (booting) {
+				handleCtlPkt(p);
 			} else if (ptype == CLIENT_DATA) {
 				forward(p,ctx);
 			} else if (ptype == SUB_UNSUB) {
@@ -609,20 +589,12 @@ h.write(cerr,ps->getBuffer(p));
 			} else if (ptype == CONNECT || ptype == DISCONNECT) {
 				handleConnDisc(p);
 			} else if (h.getDstAdr() != myAdr) {
-/*
-if (ptype == CLIENT_SIG || ptype == NET_SIG) {
-cerr << "forwarding signalling packet\n";
+if (h.getDstAdr() == Forest::forestAdr(2,2)) {
+cerr << "forwarding packet for 2.2\n";
 h.write(cerr,ps->getBuffer(p));
 }
-*/
 				forward(p,ctx);
 			} else {
-/*
-if (ptype == CLIENT_SIG || ptype == NET_SIG) {
-cerr << "received signalling packet\n";
-h.write(cerr,ps->getBuffer(p));
-}
-*/
 				ctlQ.push(p);
 			}
 		}
@@ -632,38 +604,24 @@ h.write(cerr,ps->getBuffer(p));
 		while ((p = qm->deq(lnk, now)) != 0) {
 			didNothing = false;
 			PacketHeader& h = ps->getHeader(p);
-/*
-if (h.getPtype() == CLIENT_SIG || h.getPtype() == NET_SIG) {
-cerr << "transmitting signalling packet\n";
-h.write(cerr,ps->getBuffer(p));
-}
-*/
-			if (evCnt < MAXEVENTS &&
-			    (h.getPtype() != CLIENT_DATA || numData<=NUMDATA)) {
-				int p2 = (h.getPtype() == CLIENT_DATA ? 
-					  ps->clone(p) : ps->fullCopy(p));
-				events[evCnt].sendFlag = 1;
-				events[evCnt].link = lnk;
-				events[evCnt].time = now;
-				events[evCnt].pkt = p2;
-				evCnt++;
-				if (h.getPtype() == CLIENT_DATA) numData++;
-			}
-			iop->send(p,lnk,booting);
+			pktLog->log(p,lnk,true,now);
+			iop->send(p,lnk);
 		}
 
 		// control packet processing
-		if (!ctlQ.empty() && (booting || didNothing || --controlCount <= 0)) {
+		if (!ctlQ.empty() && (didNothing || --controlCount <= 0)) {
 			handleCtlPkt(ctlQ.front());
 			ctlQ.pop();
 			controlCount = 20; // do one control packet for
 					   // every 20 iterations when busy
 		}
 
-		// update statistics every 300 ms
+		// every 300 ms, update statistics and check for un-acked
+		// control packets
 		if (now - statsTime > 300000000) {
 			sm->record(now);
 			statsTime = now;
+			resendCpReq();
 			didNothing = false;
 		}
 
@@ -675,16 +633,7 @@ h.write(cerr,ps->getBuffer(p));
 	}
 
 	// write out recorded events
-	for (int i = 0; i < evCnt; i++) {
-		if (events[i].sendFlag) 
-			cout << "send link " << setw(2) << events[i].link
-			     << " at " << setw(8) << events[i].time/1000 << " ";
-		else
-			cout << "recv link " << setw(2) << events[i].link
-			     << " at " << setw(8) << events[i].time/1000 << " ";
-		int p = events[i].pkt;
-		(ps->getHeader(p)).write(cout,ps->getBuffer(p));
-	}
+	pktLog->write(cout);
 	cout << endl;
 	cout << sm->iPktCnt(0) << " packets received, "
 	     <<	sm->oPktCnt(0) << " packets sent\n";
@@ -708,13 +657,13 @@ bool RouterCore::pktCheck(int p, int ctx) {
 		return false;
 
 	if (booting) {
-		if (h.getSrcAdr() != nmAdr) return false;
-		if (h.getDstAdr() != myAdr) return false;
-		if (h.getPtype() != NET_SIG) return false;
-		if (h.getComtree() != Forest::NET_SIG_COMT) return false;
-		return true;
+		return 	h.getSrcAdr() == nmAdr && h.getDstAdr() == myAdr &&
+		    	h.getPtype() == NET_SIG &&
+		    	h.getComtree() == Forest::NET_SIG_COMT;
 	}
 
+
+	if (!ctt->validComtIndex(ctx)) return false;
 	fAdr_t adr = h.getDstAdr();
 	if (!Forest::validUcastAdr(adr) && !Forest::mcastAdr(adr))
 		return false;
@@ -754,7 +703,13 @@ bool RouterCore::pktCheck(int p, int ctx) {
 void RouterCore::forward(int p, int ctx) {
 	PacketHeader& h = ps->getHeader(p);
 	int rtx = rt->getRteIndex(h.getComtree(),h.getDstAdr());
+if (h.getDstAdr() == Forest::forestAdr(2,2)) {
+cerr << "forward a comt=" << ctt->getComtree(ctx) << "\n";
+h.write(cerr,ps->getBuffer(p));
+}
 	if (rtx != 0) { // valid route case
+if (h.getDstAdr() == Forest::forestAdr(2,2))
+cerr << "forward b\n";
 		// reply to route request
 		if ((h.getFlags() & Forest::RTE_REQ)) {
 			sendRteReply(p,ctx);
@@ -763,10 +718,14 @@ void RouterCore::forward(int p, int ctx) {
 			ps->hdrErrUpdate(p);
 		}
 		if (Forest::validUcastAdr(h.getDstAdr())) {
+if (h.getDstAdr() == Forest::forestAdr(2,2))
+cerr << "forward c\n";
 			int rcLnk = rt->getLink(rtx);
 			int lnk = ctt->getLink(rcLnk);
 			int qid = ctt->getLinkQ(rcLnk);
 			if (lnk == h.getInLink() || !qm->enq(p,qid,now)) {
+if (h.getDstAdr() == Forest::forestAdr(2,2))
+cerr << "forward d\n";
 				ps->free(p);
 			}
 			return;
@@ -776,7 +735,10 @@ void RouterCore::forward(int p, int ctx) {
 		return;
 	}
 	// no valid route
+// think about suppressing flooding, if address is in range for this router
 	if (Forest::validUcastAdr(h.getDstAdr())) {
+if (h.getDstAdr() == Forest::forestAdr(2,2))
+cerr << "forward e\n";
 		// send to neighboring routers in comtree
 		h.setFlags(Forest::RTE_REQ);
 		ps->pack(p); ps->hdrErrUpdate(p);
@@ -998,43 +960,19 @@ void RouterCore::handleConnDisc(int p) {
 		if (lt->getPeerPort(inLnk) == 0)
 			lt->setPeerPort(inLnk,h.getTunSrcPort());
 		if (nmAdr != 0 && lt->getPeerType(inLnk) == CLIENT) {
-			int p1 = ps->alloc();
-			CtlPkt cp;
-			cp.setCpType(CLIENT_CONNECT);
-			cp.setRrType(REQUEST);
-			cp.setSeqNum(seqNum++);
+			CtlPkt cp(CLIENT_CONNECT,REQUEST,0);
 			cp.setAttr(CLIENT_ADR,h.getSrcAdr());
 			cp.setAttr(RTR_ADR,myAdr);
-			int paylen = cp.pack(ps->getPayload(p1));
-			PacketHeader& h1 = ps->getHeader(p1);
-			h1.setComtree(Forest::NET_SIG_COMT);
-			h1.setFlags(0); h1.setInLink(0);
-			h1.setPtype(NET_SIG);
-			h1.setLength(Forest::OVERHEAD + paylen);
-			h1.setDstAdr(nmAdr); h1.setSrcAdr(myAdr);
-			ps->pack(p1);
-			forward(p1,ctt->getComtIndex(Forest::NET_SIG_COMT));
+			sendCpReq(cp,nmAdr);
 		}
 	} else if (h.getPtype() == DISCONNECT) {
 		if (lt->getPeerPort(inLnk) == h.getTunSrcPort())
 			lt->setPeerPort(inLnk,0);
 		if (nmAdr != 0 && lt->getPeerType(inLnk) == CLIENT) {
-			int p1 = ps->alloc();
-			CtlPkt cp;
-			cp.setCpType(CLIENT_DISCONNECT);
-			cp.setRrType(REQUEST);
-			cp.setSeqNum(seqNum++);
+			CtlPkt cp(CLIENT_DISCONNECT,REQUEST,0);
 			cp.setAttr(CLIENT_ADR,h.getSrcAdr());
 			cp.setAttr(RTR_ADR,myAdr);
-			int paylen = cp.pack(ps->getPayload(p1));
-			PacketHeader& h1 = ps->getHeader(p1);
-			h1.setComtree(Forest::NET_SIG_COMT);
-			h1.setFlags(0); h1.setInLink(0);
-			h1.setPtype(NET_SIG);
-			h1.setLength(Forest::OVERHEAD + paylen);
-			h1.setDstAdr(nmAdr); h1.setSrcAdr(myAdr);
-			ps->pack(p1);
-			forward(p1,ctt->getComtIndex(Forest::NET_SIG_COMT));
+			sendCpReq(cp,nmAdr);
 		}
 	}
 	ps->free(p); return;
@@ -1063,14 +1001,16 @@ void RouterCore::handleCtlPkt(int p) {
 		cerr << "RouterCore::handleCtlPkt: misformatted control "
 			" packet\n";
 		h.write(cerr,ps->getBuffer(p));
-		errReply(p,cp,"misformatted control packet");
+		cp.setRrType(NEG_REPLY);
+		cp.setErrMsg("misformatted control packet");
+		returnToSender(p,cp.pack(ps->getPayload(p)));
 		return;
 	}
 	if (h.getPtype() != NET_SIG || h.getComtree() != Forest::NET_SIG_COMT) {
 		ps->free(p); return;
 	}
-	if (cp.getRrType() != REQUEST) { // need to handle replies later
-		ps->free(p); return;
+	if (cp.getRrType() != REQUEST) { 
+		handleCpReply(p,cp); return;
 	}
 	
 	// Prepare positive reply packet for use where appropriate
@@ -1079,15 +1019,20 @@ void RouterCore::handleCtlPkt(int p) {
 	reply.setRrType(POS_REPLY);
 	reply.setSeqNum(cp.getSeqNum());
 	switch (cp.getCpType()) {
-	// Configuring logical interfaces
+
+	// configuring logical interfaces
 	case ADD_IFACE: 	addIface(p,cp,reply); break;
         case DROP_IFACE:	dropIface(p,cp,reply); break;
         case GET_IFACE:		getIface(p,cp,reply); break;
         case MOD_IFACE:		modIface(p,cp,reply); break;
+
+	// configuring links
         case ADD_LINK:		addLink(p,cp,reply); break;
         case DROP_LINK:		dropLink(p,cp,reply); break;
         case GET_LINK:		getLink(p,cp,reply); break;
         case MOD_LINK:		modLink(p,cp,reply); break;
+
+	// configuring comtrees
         case ADD_COMTREE:	addComtree(p,cp,reply); break;
         case DROP_COMTREE:	dropComtree(p,cp,reply); break;
         case GET_COMTREE:	getComtree(p,cp,reply); break;
@@ -1096,10 +1041,19 @@ void RouterCore::handleCtlPkt(int p) {
 	case DROP_COMTREE_LINK:	dropComtreeLink(p,cp,reply); break;
 	case GET_COMTREE_LINK:	getComtreeLink(p,cp,reply); break;
 	case MOD_COMTREE_LINK:	modComtreeLink(p,cp,reply); break;
+
+	// configuring routes
         case ADD_ROUTE:		addRoute(p,cp,reply); break;
         case DROP_ROUTE:	dropRoute(p,cp,reply); break;
         case GET_ROUTE:		getRoute(p,cp,reply); break;
         case MOD_ROUTE:		modRoute(p,cp,reply); break;
+
+	// finishing up boot phase
+	case BOOT_COMPLETE:	bootComplete(p,cp,reply); break;
+
+	// aborting boot process
+	case BOOT_ABORT:	bootAbort(p,cp,reply); break;
+	
 	default:
 		cerr << "unrecognized control packet type " << cp.getCpType()
 		     << endl;
@@ -1107,23 +1061,14 @@ void RouterCore::handleCtlPkt(int p) {
 		reply.setRrType(NEG_REPLY);
 		break;
 	}
-	int paylen = reply.pack(ps->getPayload(p));
-	if (paylen == 0) {
-		cerr << "RouterCore::handleCtlPkt: control packet packing "
-			"error\n";
-		ps->free(p);
-		return;
+
+	returnToSender(p,reply.pack(ps->getPayload(p)));
+
+	if (reply.getCpType() == BOOT_COMPLETE) {
+		iop->closeBootSock();
+		booting = false;
 	}
-	h.setLength(Forest::OVERHEAD + paylen);
-	h.setFlags(0);
-	h.setDstAdr(h.getSrcAdr());
-	h.setSrcAdr(myAdr);
 
-	ps->pack(p);
-
-	int cLnk = ctt->getComtLink(h.getComtree(),h.getInLink());
-	int qid = ctt->getLinkQ(cLnk);
-	if (!qm->enq(p,qid,now)) { ps->free(p); }
 	return;
 }
 
@@ -1230,18 +1175,24 @@ bool RouterCore::addLink(int p, CtlPkt& cp, CtlPkt& reply) {
 		reply.setRrType(NEG_REPLY);
 		return false;
 	}
-	ntyp_t ntyp = (ntyp_t) cp.getAttr(PEER_TYPE);
+	ntyp_t peerType = (ntyp_t) cp.getAttr(PEER_TYPE);
+	if (peerType == ROUTER && !cp.isSet(PEER_ADR)) {
+		reply.setErrMsg("add link: adding link to router, but no peer "
+				"address supplied");
+		reply.setRrType(NEG_REPLY);
+		return false;
+	}
 	ipa_t  pipa = cp.getAttr(PEER_IP);
 	int lnk = (cp.isSet(LINK_NUM) ? cp.getAttr(LINK_NUM) : 0);
 	int iface = (cp.isSet(IFACE_NUM) ? cp.getAttr(IFACE_NUM) :
 				  	   ift->getDefaultIface());
 	ipp_t pipp = (cp.isSet(PEER_PORT) ? cp.getAttr(PEER_PORT) :
-		      (ntyp == ROUTER ? Forest::ROUTER_PORT : 0));
+		      (peerType == ROUTER ? Forest::ROUTER_PORT : 0));
 	fAdr_t padr = (cp.isSet(PEER_ADR) ? cp.getAttr(PEER_ADR): 0);
 	int xlnk = lt->lookup(pipa,pipp);
 	if (xlnk != 0) { // this link already exists
 		if ((lnk != 0 && lnk != xlnk) ||
-		    (ntyp != lt->getPeerType(xlnk)) ||
+		    (peerType != lt->getPeerType(xlnk)) ||
 		    (cp.isSet(IFACE_NUM) &&
 		     cp.getAttr(IFACE_NUM) != lt->getIface(xlnk)) ||
 		    (padr != 0 && padr != lt->getPeerAdr(xlnk))) {
@@ -1268,8 +1219,8 @@ bool RouterCore::addLink(int p, CtlPkt& cp, CtlPkt& reply) {
 			reply.setRrType(NEG_REPLY);
 			return false;
 		}
-		if (ntyp == ROUTER && pipp != Forest::ROUTER_PORT ||
-		    ntyp != ROUTER && pipp == Forest::ROUTER_PORT ||
+		if (peerType == ROUTER && pipp != Forest::ROUTER_PORT ||
+		    peerType != ROUTER && pipp == Forest::ROUTER_PORT ||
 		    (lnk = lt->addEntry(lnk,pipa,pipp)) == 0) {
 			ift->addAvailBitRate(iface,br);
 			ift->addAvailPktRate(iface,pr);
@@ -1280,7 +1231,7 @@ bool RouterCore::addLink(int p, CtlPkt& cp, CtlPkt& reply) {
 		}
 		// note: when lt->addEntry succeeds, link rates are
 		// initializied to Forest minimum rates
-		if (padr != 0 && !isFreeLeafAdr(padr)) {
+		if (peerType != ROUTER && padr != 0 && !allocLeafAdr(padr)) {
 			ift->addAvailBitRate(iface,br);
 			ift->addAvailPktRate(iface,pr);
 			lt->removeEntry(lnk);
@@ -1300,7 +1251,7 @@ bool RouterCore::addLink(int p, CtlPkt& cp, CtlPkt& reply) {
 			return false;
 		}
 		lt->setIface(lnk,iface);
-		lt->setPeerType(lnk,ntyp);
+		lt->setPeerType(lnk,peerType);
 		lt->setPeerAdr(lnk,padr);
 		sm->clearLnkStats(lnk);
 	}
@@ -1433,13 +1384,38 @@ bool RouterCore::dropComtree(int p, CtlPkt& cp, CtlPkt& reply) {
 		reply.setRrType(NEG_REPLY);
 		return false;
 	}
-	// should really remove all comtree links and routes first
-	// currently, no mechanism to track all routes associated with
-	// a comtree
-	// may be ok to let higher level controllers take responsibility
-	// for this
-	int ctx = ctt->getComtIndex(cp.getAttr(COMTREE_NUM));
-	ctt->removeEntry(ctx);
+	int comt = cp.getAttr(COMTREE_NUM);
+	int ctx = ctt->getComtIndex(comt);
+	if (!ctt->validComtIndex(ctx)) {
+		reply.setErrMsg("drop comtree: invalid comtree "
+			       "attribute");
+		reply.setRrType(NEG_REPLY);
+		return false;
+	}
+
+	// release the link bandwidth assigned to the comtree links
+	// and the queue assigned to the comtree
+	set<int>& linkSet = ctt->getLinks(ctx);
+	set<int>::iterator pp;
+	for (pp = linkSet.begin(); pp != linkSet.end(); pp++) {
+		int cLnk = *pp; int lnk = ctt->getLink(cLnk);
+		lt->addAvailInBitRate(lnk,ctt->getInBitRate(cLnk));
+		lt->addAvailOutBitRate(lnk,ctt->getOutBitRate(cLnk));
+		lt->addAvailInPktRate(lnk,ctt->getInPktRate(cLnk));
+		lt->addAvailOutPktRate(lnk,ctt->getOutPktRate(cLnk));
+
+cerr << "dropComtree: dropping lnk " << lnk 
+     << " from comtree " << comt << " new available rates (bri/o pri/o) are "
+     << lt->getAvailInBitRate(lnk) << "/" << lt->getAvailOutBitRate(lnk) << " "
+     << lt->getAvailInPktRate(lnk) << "/" << lt->getAvailOutPktRate(lnk)
+     << "\n";
+
+		qm->freeQ(ctt->getLinkQ(cLnk));
+	}
+
+	rt->purgeRoutes(comt);
+
+	ctt->removeEntry(ctx); // this also removes all the comtree links
 	return true;
 }
 
@@ -1478,19 +1454,19 @@ bool RouterCore::modComtree(int p, CtlPkt& cp, CtlPkt& reply) {
 			ctt->setCoreFlag(ctx,cp.getAttr(CORE_FLAG));
 		if (cp.isSet(PARENT_LINK)) {
 			int plnk = cp.getAttr(PARENT_LINK);
-			if (!ctt->isLink(ctx,plnk)) {
+			if (plnk != 0 && !ctt->isLink(ctx,plnk)) {
 				reply.setErrMsg("specified link does "
 						"not belong to comtree");
 				reply.setRrType(NEG_REPLY);
 				return false;
 			}
-			if (!ctt->isRtrLink(ctx,plnk)) {
+			if (plnk != 0 && !ctt->isRtrLink(ctx,plnk)) {
 				reply.setErrMsg("specified link does "
 						"not connect to a router");
 				reply.setRrType(NEG_REPLY);
 				return false;
 			}
-			ctt->setPlink(ctx,cp.getAttr(PARENT_LINK));
+			ctt->setPlink(ctx,plnk);
 		}
 		return true;
 	} 
@@ -1500,7 +1476,7 @@ bool RouterCore::modComtree(int p, CtlPkt& cp, CtlPkt& reply) {
 }
 
 bool RouterCore::addComtreeLink(int p, CtlPkt& cp, CtlPkt& reply) {
-	// Note: we require either the comtree number and
+	// Note: we require the comtree number and
 	// either the link number or the peerIP and peerPort
 	if (!(cp.isSet(COMTREE_NUM) &&
 	      (cp.isSet(LINK_NUM) ||
@@ -1545,6 +1521,7 @@ bool RouterCore::addComtreeLink(int p, CtlPkt& cp, CtlPkt& reply) {
 	if (cLnk != 0) {
 		if (ctt->isRtrLink(cLnk) == isRtr &&
 		    ctt->isCoreLink(cLnk) == isCore) {
+			reply.setAttr(LINK_NUM,lnk);
 			return true;
 		} else {
 			reply.setErrMsg("add comtree link: specified "
@@ -1605,10 +1582,17 @@ bool RouterCore::addComtreeLink(int p, CtlPkt& cp, CtlPkt& reply) {
 	ctt->setOutBitRate(cLnk,br);
 	ctt->setOutPktRate(cLnk,pr);
 
+cerr << "addComtreeLink: successfully added lnk " << lnk 
+     << " to comtree " << comt << " new available rates (bri/o pri/o) are "
+     << lt->getAvailInBitRate(lnk) << "/" << lt->getAvailOutBitRate(lnk) << " "
+     << lt->getAvailInPktRate(lnk) << "/" << lt->getAvailOutPktRate(lnk)
+     << "\n";
+
 	qm->setQRates(qid,br,pr);
 	if (isRtr) qm->setQLimits(qid,100,200000);
 	else	   qm->setQLimits(qid,10,20000);
 	sm->clearQuStats(qid);
+	reply.setAttr(LINK_NUM,lnk);
 	return true;
 }
 
@@ -1661,6 +1645,12 @@ bool RouterCore::dropComtreeLink(int p, CtlPkt& cp, CtlPkt& reply) {
 		}
 	}
 
+cerr << "dropComtreeLink: successfully dropped lnk " << lnk 
+     << " from comtree " << comt << " new available rates (bri/o pri/o) are "
+     << lt->getAvailInBitRate(lnk) << "/" << lt->getAvailOutBitRate(lnk) << " "
+     << lt->getAvailInPktRate(lnk) << "/" << lt->getAvailOutPktRate(lnk)
+     << "\n";
+
 	// release queue and remove link from comtree
 	int qid = ctt->getLinkQ(cLnk);
 	qm->freeQ(qid);
@@ -1691,7 +1681,7 @@ bool RouterCore::modComtreeLink(int p, CtlPkt& cp, CtlPkt& reply) {
 	}
 	int cLnk = ctt->getComtLink(comt,lnk);
 	if (cLnk == 0) {
-		reply.setErrMsg("resize comtree link: specified link "
+		reply.setErrMsg("modify comtree link: specified link "
 			       "not defined in specified comtree");
 		reply.setRrType(NEG_REPLY);
 		return false;
@@ -1702,9 +1692,8 @@ bool RouterCore::modComtreeLink(int p, CtlPkt& cp, CtlPkt& reply) {
 	int obr = ctt->getOutBitRate(cLnk);
 	int opr = ctt->getOutPktRate(cLnk);
 
-	bool isPlnk = (lnk == ctt->getPlink(ctx));
-	if (cp.isSet(BIT_RATE_IN)) ibr = cp.getAttr(BIT_RATE_IN);
-	if (cp.isSet(PKT_RATE_IN)) ipr = cp.getAttr(PKT_RATE_IN);
+	if (cp.isSet(BIT_RATE_IN))  ibr = cp.getAttr(BIT_RATE_IN);
+	if (cp.isSet(PKT_RATE_IN))  ipr = cp.getAttr(PKT_RATE_IN);
 	if (cp.isSet(BIT_RATE_OUT)) ibr = cp.getAttr(BIT_RATE_OUT);
 	if (cp.isSet(PKT_RATE_OUT)) ipr = cp.getAttr(PKT_RATE_OUT);
 
@@ -1714,14 +1703,16 @@ bool RouterCore::modComtreeLink(int p, CtlPkt& cp, CtlPkt& reply) {
 	int dopr = opr - ctt->getOutPktRate(cLnk);
 
 	if (dibr != 0 && !lt->addAvailInBitRate(lnk,-dibr)) {
-		reply.setErrMsg("resize comtree link: increase in "
-					"input bit rate exceeds link capacity");
+		reply.setErrMsg("modify comtree link: increase in "
+				"input bit rate exceeds link capacity");
 		reply.setRrType(NEG_REPLY);
 		return false;
 	}
 	if (dipr != 0 && !lt->addAvailInPktRate(lnk,-dipr)) {
 		lt->addAvailInBitRate(lnk,dibr); // de-allocate link bw
-		reply.setErrMsg("resize comtree link: increase in "
+cerr << "modComtreeLink failing to increase input packet rate on lnk " << lnk
+     << " in comtree " << comt << endl;
+		reply.setErrMsg("modify comtree link: increase in "
 				"input packet rate exceeds link capacity");
 		reply.setRrType(NEG_REPLY);
 		return false;
@@ -1729,7 +1720,7 @@ bool RouterCore::modComtreeLink(int p, CtlPkt& cp, CtlPkt& reply) {
 	if (dobr != 0 && !lt->addAvailOutBitRate(lnk,-dobr)) {
 		lt->addAvailInBitRate(lnk,dibr); // de-allocate link bw
 		lt->addAvailInPktRate(lnk,dipr);
-		reply.setErrMsg("resize comtree link: increase in "
+		reply.setErrMsg("modify comtree link: increase in "
 				"output bit rate exceeds link capacity");
 		reply.setRrType(NEG_REPLY);
 		return false;
@@ -1738,7 +1729,7 @@ bool RouterCore::modComtreeLink(int p, CtlPkt& cp, CtlPkt& reply) {
 		lt->addAvailInBitRate(lnk,dibr); // de-allocate link bw
 		lt->addAvailInPktRate(lnk,dipr);
 		lt->addAvailOutBitRate(lnk,dobr);
-		reply.setErrMsg("resize comtree link: increase in "
+		reply.setErrMsg("modify comtree link: increase in "
 				"output packet rate exceeds link capacity");
 		reply.setRrType(NEG_REPLY);
 		return false;
@@ -1747,6 +1738,14 @@ bool RouterCore::modComtreeLink(int p, CtlPkt& cp, CtlPkt& reply) {
 	if (dibr != 0) ctt->setInBitRate(cLnk,ibr);
 	if (dipr != 0) ctt->setInPktRate(cLnk,ipr);
 	if (dobr != 0) ctt->setOutBitRate(cLnk,obr);
+	if (dopr != 0) ctt->setOutPktRate(cLnk,obr);
+
+cerr << "modComtreeLink: successfully modified lnk " << lnk 
+     << " in comtree " << comt << " new available rates (bri/o pri/o) are "
+     << lt->getAvailInBitRate(lnk) << "/" << lt->getAvailOutBitRate(lnk) << " "
+     << lt->getAvailInPktRate(lnk) << "/" << lt->getAvailOutPktRate(lnk)
+     << "\n";
+
 	return true;
 }
 
@@ -1928,31 +1927,193 @@ bool RouterCore::modRoute(int p, CtlPkt& cp, CtlPkt& reply) {
 	return false;
 }
 
-void RouterCore::sendCpReq(int p) {
-	// make a copy of the packet and save its packet number in a list
-	// of pending request packets, along with a timestamp and sequence #
-	// the main loop will periodically call another routine to
-	// check for expired timestamps and re-send
-	// when replies are received, need to free stored state and
-	// then do something based on the reply
-	// For replies to connect, disconnect packets, we can just discard
-	// the reply. When we get a reply from a boot request packet,
-	// we can also just discard. Well, in both cases should print
-	// an error message in the case of a negative reply or no reply.
-	// But these should not happen, and if they do, we exit.
-	// When the NM is done with the initialization, it will send
-	// a boot complete message. We respond to this by checking the
-	// tables and exiting the booting state. This goes through the
-	// standard handler.
+/** Handle boot complete message.
+ *  At the end of the boot phase, we do some additional setup and checking
+ *  of the configuration tables. If the tables are inconsistent in some way,
+ *  the operation fails. On successful completion of the boot phase,
+ *  we close the boot socket and sent the booting variable to false.
+ *  @param p is the number of the boot complete request packet
+ *  @param cp is an unpacked control packet for p
+ *  @param reply is a reference to a pre-formatted positive reply packet
+ *  that will be returned to the sender; it may be modified to indicate
+ *  a negative reply.
+ *  @return true on success, false on failure
+ */
+bool RouterCore::bootComplete(int p, CtlPkt& cp, CtlPkt& reply) {
+	if (!setup()) {
+		cerr << "RouterCore::bootComplete: setup failed after "
+			"completion of boot phase\n";
+		reply.setErrMsg("configured tables are not consistent\n");
+		reply.setRrType(NEG_REPLY);
+		returnToSender(p,reply.pack(ps->getPayload(p)));
+		pktLog->write(cout);
+		exit(1);
+	}
+	return true;
 }
 
+bool RouterCore::bootAbort(int p, CtlPkt& cp, CtlPkt& reply) {
+	cerr << "RouterCore::bootAbort: received boot abort message "
+			"from netMgr; exiting\n";
+	reply.setRrType(POS_REPLY);
+	returnToSender(p,reply.pack(ps->getPayload(p)));
+	pktLog->write(cout);
+	exit(1);
+}
+
+/** Send control packet request.
+ *  Builds a packet containing the specified control packet and stores
+ *  its packet number and a timestamp in the map of pending control packet
+ *  requests. Then, makes a copy, which is sent to the destination.
+ *  @param cp is a reference to the control packet to be sent
+ *  @param dest is the destination address to which the packet is to be sent
+ *  @return true on success, false on failure
+ */
+bool RouterCore::sendCpReq(CtlPkt& cp, fAdr_t dest) {
+
+	int p = ps->alloc();
+	if (p == 0) {
+		cerr << "RouterCore::sendCpReq: no packets left in packet "
+			"store\n";
+		return false;
+	}
+	PacketHeader& h = ps->getHeader(p);
+
+	// pack cp into p, setting rr type and seq number
+	cp.setRrType(REQUEST);
+	cp.setSeqNum(seqNum);
+	int paylen = cp.pack(ps->getPayload(p));
+	if (paylen == 0) {
+		cerr << "RouterCore::sendCpReq: control packet packing error\n";
+		return false;
+	}
+	h.setLength(Forest::OVERHEAD + paylen);
+	h.setPtype(NET_SIG); h.setFlags(0);
+	h.setComtree(Forest::NET_SIG_COMT);
+	h.setSrcAdr(myAdr); h.setDstAdr(dest);
+	ps->pack(p);
+
+	// save a record of the packet in pending map
+	CpInfo cpi = {p, 1, now};
+	(*pending)[seqNum] = cpi;
+	seqNum++;
+
+	// now, make copy of packet and send the copy
+	int copy = ps->fullCopy(p);
+	if (copy == 0) {
+		cerr << "RouterCore::sendCpReq: no packets left in packet "
+			"store\n";
+		return false;
+	}
+	if (booting) {
+		iop->send(copy,0);
+		pktLog->log(copy,0,true,now);
+	} else
+		forward(copy,ctt->getComtIndex(h.getComtree()));
+
+	return true;
+
+}
+
+/** Retransmit any pending control packets that have timed out.
+ *  This method checks the map of pending requests and whenever
+ *  it finds a packet that has been waiting for an acknowledgement
+ *  for more than a second, it retransmits it or gives up, 
+ *  if it has already made three attempts.
+ */
 void RouterCore::resendCpReq() {
-	// go through the list of pending control packet requests
-	// and retransmit any whose timestamp has expired
+	map<uint64_t,CpInfo>::iterator pp;
+	for (pp = pending->begin(); pp != pending->end(); pp++) {
+		if (now < pp->second.timestamp + 1000000000) continue;
+		int p = pp->second.p;
+		PacketHeader h = ps->getHeader(p);
+		if (pp->second.nSent >= 3) { // give up on this packet
+			cerr << "RouterCore::resendCpReq: received no reply to "
+				"control packet after three attempts\n";
+			h.write(cerr,ps->getBuffer(p));
+			ps->free(p);
+			pending->erase(pp->first);
+			continue;
+		}
+		// make copy of packet and send the copy
+		pp->second.timestamp = now;
+		pp->second.nSent++;
+		int copy = ps->fullCopy(p);
+		if (copy == 0) {
+			cerr << "RouterCore::resendCpReq: no packets left in "
+				"packet store\n";
+			return;
+		}
+		if (booting) {
+			pktLog->log(copy,0,true,now);
+			iop->send(copy,0);
+		} else
+			forward(copy,ctt->getComtIndex(h.getComtree()));
+	}
 }
 
-void RouterCore::handleCpReply(int p) {
-	// This routine handles incoming replies to control packets.
+/** Handle incoming replies to control packets.
+ *  The reply is checked against the map of pending request packets,
+ *  and if a match is found, the entry is removed from the map
+ *  and the storage for the request packet is freed.
+ *  Currently, the only action on a reply is to print an error message
+ *  to the log if we receive a negative reply.
+ *  @param reply is the packet number of the reply packet
+ *  @param cpr is a reference to an unpacked control packet for reply
+ */
+void RouterCore::handleCpReply(int reply, CtlPkt& cpr) {
+	map<uint64_t,CpInfo>::iterator pp = pending->find(cpr.getSeqNum());
+	if (pp == pending->end()) {
+		// this is a reply to a request we never sent, or
+		// possibly, a reply to a request we gave up on
+		ps->free(reply);
+		return;
+	}
+	// so, remove it from the map of pending requests
+	ps->free(pp->second.p);
+	pending->erase(pp);
+
+	// and then handle the reply
+	PacketHeader hr = ps->getHeader(reply);
+	switch (cpr.getCpType()) {
+	case CLIENT_CONNECT: case CLIENT_DISCONNECT:
+		if (cpr.getRrType() == NEG_REPLY) {
+			cerr << "RouterCore::handleCpReply: got negative reply "
+				"to a connect or disconnect request: "
+				<< cpr.getErrMsg() << endl;
+			break;
+		}
+		// otherwise, nothing to do
+		break;
+	case BOOT_REQUEST: {
+		if (cpr.getRrType() == NEG_REPLY) {
+			cerr << "RouterCore::handleCpReply: got "
+				"negative reply to a boot request: "
+				<< cpr.getErrMsg() << endl;
+			break;
+		}
+		// unpack first and last leaf addresses, initialize leafAdr
+		if (!(cpr.isSet(FIRST_LEAF_ADR) && cpr.isSet(LAST_LEAF_ADR))) {
+			cerr << "RouterCore::handleCpReply: reply to boot "
+				"request did not include leaf address range\n";
+			break;
+		}
+		firstLeafAdr = cpr.getAttr(FIRST_LEAF_ADR);
+        	fAdr_t lastLeafAdr = cpr.getAttr(LAST_LEAF_ADR);
+		if (firstLeafAdr > lastLeafAdr) {
+			cerr << "RouterCore::handleCpReply: reply to boot "
+				"request contained empty leaf address range\n";
+			break;
+		}
+		leafAdr = new UiSetPair((lastLeafAdr - firstLeafAdr)+1);
+		break;
+	}
+	default:
+		cerr << "RouterCore::handleCpReply: unexpected control packet "
+			"type\n";
+		break;
+	}
+	ps->free(reply);
 }
 
 /** Send packet back to sender.
@@ -1967,25 +2128,20 @@ void RouterCore::returnToSender(packet p, int paylen) {
 			"error, zero payload length\n";
 		ps->free(p);
 	}
-	h.setLength(Forest::HDR_LENG + paylen + sizeof(uint32_t));
-
+	h.setLength(Forest::OVERHEAD + paylen);
+	h.setFlags(0);
 	h.setDstAdr(h.getSrcAdr());
 	h.setSrcAdr(myAdr);
 
 	ps->pack(p);
 
+	if (booting) {
+		pktLog->log(p,0,true,now);
+		iop->send(p,0);
+		return;
+	}
+
 	int cLnk = ctt->getComtLink(h.getComtree(),h.getInLink());
 	int qn = ctt->getLinkQ(cLnk);
 	if (!qm->enq(p,qn,now)) { ps->free(p); }
-}
-
-/** Send an error reply to a control packet.
- *  Reply packet re-uses the request packet and its buffer.
- *  @param p is a packet number
- *  @param cp is a reference to a control packet object for p
- *  @param s points to an error message to be included in the reply
- */
-void RouterCore::errReply(packet p, CtlPkt& cp, const char *s) {
-	cp.setRrType(NEG_REPLY); cp.setErrMsg(s);
-	returnToSender(p,4*cp.pack(ps->getPayload(p)));
 }

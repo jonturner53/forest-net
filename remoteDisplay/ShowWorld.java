@@ -1,17 +1,19 @@
 package remoteDisplay;
 
 import java.awt.Color;
+import java.awt.event.*;
 import java.lang.Math;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.HashSet;
 import java.util.Set;
+import java.util.Iterator;
 import java.net.*;
 import java.io.*;
 import java.nio.*;
 import java.nio.channels.*;
-
 import princeton.StdDraw;
-
+import java.util.Scanner;
 /**
  *  ShowWorld provides a visual display of the avatars moving around
  *  within a virtual world. It connects to a remote monitor that
@@ -19,20 +21,27 @@ import princeton.StdDraw;
  *  in in the form of a simple animation
  *  @author Jon Turner
  */
-public class ShowWorld {
+public class MazeWorld {
 	private static Map<Integer, AvatarGraphic> status; // avatar status
 	private static final int INTERVAL = 50;	// time between updates (in ms)
 	private static int comtree;	// number of comtree to be monitored
-	
+	private static int SIZE;	//size of full map
+	private static int gridSize;	//number of squares in map (x or y direction)
 	private static final int MON_PORT = 30124; // port number used by monitor
-	private static final String WALLS = "0010100101110100100101101"; // list of solid walls
-	private static SocketChannel monChan = null;	// channel to remote monitor
+	private static int AVA_PORT;
+	private static Scanner mazeFile; // filename of maze
+	private static int[] walls; 	// list of walls
+	private static SocketChannel chan = null;	// channel to remote monitor or avatar
 	private static ByteBuffer repBuf = null; 	// buffer for report packets
 	private static AvatarStatus rep = null;		// most recent report
-
+	private static final int GRID = 2000;		// size of one grid space
 	private static boolean needData = true;		// true when getReport() needs
 							// more data to process
 	
+	private static boolean avaConn = false;			// true if we connect to the avatar,
+							//false if we connect to monitor
+	private static Set<Integer> recentIds;		//list of recently seen ids
+	private static int idCounter;			//counter with which to clear old ids	
 	/**
 	 * Get the next status report from a buffered status packet.
 	 * Receive additional status packets as needed using nonblocking IO.
@@ -41,7 +50,7 @@ public class ShowWorld {
 	 */
 	private static AvatarStatus getReport() {
 		if (repBuf == null) {
-			repBuf = ByteBuffer.allocate(36*36);
+			repBuf = ByteBuffer.allocate(1000*(avaConn ? 40 :36));
 			repBuf.clear();
 		}
 		
@@ -50,9 +59,9 @@ public class ShowWorld {
 				repBuf.clear();
 			while (needData) {
 				try {					
-					if (monChan.read(repBuf) == 0)
+					if (chan.read(repBuf) == 0)
 						return null;
-					if (repBuf.position() >= 36) {
+					if (repBuf.position() >= (avaConn ? 40 : 36)) {
 						repBuf.flip(); needData = false;
 					}
 				} catch(Exception x) {
@@ -63,23 +72,45 @@ public class ShowWorld {
 				}    	    	   
 			}
 		}		
-		
 		if (rep == null) rep = new AvatarStatus();
 		rep.when = repBuf.getInt()/1000;
 		rep.id = repBuf.getInt();
-		rep.x = repBuf.getInt()/1000000.0;
-		rep.y = repBuf.getInt()/1000000.0;
+		rep.x = repBuf.getInt()/(double)SIZE;
+		rep.y = repBuf.getInt()/(double)SIZE;
 		rep.dir = repBuf.getInt();
 		repBuf.getInt(); // discard value
 		rep.numVisible = repBuf.getInt();
 		rep.numNear = repBuf.getInt();
 		rep.comtree = repBuf.getInt();
-		if (repBuf.remaining() < 36) needData = true;
-		return rep;		
+		if(avaConn) rep.type = repBuf.getInt();
+		if (repBuf.remaining() < (avaConn ? 40 : 36)) needData = true;
+
+		recentIds.add(rep.id);
+		return rep;
 	}
 
 	private static AvatarStatus lastRep = null; // used by processFrame
 	
+	private static void sendMovements(int c) throws IOException {
+		ByteBuffer buff = ByteBuffer.allocate(4);
+		switch(c) {
+			case KeyEvent.VK_LEFT:
+				buff.putInt(1);
+				break;
+			case KeyEvent.VK_UP:
+				buff.putInt(2);
+				break;
+			case KeyEvent.VK_RIGHT:
+				buff.putInt(3);
+				break;
+			case KeyEvent.VK_DOWN:
+				buff.putInt(4);
+				break;
+		}
+		buff.flip();
+		chan.write(buff);
+		chan.socket().getOutputStream().flush();
+	}
 	/**
 	 * Process reports for which the timestamp is <= bound
 	 * and redraw all markers in their new positions.
@@ -89,21 +120,31 @@ public class ShowWorld {
 	 * or -1 if there are no reports
 	 */
 	private static int processFrame(int bound) {
-		AvatarStatus rep;	 
+		AvatarStatus rep;
 		rep = (lastRep != null ? lastRep : getReport());
 		int firstTimeStamp = (rep != null ? rep.when : -1);
 		while (rep != null) {
 			if (rep.when > bound) {		
-				lastRep = rep; return firstTimeStamp;
+				lastRep = rep; break;
 			}
 			AvatarGraphic m = status.get(rep.id);
 			if (m == null) {
-				m = new AvatarGraphic(rep);				
+				m = new AvatarGraphic(rep);		
 				status.put(rep.id, m);
 			} else {
 				m.update(rep);
 			}
 			rep = getReport();
+		}
+		// clear an item from status, if no report in 4 frames
+		idCounter = (++idCounter)%4;
+		if (idCounter == 3) {
+			Iterator<Integer> iter = status.keySet().iterator();
+			while (iter.hasNext()) {
+				Integer i = iter.next();
+				if(!recentIds.contains(i)) iter.remove();
+			}
+			recentIds.clear();
 		}
 		return firstTimeStamp;
 	}
@@ -119,7 +160,7 @@ public class ShowWorld {
 		try {
 			if (inStream == null) {
 				inStream = new BufferedReader(
-						new InputStreamReader(System.in));
+					   new InputStreamReader(System.in));
 				System.out.print("\ncomtree=");
 				comtree = Integer.parseInt(inStream.readLine());
 			} else if (inStream.ready()) {
@@ -133,16 +174,49 @@ public class ShowWorld {
 	}
 	
 	private static InetSocketAddress monSockAdr;
-	
+	private static InetSocketAddress avaSockAdr;
 	/**
 	 *  Process command line arguments
 	 *   - name of monitor host (or localhost)
 	 */
 	private static boolean processArgs(String[] args) {
 		try {
-			monSockAdr = new InetSocketAddress(args[0], MON_PORT);
+			mazeFile = new Scanner(new File(args[1]));
+			if(args.length > 2) {
+				avaConn = true;
+				avaSockAdr = new InetSocketAddress(args[0],Integer.valueOf(args[2]));
+			} else {
+				monSockAdr = new InetSocketAddress(args[0], MON_PORT);
+			}
+			int counter = 1;
+			while(mazeFile.hasNextLine()) {
+				String temp = mazeFile.nextLine();
+				if(walls==null) {
+					gridSize = temp.length();
+					SIZE = gridSize*GRID;
+					walls = new int[gridSize*gridSize];
+				}
+				for(int i = 0; i < gridSize; i++) {
+					if(temp.charAt(i)=='+') {
+						walls[(gridSize-counter)
+							*gridSize+i] = 3;
+					} else if(temp.charAt(i)=='-') {
+						walls[(gridSize-counter)
+							*gridSize+i] = 2;
+					} else if(temp.charAt(i)=='|') {
+						walls[(gridSize-counter)
+							*gridSize+i] = 1;
+					} else if(temp.charAt(i)==' ') {
+						walls[(gridSize-counter)
+							*gridSize+i] = 0;
+					} else {
+						System.out.println("Unrecognized symbol in map file!");
+					}
+				}
+				counter++;
+			}
 		} catch (Exception e) {
-			System.out.println("usage: ShowWorldNet monIp");
+			System.out.println("usage: ShowWorldNet monIp wallfile avaConn [avaIp port]");
 			System.out.println(e);
 			System.exit(1);
 		}
@@ -161,7 +235,7 @@ public class ShowWorld {
 			sendBuf.putInt(comtree);
 			sendBuf.flip();
 			do {
-				monChan.write(sendBuf);
+				chan.write(sendBuf);
 			} while (sendBuf.position() == 0);
 			sendBuf.clear();
 		} catch(Exception e) { 
@@ -171,16 +245,34 @@ public class ShowWorld {
 		}	
 	}
 
+
 	/** Draw grid with a background color of c.
 	 */
 	private static void drawGrid(Color c) {
 		StdDraw.clear(c);
+		StdDraw.setPenRadius(.002);
 		StdDraw.setPenColor(Color.GRAY);
-		for (int i = 0; i <= 5; i++) {
-			StdDraw.line(0,.2*i,1,.2*i);
-			StdDraw.line(.2*i,0,.2*i,1);
+		double frac = 1.0/gridSize;
+		for (int i = 0; i <= gridSize; i++) {
+			StdDraw.line(0,frac*i,1,frac*i);
+			StdDraw.line(frac*i,0,frac*i,1);
 		}
 		StdDraw.setPenColor(Color.BLACK);
+		StdDraw.setPenRadius(.006);
+		StdDraw.line(0,0,0,1); StdDraw.line(0,0,1,0);
+		StdDraw.line(1,1,0,1); StdDraw.line(1,1,1,0);
+		for(int i = 0; i < gridSize*gridSize; i++) {
+			int row = i/gridSize; int col = i%gridSize;
+			if(walls[i] == 1 || walls[i] == 3) {
+				StdDraw.line(frac*col,frac*row,
+					     frac*col,frac*(row+1));
+			} 
+			if(walls[i]==2 || walls[i] == 3) {
+				StdDraw.line(frac*col,     frac*(row+1),
+					     frac*(col+1), frac*(row+1));
+			}
+		}
+		StdDraw.setPenRadius(.003);
 		StdDraw.text(.08, -.02, "comtree: " + comtree);
 	}
 	
@@ -200,10 +292,11 @@ public class ShowWorld {
 				
 		// Open channel to monitor and make it nonblocking
 		try {
-			monChan = SocketChannel.open(monSockAdr);
-			monChan.configureBlocking(false);
+			if(avaConn) chan = SocketChannel.open(avaSockAdr);
+			else chan = SocketChannel.open(monSockAdr);
+			chan.configureBlocking(false);
 		} catch (Exception e) {
-			System.out.println("Can't open channel to monitor");
+			System.out.println("Can't open channel to monitor/avatar");
 			System.out.println(e);
 			System.exit(1);
 		}
@@ -219,22 +312,23 @@ public class ShowWorld {
 		// setup hashmap for reports from each host
 		status = new HashMap<Integer, AvatarGraphic>();
 
+		// setup hashset for recent ids
+		recentIds = new HashSet<Integer>();
+		idCounter = 0;
 		// Prompt for comtree number and send to monitor
-		comtree = readComtree();
-		sendComtree(comtree);
-
+		if(!avaConn) {
+			comtree = readComtree();
+			sendComtree(comtree);
+		}
 		AvatarStatus firstRep;
 		while ((firstRep = getReport()) == null) {}
-		int monTime = firstRep.when - 200; // build in some delay
-		
+		int monTime = firstRep.when + 3000; // build in some delay
 		long localTime = System.nanoTime()/1000000;
 		long targetLocalTime = localTime;
 
 		while (true) {
 			processFrame(monTime+INTERVAL);
-			
 			Set<Integer> idSet = status.keySet();
-			
 			drawGrid(c);
 			for (Integer id : idSet) {
 				AvatarGraphic m = status.get(id);
@@ -252,9 +346,12 @@ public class ShowWorld {
 
 			monTime += INTERVAL; targetLocalTime += INTERVAL;
 			
-			int newComtree = readComtree();
-			if (newComtree >= 0 && newComtree != comtree) {
-				comtree = newComtree; sendComtree(comtree);
+			//StdDraw.show(INTERVAL);
+			if(!avaConn) {
+				int newComtree = readComtree();
+				if (newComtree >= 0 && newComtree != comtree) {
+					comtree = newComtree; sendComtree(comtree);
+				}
 			}
 		}
 	}

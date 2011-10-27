@@ -57,6 +57,20 @@ void RouteTable::removeEntry(int rtx) {
 	rteMap->dropPair(key(tbl[rtx].ct,tbl[rtx].adr));
 }
 
+/** Remove all route table entries for a specific comtree.
+ *  This requires iterating through all routes, so it can be slow.
+ *  @param comt is a comtree number
+ */
+void RouteTable::purgeRoutes(comt_t comt) {
+	set<int> routeSet;
+	for (int rtx = firstRteIndex(); rtx != 0; rtx = nextRteIndex(rtx)) {
+		if (getComtree(rtx) == comt) routeSet.insert(rtx);
+	}
+	set<int>::iterator rp;
+	for (rp = routeSet.begin(); rp != routeSet.end(); rp++)
+		removeEntry(*rp);
+}
+
 /** Read an entry from an input stream and add a routing table entry for it.
  *  An entry consists of a comtree number, a forest address and
  *  either a single link number, or a comma-separated list of links.

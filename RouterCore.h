@@ -10,6 +10,7 @@
 #define ROUTERCORE_H
 
 #include <queue>
+#include <map>
 
 #include "stdinc.h"
 #include "CommonDefs.h"
@@ -23,6 +24,7 @@
 #include "QuManager.h"
 #include "IoProcessor.h"
 #include "StatsModule.h"
+#include "PacketLog.h"
 
 /** Structure used to carry information about a router. */
 struct RouterInfo {
@@ -47,7 +49,7 @@ struct RouterInfo {
 
 class RouterCore {
 public:
-		RouterCore(const RouterInfo&);
+		RouterCore(bool, const RouterInfo&);
 		~RouterCore();
 
 	bool	readTables(const RouterInfo&);
@@ -62,7 +64,7 @@ private:
 	fAdr_t	nmAdr;			///< forest address of the netMgr
 	fAdr_t	ccAdr;			///< address of comtree controller
 
-	bool 	booting;		///< true when booting from netMgr
+	bool 	booting;		///< true when booting remotely
 
 	uint64_t now;			///< current time in 64 bit form
 
@@ -71,6 +73,13 @@ private:
 	fAdr_t	firstLeafAdr;		///< first leaf address
 	UiSetPair *leafAdr;		///< offsets for in-use and free leaf
 					///< addresses
+
+	struct CpInfo {			///< info on outgoing control packets
+	int	p;			///< packet number of retained copy
+	int	nSent;			///< number of times we've sent packet
+	uint64_t timestamp;		///< time when we last sent a request
+	};
+	map<uint64_t,CpInfo> *pending;	///< map of pending requests, indexed
 
 	int	nIfaces;		///< max number of interfaces
 	int	nLnks;			///< max number of links
@@ -88,6 +97,7 @@ private:
 	QuManager *qm;			///< collection of queues for all links
 	IoProcessor *iop;		///< class for handling io
 	StatsModule *sm;		///< class for recording statistics
+	PacketLog *pktLog;		///< log for recording sample of packets
 
 	// setup 
 	bool	setupIfaces();
@@ -116,14 +126,17 @@ private:
 
 	// signalling packets
 	void	handleCtlPkt(int);
+
 	bool	addIface(int, CtlPkt&, CtlPkt&);
 	bool	dropIface(int, CtlPkt&, CtlPkt&);
 	bool	getIface(int, CtlPkt&, CtlPkt&);
 	bool	modIface(int, CtlPkt&, CtlPkt&);
+
 	bool	addLink(int, CtlPkt&, CtlPkt&);
 	bool	dropLink(int, CtlPkt&, CtlPkt&);
 	bool	getLink(int, CtlPkt&, CtlPkt&);
 	bool	modLink(int, CtlPkt&, CtlPkt&);
+
 	bool	addComtree(int, CtlPkt&, CtlPkt&);
 	bool	dropComtree(int, CtlPkt&, CtlPkt&);
 	bool	getComtree(int, CtlPkt&, CtlPkt&);
@@ -132,16 +145,19 @@ private:
 	bool	dropComtreeLink(int, CtlPkt&, CtlPkt&);
 	bool	modComtreeLink(int, CtlPkt&, CtlPkt&);
 	bool	getComtreeLink(int, CtlPkt&, CtlPkt&);
+
 	bool	addRoute(int, CtlPkt&, CtlPkt&);
 	bool	dropRoute(int, CtlPkt&, CtlPkt&);
 	bool	getRoute(int, CtlPkt&, CtlPkt&);
 	bool	modRoute(int, CtlPkt&, CtlPkt&);
 
-	void	sendCpReq(int);
-	void	resendCpReq();
-	void	handleCpReply(int);
+	bool	bootComplete(int, CtlPkt&, CtlPkt&);
+	bool	bootAbort(int, CtlPkt&, CtlPkt&);
 
-	void	errReply(packet,CtlPkt&,const char*);
+	bool	sendCpReq(CtlPkt&, fAdr_t);
+	void	resendCpReq();
+	void	handleCpReply(int, CtlPkt&);
+
 	void	returnToSender(packet,int);
 };
 

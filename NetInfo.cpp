@@ -27,7 +27,8 @@ NetInfo::NetInfo(int maxNode1, int maxLink1,
 
 	leaf = new LeafNodeInfo[maxLeaf+1];
 	leaves = new UiSetPair(maxLeaf);
-	nodeNumMap = new map<string,int>;
+	nameNodeMap = new map<string,int>;
+	adrNodeMap = new map<fAdr_t,int>;
 	controllers = new set<int>();
 
 	link = new LinkInfo[maxLink+1];
@@ -44,9 +45,471 @@ NetInfo::~NetInfo() {
 	delete netTopo;
 	delete [] rtr; delete routers;
 	delete [] leaf; delete leaves; delete controllers;
-	delete nodeNumMap;
+	delete nameNodeMap; delete adrNodeMap;
 	delete [] link; delete locLnk2lnk;
 	delete [] comtree; delete comtreeMap;
+}
+
+/** Add a new link to a comtree.
+ *  @param ctx is the comtree index
+ *  @param lnk is the link number of the link to be added
+ *  @param parent is the parent endpoint of lnk
+ *  @return true on success, false on failure
+ */
+bool NetInfo::addComtLink(int ctx, int lnk, int parent) {
+	if (!validLink(lnk)) return false;
+	pair<int,RateSpec> newPair;
+	newPair.first = lnk;
+	newPair.second.bitRateUp = newPair.second.bitRateDown = 0;
+	newPair.second.pktRateUp = newPair.second.pktRateDown = 0;
+	comtree[ctx].lnkMap->insert(newPair);
+
+	int child = getPeer(parent,lnk);
+	addComtNode(ctx,child); addComtNode(ctx,parent);
+	map<int,ComtRtrInfo>::iterator pp;
+	pp = comtree[ctx].rtrMap->find(child);
+	pp->second.plnk = lnk; pp->second.lnkCnt += 1;
+	pp = comtree[ctx].rtrMap->find(parent);
+	pp->second.lnkCnt += 1;
+
+	return true;
+}
+
+/** Remove a link from a comtree.
+ *  @param ctx is the comtree index
+ *  @param lnk is the link number of the link to be removed
+ *  @return true on success, false on failure
+ */
+bool NetInfo::removeComtLink(int ctx, int lnk) {
+	if (!validLink(lnk)) return false;
+	map<int,RateSpec>::iterator lp;
+	lp = comtree[ctx].lnkMap->find(lnk);
+	if (lp == comtree[ctx].lnkMap->end())
+		return true;
+	comtree[ctx].lnkMap->erase(lp);
+
+	int left = getLinkL(lnk); int right = getLinkR(lnk);
+	map<int,ComtRtrInfo>::iterator rp;
+	rp = comtree[ctx].rtrMap->find(left);
+	if (rp != comtree[ctx].rtrMap->end()) {
+		rp->second.lnkCnt -= 1;
+		if (rp->second.lnkCnt <= 0 && left != getComtRoot(ctx))
+			removeComtNode(ctx,left);
+	}
+	rp = comtree[ctx].rtrMap->find(right);
+	if (rp != comtree[ctx].rtrMap->end()) {
+		rp->second.lnkCnt -= 1;
+		if (rp->second.lnkCnt <= 0 && right != getComtRoot(ctx))
+			removeComtNode(ctx,right);
+	}
+	return true;
+}
+
+/** Perform a series of consistency checks.
+ *  Print error message for each detected problem.
+ *  @return true if all checks passed, else false
+ */
+bool NetInfo::check() {
+	bool status = true;
+
+	// make sure there is at least one router
+	if (getNumRouters() == 0 || firstRouter() == 0) {
+		cerr << "NetInfo::check: no routers in network, terminating\n";
+		return false;
+	}
+	// make sure that no two links at a router have the
+	// the same local link number
+	for (int r = firstRouter(); r != 0; r = nextRouter(r)) {
+		for (int l1 = firstLinkAt(r); l1 != 0;
+			 l1 = nextLinkAt(r,l1)) {
+			for (int l2 = nextLinkAt(r,l1); l2 != 0;
+				 l2 = nextLinkAt(r,l2)) {
+				if (getLocLink(l1,r) == getLocLink(l2,r)) {
+					string s1,s2;
+					cerr << "NetInfo::check: detected two "
+						"links with same local link "
+						"number: "
+					     << link2string(l1,s1) << " and "
+					     << link2string(l2,s2) << "\n";
+					status = false;
+				}
+			}
+		}
+	}
+
+	// make sure that routers are all connected, by doing
+	// a breadth-first search from firstRouter()
+	set<int> seen; seen.insert(firstRouter());
+	queue<int> pending; pending.push(firstRouter());
+	while (!pending.empty()) {
+		int u = pending.front(); pending.pop();
+		for (int lnk = firstLinkAt(u); lnk != 0;
+			 lnk = nextLinkAt(u,lnk)) {	
+			int v = getPeer(u,lnk);
+			if (getNodeType(v) != ROUTER) continue;
+			if (seen.find(v) != seen.end()) continue;
+			seen.insert(v);
+			pending.push(v);
+		}
+	}
+	if (seen.size() != getNumRouters()) {
+		cerr << "NetInfo::check: network is not connected";
+		status = false;
+	}
+
+	// check that no two nodes have the same address
+	for (int n1 = firstNode(); n1 != 0; n1 = nextNode(n1)) {
+		for (int n2 = nextNode(n1); n2 != 0; n2 = nextNode(n2)) {
+			if (getNodeAdr(n1) == getNodeAdr(n2)) {
+				string s1,s2;
+				cerr << "NetInfo::check: detected two nodes "
+				     << getNodeName(n1,s1) << " and "
+				     << getNodeName(n2,s1) << " with the same "
+					"forest address\n";
+			status = false;
+			}
+		}
+	}
+
+	// check that the leaf address range for a router
+	// is compatible with the router's address
+	for (int r = firstRouter(); r != 0; r = nextRouter(r)) {
+		int rzip = Forest::zipCode(getNodeAdr(r));
+		int flzip = Forest::zipCode(getFirstLeafAdr(r));
+		int llzip = Forest::zipCode(getLastLeafAdr(r));
+		if (rzip != flzip || rzip != llzip) {
+			cerr << "netInfo::check: detected router " << r
+			     << "with incompatible address and leaf address "
+			     << "range\n";
+			status = false;
+		}
+		if (getFirstLeafAdr(r) > getLastLeafAdr(r)) {
+			cerr << "netInfo::check: detected router " << r
+			     << "with empty leaf address range\n";
+			status = false;
+		}
+	}
+
+	// make sure that no two routers have overlapping leaf
+	// address ranges
+	for (int r1 = firstRouter(); r1 != 0; r1 = nextRouter(r1)) {
+		int fla1 = getFirstLeafAdr(r1);
+		int lla1 = getLastLeafAdr(r1);
+		for (int r2 = nextRouter(r1); r2 != 0; r2 = nextRouter(r2)) {
+			int fla2 = getFirstLeafAdr(r2);
+			int lla2 = getLastLeafAdr(r2);
+			if (fla2 <= lla1 && lla2 >= fla1) {
+				cerr << "netInfo::check: detected two routers "
+				     << r1 << " and " << r2
+			     	     << " with overlapping address ranges\n";
+				status = false;
+			}
+		}
+	}
+
+	// check that all leaf nodes have a single link that connects
+	// to a router and that their address is in the range of their router
+	for (int u = firstLeaf(); u != 0; u = nextLeaf(u)) {
+		int lnk = firstLinkAt(u);
+		if (lnk == 0) {
+			string s;
+			cerr << "NetInfo::check: detected a leaf node "
+			     << getNodeName(u,s) << " with no links\n";
+			status = false; continue;
+		}
+		if (nextLinkAt(u,lnk) != 0) {
+			string s;
+			cerr << "NetInfo::check: detected a leaf node "
+			     << getNodeName(u,s)<< " with more than one link\n";
+			status = false; continue;
+		}
+		if (getNodeType(getPeer(u,lnk)) != ROUTER) {
+			string s;
+			cerr << "NetInfo::check: detected a leaf node "
+			     << getNodeName(u,s) << " with link to non-router"
+				"\n";
+			status = false; continue;
+		}
+		int rtr = getPeer(u,lnk);
+		int adr = getNodeAdr(u);
+		if (adr < getFirstLeafAdr(rtr) || adr > getLastLeafAdr(rtr)) {
+			string s;
+			cerr << "NetInfo::check: detected a leaf node "
+			     << getNodeName(u,s) << " with an address outside "
+				" the leaf address range of its router\n";
+			status = false; continue;
+		}
+	}
+
+	// check that link rates are within bounds
+	for (int lnk = firstLink(); lnk != 0; lnk = nextLink(lnk)) {
+		int br = getLinkBitRate(lnk);
+		if (br < Forest::MINBITRATE || br > Forest::MAXBITRATE) {
+			string s;
+			cerr << "NetInfo::check: detected a link "
+			     << link2string(lnk,s) << " with bit rate "
+				"outside the allowed range\n";
+			status = false;
+		}
+		int pr = getLinkPktRate(lnk);
+		if (pr < Forest::MINPKTRATE || pr > Forest::MAXPKTRATE) {
+			string s;
+			cerr << "NetInfo::check: detected a link "
+			     << link2string(lnk,s) << " with packet rate "
+				"outside the allowed range\n";
+			status = false;
+		}
+	}
+
+	// check that routers' local link numbers fall within the range of
+	// some valid interface
+	for (int r = firstRouter(); r != 0; r = nextRouter(r)) {
+		for (int lnk = firstLinkAt(r); lnk != 0;
+			 lnk = nextLinkAt(r,lnk)) {
+			int llnk = getLocLink(lnk,r);
+			if (getIface(llnk,r) == 0) {
+				string s;
+				cerr << "NetInfo::check: link " << llnk
+				     << " at router " << getNodeName(r,s)
+				     << " is not in the range assigned "
+					"to any valid interface\n";
+				status = false;
+			}
+		}
+	}
+
+	// check that router interface rates are within bounds
+	for (int r = firstRouter(); r != 0; r = nextRouter(r)) {
+		for (int i = 1; i <= getNumIf(r); i++) {
+			if (!validIf(r,i)) continue;
+			int br = getIfBitRate(r,i);
+			if (br < Forest::MINBITRATE || br >Forest::MAXBITRATE) {
+				cerr << "NetInfo::check: interface " << i
+				     << "at router " << r << " has bit rate "
+					"outside the allowed range\n";
+				status = false;
+			}
+			int pr = getIfPktRate(r,i);
+			if (pr < Forest::MINPKTRATE || pr >Forest::MAXPKTRATE) {
+				cerr << "NetInfo::check: interface " << i
+				     << "at router " << r << " has packet rate "
+					"outside the allowed range\n";
+				status = false;
+			}
+		}
+	}
+
+	// verify that link rates at any router don't add up to more
+	// than the interface rates
+	for (int r = firstRouter(); r != 0; r = nextRouter(r)) {
+		int* ifbr = new int[getNumIf(r)+1];
+		int* ifpr = new int[getNumIf(r)+1];
+		for (int i = 0; i <= getNumIf(r); i++) {
+			ifbr[i] = 0; ifpr[i] = 0;
+		}
+		for (int lnk = firstLinkAt(r); lnk != 0;
+			 lnk = nextLinkAt(r,lnk)) {
+			int llnk = getLocLink(lnk,r);
+			int iface = getIface(llnk,r);
+			ifbr[iface] += getLinkBitRate(lnk);
+			ifpr[iface] += getLinkPktRate(lnk);
+		}
+		for (int i = 0; i <= getNumIf(r); i++) {
+			if (!validIf(r,i)) continue;
+			if (ifbr[i] > getIfBitRate(r,i)) {
+				string s;
+				cerr << "NetInfo::check: links at interface "
+				     << i  << " of router " << r
+				     <<	" have total bit rate that exceeds "
+					"interface bit rate\n";
+			}
+			if (ifpr[i] > getIfPktRate(r,i)) {
+				string s;
+				cerr << "NetInfo::check: links at interface "
+				     << i  << " of router " << r
+				     <<	" have total packet rate that exceeds "
+					"interface packet rate\n";
+			}
+		}
+	}
+
+	// check that comtrees are in fact trees and that they satisfy
+	// various other requirements
+	for (int ctx = firstComtIndex(); ctx != 0; ctx = nextComtIndex(ctx)) {
+		int comt = getComtree(ctx);
+		// first count nodes and links
+		set<int> nodes; int lnkCnt = 0;
+		for (int lnk = firstComtLink(ctx); lnk != 0;
+			 lnk = nextComtLink(lnk,ctx)) {
+			nodes.insert(getLinkL(lnk));
+			nodes.insert(getLinkR(lnk));
+			lnkCnt++;
+		}
+		if (lnkCnt != nodes.size() - 1) {
+			cerr << "NetInfo::check: links in comtree "
+			     << comt << " do not form a tree\n";
+			status = false; continue;
+		}
+		// check that root and core nodes are in the set we've seen
+		int root = getComtRoot(ctx);
+		if (nodes.find(root) == nodes.end()) {
+			cerr << "NetInfo::check: specified comtree root for "
+				" comtree " << comt << " does not appear "
+				"in any comtree link\n";
+			status = false; continue;
+		}
+		bool seenRoot = false;
+		for (int r = firstCore(ctx); r != 0; r = nextCore(r,ctx)) {
+			if (r == root) seenRoot = true;
+			if (nodes.find(r) == nodes.end()) {
+				string s;
+				cerr << "NetInfo::check: core node "
+				     << getNodeName(r,s) << " for comtree "
+				     << comt << " does not appear in any "
+					"comtree link\n";
+				status = false;
+			}
+		}
+		if (!seenRoot) {
+			string s;
+			cerr << "NetInfo::check: root node does not appear "
+				"among the core nodes for comtree " << comt
+			     << "\n";
+			status = false;
+		}
+
+		// now, check that the comtree topology is really a tree
+		// by doing a breadth-first search from the root;
+		// while we're at it, make sure the parent of every
+		// core node is a core node and that the zip codes
+		// of routers within the comtree are contiguous
+		queue<int> pending; pending.push(root);
+		map<int,int> plink; plink[root] = 0;
+		map<int,int> pzip; pzip[Forest::zipCode(getNodeAdr(root))] = 0;
+		while (!pending.empty()) {
+			int u = pending.front(); pending.pop();
+			bool foundCycle = false;
+			int uzip = Forest::zipCode(getNodeAdr(u));
+			for (int lnk = firstLinkAt(u); lnk != 0;
+				 lnk = nextLinkAt(u,lnk)) {
+				if (!isComtLink(ctx,lnk)) continue;
+				if (lnk == plink[u]) continue;
+				int v = getPeer(u,lnk);
+				int vzip = Forest::zipCode(getNodeAdr(v));
+				if (plink.find(v) != plink.end()) {
+					cerr << "NetInfo::check: comtree "
+					     <<	comt << " contains a cycle\n";
+					foundCycle = true;
+					break;
+				}
+				plink[v] = lnk;
+				pending.push(v);
+				// now check that if v is in core, so is u
+				if (isComtCoreNode(ctx,v) &&
+				    !isComtCoreNode(ctx,u)) {
+					string s;
+					cerr << "NetInfo::check: comtree "
+					     << comt << " contains a core node "
+					     << getNodeName(v,s) << " whose "
+						"parent is not a core node\n";
+					status = false;
+				}
+				// now check that if v has a different zip code
+				// than u, that we haven't already seen this zip
+				if (vzip != uzip) {
+					if (pzip.find(v) != pzip.end()) {
+						cerr << "NetInfo::check: zip "
+							"code " << vzip <<
+							" is non-contiguous in "
+							"comtree " << comt
+						     << "\n";
+						status = false;
+					} else {
+						pzip[v] = u;
+					}
+				}
+			}
+			if (foundCycle) { status = false; break; }
+		}
+	}
+	return status;
+}
+
+/** Initialize auxiliary data structures for fast access to comtree information.
+ *  Set comtree link rates to default values and check that total comtree rates
+ *  don't exceed link rates. Also set the plnk and lnkCnt fields
+ *  in the rtrMap for each comtree; note that we assume that the lnkCnt
+ *  fields have been initialized to zero.
+ */
+bool NetInfo::setComtLnkNodeInfo() {
+	bool status = true;
+	for (int ctx = firstComtIndex(); ctx != 0; ctx = nextComtIndex(ctx)) {
+		// do breadth-first search over the comtree links
+		int comt = getComtree(ctx); int root = getComtRoot(ctx);
+		queue<int> pending; pending.push(root);
+		map<int,int> plink; plink[root] = 0;
+		while (!pending.empty()) {
+			int u = pending.front(); pending.pop();
+			for (int lnk = firstLinkAt(u); lnk != 0;
+				 lnk = nextLinkAt(u,lnk)) {
+				if (!isComtLink(ctx,lnk)) continue;
+				incComtLnkCnt(ctx,u);
+				if (lnk == plink[u]) continue;
+				int v = getPeer(u,lnk);
+				setComtPlink(ctx,v,lnk);
+				plink[v] = lnk;
+				pending.push(v);
+				if (!setLinkRates(ctx,lnk,v)) {
+					cerr << "NetInfo::setComtLinkRates: "
+						"could not set comtree link "
+						"rates as specified for "
+						"comtree " << comt <<
+						" lnk " << lnk << endl;
+					status = false;
+				}
+			}
+		}
+		plink.clear();
+	}
+	return status;
+}
+
+/** Set the rates on a specific comtree link and adjust available rates.
+ *  @param ctx is a valid comtree index
+ *  @param lnk is a link in the comtree
+ *  @param child is the "child endpoint" of lnk, in the comtree
+ *  @return true on success, false on failure;
+ */
+bool NetInfo::setLinkRates(int ctx, int lnk, int child) {
+	// first set the rates on the comtree links
+	if (isLeaf(child)) {
+		if (!setComtBrDown(ctx,getComtLeafBrDown(ctx),lnk) ||
+		    !setComtBrUp(ctx,getComtLeafBrUp(ctx),lnk) ||
+		    !setComtPrDown(ctx,getComtLeafPrDown(ctx),lnk) ||
+		    !setComtPrUp(ctx,getComtLeafPrUp(ctx),lnk))
+			return false;
+	} else {
+		if (!setComtBrDown(ctx,getComtBrDown(ctx),lnk) ||
+		    !setComtBrUp(ctx,getComtBrUp(ctx),lnk) ||
+		    !setComtPrDown(ctx,getComtPrDown(ctx),lnk) ||
+		    !setComtPrUp(ctx,getComtPrUp(ctx),lnk))
+			return false;
+	}
+	// next, adjust the available rates on the network links
+	int brl, prl, brr, prr;
+	if (child == getLinkL(lnk)) {
+		brl = getComtBrUp(ctx,lnk);   prl = getComtPrUp(ctx,lnk);
+		brr = getComtBrDown(ctx,lnk); prr = getComtPrDown(ctx,lnk);
+	} else {
+		brl = getComtBrDown(ctx,lnk); prl = getComtPrDown(ctx,lnk);
+		brr = getComtBrUp(ctx,lnk);   prr = getComtPrUp(ctx,lnk);
+	}
+	int left = getLinkL(lnk); int right = getLinkR(lnk);
+	if (!addAvailBitRate(lnk,left, -brl)) return false;
+	if (!addAvailPktRate(lnk,left, -prl)) return false;
+	if (!addAvailBitRate(lnk,right,-brr)) return false;
+	if (!addAvailPktRate(lnk,right,-prr)) return false;
+	return true;
 }
 
 /** Get the interface associated with a given local link number.
@@ -55,13 +518,14 @@ NetInfo::~NetInfo() {
  *  @return the number of the interface that hosts llnk
  */
 int NetInfo::getIface(int llnk, int rtr) {
-	for (int i = 1; i < getNumIf(rtr); i++) {
-		if (validIf(i,rtr) && llnk >= getIfFirstLink(rtr)
-				   && llnk <= getIfLastLink(rtr))
+	for (int i = 1; i <= getNumIf(rtr); i++) {
+		if (validIf(rtr,i) && llnk >= getIfFirstLink(rtr,i)
+				   && llnk <= getIfLastLink(rtr,i)) {
 			return i;
+		}
 	}
 	return 0;
-;
+}
 
 /** Add a new router to the NetInfo object.
  *  A new router object is allocated and assigned a name.
@@ -73,15 +537,15 @@ int NetInfo::getIface(int llnk, int rtr) {
 int NetInfo::addRouter(const string& name) {
 	int r = routers->firstOut();
 	if (r == 0) return 0;
-	if (nodeNumMap->find(name) != nodeNumMap->end()) return 0;
+	if (nameNodeMap->find(name) != nameNodeMap->end()) return 0;
 	routers->swap(r);
 
-	rtr[r].name = name; (*nodeNumMap)[name] = r;
+	rtr[r].name = name; (*nameNodeMap)[name] = r;
 	rtr[r].nType = ROUTER;
 	rtr[r].fAdr = -1;
 
 	setNodeLat(r,UNDEF_LAT); setNodeLong(r,UNDEF_LONG);
-	setFirstCliAdr(r,-1); setLastCliAdr(r,-1);
+	setFirstLeafAdr(r,-1); setLastLeafAdr(r,-1);
 	rtr[r].numIf = 0; rtr[r].iface = 0;
 	return r;
 }
@@ -113,12 +577,12 @@ bool NetInfo::addInterfaces(int r, int numIf) {
 int NetInfo::addLeaf(const string& name, ntyp_t nTyp) {
 	int ln = leaves->firstOut();
 	if (ln == 0) return 0;
-	if (nodeNumMap->find(name) != nodeNumMap->end()) return 0;
+	if (nameNodeMap->find(name) != nameNodeMap->end()) return 0;
 	leaves->swap(ln);
 
 	int nodeNum = ln + maxRtr;
 	leaf[ln].name = name;
-	(*nodeNumMap)[name] = nodeNum;
+	(*nameNodeMap)[name] = nodeNum;
 	if (nTyp == CONTROLLER) controllers->insert(ln);
 	leaf[ln].fAdr = -1;
 
@@ -129,7 +593,7 @@ int NetInfo::addLeaf(const string& name, ntyp_t nTyp) {
 
 /** Add a link to a forest network.
  *  @param u is a node number of some node in the network
- *  @param v is a leaf number of some node in the network
+ *  @param v is a node number of some node in the network
  *  @param uln if u is a ROUTER, then uln is a local link number used by
  *  u to identify the link - for leaf nodes, this argument is ignored
  *  @param vln if v is a ROUTER, then vln is a local link number used by
@@ -139,8 +603,8 @@ int NetInfo::addLeaf(const string& name, ntyp_t nTyp) {
  *  link number with a specified router)
  */
 int NetInfo::addLink(int u, int v, int uln, int vln ) {
-        int lnk = netTopo->join(u,v,0);
-        if (lnk == 0) return 0;
+	int lnk = netTopo->join(u,v,0);
+	if (lnk == 0) return 0;
 	if (getNodeType(u) == ROUTER) {
 		if (!locLnk2lnk->insert(ll2l_key(u,uln),2*lnk)) {
 			netTopo->remove(lnk); return 0;
@@ -154,7 +618,11 @@ int NetInfo::addLink(int u, int v, int uln, int vln ) {
 		}
 		setLocLinkR(lnk,vln);
 	}
-        return lnk;
+	link[lnk].bitRate = Forest::MINBITRATE;
+	link[lnk].pktRate = Forest::MINPKTRATE;
+	link[lnk].availBitRateL = link[lnk].availBitRateR = Forest::MINBITRATE;
+	link[lnk].availPktRateL = link[lnk].availPktRateR = Forest::MINPKTRATE;
+	return lnk;
 }
 
 /* Example of NetInfo input file format.
@@ -163,23 +631,23 @@ int NetInfo::addLink(int u, int v, int uln, int vln ) {
  *  
  *  # define salt router
  *  name=salt type=router ipAdr=2.3.4.5 fAdr=1.1000
- *  location=(40,-50) clientAdrRange=(1.1-1.200)
+ *  location=(40,-50) leafAdrRange=(1.1-1.200)
  *  
  *  interfaces # router interfaces
  *  # ifaceNum ifaceIp      ifaceLinks  bitRate  pktRate
- *       1     193.168.3.4  1           50000    25000 ;
- *       2     193.168.3.5  2-30        40000    20000 ;
+ *       1     193.168.3.4  1	   50000    25000 ;
+ *       2     193.168.3.5  2-30	40000    20000 ;
  *  end
  *  ;
  *  
  *  # define kans router
  *  name=kans type=router ipAdr=6.3.4.5 fAdr=2.1000
- *  location=(40,-40) clientAdrRange=(2.1-2.200)
+ *  location=(40,-40) leafAdrRange=(2.1-2.200)
  *  
  *  interfaces
  *  # ifaceNum ifaceIp      ifaceLinks  bitRate  pktRate
- *       1     193.168.5.6  1           50000    25000 ;
- *       2     193.168.5.7  2-30        40000    20000 ;
+ *       1     193.168.5.6  1	   50000    25000 ;
+ *       2     193.168.5.7  2-30	40000    20000 ;
  *  end
  *  ;
  *  ;
@@ -228,7 +696,7 @@ bool NetInfo::read(istream& in) {
 	LinkInfo cLink;		// hods data for link being parsed
 	IfInfo iface[Forest::MAXINTF+1]; // holds data for router interfaces
 	ComtreeInfo cComt;	// holds data comtree being parsed
-	cComt.coreSet = 0; cComt.linkMap = 0;
+	cComt.coreSet = 0; cComt.lnkMap = 0;
 
 	int rtrNum = 1;		// rtrNum = i for i-th router in file
 	int ifNum = 1;		// interface number for current interface
@@ -245,7 +713,7 @@ bool NetInfo::read(istream& in) {
 	// parsed file. Based opn the context, we look for specific items
 	// in the input stream. For example, the TOP context is the initial
    	// context, and will in the TOP context, we expect to see one of
-        // keyworks, Routers, LeafNodes, Links or Comtrees.
+	// keyworks, Routers, LeafNodes, Links or Comtrees.
 	enum ParseContexts {
 		TOP, ROUTER_SEC, ROUTER_CTXT , IFACES, IFACES_ENTRY,
 		LEAF_SEC, LEAF, LINK_SEC, LINK, COMTREE_SEC, COMTREE_CTXT
@@ -253,8 +721,7 @@ bool NetInfo::read(istream& in) {
 	
 	char c; string s;
 	while (!in.eof()) {
-		if (!Misc::skipBlank(in)) { 
-		break; }
+		if (!Misc::skipBlank(in)) { break; }
 		s.clear();
 		switch (context) {
 		case TOP:
@@ -285,7 +752,7 @@ bool NetInfo::read(istream& in) {
 			// clear the current router structure
 			cRtr.name = ""; cRtr.nType = UNDEF_NODE; cRtr.fAdr = 0;
 			cRtr.latitude = 91000000; cRtr.longitude = 361000000; 
-			cRtr.firstCliAdr = cRtr.lastCliAdr = 0;
+			cRtr.firstLeafAdr = cRtr.lastLeafAdr = 0;
 			cRtr.numIf = 0; cRtr.iface = 0;
 			context = ROUTER_CTXT;
 			// falling through to ROUTER_CTXT context
@@ -330,20 +797,20 @@ bool NetInfo::read(istream& in) {
 					     << cRtr.name << endl;
 					return false;
 				}
-				if (!Forest::validUcastAdr(cRtr.firstCliAdr) ||
-				    !Forest::validUcastAdr(cRtr.lastCliAdr) ||
+				if (!Forest::validUcastAdr(cRtr.firstLeafAdr) ||
+				    !Forest::validUcastAdr(cRtr.lastLeafAdr) ||
 				     Forest::zipCode(cRtr.fAdr)
-				      != Forest::zipCode(cRtr.firstCliAdr) ||
+				      != Forest::zipCode(cRtr.firstLeafAdr) ||
 				     Forest::zipCode(cRtr.fAdr)
-				      != Forest::zipCode(cRtr.lastCliAdr) ||
-				    cRtr.firstCliAdr > cRtr.lastCliAdr) {
+				      != Forest::zipCode(cRtr.lastLeafAdr) ||
+				    cRtr.firstLeafAdr > cRtr.lastLeafAdr) {
 					cerr << "NetInfo::read: no valid client"
 					     << " address range for router "
 					     << cRtr.name << endl;
 					return false;
 				}
 				if (cRtr.numIf == 0) {
-					cerr << "NetInfo::read: interfaces "
+					cerr << "NetInfo::read: no interfaces "
 					     << "defined for router "
 					     << cRtr.name << endl;
 					return false;
@@ -359,8 +826,8 @@ bool NetInfo::read(istream& in) {
 				setNodeAdr(r,cRtr.fAdr);
 				setNodeLat(r,cRtr.latitude/1000000.0);
 				setNodeLong(r,cRtr.longitude/1000000.0);
-				setFirstCliAdr(r,cRtr.firstCliAdr);
-				setLastCliAdr(r,cRtr.lastCliAdr);
+				setFirstLeafAdr(r,cRtr.firstLeafAdr);
+				setLastLeafAdr(r,cRtr.lastLeafAdr);
 				addInterfaces(r,cRtr.numIf);
 				for (int i = 1; i <= getNumIf(r); i++)
 					rtr[r].iface[i] = iface[i];
@@ -412,7 +879,7 @@ bool NetInfo::read(istream& in) {
 				}
 				cRtr.latitude  = (int) (x*1000000);
 				cRtr.longitude = (int) (y*1000000);
-			} else if (s.compare("clientAdrRange") == 0 &&
+			} else if (s.compare("leafAdrRange") == 0 &&
 				   Misc::verify(in,'=')) {
 				fAdr_t first, last;
 				if (!Misc::verify(in,'(') ||
@@ -425,8 +892,8 @@ bool NetInfo::read(istream& in) {
 					     << " number " << rtrNum << endl;
 					return false;
 				}
-				cRtr.firstCliAdr = first;
-				cRtr.lastCliAdr  = last;
+				cRtr.firstLeafAdr = first;
+				cRtr.lastLeafAdr  = last;
 			} else if (s.compare("interfaces") == 0) {
 				context = IFACES;
 			} else {
@@ -702,8 +1169,8 @@ bool NetInfo::read(istream& in) {
 				}
 				
 				// add new link and set attributes
-				int u = (*nodeNumMap)[leftName];
-				int v = (*nodeNumMap)[rightName];
+				int u = (*nameNodeMap)[leftName];
+				int v = (*nameNodeMap)[rightName];
 				int lnk = addLink(u,v,cLink.leftLnum,
 						      cLink.rightLnum);
 				if (lnk == 0) {
@@ -768,10 +1235,10 @@ bool NetInfo::read(istream& in) {
 					     << linkNum << endl;
 					return false;
 				}
-				if (nodeNumMap->find(leftName)  
-				     == nodeNumMap->end() ||
-				    nodeNumMap->find(rightName)
-				     == nodeNumMap->end()) {
+				if (nameNodeMap->find(leftName)  
+				     == nameNodeMap->end() ||
+				    nameNodeMap->find(rightName)
+				     == nameNodeMap->end()) {
 					cerr << "NetInfo::read: link number "
 					     << linkNum 
 					     << " refers to unknown node name "
@@ -779,7 +1246,7 @@ bool NetInfo::read(istream& in) {
 					return false;
 				}
 				if (cLink.leftLnum == 0 &&
-				    getNodeType((*nodeNumMap)[leftName])
+				    getNodeType((*nameNodeMap)[leftName])
 				     ==ROUTER) {
 					cerr << "NetInfo::read: missing local "
 					     << "link number for router in "
@@ -788,7 +1255,7 @@ bool NetInfo::read(istream& in) {
 					return false;
 				}
 				if (cLink.rightLnum == 0 &&
-				    getNodeType((*nodeNumMap)[rightName])
+				    getNodeType((*nameNodeMap)[rightName])
 				     == ROUTER) {
 					cerr << "NetInfo::read: missing local "
 					     << "link number for router in "
@@ -836,12 +1303,14 @@ bool NetInfo::read(istream& in) {
 
 			// clear the current leaf structure
 			cComt.comtreeNum = 0; cComt.root = 0;
+			cComt.ownerAdr = 0;
 			cComt.bitRateDown = 0; cComt.bitRateUp = 0;
 			cComt.pktRateDown = 0; cComt.pktRateUp = 0;
 			cComt.leafBitRateDown = 0; cComt.leafBitRateUp = 0;
 			cComt.leafPktRateDown = cComt.leafPktRateUp = 0;
 			cComt.coreSet = new set<int>;
-			cComt.linkMap = new map<int,RateSpec>;
+			cComt.lnkMap = new map<int,RateSpec>;
+			cComt.rtrMap = new map<int,ComtRtrInfo>;
 			context = COMTREE_CTXT;
 			// falling through to COMTREE_CTXT context
 		case COMTREE_CTXT: {
@@ -925,29 +1394,15 @@ bool NetInfo::read(istream& in) {
 				}
 				
 				// get unused comtree index 
-				int i = comtreeMap->addPair(cComt.comtreeNum);
-				if (i == 0) {
+				int ctx = comtreeMap->addPair(cComt.comtreeNum);
+				if (ctx == 0) {
 					cerr << "NetInfo::read: too many "
 						"comtrees" << endl;
 					return false;
 				}
-				comtree[i].comtreeNum = cComt.comtreeNum;
-				comtree[i].root = cComt.root;
-				comtree[i].bitRateDown = cComt.bitRateDown;
-				comtree[i].bitRateUp = cComt.bitRateUp;
-				comtree[i].pktRateDown = cComt.pktRateDown;
-				comtree[i].pktRateUp = cComt.pktRateUp;
-				comtree[i].leafBitRateDown =
-							cComt.leafBitRateDown;
-				comtree[i].leafBitRateUp =
-							cComt.leafBitRateUp;
-				comtree[i].leafPktRateDown =
-							cComt.leafPktRateDown;
-				comtree[i].leafPktRateUp =
-							cComt.leafPktRateUp;
-				comtree[i].coreSet = cComt.coreSet;
-				comtree[i].linkMap = cComt.linkMap;
-				cComt.coreSet = 0; cComt.linkMap = 0;
+				comtree[ctx] = cComt;
+				cComt.coreSet = 0;
+				cComt.lnkMap = 0; cComt.rtrMap = 0;
 				comtNum++;
 				context = COMTREE_SEC; break;
 			}
@@ -966,6 +1421,22 @@ bool NetInfo::read(istream& in) {
 					     << endl;
 					return false;
 				}
+			} else if (s.compare("owner") == 0 &&
+				   Misc::verify(in,'=')) {
+				if (!Misc::readWord(in,s)) {
+					cerr << "NetInfo::read: can't read "
+					     << "owner for " << comtNum 
+					     << "-th comtree\n";
+					return false;
+				}
+				int owner = getNodeNum(s);
+				if (owner == 0) {
+					cerr << "NetInfo::read: specified "
+					     << "owner for " << comtNum 
+					     << "-th comtree is not valid\n";
+					return false;
+				}
+				cComt.ownerAdr = getNodeAdr(owner);
 			} else if (s.compare("root") == 0 &&
 				   Misc::verify(in,'=')) {
 				if (!Misc::readWord(in,s)) {
@@ -975,14 +1446,14 @@ bool NetInfo::read(istream& in) {
 					     << endl;
 					return false;
 				}
-				if (nodeNumMap->find(s) == nodeNumMap->end()) {
+				if (nameNodeMap->find(s) ==nameNodeMap->end()) {
 					cerr << "NetInfo::read: root in "
 					     << comtNum  << "-th comtree "
 					     << " is an unknown node name"
 					     << endl;
 					return false;
 				}
-				cComt.root = (*nodeNumMap)[s];
+				cComt.root = (*nameNodeMap)[s];
 				if (!isRouter(cComt.root)) {
 					cerr << "NetInfo::read: root node "
 					     << "is not a router in "
@@ -1072,14 +1543,14 @@ bool NetInfo::read(istream& in) {
 					     << endl;
 					return false;
 				}
-				if (nodeNumMap->find(s) == nodeNumMap->end()) { 
+				if (nameNodeMap->find(s) ==nameNodeMap->end()) {
 					cerr << "NetInfo::read: invalid router "
 					     << "name for core in "
 					     << comtNum << "-th comtree"
 					     << endl;
 					return false;
 				}
-				int r = (*nodeNumMap)[s];
+				int r = (*nameNodeMap)[s];
 				if (!isRouter(r)) {
 					cerr << "NetInfo::read: core node "
 					     << "is not a router in "
@@ -1136,17 +1607,17 @@ bool NetInfo::read(istream& in) {
 					     << linkNum << endl;
 					return false;
 				}
-				if (nodeNumMap->find(leftName)  
-				     == nodeNumMap->end() ||
-				    nodeNumMap->find(rightName)
-				     == nodeNumMap->end()) {
+				if (nameNodeMap->find(leftName)  
+				     == nameNodeMap->end() ||
+				    nameNodeMap->find(rightName)
+				     == nameNodeMap->end()) {
 					cerr << "NetInfo::read: " << comtNum
 					     << "-th comtree refers to "
 					     << "unknown node name "
 					     << endl;
 					return false;
 				}
-				int left = (*nodeNumMap)[leftName];
+				int left = (*nameNodeMap)[leftName];
 				if (leftNum == 0 && isRouter(left)) {
 					cerr << "NetInfo::read: missing local "
 					     << "link number for router in "
@@ -1154,7 +1625,7 @@ bool NetInfo::read(istream& in) {
 					     << endl;
 					return false;
 				}
-				int right = (*nodeNumMap)[rightName];
+				int right = (*nameNodeMap)[rightName];
 				if (rightNum == 0 && isRouter(right)) {
 					cerr << "NetInfo::read: missing local "
 					     << "link number for router in "
@@ -1167,20 +1638,31 @@ bool NetInfo::read(istream& in) {
 						    getLinkNum(left,leftNum));
 				lr = (isLeaf(right) ? getLinkNum(right) :
 						    getLinkNum(right,rightNum));
-				if (ll != lr ) {
+				if (ll == 0 || ll != lr ) {
 					cerr << "NetInfo::read: reference to "
 					     << "a non-existent link in "
 					     << comtNum << "-th comtree" 
 					     << endl;
 					return false;
 				}
-				pair<int,RateSpec> mv;
-        			mv.first = ll;
-        			mv.second.bitRateLeft = 0;
-				mv.second.bitRateRight = 0;
-        			mv.second.pktRateLeft = 0;
-				mv.second.pktRateRight = 0;
-				cComt.linkMap->insert(mv);
+				pair<int,RateSpec> newPair1;
+				newPair1.first = ll;
+				newPair1.second.bitRateUp = 0;
+				newPair1.second.bitRateDown = 0;
+				newPair1.second.pktRateUp = 0;
+				newPair1.second.pktRateDown = 0;
+				cComt.lnkMap->insert(newPair1);
+				pair<int,ComtRtrInfo> newPair2;
+				newPair2.second.plnk = 0;
+				newPair2.second.lnkCnt = 0;
+				if (getNodeType(left) == ROUTER) {
+					newPair2.first = left;
+					cComt.rtrMap->insert(newPair2);
+				}
+				if (getNodeType(right) == ROUTER) {
+					newPair2.first = right;
+					cComt.rtrMap->insert(newPair2);
+				}
 			} else {
 				cerr << "NetInfo::read: syntax error while "
 				     << "reading comtree "
@@ -1194,8 +1676,54 @@ bool NetInfo::read(istream& in) {
 		}
 	}
 	if (cComt.coreSet != 0) delete cComt.coreSet;
-	if (cComt.linkMap != 0) delete cComt.linkMap;
-	return in.eof() && context == TOP;
+	if (cComt.lnkMap != 0) delete cComt.lnkMap;
+	if (cComt.rtrMap != 0)  delete cComt.rtrMap;
+
+	bool status = in.eof() && context == TOP && check()
+	     	    && setComtLnkNodeInfo();
+
+/*
+cerr << "available bit rates for links\n";
+for (int lnk = firstLink(); lnk != 0; lnk = nextLink(lnk)) {
+	string ss;
+	int left = getLinkL(lnk); int right = getLinkR(lnk);
+	cerr << link2string(lnk,ss) << " " << getAvailBitRate(lnk,left)
+	     << " kb/s " << getAvailPktRate(lnk,left) << " p/s "
+	     << getAvailBitRate(lnk,right) << " kb/s "
+	     << getAvailPktRate(lnk,right) << " p/s\n";
+}
+for (int ctx = firstComtIndex(); ctx != 0; ctx = nextComtIndex(ctx)) {
+	map<int,ComtRtrInfo>& rmap = (*comtree[ctx].rtrMap);
+	map<int,ComtRtrInfo>::iterator rp;
+	cerr << "parent links and link counts for routers in comtree "
+	     << getComtree(ctx) << endl;
+	for (rp = rmap.begin(); rp != rmap.end(); rp++) {
+		string ss1, ss2;
+		cerr << "[" << getNodeName(rp->first,ss1) << ": "
+		     << link2string(rp->second.plnk,ss2) << " "
+		     << rp->second.lnkCnt << "] ";
+	}
+	cerr << endl;
+}
+*/
+
+	return status;
+}
+
+string& NetInfo::link2string(int lnk, string& s) {
+	if (lnk == 0) { s = "-"; return s; }
+	int left = getLinkL(lnk); int right = getLinkR(lnk);
+	string s1;
+	s = "(" + getNodeName(left,s1);
+	if (getNodeType(left) == ROUTER)  {
+		s += "." + Misc::num2string(getLocLinkL(lnk),s1);
+	}
+	s += "," + getNodeName(right,s1);
+	if (getNodeType(right) == ROUTER)  {
+		s += "." + Misc::num2string(getLocLinkR(lnk),s1);
+	}
+	s += ")";
+	return s;
 }
 
 /** Write the contents of a NetInfo object to an output stream.
@@ -1208,108 +1736,108 @@ bool NetInfo::read(istream& in) {
  *  @param out is an open output stream
  */
 void NetInfo::write(ostream& out) {
-	string s0, s1, s2, s3; // temp strings used with xx2string methods below
-
 	// First write the "Routers" section
 	out << "Routers\n\n";
 	for (int r = firstRouter(); r != 0; r = nextRouter(r)) {
-		out << "name=" << getNodeName(r,s1) << " "
-		    << "type=" << Forest::nodeType2string(getNodeType(r),s2)
-		    << " fAdr=" << Forest::fAdr2string(getNodeAdr(r),s3);
-		out << " clientAdrRange=("
-		    << Forest::fAdr2string(getFirstCliAdr(r),s1) << "-"
-		    << Forest::fAdr2string(getLastCliAdr(r),s2) << ")";
-		out << "\n\tlocation=(" << getNodeLat(r) << ","
-		    		     << getNodeLong(r) << ")\n";
-		out << "interfaces\n"
-		    << "# iface#   ipAdr  linkRange  bitRate  pktRate\n";
-		for (int i = 1; i <= getNumIf(r); i++) {
-			if (!validIf(r,i)) continue;
-			out << "   " << i << "  "
-			    << Np4d::ip2string(getIfIpAdr(r,i),s1); 
-			if (getIfFirstLink(r,i) == getIfLastLink(r,i)) 
-				out << " " << getIfFirstLink(r,i) << " ";
-			else
-				out << " " << getIfFirstLink(r,i) << "-"
-				    << getIfLastLink(r,i) << "  ";
-			out << getIfBitRate(r,i) << "  "
-			    << getIfPktRate(r,i) << ";\n";
-		}
-		out << "end\n;\n";
+		writeRtr(out,r);
 	}
 	out << ";\n\n";
 
 	// Next write the LeafNodes, starting with the controllers
 	out << "LeafNodes\n\n";
 	for (int c = firstController(); c != 0; c = nextController(c)) {
-		out << "name=" << getNodeName(c,s0) << " "
-		    << "type=" << Forest::nodeType2string(getNodeType(c),s1)
-		    << " ipAdr=" << Np4d::ip2string(getLeafIpAdr(c),s2) 
-		    << " fAdr=" << Forest::fAdr2string(getNodeAdr(c),s3);
-		out << "\n\tlocation=(" << getNodeLat(c) << ","
-		    		     << getNodeLong(c) << ");\n";
+		writeLeaf(out,c);
 	}
-	for (int c = firstLeaf(); c != 0; c = nextLeaf(c)) {
-		if (getNodeType(c) == CONTROLLER) continue;
-		out << "name=" << getNodeName(c,s0) << " "
-		    << "type=" << Forest::nodeType2string(getNodeType(c),s1)
-		    << " ipAdr=" << Np4d::ip2string(getLeafIpAdr(c),s2) 
-		    << " fAdr=" << Forest::fAdr2string(getNodeAdr(c),s3);
-		out << "\n\tlocation=(" << getNodeLat(c) << ","
-		    		     << getNodeLong(c) << ");\n";
+	for (int n = firstLeaf(); n != 0; n = nextLeaf(n)) {
+		if (getNodeType(n) != CONTROLLER) writeLeaf(out,n);
 	}
 	out << ";\n\n";
 
 	// Now, write the Links
-	out << "Links\n\n";
+	out << "Links\n\n"; 
 	for (int lnk = firstLink(); lnk != 0; lnk = nextLink(lnk)) {
-		int ln = getLinkL(lnk); int rn = getLinkR(lnk);
-		out << "link=(" << getNodeName(ln,s0);
-		if (isRouter(ln)) out << "." << getLocLinkL(lnk);
-		out << "," << getNodeName(rn,s0);
-		if (isRouter(rn)) out << "." << getLocLinkR(lnk);
-		out << ") "
-		    << "bitRate=" << getLinkBitRate(lnk) << " "
-		    << "pktRate=" << getLinkPktRate(lnk) << " "
-		    << "length=" << getLinkLength(lnk) << ";\n";
+		writeLink(out,lnk);
 	}
-	out << ";\n\n";
+	out << ";\n\n"; 
 
 	// And finally, the Comtrees
-	out << "Comtrees\n\n";
+	out << "Comtrees\n\n"; 
 	for (int ctx = firstComtIndex(); ctx != 0; ctx = nextComtIndex(ctx)) {
-		if (!validComtIndex(ctx)) continue;
-
-		out << "comtree=" << getComtree(ctx)
-		    << " root=" << getNodeName(getComtRoot(ctx),s0)
-		    << "\nbitRateDown=" << getComtBrDown(ctx)
-		    << " bitRateUp=" << getComtBrUp(ctx)
-		    << " pktRateDown=" << getComtPrDown(ctx)
-		    << " pktRateUp=" << getComtPrUp(ctx)
-		    << "\nleafBitRateDown=" << getComtLeafBrDown(ctx)
-		    << " leafBitRateUp=" << getComtLeafBrUp(ctx)
-		    << " leafPktRateDown=" << getComtLeafPrDown(ctx)
-		    << " leafPktRateUp=" << getComtLeafPrUp(ctx);
-
-		// iterate through core nodes and print
-		out << "\n";
-		for (int c = firstCore(ctx); c != 0; c = nextCore(c,ctx)) {
-			if (c != getComtRoot(ctx)) 
-				out << "core=" << getNodeName(c,s0) << " ";
-		}
-		out << "\n";
-		// iterate through links and print
-		for (int lnk = firstComtLink(ctx); lnk != 0;
-		         lnk = nextComtLink(lnk,ctx)) {
-
-			int left = getLinkL(lnk); int right = getLinkR(lnk);
-			out << "link=(" << getNodeName(left,s0);
-			if (isRouter(left)) out << "." << getLocLinkL(lnk);
-			out << "," << getNodeName(right,s0);
-			if (isRouter(right)) out << "." << getLocLinkR(lnk);
-			out << ") ";
-		}
-		out << "\n;\n";
+		writeComt(out,ctx);
 	}
-	out << ";\n";
+	out << ";\n"; 
+}
+
+void NetInfo::writeRtr(ostream& out, int rtr) {
+	string s1,s2,s3;
+	out << "name=" << getNodeName(rtr,s1) << " "
+	    << "type=" << Forest::nodeType2string(getNodeType(rtr),s2)
+	    << " fAdr=" << Forest::fAdr2string(getNodeAdr(rtr),s3);
+	out << " leafAdrRange=("
+	    << Forest::fAdr2string(getFirstLeafAdr(rtr),s1) << "-"
+	    << Forest::fAdr2string(getLastLeafAdr(rtr),s2) << ")";
+	out << "\n\tlocation=(" << getNodeLat(rtr) << ","
+	    		     << getNodeLong(rtr) << ")\n";
+	out << "interfaces\n"
+	    << "# iface#   ipAdr  linkRange  bitRate  pktRate\n";
+	for (int i = 1; i <= getNumIf(rtr); i++) {
+		if (!validIf(rtr,i)) continue;
+		out << "   " << i << "  "
+		    << Np4d::ip2string(getIfIpAdr(rtr,i),s1); 
+		if (getIfFirstLink(rtr,i) == getIfLastLink(rtr,i)) 
+			out << " " << getIfFirstLink(rtr,i) << " ";
+		else
+			out << " " << getIfFirstLink(rtr,i) << "-"
+			    << getIfLastLink(rtr,i) << "  ";
+		out << getIfBitRate(rtr,i) << "  "
+		    << getIfPktRate(rtr,i) << ";\n";
+	}
+	out << "end\n;\n";
+}
+
+void NetInfo::writeLeaf(ostream& out, int leaf) {
+	string s0, s1, s2, s3;
+	out << "name=" << getNodeName(leaf,s0) << " "
+	    << "type=" << Forest::nodeType2string(getNodeType(leaf),s1)
+	    << " ipAdr=" << Np4d::ip2string(getLeafIpAdr(leaf),s2) 
+	    << " fAdr=" << Forest::fAdr2string(getNodeAdr(leaf),s3);
+	out << "\n\tlocation=(" << getNodeLat(leaf) << ","
+	    		     << getNodeLong(leaf) << ");\n";
+}
+
+void NetInfo::writeLink(ostream& out, int lnk) {
+	string s0;
+	out << "link=" << link2string(lnk,s0)
+	    << " bitRate=" << getLinkBitRate(lnk)
+	    << " pktRate=" << getLinkPktRate(lnk)
+	    << " length=" << getLinkLength(lnk) << ";\n"; 
+}
+
+void NetInfo::writeComt(ostream& out, int ctx) {
+	if (!validComtIndex(ctx)) return;
+	string s0;
+	out << "comtree=" << getComtree(ctx)
+	    << " root=" << getNodeName(getComtRoot(ctx),s0)
+	    << "\nbitRateDown=" << getComtBrDown(ctx)
+	    << " bitRateUp=" << getComtBrUp(ctx)
+	    << " pktRateDown=" << getComtPrDown(ctx)
+	    << " pktRateUp=" << getComtPrUp(ctx)
+	    << "\nleafBitRateDown=" << getComtLeafBrDown(ctx)
+	    << " leafBitRateUp=" << getComtLeafBrUp(ctx)
+	    << " leafPktRateDown=" << getComtLeafPrDown(ctx)
+	    << " leafPktRateUp=" << getComtLeafPrUp(ctx); 
+
+	// iterate through core nodes and print
+	out << "\n"; 
+	for (int c = firstCore(ctx); c != 0; c = nextCore(c,ctx)) {
+		if (c != getComtRoot(ctx)) 
+			out << "core=" << getNodeName(c,s0) << " ";
+	}
+	out << "\n"; 
+	// iterate through links and print
+	for (int lnk = firstComtLink(ctx); lnk != 0;
+		 lnk = nextComtLink(lnk,ctx)) {
+		out << "link=" << link2string(lnk,s0) << " ";
+	}
+	out << "\n;\n"; 
 }

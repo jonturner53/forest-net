@@ -77,7 +77,7 @@ UiSetPair *threads;		///< in-use and unused thread indices
 
 IdMap	*tMap;			///< maps sequence numbers to thread #
 
-bool	init();
+bool	init(const char*);
 void	cleanup();
 bool	readPrefixInfo(char*);
 void*	run(void*); 
@@ -86,7 +86,9 @@ void* 	handler(void *);
 bool 	handleConsReq(int,CtlPkt&, Queue&, Queue&);
 bool 	handleConDisc(int,CtlPkt&, Queue&, Queue&);
 bool 	handleNewClient(int,CtlPkt&, Queue&, Queue&);
-int	sendCtlPkt(CtlPkt&, comt_t, fAdr_t, Queue&, Queue&);
+bool 	handleBootRequest(int,CtlPkt&, Queue&, Queue&);
+int	sendCtlPkt(CtlPkt&, fAdr_t, ipa_t, ipp_t, Queue&, Queue&);
+int	sendCtlPkt(CtlPkt&, fAdr_t, Queue&, Queue&);
 int 	sendAndWait(int,CtlPkt&,Queue&,Queue&);
 void 	errReply(int,CtlPkt&,Queue&, const char*);
 

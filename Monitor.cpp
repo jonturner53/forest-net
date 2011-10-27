@@ -71,12 +71,10 @@ Monitor::Monitor(ipa_t xipa, ipa_t iipa, ipa_t ripa, fAdr_t ma, fAdr_t ra,
 	ps = new PacketStore(nPkts+1, nPkts+1);
 
 	watchedAvatars = new UiHashTbl(MAX_AVATARS);
+	avData = new avatarData[MAX_AVATARS+1];
 	nextAvatar = 1;
 
-	avData = new avatarData[MAX_AVATARS+1];
-	statPkt = new uint32_t[500];
-
-	comt = 0; repCnt = 0;
+	comt = 0;
 	connSock = -1;
 }
 
@@ -124,13 +122,9 @@ void Monitor::run(int finishTime) {
 
 	uint32_t now;    	// free-running microsecond time
 	uint32_t nextTime;	// time of next operational cycle
-	uint32_t printTime;	// next time to print status
-
-	now = nextTime = 0; printTime = 1000*UPDATE_PERIOD;
+	now = nextTime = Misc::getTime(); 
 
 	while (now <= finishTime) {
-		now = Misc::getTime();
-
 		check4comtree();
 		while ((p = receiveReport()) != 0) {
 			updateStatus(p,now);
@@ -140,6 +134,7 @@ void Monitor::run(int finishTime) {
 		nextTime += 1000*UPDATE_PERIOD;
 		useconds_t delay = nextTime - Misc::getTime();
 		if (0 < delay && delay <= 1000*UPDATE_PERIOD) usleep(delay);
+		now = Misc::getTime();
 	}
 
 	disconnect(); 		// send final disconnect packet
@@ -185,6 +180,11 @@ void Monitor::check4comtree() {
         if (nbytes < 0) {
                 if (errno == EAGAIN) return;
                 fatal("Monitor::check4comtree: error in read call");
+	} else if (nbytes == 0) { // remote gui closed connection
+		close(connSock); connSock = -1;
+		updateSubscriptions(comt, 0);
+		watchedAvatars->clear(); nextAvatar = 1;
+		return;
         } else if (nbytes < sizeof(uint32_t)) {
 		fatal("Monitor::check4comtree: incomplete comtree number");
 	}
@@ -193,7 +193,8 @@ void Monitor::check4comtree() {
 	if (newComt == comt) return;
 	updateSubscriptions(comt, newComt);
 	comt = newComt;
-	repCnt = 0;
+	watchedAvatars->clear(); 
+	nextAvatar = 1;
 
         return;
 }
@@ -209,17 +210,31 @@ void Monitor::send2router(int p) {
 	if (rv == -1) fatal("Monitor::send2router: failure in sendto");
 }
 
-/** Send status packet to remote GUI, assuming the comt value is non-zero.
+/** Send status report to remote GUI, assuming the comt value is non-zero.
+ *  @param now is the current time, used to timestamp the report
+ *  @param avNum is the number of the avatar for which we are sending
+ *  a report
  */
-void Monitor::send2gui() {
+void Monitor::send2gui(uint32_t now, int avNum) {
 
-	if (comt == 0) return;
+	if (comt == 0 || connSock == -1) return;
 
-	int nbytes = repCnt*NUMITEMS*sizeof(uint32_t);
-	char* p = (char *) statPkt;
+	uint32_t buf[9];
+	buf[0] = htonl(now);
+	buf[1] = htonl(avData[avNum].adr);
+	buf[2] = htonl(avData[avNum].x);
+	buf[3] = htonl(avData[avNum].y);
+	buf[4] = htonl(avData[avNum].dir);
+	buf[5] = htonl(avData[avNum].speed);
+	buf[6] = htonl(avData[avNum].numVisible);
+	buf[7] = htonl(avData[avNum].numNear);
+	buf[8] = htonl(avData[avNum].comt);
+
+	int nbytes = 9*sizeof(uint32_t);
+	char* p = (char *) buf;
 	while (nbytes > 0) {
 		int n = write(connSock, (void *) p, nbytes);
-		if (n < 0) fatal("Monitor::send2gui: failure in write");
+		if (n < 0) return;//fatal("Monitor::send2gui: failure in write");
 		p += n; nbytes -= n;
 	}
 }
@@ -309,10 +324,15 @@ void Monitor::updateSubscriptions(comt_t oldcomt, comt_t newcomt) {
  *  invisible avatar.
  */
 void Monitor::updateStatus(int p, int now) {
-
 	PacketHeader& h = ps->getHeader(p);
 	uint32_t *pp = ps->getPayload(p);
 
+	if (h.getComtree() != comt || h.getPtype() != CLIENT_DATA ||
+	    ntohl(pp[0]) != Avatar::STATUS_REPORT) {
+		// ignore packets for other comtrees, or that are not
+		// avatar status reports
+		ps->free(p); return;
+	}
 	uint64_t key = h.getSrcAdr(); key = (key << 32) | h.getSrcAdr();
 	int avNum = watchedAvatars->lookup(key);
 	if (avNum == 0) {
@@ -328,25 +348,9 @@ void Monitor::updateStatus(int p, int now) {
 	avData[avNum].speed = ntohl(pp[5]);
 	avData[avNum].numVisible = ntohl(pp[6]);
 	avData[avNum].numNear = ntohl(pp[7]);
-	avData[avNum].comt = h.getComtree();
-	if (h.getComtree() != comt) return;
+	avData[avNum].comt = comt;
 
-	// if no room in statusPkt buffer for another report,
-	// send current buffer
-	if (repCnt + 1 > MAX_REPORTS) {
-		send2gui(); repCnt = 0;
-	}
-	// add new report to the outgoing status packet
-	statPkt[NUMITEMS*repCnt]   = htonl(now);
-	statPkt[NUMITEMS*repCnt+1] = htonl(avData[avNum].adr);
-	statPkt[NUMITEMS*repCnt+2] = htonl(avData[avNum].x);
-	statPkt[NUMITEMS*repCnt+3] = htonl(avData[avNum].y);
-	statPkt[NUMITEMS*repCnt+4] = htonl(avData[avNum].dir);
-	statPkt[NUMITEMS*repCnt+5] = htonl(avData[avNum].speed);
-	statPkt[NUMITEMS*repCnt+6] = htonl(avData[avNum].numVisible);
-	statPkt[NUMITEMS*repCnt+7] = htonl(avData[avNum].numNear);
-	statPkt[NUMITEMS*repCnt+8] = htonl(h.getComtree());
-	repCnt++;
+	send2gui(now,avNum);
 
 	return;
 }

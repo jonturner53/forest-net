@@ -27,6 +27,7 @@ public:
 	static void addNum2string(string&, uint64_t);
 	static string& num2string(int, string&);
 	static string& num2string(uint64_t, string&);
+	static string& nstime2string(uint64_t, string&);
 
 	// functions to facilitate use of single character 
 	// node names in small data structures
@@ -88,6 +89,20 @@ inline string& Misc::num2string(int i, string& s) {
 }
 inline string& Misc::num2string(uint64_t i, string& s) {
         char buf[16]; sprintf(buf,"%lld",i); s = buf;
+	return s;
+}
+
+/** Create a string representation of a time value based on a ns time value.
+ *  The returned string gives the time as seconds and fractions of a second.
+ *  @param t is the ns time
+ *  @param s is the string in which the value is to be returned
+ *  @return a reference to s
+ */
+inline string& Misc::nstime2string(uint64_t t, string& s) {
+	uint64_t sec = t/1000000000;
+	uint64_t frac = (t/1000)%1000000;
+	
+        char buf[32]; sprintf(buf,"%lld.%06lld",sec,frac); s = buf;
 	return s;
 }
 
