@@ -1,14 +1,11 @@
-CLASSFILES = MazeAvatarStatus.class MazeAvatarGraphic.class AvatarStatus.class AvatarGraphic.class MazeWorld.class MazeWorld2.class
+CLASSFILES = AvatarStatus.class AvatarGraphic.class ShowWorld.class 
 
 %.class: %.java
 	javac -cp ~/bin/java $<
 	mv $@ ~/bin/java/remoteDisplay
  
 
-all: topoGen ${CLASSFILES}
-
-topoGen:
-	${MAKE} -C TopologyGen all
+all: ${CLASSFILES}
 
 clean :
 	${MAKE} -C TopologyGen clean	
