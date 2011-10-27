@@ -49,7 +49,7 @@ bool IoProcessor::setup(int i) {
 bool IoProcessor::setupBootSock(ipa_t bootIp, ipa_t nmIp1) {
 	nmIp = nmIp1;
 	// open datagram socket
-	bootSock =Np4d::datagramSocket();
+	bootSock = Np4d::datagramSocket();
 	if (bootSock < 0) {
 		cerr << "IoProcessor::setupBootSock: socket call failed\n";
 		return false;
@@ -63,9 +63,13 @@ bool IoProcessor::setupBootSock(ipa_t bootIp, ipa_t nmIp1) {
 	return true;
 }
 
-int IoProcessor::receive(bool booting) { 
+void IoProcessor::closeBootSock() {
+	close(bootSock); bootSock = -1;
+}
+
+int IoProcessor::receive() { 
 // Return next waiting packet or 0 if there is none. 
-	if (booting) {
+	if (bootSock >= 0) {
 		int nbytes;	  	// number of bytes in received packet
 		int lnk;	  	// # of link on which packet received
 	
@@ -77,6 +81,7 @@ int IoProcessor::receive(bool booting) {
 		ipa_t sIpAdr; ipp_t sPort;
 		nbytes = Np4d::recvfrom4d(bootSock, (void *) &b[0], 1500,
 					  sIpAdr, sPort);
+		h.setIoBytes(nbytes);
 		if (nbytes < 0) {
 			if (errno == EAGAIN) {
 				ps->free(p); return 0;
@@ -89,6 +94,7 @@ int IoProcessor::receive(bool booting) {
 		ps->unpack(p);
 	        if (!ps->hdrErrCheck(p)) { ps->free(p); return 0; }
         	h.setTunSrcIp(sIpAdr); h.setTunSrcPort(sPort);
+		h.setInLink(0); h.setIoBytes(nbytes);
 		return p;
 	}
 	// proceed to normal case, when we're not booting
@@ -125,7 +131,7 @@ int IoProcessor::receive(bool booting) {
 	int lnk;	  	// # of link on which packet received
 
 	packet p = ps->alloc();
-        if (p == 0) { return 0; }
+        if (p == 0) return 0;
         PacketHeader& h = ps->getHeader(p);
         buffer_t& b = ps->getBuffer(p);
 
@@ -154,9 +160,9 @@ int IoProcessor::receive(bool booting) {
         return p;
 }
 
-void IoProcessor::send(int p, int lnk, bool booting) {
 // Send packet on specified link and recycle storage.
-	if (booting) {
+void IoProcessor::send(int p, int lnk) {
+	if (bootSock >= 0) {
 		int rv, lim = 0;
 		int length = ps->getHeader(p).getLength();
 		do {
@@ -165,10 +171,10 @@ void IoProcessor::send(int p, int lnk, bool booting) {
 				nmIp, Forest::NM_PORT);
 		} while (rv == -1 && errno == EAGAIN && lim++ < 10);
 		if (rv == -1) {
-			perror("IoProcessor:: send: failure in sendto");
-			exit(1);
+			fatal("IoProcessor:: send: failure in sendto");
 		}
 		ps->free(p);
+		return;
 	}
 	ipp_t farPort = lt->getPeerPort(lnk);
 	if (farPort == 0) { ps->free(p); return; }

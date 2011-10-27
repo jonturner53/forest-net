@@ -104,7 +104,6 @@ public:
 	static const comt_t CLIENT_SIG_COMT = 2; ///< for comtree signaling
 	static const comt_t NET_SIG_COMT = 100;  ///< for internal signaling
 
-
 	// methods for manipulating addresses 
 	static bool validUcastAdr(fAdr_t);
 	static bool mcastAdr(fAdr_t);

@@ -56,8 +56,13 @@ void ComtreeTable::removeEntry(int ctx) {
 	
 	set<int>& comtLinks = *tbl[ctx].comtLinks;
 	set<int>::iterator p;
+	// copy out the comtree links, then remove them
+	int *clnks = new int[comtLinks.size()];
+	int i = 0;
 	for (p = comtLinks.begin(); p != comtLinks.end(); p++)
-		removeLink(ctx,*p);
+		clnks[i++] = *p;
+	for (int i = 0; i < comtLinks.size(); i++)
+		removeLink(ctx,clnks[i]);
 
 	comtMap->dropPair(key(tbl[ctx].comt));
 	delete tbl[ctx].comtLinks;

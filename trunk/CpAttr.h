@@ -40,6 +40,8 @@ enum CpAttrIndex {
 	EXT_BIT_RATE_UP,	///< bit rate of an access link in Kb/s
 	EXT_PKT_RATE_DOWN,	///< packet rate of an access link in p/s
 	EXT_PKT_RATE_UP,	///< packet rate of an access link in p/s
+	FIRST_LEAF_ADR,		///< first in a router's leaf address range
+	LAST_LEAF_ADR,		///< last in a router's leaf address range
 	IFACE_NUM,		///< interface number
 	INT_BIT_RATE_DOWN,	///< bit rate of an internal link in Kb/s
 	INT_BIT_RATE_UP,	///< bit rate of an internal link in Kb/s
@@ -65,6 +67,7 @@ enum CpAttrIndex {
 	PKT_RATE_IN,		///< input packet rate in p/s
 	PKT_RATE_OUT,		///< output packet rate in p/s
 	QUEUE_NUM,		///< queue number
+	ROOT_ZIP,		///< suggested zipcode for comtree core
 	RTR_ADR,		///< forest address of a router
 	RTR_IP,			///< IP address of a router
 

@@ -35,7 +35,8 @@ private:
 	const static int UPDATE_PERIOD = 50;	///< # ms between status updates
 	const static int MAX_AVATARS = 1000;	///< max # of avatars to monitor
 	
-	ipa_t	extIp, intIp;		///< IP addresses for remote GUI and Forest net
+	ipa_t	extIp;			///< local IP used for remote GUI
+	ipa_t	intIp;			///< local IP used for Forest
 	ipa_t	rtrIp;			///< IP address of router
 	fAdr_t	myAdr;			///< forest address of host
 	fAdr_t	rtrAdr;			///< forest address of router
@@ -44,11 +45,7 @@ private:
 	int	extSock;		///< external listening socket
 	int	connSock;		///< external connection socket
 
-	comt_t	comt;			///< comtree number
-
-	const static int MAX_REPORTS = 5; ///< max # of reports per status pkt
-	uint32_t *statPkt;		///< pointer to buffer for status packet
-	int	repCnt;			///< number of reports in status packet
+	comt_t	comt;			///< current comtree number
 
 	// avatar properties
 	struct avatarData {
@@ -75,7 +72,7 @@ private:
 	void	disconnect();	
 
 	void 	check4comtree(); 	
-	void	send2gui();	
+	void	send2gui(uint32_t,int);	
 
 	int 	receiveReport();
 	void	send2router(int);

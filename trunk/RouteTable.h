@@ -54,6 +54,7 @@ public:
 	// modifiers
 	int	addEntry(comt_t,fAdr_t,int);
 	void	removeEntry(int);
+	void	purgeRoutes(comt_t);
 	bool	addLink(int,int);
 	void	removeLink(int,int);	
 	void	setLink(int,int);

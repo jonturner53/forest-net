@@ -20,30 +20,35 @@
 enum CpTypeIndex {
 	CPT_START,			///< marker preceding first index
 
-	/** messages used by clients to manage comtrees */
+	// messages used by clients to manage comtrees
 	CLIENT_ADD_COMTREE, CLIENT_DROP_COMTREE,
 	CLIENT_GET_COMTREE, CLIENT_MOD_COMTREE,
 	CLIENT_JOIN_COMTREE, CLIENT_LEAVE_COMTREE,
 	CLIENT_RESIZE_COMTREE,
 	CLIENT_GET_LEAF_RATE, CLIENT_MOD_LEAF_RATE,
 
-	/** packet types to manage router interfaces */
+	CLIENT_NET_SIG_SEP,
+
+	// packet types to manage router interfaces
 	ADD_IFACE, DROP_IFACE, GET_IFACE, MOD_IFACE,
 
-	/** packet types to manage router links */
+	// packet types to manage router links
 	ADD_LINK, DROP_LINK, GET_LINK, MOD_LINK,
 
-	/** packet types to manage comtrees at routers */
+	// packet types to manage comtrees at routers
 	ADD_COMTREE, DROP_COMTREE, GET_COMTREE, MOD_COMTREE,
 	ADD_COMTREE_LINK, DROP_COMTREE_LINK,
 	MOD_COMTREE_LINK, GET_COMTREE_LINK,
 
-	/** packet types to manage routes at routers */
+	// packet types to manage routes at routers
 	ADD_ROUTE, DROP_ROUTE, GET_ROUTE, MOD_ROUTE,
 	ADD_ROUTE_LINK, DROP_ROUTE_LINK,
 
-	/** packet types used by client manager */
+	// packet types used by client manager
 	NEW_CLIENT, CLIENT_CONNECT, CLIENT_DISCONNECT,
+
+	// packet types to boot router from netMgr
+	BOOT_REQUEST, BOOT_COMPLETE, BOOT_ABORT,
 	
 	CPT_END			///< marker following last CtlPktType
 };

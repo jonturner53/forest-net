@@ -25,12 +25,12 @@ public:
 	bool	setupBootSock(ipa_t, ipa_t);
 	void	closeBootSock();
 
-	int	receive(bool);	
-	void	send(int,int,bool);
+	int	receive();	
+	void	send(int,int);
 
 private:
 	ipp_t	bootIp;			///< IP address used to boot router
-	ipp_t	nmIp;			///< IP address used by netMgr
+	ipa_t	nmIp;			///< IP address used by netMgr
 	int	bootSock;		///< associated socket
 
 	int	maxIface;		///< largest interface number

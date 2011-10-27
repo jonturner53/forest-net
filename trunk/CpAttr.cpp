@@ -36,6 +36,8 @@ const CpAttr::CpAttrInfo CpAttr::attrInfo[CPA_END+1] = {
 	{ EXT_BIT_RATE_UP,	9,	"extBitRateUp" },
 	{ EXT_PKT_RATE_DOWN,	10,	"extPktRateDown" },
 	{ EXT_PKT_RATE_UP,	11,	"extPktRateUp" },
+	{ FIRST_LEAF_ADR,	50,	"firstLeafAdr" },
+	{ LAST_LEAF_ADR,	51,	"lastLeafAdr" },
 	{ IFACE_NUM,		12,	"iface" },
 	{ INT_BIT_RATE_DOWN,	13,	"intBitRateDown" },
 	{ INT_BIT_RATE_UP,	14,	"intBitRateUp" },
@@ -61,6 +63,7 @@ const CpAttr::CpAttrInfo CpAttr::attrInfo[CPA_END+1] = {
 	{ PKT_RATE_IN,		47,	"pktRateIn" },
 	{ PKT_RATE_OUT,		48,	"pktRateOut" },
 	{ QUEUE_NUM,		32,	"queue" },
+	{ ROOT_ZIP,		52,	"rootZip" },
 	{ RTR_ADR,		35,	"rtrAdr" },
 	{ RTR_IP,		36,	"rtrIp" },
 

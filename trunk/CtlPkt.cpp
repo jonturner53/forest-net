@@ -57,8 +57,8 @@ int CtlPkt::pack(uint32_t* pl) {
 	if (rrType != REQUEST && rrType != POS_REPLY && rrType != NEG_REPLY)
 		return 0;
 	pp = 0;
-	payload[pp++] = htonl(rrType);
 	payload[pp++] = htonl(CpType::getCode(cpType));
+	payload[pp++] = htonl(rrType);
 	payload[pp++] = htonl((uint32_t) (seqNum >> 32));
 	payload[pp++] = htonl((uint32_t) (seqNum & 0xffffffff));
 
@@ -104,8 +104,8 @@ bool CtlPkt::unpack(uint32_t* pl, int pleng) {
 	if (pleng < 4) return false; // too short for control packet
 
 	pp = 0;
-	rrType = (CpRrType) ntohl(payload[pp++]);
 	cpType = CpType::getIndexByCode(ntohl(payload[pp++]));
+	rrType = (CpRrType) ntohl(payload[pp++]);
 	seqNum = ntohl(payload[pp++]); seqNum <<= 32;
 	seqNum |= ntohl(payload[pp++]);
 
@@ -153,6 +153,7 @@ void CtlPkt::writeAvPair(ostream& out, CpAttrIndex ii) {
 	if (ii == COMTREE_OWNER || ii == LEAF_ADR ||
 	    ii == PEER_ADR || ii == PEER_DEST ||
 	    ii == RTR_ADR || ii == CLIENT_ADR ||
+	    ii == FIRST_LEAF_ADR || ii == LAST_LEAF_ADR ||
 	    ii == DEST_ADR) {
 		Forest::writeForestAdr(out,(fAdr_t) val);
 	} else if (ii == LOCAL_IP || ii == PEER_IP ||

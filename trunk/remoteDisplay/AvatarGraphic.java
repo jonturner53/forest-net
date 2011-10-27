@@ -8,16 +8,16 @@ import princeton.StdDraw;
  *  Includes methods to track Avatar status and to draw the
  *  avatar on the display.
  */
-class AvatarGraphic {
-	private AvatarStatus avaStatus;
-	private static final double SIZE = .04;
+class MazeAvatarGraphic {
+	private MazeAvatarStatus avaStatus;
+	private static final double SIZE = .06;
 	
 	/** Constructor for AvatarGraphic class.
 	 *  @param status is a AvatarStatus object that defines the avatar's
 	 *  initial status.
 	 */
-	public AvatarGraphic(AvatarStatus status) {
-		avaStatus = new AvatarStatus();
+	public MazeAvatarGraphic(MazeAvatarStatus status) {
+		avaStatus = new MazeAvatarStatus();
 		update(status);
 	}
 	
@@ -25,36 +25,40 @@ class AvatarGraphic {
 	public int getComtree() { return avaStatus.comtree; }
 	
 	/** Update the avatar's status. */
-	public void update(AvatarStatus status) { 
+	public void update(MazeAvatarStatus status) { 
 		avaStatus.copyFrom(status);
 	}
 	
 	/** Draw a graphic representation of the Avatar.
-	 *  Avatar is drawn as a circle.
-	 *  A line is drawn from the center to
+	 *  Avataris drawn as a circle with a radius that represents
+	 *  its visibility range. A line is drawn from the center to
 	 *  the circumference, to show the direction in which the 
 	 *  Avatar is moving. The Avatar's Forest address is displayed
-	 *  in the top half of the circle and the number of nearby
-	 *  and visibile avatars in the bottom half.
+	 *  in the upper left quadrant of the circle and the number
+	 *  of other Avatars it can "see" is displayed in the bottom
+	 *  right quadrant.
 	 */
 	public void draw() {
-		double scaleFactor = 2*Math.PI/360; // degrees to radians
-			
+		double scaleFactor = 2*Math.PI/360; // for converting degrees to radians
 		StdDraw.setPenColor(Color.GRAY);
+		if(avaStatus.type==1)
+			StdDraw.setPenRadius(.010);
+		else if(avaStatus.type==3)
+			StdDraw.setPenColor(Color.GREEN);
 		StdDraw.circle(avaStatus.x,avaStatus.y,SIZE);		
 		StdDraw.line(avaStatus.x, avaStatus.y,
-			avaStatus.x + SIZE*Math.sin(avaStatus.dir*scaleFactor),
-			avaStatus.y + SIZE*Math.cos(avaStatus.dir*scaleFactor));
-		
+			     avaStatus.x + SIZE*Math.sin(avaStatus.dir*scaleFactor),
+			     avaStatus.y + SIZE*Math.cos(avaStatus.dir*scaleFactor));
+		StdDraw.setPenRadius(.003);
 		StdDraw.setPenColor(Color.BLACK);
 		StdDraw.filledCircle(avaStatus.x,avaStatus.y,.005);
 
-		StdDraw.text(avaStatus.x,avaStatus.y+.4*SIZE,
+		StdDraw.text(avaStatus.x-SIZE/3,avaStatus.y+SIZE/3,
 			     ((avaStatus.id >> 16) & 0xffff) + "." +
 			     (avaStatus.id & 0xffff));
-		StdDraw.text(avaStatus.x+SIZE/3,avaStatus.y-.4*SIZE,
+		StdDraw.text(avaStatus.x+SIZE/3,avaStatus.y-SIZE/3,
 			    ((Integer) avaStatus.numVisible).toString());
-		StdDraw.text(avaStatus.x-SIZE/3,avaStatus.y-.4*SIZE,
+		StdDraw.text(avaStatus.x-SIZE/3,avaStatus.y-SIZE/3,
                             ((Integer) avaStatus.numNear).toString()); 
 	}
 }
