@@ -10,8 +10,7 @@ LIBFILES = CommonDefs.o IoProcessor.o IfaceTable.o LinkTable.o ComtreeTable.o \
 	   QuManager.o PacketHeader.o PacketStore.o  PacketStoreTs.o \
 	   NetInfo.o PacketLog.o
 
-all : supportLib fHost fRouter fAvatar fMazeAvatar fClientAvatar fMonitor \
-	fCliMgr fNetMgr fComtreeController fComtreeController_NetInfo \
+all : supportLib fHost fRouter fAvatar fMonitor fCliMgr fNetMgr \
 	fConsole fComtCtl BuildRtables
 
 supportLib:
@@ -29,14 +28,6 @@ fAvatar : Avatar.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
 	cp $@ ${HOME}/bin
 
-fMazeAvatar : MazeAvatar.o ${LIBS}
-	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
-	cp $@ ${HOME}/bin
-
-fClientAvatar : ClientAvatar.o ${LIBS}
-	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
-	cp $@ ${HOME}/bin
-
 fMonitor : Monitor.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
 	cp $@ ${HOME}/bin
@@ -51,14 +42,6 @@ fConsole : Console.o ${LIBS}
 
 fCliMgr : ClientMgr.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -lpthread -o $@
-	cp $@ ${HOME}/bin
-
-fComtreeController : ComtreeController.o ${LIBS}
-	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
-	cp $@ ${HOME}/bin
-
-fComtreeController_NetInfo : ComtreeController_NetInfo.o ${LIBS}
-	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
 	cp $@ ${HOME}/bin
 
 fComtCtl : ComtCtl.o ${LIBS}

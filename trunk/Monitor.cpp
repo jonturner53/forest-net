@@ -363,7 +363,8 @@ void Monitor::connect() {
 
 	PacketHeader& h = ps->getHeader(p);
 	h.setLength(4*(5+1)); h.setPtype(CONNECT); h.setFlags(0);
-	h.setComtree(1); h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
+	h.setComtree(Forest::CLIENT_CON_COMT);
+	h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
 
 	send2router(p); ps->free(p);
 }
@@ -378,7 +379,8 @@ void Monitor::disconnect() {
 	PacketHeader& h = ps->getHeader(p);
 
 	h.setLength(4*(5+1)); h.setPtype(DISCONNECT); h.setFlags(0);
-	h.setComtree(1); h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
+	h.setComtree(Forest::CLIENT_CON_COMT);
+	h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
 
 	send2router(p); ps->free(p);
 }

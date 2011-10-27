@@ -88,13 +88,13 @@ bool init(fAdr_t nma, ipa_t ri, fAdr_t ra, fAdr_t cca, ipa_t mi, fAdr_t ma, char
 	status = Np4d::bind4d(sock,myIp,0);
 	if(!status) return false;
 	connect();
-	usleep(500000); //sleep for one second
+	usleep(1000000); //sleep for one second
 	for (int t = 1; t <= TPSIZE; t++) {
 		if (!pool[t].qp.in.init() || !pool[t].qp.out.init())
 			fatal("init: can't initialize thread queues\n");
-		//pthread_attr_t attr;
-		//pthread_attr_init(&attr);
-		//pthread_attr_setstacksize(&attr,10024); //stack size 10 kb
+		pthread_attr_t attr;
+		pthread_attr_init(&attr);
+		pthread_attr_setstacksize(&attr,8096); //stack size 8 kB
                 if (pthread_create(&pool[t].th,NULL,handler,
 		    (void *) &pool[t]) != 0)
 			fatal("init: can't create thread pool");
@@ -155,6 +155,7 @@ void send(int p) {
 	if (rv == -1) fatal("send: failure in sendto");
 	ps->free(p);
 }
+
 /** run repeatedly tries to initialize any new avatars until the time runs out
  *@param finTime is the length of time that this should run
  *
@@ -312,7 +313,8 @@ void connect() {
 	if(p == 0) fatal("Couldn't allocate space");
         PacketHeader& h = ps->getHeader(p);
         h.setLength(4*(5+1)); h.setPtype(CONNECT); h.setFlags(0);
-        h.setComtree(1); h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
+        h.setComtree(Forest::CLIENT_CON_COMT);
+	h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
         send(p);
 	ps->free(p);
 }
@@ -323,7 +325,8 @@ void disconnect() {
         PacketHeader& h = ps->getHeader(p);
 
         h.setLength(4*(5+1)); h.setPtype(DISCONNECT); h.setFlags(0);
-        h.setComtree(1); h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
+        h.setComtree(Forest::CLIENT_CON_COMT);
+	h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
 
         send(p);
 	ps->free(p);

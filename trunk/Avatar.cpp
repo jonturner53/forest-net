@@ -9,7 +9,7 @@
 
 #include "stdinc.h"
 #include "CommonDefs.h"
-#include "ClientAvatar.h"
+#include "Avatar.h"
 #include <string>
 #include <algorithm>
 /** usage:
@@ -373,8 +373,8 @@ void Avatar::sendCtlPkt2CC(bool join, int comtree) {
         PacketHeader& h = ps->getHeader(p);
 	h.setLength(Forest::OVERHEAD + len);
         h.setPtype(CLIENT_SIG); h.setFlags(0);
-        h.setComtree(1); h.setSrcAdr(myAdr);
-        h.setDstAdr(CC_Adr);
+        h.setComtree(Forest::CLIENT_SIG_COMT);
+	h.setSrcAdr(myAdr); h.setDstAdr(CC_Adr);
         h.pack(ps->getBuffer(p));
 	send(p);
 }
@@ -414,7 +414,8 @@ void Avatar::connect() {
 	PacketHeader& h = ps->getHeader(p);
 
 	h.setLength(4*(5+1)); h.setPtype(CONNECT); h.setFlags(0);
-	h.setComtree(1); h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
+	h.setComtree(Forest::CLIENT_CON_COMT);
+	h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
 
 	send(p);
 }
@@ -427,7 +428,8 @@ void Avatar::disconnect() {
 	PacketHeader& h = ps->getHeader(p);
 
 	h.setLength(4*(5+1)); h.setPtype(DISCONNECT); h.setFlags(0);
-	h.setComtree(1); h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
+	h.setComtree(Forest::CLIENT_CON_COMT);
+	h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
 
 	send(p);
 }
