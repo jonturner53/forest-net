@@ -8,16 +8,16 @@ import princeton.StdDraw;
  *  Includes methods to track Avatar status and to draw the
  *  avatar on the display.
  */
-class MazeAvatarGraphic {
-	private MazeAvatarStatus avaStatus;
+class AvatarGraphic {
+	private AvatarStatus avaStatus;
 	private static final double SIZE = .06;
 	
 	/** Constructor for AvatarGraphic class.
 	 *  @param status is a AvatarStatus object that defines the avatar's
 	 *  initial status.
 	 */
-	public MazeAvatarGraphic(MazeAvatarStatus status) {
-		avaStatus = new MazeAvatarStatus();
+	public AvatarGraphic(AvatarStatus status) {
+		avaStatus = new AvatarStatus();
 		update(status);
 	}
 	
@@ -25,7 +25,7 @@ class MazeAvatarGraphic {
 	public int getComtree() { return avaStatus.comtree; }
 	
 	/** Update the avatar's status. */
-	public void update(MazeAvatarStatus status) { 
+	public void update(AvatarStatus status) { 
 		avaStatus.copyFrom(status);
 	}
 	

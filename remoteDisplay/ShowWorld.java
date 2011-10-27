@@ -21,7 +21,7 @@ import java.util.Scanner;
  *  in in the form of a simple animation
  *  @author Jon Turner
  */
-public class MazeWorld {
+public class ShowWorld {
 	private static Map<Integer, AvatarGraphic> status; // avatar status
 	private static final int INTERVAL = 50;	// time between updates (in ms)
 	private static int comtree;	// number of comtree to be monitored
