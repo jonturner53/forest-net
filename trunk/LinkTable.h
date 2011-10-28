@@ -62,8 +62,8 @@ public:
 	bool	addAvailInPktRate(int, int);	
 	bool	addAvailOutBitRate(int, int);	
 	bool	addAvailOutPktRate(int, int);	
-	void	registerComt(int);
-	void	deregisterComt(int);
+	bool	registerComt(int);
+	bool	deregisterComt(int);
 
 	// io routines
 	bool read(istream&);
