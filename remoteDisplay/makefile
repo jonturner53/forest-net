@@ -8,5 +8,4 @@ CLASSFILES = AvatarStatus.class AvatarGraphic.class ShowWorld.class
 all: ${CLASSFILES}
 
 clean :
-	${MAKE} -C TopologyGen clean	
 	rm -f *.class

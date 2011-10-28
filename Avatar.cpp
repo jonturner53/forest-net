@@ -121,6 +121,7 @@ void Avatar::login(string uname, string pword) {
 	Np4d::sendBufBlock(CM_sock,(char *) buf.c_str(),buf.size()+1);
 	//receive rtrAdr, myAdr,rtrIp, CC_Adr
 	Np4d::recvIntBlock(CM_sock,(uint32_t&)rtrAdr);
+	if(rtrAdr==-1) fatal("Avatar::login: Could not connect, negative reply");
 	Np4d::recvIntBlock(CM_sock,(uint32_t&)myAdr);
 	Np4d::recvIntBlock(CM_sock,(uint32_t&)rtrIpAdr);
 	Np4d::recvIntBlock(CM_sock,(uint32_t&)CC_Adr);

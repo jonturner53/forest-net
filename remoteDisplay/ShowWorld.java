@@ -34,7 +34,7 @@ public class ShowWorld {
 	private static SocketChannel chan = null;	// channel to remote monitor or avatar
 	private static ByteBuffer repBuf = null; 	// buffer for report packets
 	private static AvatarStatus rep = null;		// most recent report
-	private static final int GRID = 2000;		// size of one grid space
+	private static final int GRID = 10000;		// size of one grid space
 	private static boolean needData = true;		// true when getReport() needs
 							// more data to process
 	
