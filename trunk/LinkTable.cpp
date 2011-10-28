@@ -44,6 +44,7 @@ int LinkTable::addEntry(int lnk, ipa_t peerIp, ipp_t peerPort) {
 	setAvailInPktRate(lnk,Forest::MINPKTRATE);
 	setAvailOutBitRate(lnk,Forest::MINBITRATE);
 	setAvailOutPktRate(lnk,Forest::MINPKTRATE);
+	lnkTbl[lnk].comtSet = new set<int>();
         return lnk;
 }
 
@@ -69,6 +70,7 @@ bool LinkTable::setPeerPort(int lnk, ipp_t peerPort) {
 void LinkTable::removeEntry(int lnk) {
 	if (!links->isIn(lnk)) return;
 	ht->remove(hashkey(getPeerIpAdr(lnk),getPeerPort(lnk)));
+	delete lnkTbl[lnk].comtSet;
 	links->swap(lnk); 
 }
 

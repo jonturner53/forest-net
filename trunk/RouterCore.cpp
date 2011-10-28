@@ -589,10 +589,6 @@ h.write(cerr,ps->getBuffer(p));
 			} else if (ptype == CONNECT || ptype == DISCONNECT) {
 				handleConnDisc(p);
 			} else if (h.getDstAdr() != myAdr) {
-if (h.getDstAdr() == Forest::forestAdr(2,2)) {
-cerr << "forwarding packet for 2.2\n";
-h.write(cerr,ps->getBuffer(p));
-}
 				forward(p,ctx);
 			} else {
 				ctlQ.push(p);
@@ -651,10 +647,13 @@ h.write(cerr,ps->getBuffer(p));
 bool RouterCore::pktCheck(int p, int ctx) {
 	PacketHeader& h = ps->getHeader(p);
 	// check version and  length
-	if (h.getVersion() != Forest::FOREST_VERSION) return false;
-
-	if (h.getLength() != h.getIoBytes() || h.getLength() < Forest::HDR_LENG)
+	if (h.getVersion() != Forest::FOREST_VERSION) {
 		return false;
+	}
+
+	if (h.getLength() != h.getIoBytes() || h.getLength()<Forest::HDR_LENG) {
+		return false;
+	}
 
 	if (booting) {
 		return 	h.getSrcAdr() == nmAdr && h.getDstAdr() == myAdr &&
@@ -662,16 +661,20 @@ bool RouterCore::pktCheck(int p, int ctx) {
 		    	h.getComtree() == Forest::NET_SIG_COMT;
 	}
 
-
-	if (!ctt->validComtIndex(ctx)) return false;
-	fAdr_t adr = h.getDstAdr();
-	if (!Forest::validUcastAdr(adr) && !Forest::mcastAdr(adr))
+	if (!ctt->validComtIndex(ctx)) {
 		return false;
+	}
+	fAdr_t adr = h.getDstAdr();
+	if (!Forest::validUcastAdr(adr) && !Forest::mcastAdr(adr)) {
+		return false;
+	}
 
 	int inLink = h.getInLink();
 	if (inLink == 0) return false;
 	int cLnk = ctt->getComtLink(ctt->getComtree(ctx),inLink);
-	if (cLnk == 0) return false;
+	if (cLnk == 0) {
+		return false;
+	}
 
 	// extra checks for packets from untrusted peers
 	if (lt->getPeerType(inLink) < TRUSTED) {
@@ -686,6 +689,12 @@ bool RouterCore::pktCheck(int p, int ctx) {
 		if (ptype != CLIENT_DATA &&
 		    ptype != CONNECT && ptype != DISCONNECT &&
 		    ptype != SUB_UNSUB && ptype != CLIENT_SIG)
+			return false;
+		int comt = ctt->getComtree(ctx);
+		if ((ptype == CONNECT || ptype == DISCONNECT) &&
+		     comt != Forest::CLIENT_CON_COMT)
+			return false;
+		if (ptype == CLIENT_SIG && comt != Forest::CLIENT_SIG_COMT)
 			return false;
 	}
 	return true;
@@ -737,8 +746,6 @@ cerr << "forward d\n";
 	// no valid route
 // think about suppressing flooding, if address is in range for this router
 	if (Forest::validUcastAdr(h.getDstAdr())) {
-if (h.getDstAdr() == Forest::forestAdr(2,2))
-cerr << "forward e\n";
 		// send to neighboring routers in comtree
 		h.setFlags(Forest::RTE_REQ);
 		ps->pack(p); ps->hdrErrUpdate(p);
@@ -1403,13 +1410,6 @@ bool RouterCore::dropComtree(int p, CtlPkt& cp, CtlPkt& reply) {
 		lt->addAvailOutBitRate(lnk,ctt->getOutBitRate(cLnk));
 		lt->addAvailInPktRate(lnk,ctt->getInPktRate(cLnk));
 		lt->addAvailOutPktRate(lnk,ctt->getOutPktRate(cLnk));
-
-cerr << "dropComtree: dropping lnk " << lnk 
-     << " from comtree " << comt << " new available rates (bri/o pri/o) are "
-     << lt->getAvailInBitRate(lnk) << "/" << lt->getAvailOutBitRate(lnk) << " "
-     << lt->getAvailInPktRate(lnk) << "/" << lt->getAvailOutPktRate(lnk)
-     << "\n";
-
 		qm->freeQ(ctt->getLinkQ(cLnk));
 	}
 
@@ -1582,12 +1582,6 @@ bool RouterCore::addComtreeLink(int p, CtlPkt& cp, CtlPkt& reply) {
 	ctt->setOutBitRate(cLnk,br);
 	ctt->setOutPktRate(cLnk,pr);
 
-cerr << "addComtreeLink: successfully added lnk " << lnk 
-     << " to comtree " << comt << " new available rates (bri/o pri/o) are "
-     << lt->getAvailInBitRate(lnk) << "/" << lt->getAvailOutBitRate(lnk) << " "
-     << lt->getAvailInPktRate(lnk) << "/" << lt->getAvailOutPktRate(lnk)
-     << "\n";
-
 	qm->setQRates(qid,br,pr);
 	if (isRtr) qm->setQLimits(qid,100,200000);
 	else	   qm->setQLimits(qid,10,20000);
@@ -1644,12 +1638,6 @@ bool RouterCore::dropComtreeLink(int p, CtlPkt& cp, CtlPkt& reply) {
 			if (rtx != 0) rt->removeEntry(rtx);
 		}
 	}
-
-cerr << "dropComtreeLink: successfully dropped lnk " << lnk 
-     << " from comtree " << comt << " new available rates (bri/o pri/o) are "
-     << lt->getAvailInBitRate(lnk) << "/" << lt->getAvailOutBitRate(lnk) << " "
-     << lt->getAvailInPktRate(lnk) << "/" << lt->getAvailOutPktRate(lnk)
-     << "\n";
 
 	// release queue and remove link from comtree
 	int qid = ctt->getLinkQ(cLnk);
@@ -1710,8 +1698,6 @@ bool RouterCore::modComtreeLink(int p, CtlPkt& cp, CtlPkt& reply) {
 	}
 	if (dipr != 0 && !lt->addAvailInPktRate(lnk,-dipr)) {
 		lt->addAvailInBitRate(lnk,dibr); // de-allocate link bw
-cerr << "modComtreeLink failing to increase input packet rate on lnk " << lnk
-     << " in comtree " << comt << endl;
 		reply.setErrMsg("modify comtree link: increase in "
 				"input packet rate exceeds link capacity");
 		reply.setRrType(NEG_REPLY);
@@ -1739,12 +1725,6 @@ cerr << "modComtreeLink failing to increase input packet rate on lnk " << lnk
 	if (dipr != 0) ctt->setInPktRate(cLnk,ipr);
 	if (dobr != 0) ctt->setOutBitRate(cLnk,obr);
 	if (dopr != 0) ctt->setOutPktRate(cLnk,obr);
-
-cerr << "modComtreeLink: successfully modified lnk " << lnk 
-     << " in comtree " << comt << " new available rates (bri/o pri/o) are "
-     << lt->getAvailInBitRate(lnk) << "/" << lt->getAvailOutBitRate(lnk) << " "
-     << lt->getAvailInPktRate(lnk) << "/" << lt->getAvailOutPktRate(lnk)
-     << "\n";
 
 	return true;
 }
