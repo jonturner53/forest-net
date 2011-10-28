@@ -9,6 +9,7 @@
 #ifndef LINKTABLE_H
 #define LINKTABLE_H
 
+#include <set>
 #include "CommonDefs.h"
 #include "PacketHeader.h"
 #include "UiSetPair.h"
@@ -42,6 +43,7 @@ public:
 	int	getAvailInPktRate(int) const;	
 	int	getAvailOutBitRate(int) const;	
 	int	getAvailOutPktRate(int) const;	
+	set<int>& getComtSet(int);
 
 	// modifiers
 	int	addEntry(int,ipa_t,ipp_t);
@@ -60,6 +62,8 @@ public:
 	bool	addAvailInPktRate(int, int);	
 	bool	addAvailOutBitRate(int, int);	
 	bool	addAvailOutPktRate(int, int);	
+	void	registerComt(int);
+	void	deregisterComt(int);
 
 	// io routines
 	bool read(istream&);
@@ -80,6 +84,7 @@ private:
 	int	avInPktRate;		///< available input packet rate
 	int	avOutBitRate;		///< available output bit rate
 	int	avOutPktRate;		///< available output packet rate
+	set<int> *comtSet;		///< set of comtrees containing link
 	};
 	LinkInfo *lnkTbl;		///< lnkTbl[i] is link info for link i
 	UiSetPair *links;		///< sets for in-use and unused links
@@ -204,6 +209,17 @@ inline int LinkTable::getAvailOutBitRate(int lnk) const {
  */
 inline int LinkTable::getAvailOutPktRate(int lnk) const {
 	return lnkTbl[lnk].avOutPktRate;
+}
+
+/** Get the set of comtrees registered for a link.
+ *  This method is provided to allow the caller to efficiently
+ *  examine the elements of a comtree set. It should not be
+ *  used to modify the set.
+ *  @param lnk is a valid link number
+ *  @return a reference to the set of comtrees registered for this link
+ */
+inline set<int>& LinkTable::getComtSet(int lnk) {
+	return *(lnkTbl[lnk].comtSet);
 }
 
 /** Set the interface number for a given link.
@@ -352,6 +368,16 @@ inline bool LinkTable::addAvailOutPktRate(int lnk, int pr) {
 	if (s < 0 || s > lnkTbl[lnk].pktRate) return false;
 	lnkTbl[lnk].avOutPktRate = s;
 	return true;
+}
+
+inline bool LinkTable::registerComt(int lnk) {
+	if (!valid(lnk)) return false;
+	lnkTbl[lnk].comtSet->insert(lnk);
+}
+
+inline bool LinkTable::deregisterComt(int lnk) {
+	if (!valid(lnk)) return false;
+	lnkTbl[lnk].comtSet->erase(lnk);
 }
 
 /** Compute key for hash lookup.

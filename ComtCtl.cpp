@@ -426,6 +426,11 @@ bool handleAddComtReq(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 	CtlPkt reqCp(ADD_COMTREE, REQUEST, 0);
 	reqCp.setAttr(COMTREE_NUM,comt);
 	int reply = sendCtlPkt(reqCp,rootAdr,inQ,outQ);
+	CtlPkt repCp; string s1;
+	string noRstr = "handleAddComt: add comtree request to "
+			+ net->getNodeName(rootRtr,s1);
+	string negRstr = noRstr;
+	bool success = handleReply(reply,repCp,noRstr,negRstr);
 	if (reply == 0) {
 		pthread_mutex_lock(&allComtLock);
 		net->removeComtree(ctx);
@@ -434,13 +439,8 @@ bool handleAddComtReq(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 		pthread_mutex_unlock(&allComtLock);
 		pthread_mutex_unlock(&comtLock[ctx]);
 		errReply(p,cp,outQ,"root router never replied");
-		cerr << "handleAddComtree: no reply from root router\n";
 		return false;
-	}
-	CtlPkt repCp;
-	repCp.unpack(ps->getPayload(reply),
-		     (ps->getHeader(reply)).getLength()-Forest::OVERHEAD);
-	if (repCp.getRrType() == NEG_REPLY) {
+	} else if (!success) {
 		pthread_mutex_lock(&allComtLock);
 		net->removeComtree(ctx);
 		comt -= (firstComt - 1);
@@ -448,12 +448,8 @@ bool handleAddComtReq(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 		pthread_mutex_unlock(&allComtLock);
 		pthread_mutex_unlock(&comtLock[ctx]);
 		errReply(p,cp,outQ,"root router could not add comtree");
-		cerr << "handleAddComtree: root router could not add comtree\n";
-		cerr << repCp.getErrMsg() << endl;
-		ps->free(reply);
 		return false;
 	}
-	ps->free(reply);
 	
 	// modify comtree to set global attributes
 	reqCp.reset(MOD_COMTREE, REQUEST, 0);
@@ -461,6 +457,10 @@ bool handleAddComtReq(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 	reqCp.setAttr(CORE_FLAG,true);
 	reqCp.setAttr(PARENT_LINK,0);
 	reply = sendCtlPkt(reqCp,rootAdr,inQ,outQ);
+	noRstr = "handleAddComt: mod comtree request to "
+		 + net->getNodeName(rootRtr,s1);
+	negRstr = noRstr;
+	success = handleReply(reply,repCp,noRstr,negRstr);
 	if (reply == 0) {
 		pthread_mutex_lock(&allComtLock);
 		net->removeComtree(ctx);
@@ -469,13 +469,8 @@ bool handleAddComtReq(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 		pthread_mutex_unlock(&allComtLock);
 		pthread_mutex_unlock(&comtLock[ctx]);
 		errReply(p,cp,outQ,"root router never replied");
-		cerr << "handleAddComtree: no reply from root router\n";
 		return false;
-	}
-	repCp.reset();
-	repCp.unpack(ps->getPayload(reply),
-		     (ps->getHeader(reply)).getLength()-Forest::OVERHEAD);
-	if (repCp.getRrType() == NEG_REPLY) {
+	} else if (!success) {
 		pthread_mutex_lock(&allComtLock);
 		net->removeComtree(ctx);
 		comt -= (firstComt - 1);
@@ -487,13 +482,8 @@ bool handleAddComtReq(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 		// there's no reason to think that the drop comtree would
 		// succeed
 		errReply(p,cp,outQ,"root router could not modify comtree");
-		cerr << "handleAddComtree: root router could not modify "
-			"comtree\n";
-		cerr << repCp.getErrMsg() << endl;
-		ps->free(reply);
 		return false;
 	}
-	ps->free(reply);
 
 	// now update local data structure to reflect addition
 	net->addComtNode(ctx,rootRtr);
@@ -581,23 +571,18 @@ bool handleDropComtReq(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 	CtlPkt reqCp(DROP_COMTREE, REQUEST, 0);
 	reqCp.setAttr(COMTREE_NUM,comt);
 	int reply = sendCtlPkt(reqCp,rootAdr,inQ,outQ);
+	CtlPkt repCp; string s1;
+	string noRstr = "handleDropComt: drop comtree request to "
+			+ net->getNodeName(root,s1);
+	string negRstr = noRstr;
+	bool success = handleReply(reply,repCp,noRstr,negRstr);
 	if (reply == 0) {
 		errReply(p,cp,outQ,"root router never replied");
-		cerr << "handleDropComtree: no reply from root router\n";
 		return false;
-	}
-	CtlPkt repCp;
-	repCp.unpack(ps->getPayload(reply),
-		     (ps->getHeader(reply)).getLength()-Forest::OVERHEAD);
-	if (repCp.getRrType() == NEG_REPLY) {
+	} else if (!success) {
 		errReply(p,cp,outQ,"root router could not drop comtree");
-		cerr << "handleAddComtree: root router could not drop "
-			"comtree\n";
-		cerr << repCp.getErrMsg() << endl;
-		ps->free(reply);
 		return false;
 	}
-	ps->free(reply);
 	
 	// send positive reply to client
 	repCp.reset(cp.getCpType(),POS_REPLY,cp.getSeqNum());
@@ -689,25 +674,55 @@ bool handleJoinComtReq(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 	reqCp.setAttr(PEER_IP,cliIp);
 	reqCp.setAttr(PEER_PORT,cliPort);
 	int reply = sendCtlPkt(reqCp,cliRtrAdr,inQ,outQ);
-	if (reply == 0) {
+	CtlPkt repCp; string ss;
+	string noRstr = "handleJoinComt: final add comtree link request to "
+			+ net->getNodeName(cliRtr,ss);
+	string negRstr = "";
+	bool success = handleReply(reply,repCp,noRstr,negRstr);
+	if (reply == 0) { // no reply
 		dropPath(cliRtr,ctx,inQ,outQ);
 		pthread_mutex_lock(&rateLock);
 		releasePath(cliRtr,ctx);
 		pthread_mutex_unlock(&rateLock);
 		pthread_mutex_unlock(&comtLock[ctx]);
-		string ss;
-		cerr << "handleJoinComt: router "
-		     << net->getNodeName(cliRtr,ss) << " did not respond to "
-			"final add comtree link request\n";
 		errReply(p,cp,outQ,"client router did not respond to final "
 				   "add comtree link request");
 		return false;
+	} else if (!success) { // negative reply
+		dropPath(cliRtr,ctx,inQ,outQ);
+		pthread_mutex_lock(&rateLock);
+		releasePath(cliRtr,ctx);
+		pthread_mutex_unlock(&rateLock);
+		pthread_mutex_unlock(&comtLock[ctx]);
+		errReply(p,cp,outQ,"client router could not add client "
+				   "comtree link");
+		return true;
 	}
-	CtlPkt repCp;
-	repCp.unpack(ps->getPayload(reply),
-		     (ps->getHeader(reply)).getLength() - Forest::OVERHEAD);
-	if (repCp.getRrType() == NEG_REPLY) {
-		ps->free(reply);
+	net->incComtLnkCnt(ctx,cliRtr); // increment the link count for cliRtr
+	int lnk = repCp.getAttr(LINK_NUM);
+
+	// and set the rates on the link
+	reqCp.reset(MOD_COMTREE_LINK,REQUEST,0);
+	reqCp.setAttr(COMTREE_NUM,comt);
+	reqCp.setAttr(LINK_NUM,lnk);
+	reqCp.setAttr(BIT_RATE_IN,net->getComtLeafBrUp(ctx));
+	reqCp.setAttr(BIT_RATE_OUT,net->getComtLeafBrDown(ctx));
+	reqCp.setAttr(PKT_RATE_IN,net->getComtLeafPrUp(ctx));
+	reqCp.setAttr(PKT_RATE_OUT,net->getComtLeafPrDown(ctx));
+	reply = sendCtlPkt(reqCp,cliRtrAdr,inQ,outQ);
+	noRstr = "handleJoinComt: final mod comtree link request to "
+		 + net->getNodeName(cliRtr,ss);
+	success = handleReply(reply,repCp,noRstr,negRstr);
+	if (reply == 0) { // no reply
+		dropPath(cliRtr,ctx,inQ,outQ);
+		pthread_mutex_lock(&rateLock);
+		releasePath(cliRtr,ctx);
+		pthread_mutex_unlock(&rateLock);
+		pthread_mutex_unlock(&comtLock[ctx]);
+		errReply(p,cp,outQ,"client router did not respond to final "
+				   "mod comtree link request");
+		return false;
+	} else if (!success) { // negative reply
 		dropPath(cliRtr,ctx,inQ,outQ);
 		pthread_mutex_lock(&rateLock);
 		releasePath(cliRtr,ctx);
@@ -717,44 +732,6 @@ bool handleJoinComtReq(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 				   "comtree link");
 		return true;
 	}
-	net->incComtLnkCnt(ctx,cliRtr); // increment the link count for cliRtr
-	int lnk = repCp.getAttr(LINK_NUM);
-	ps->free(reply);
-
-	reqCp.reset(MOD_COMTREE_LINK,REQUEST,0);
-	reqCp.setAttr(COMTREE_NUM,comt);
-	reqCp.setAttr(LINK_NUM,lnk);
-	reqCp.setAttr(BIT_RATE_IN,net->getComtLeafBrUp(ctx));
-	reqCp.setAttr(BIT_RATE_OUT,net->getComtLeafBrDown(ctx));
-	reqCp.setAttr(PKT_RATE_IN,net->getComtLeafPrUp(ctx));
-	reqCp.setAttr(PKT_RATE_OUT,net->getComtLeafPrDown(ctx));
-	reply = sendCtlPkt(reqCp,cliRtrAdr,inQ,outQ);
-	if (reply == 0) {
-		cerr << "handleJoinComt: router at address " << cliRtrAdr <<
-			" did not respond to final mod comtree link request\n";
-		dropPath(cliRtr,ctx,inQ,outQ);
-		pthread_mutex_lock(&rateLock);
-		releasePath(cliRtr,ctx);
-		pthread_mutex_unlock(&rateLock);
-		pthread_mutex_unlock(&comtLock[ctx]);
-		errReply(p,cp,outQ,"client router did not respond to final "
-				   "add comtree link request");
-		return false;
-	}
-	repCp.reset();
-	repCp.unpack(ps->getPayload(reply),
-		     (ps->getHeader(reply)).getLength() - Forest::OVERHEAD);
-	if (repCp.getRrType() == NEG_REPLY) {
-		ps->free(reply);
-		dropPath(cliRtr,ctx,inQ,outQ);
-		pthread_mutex_lock(&rateLock);
-		releasePath(cliRtr,ctx);
-		pthread_mutex_unlock(&rateLock);
-		pthread_mutex_unlock(&comtLock[ctx]);
-		errReply(p,cp,outQ,"cannot add comtree link to client");
-		return true;
-	}
-	ps->free(reply);
 
 	pthread_mutex_unlock(&comtLock[ctx]);
 
@@ -943,23 +920,14 @@ bool addPath(int ctx, list<int>& path, Queue& inQ, Queue& outQ) {
 		reqCp.setAttr(LINK_NUM,net->getLocLink(lnk,rtr));
 		reqCp.setAttr(PEER_CORE_FLAG,net->isComtCoreNode(ctx,child));
 		int reply = sendCtlPkt(reqCp,rtrAdr,inQ,outQ);
-		if (reply == 0) {
-			string ss;
-			cerr << "addPath: no reply from router " <<
-				net->getNodeName(rtr,ss) << " to add comtree "
-				"link message for comtree " << comt << "\n";
-			dropPath(rtr,ctx,inQ,outQ);
-			return false;
+		CtlPkt repCp; string s1, s2;
+		string noRstr = "addPath: add comtree link request to "
+			 	+ net->getNodeName(rtr,s1) + " for comtree "
+		         	+ Misc::num2string(comt,s2);
+		string negRstr = "";
+		if (!handleReply(reply,repCp,noRstr,negRstr)) {
+			dropPath(rtr,ctx,inQ,outQ); return false;
 		}
-		CtlPkt repCp;
-		repCp.unpack(ps->getPayload(reply),
-			 (ps->getHeader(reply)).getLength() - Forest::OVERHEAD);
-		if (repCp.getRrType() == NEG_REPLY) {
-			ps->free(reply);
-			dropPath(rtr,ctx,inQ,outQ);
-			return false;
-		}
-		ps->free(reply);
 
 		// next, set the comtree link rates at rtr
 		reqCp.reset(MOD_COMTREE_LINK,REQUEST,0);
@@ -970,49 +938,34 @@ bool addPath(int ctx, list<int>& path, Queue& inQ, Queue& outQ) {
 		reqCp.setAttr(PKT_RATE_IN,net->getComtPrUp(ctx,lnk));
 		reqCp.setAttr(PKT_RATE_OUT,net->getComtPrDown(ctx,lnk));
 		reply = sendCtlPkt(reqCp,rtrAdr,inQ,outQ);
+		noRstr = "addPath: mod comtree link request to "
+		 	 + net->getNodeName(rtr,s1) + " for comtree "
+		       	 + Misc::num2string(comt,s2);
+		negRstr = "";
+		bool success = handleReply(reply,repCp,noRstr,negRstr);
 		if (reply == 0) {
-			string ss;
-			cerr << "addPath: no reply from router " <<
-				net->getNodeName(rtr,ss) << " to mod comtree "
-				"link message for comtree " << comt << "\n";
-			dropPath(rtr,ctx,inQ,outQ);
-			return false;
-		}
-		repCp.reset();
-		repCp.unpack(ps->getPayload(reply),
-			 (ps->getHeader(reply)).getLength() - Forest::OVERHEAD);
-		if (repCp.getRrType() == NEG_REPLY) {
-			ps->free(reply);
+			dropPath(rtr,ctx,inQ,outQ); return false;
+		} else if (!success) {
 			CtlPkt abortCp(DROP_COMTREE_LINK,REQUEST,0);
 			abortCp.setAttr(COMTREE_NUM,comt);
 			abortCp.setAttr(LINK_NUM,net->getLocLink(lnk,rtr));
 			int reply = sendCtlPkt(abortCp,rtrAdr,inQ,outQ);
 			if (reply != 0) ps->free(reply);
 			dropPath(rtr,ctx,inQ,outQ);
-
 			return false;
 		}
-		ps->free(reply);
 
 		// next, add the child to the comtree
 		reqCp.reset(ADD_COMTREE,REQUEST,0);
 		reqCp.setAttr(COMTREE_NUM,comt);
 		reply = sendCtlPkt(reqCp,childAdr,inQ,outQ);
-		if (reply == 0) {
-			string ss;
-			cerr << "addPath: no reply from router " <<
-				net->getNodeName(child,ss) << " to add comtree "
-				"message for comtree " << comt << "\n";
-			dropPath(rtr,ctx,inQ,outQ);
-			return false;
-		}
-		repCp.reset();
-		repCp.unpack(ps->getPayload(reply),
-			 (ps->getHeader(reply)).getLength() - Forest::OVERHEAD);
-		if (repCp.getRrType() == NEG_REPLY) {
-			ps->free(reply);
-			dropPath(rtr,ctx,inQ,outQ);
-			return false;
+		noRstr = "addPath: add comtree request to "
+		 	 + net->getNodeName(rtr,s1) + " for comtree "
+		       	 + Misc::num2string(comt,s2);
+		negRstr = "";
+		success = handleReply(reply,repCp,noRstr,negRstr);
+		if (!success) {
+			dropPath(rtr,ctx,inQ,outQ); return false;
 		}
 		ps->free(reply);
 
@@ -1024,24 +977,14 @@ bool addPath(int ctx, list<int>& path, Queue& inQ, Queue& outQ) {
 		reqCp.setAttr(LINK_NUM,net->getLocLink(lnk,child));
 		reqCp.setAttr(PEER_CORE_FLAG,net->isComtCoreNode(ctx,rtr));
 		reply = sendCtlPkt(reqCp,childAdr,inQ,outQ);
+		noRstr = "addPath: add comtree link request to "
+		 	 + net->getNodeName(child,s1) + " for comtree "
+		       	 + Misc::num2string(comt,s2);
+		negRstr = noRstr;
+		success = handleReply(reply,repCp,noRstr,negRstr);
 		if (reply == 0) {
-			string ss;
-			cerr << "addPath: no reply from router " <<
-				net->getNodeName(child,ss) << " to add comtree "
-				"link message for comtree " << comt << "\n";
-			dropPath(rtr,ctx,inQ,outQ);
-			return false;
-		}
-		repCp.reset();
-		repCp.unpack(ps->getPayload(reply),
-			 (ps->getHeader(reply)).getLength() - Forest::OVERHEAD);
-		if (repCp.getRrType() == NEG_REPLY) {
-			string ss;
-			cerr << "addPath: negative reply from router " <<
-				net->getNodeName(rtr,ss) << " to add comtree "
-				"link message for comtree " << comt << "\n";
-			cerr << repCp.getErrMsg() << endl;
-			ps->free(reply);
+			dropPath(rtr,ctx,inQ,outQ); return false;
+		} else if (!success) {
 			CtlPkt abortCp(DROP_COMTREE,REQUEST,0);
 			abortCp.setAttr(COMTREE_NUM,comt);
 			int reply = sendCtlPkt(abortCp,rtrAdr,inQ,outQ);
@@ -1049,7 +992,6 @@ bool addPath(int ctx, list<int>& path, Queue& inQ, Queue& outQ) {
 			dropPath(rtr,ctx,inQ,outQ);
 			return false;
 		}
-		ps->free(reply);
 
 		// now, set comtree attributes at child
 		reqCp.reset(MOD_COMTREE,REQUEST,0);
@@ -1057,24 +999,14 @@ bool addPath(int ctx, list<int>& path, Queue& inQ, Queue& outQ) {
 		reqCp.setAttr(PARENT_LINK,net->getLocLink(lnk,child));
 		reqCp.setAttr(CORE_FLAG,net->isComtCoreNode(ctx,child));
 		reply = sendCtlPkt(reqCp,childAdr,inQ,outQ);
+		noRstr = "addPath: add mod comtree request to "
+		 	 + net->getNodeName(child,s1) + " for comtree "
+		       	 + Misc::num2string(comt,s2);
+		negRstr = noRstr;
+		success = handleReply(reply,repCp,noRstr,negRstr);
 		if (reply == 0) {
-			string ss;
-			cerr << "addPath: no reply from router " <<
-				net->getNodeName(child,ss) << " to mod comtree "
-				"message for comtree " << comt << "\n";
-			dropPath(rtr,ctx,inQ,outQ);
-			return false;
-		}
-		repCp.reset();
-		repCp.unpack(ps->getPayload(reply),
-			 (ps->getHeader(reply)).getLength() - Forest::OVERHEAD);
-		if (repCp.getRrType() == NEG_REPLY) {
-			string ss;
-			cerr << "addPath: negative reply from router " <<
-				net->getNodeName(rtr,ss) << " to mod comtree "
-				"message for comtree " << comt << "\n";
-			cerr << repCp.getErrMsg() << endl;
-			ps->free(reply);
+			dropPath(rtr,ctx,inQ,outQ); return false;
+		} else if (!success) {
 			CtlPkt abortCp(DROP_COMTREE,REQUEST,0);
 			abortCp.setAttr(COMTREE_NUM,comt);
 			int reply = sendCtlPkt(abortCp,rtrAdr,inQ,outQ);
@@ -1082,7 +1014,6 @@ bool addPath(int ctx, list<int>& path, Queue& inQ, Queue& outQ) {
 			dropPath(rtr,ctx,inQ,outQ);
 			return false;
 		}
-		ps->free(reply);
 
 		// finally, set the comtree link rates at the child
 		reqCp.reset(MOD_COMTREE_LINK,REQUEST,0);
@@ -1093,25 +1024,19 @@ bool addPath(int ctx, list<int>& path, Queue& inQ, Queue& outQ) {
 		reqCp.setAttr(PKT_RATE_IN,net->getComtPrDown(ctx,lnk));
 		reqCp.setAttr(PKT_RATE_OUT,net->getComtPrUp(ctx,lnk));
 		reply = sendCtlPkt(reqCp,childAdr,inQ,outQ);
+		noRstr = "addPath: mod comtree link request to "
+		 	 + net->getNodeName(child,s1) + " for comtree "
+		       	 + Misc::num2string(comt,s2);
+		negRstr = noRstr;
+		success = handleReply(reply,repCp,noRstr,negRstr);
 		if (reply == 0) {
-			string ss;
-			cerr << "addPath: no reply from router " <<
-				net->getNodeName(child,ss) << " to mod comtree "
-				"link message for comtree " << comt << "\n";
-			dropPath(rtr,ctx,inQ,outQ);
-			return false;
-		}
-		repCp.reset();
-		repCp.unpack(ps->getPayload(reply),
-			 (ps->getHeader(reply)).getLength() - Forest::OVERHEAD);
-		if (repCp.getRrType() == NEG_REPLY) {
-			ps->free(reply);
+			dropPath(rtr,ctx,inQ,outQ); return false;
+		} else if (!success) {
 			CtlPkt abortCp(DROP_COMTREE,REQUEST,0);
 			abortCp.setAttr(COMTREE_NUM,comt);
 			int reply = sendCtlPkt(abortCp,childAdr,inQ,outQ);
 			if (reply != 0) ps->free(reply);
 			dropPath(rtr,ctx,inQ,outQ);
-
 			return false;
 		}
 		ps->free(reply);
@@ -1141,30 +1066,18 @@ bool dropPath(int firstRtr, int ctx, Queue& inQ, Queue& outQ) {
 		    net->getComtLnkCnt(ctx,rtr) > 1)
 			break;
 		int parent = net->getPeer(rtr,lnk);
+
 		// drop comtree at rtr
 		fAdr_t rtrAdr = net->getNodeAdr(rtr);
 		CtlPkt reqCp(DROP_COMTREE,REQUEST,0);
 		reqCp.setAttr(COMTREE_NUM,comt);
 		int reply = sendCtlPkt(reqCp,rtrAdr,inQ,outQ);
-		if (reply == 0) {
-			string ss;
-			cerr << "dropPath: router " << net->getNodeName(rtr,ss)
-			     << " failed to respond to drop comtree request "
-				"for comtree " << comt << endl;
-			status = false;
-		}
-		CtlPkt repCp;
-		repCp.unpack(ps->getPayload(reply),
-		 		(ps->getHeader(reply)).getLength());
-		if (repCp.getRrType() == NEG_REPLY) {
-			string ss;
-			cerr << "dropPath: router " << net->getNodeName(rtr,ss)
-			     << " could not complete drop comtree request "
-				"for comtree " << comt << endl;
-			cerr << repCp.getErrMsg() << endl;
-			status = false;
-		}
-		if (reply != 0) ps->free(reply);
+		CtlPkt repCp; string s1, s2;
+		string noRstr = "dropPath: drop comtree request to "
+		 		+ net->getNodeName(rtr,s1) + " for comtree "
+		       		+ Misc::num2string(comt,s2);
+		string negRstr = noRstr;
+		if (!handleReply(reply,repCp,noRstr,negRstr)) status = false;
 
 		// now drop comtree link at parent
 		fAdr_t pAdr = net->getNodeAdr(parent);
@@ -1172,26 +1085,11 @@ bool dropPath(int firstRtr, int ctx, Queue& inQ, Queue& outQ) {
 		reqCp.setAttr(COMTREE_NUM,comt);
 		reqCp.setAttr(LINK_NUM,net->getLocLink(lnk,rtr));
 		reply = sendCtlPkt(reqCp,pAdr,inQ,outQ);
-		if (reply == 0) {
-			string ss;
-			cerr << "dropPath: router "
-			     << net->getNodeName(parent,ss) << " failed to "
-				"respond to drop comtree link "
-				"request for comtree " << comt << endl;
-			status = false;
-		}
-		repCp.reset();
-		repCp.unpack(ps->getPayload(reply),
-		 		(ps->getHeader(reply)).getLength());
-		if (repCp.getRrType() == NEG_REPLY) {
-			string ss;
-			cerr << "dropPath: router " << net->getNodeName(rtr,ss)
-			     << " could not complete drop comtree link request "
-				"for comtree " << comt << endl;
-			cerr << repCp.getErrMsg() << endl;
-			status = false;
-		}
-		if (reply != 0) ps->free(reply);
+		noRstr = "dropPath: mod comtree link request to "
+		 	 + net->getNodeName(parent,s1) + " for comtree "
+		       	 + Misc::num2string(comt,s2);
+		negRstr = noRstr;
+		if (!handleReply(reply,repCp,noRstr,negRstr)) status = false;
 
 		rtr = parent;
 	}
@@ -1296,28 +1194,15 @@ bool handleLeaveComtReq(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 	reqCp.setAttr(PEER_IP,cliIp);
 	reqCp.setAttr(PEER_PORT,cliPort);
 	int reply = sendCtlPkt(reqCp,cliRtrAdr,inQ,outQ);
-	if (reply == 0) {
-		pthread_mutex_unlock(&comtLock[ctx]);
-		cerr << "handleLeaveComt: no reply from router " <<
-			cliRtr << " to drop comtree link request\n";
-		return false;
-	} else {
-		CtlPkt repCp;
-		repCp.unpack(ps->getPayload(reply),
-		 (ps->getHeader(reply)).getLength() - Forest::OVERHEAD);
-		if (repCp.getRrType() == NEG_REPLY) {
-			pthread_mutex_unlock(&comtLock[ctx]);
-			string s1, s2;
-			cerr << "handleLeaveComt: router " << 
-				net->getNodeName(cliRtr,s1) <<
-				" could not drop access link to " <<
-				Forest::fAdr2string(cliAdr,s2) <<
-				" for comtree " << comt << "\n";
-			cerr << repCp.getErrMsg() << endl;
-			ps->free(reply);
-			return false;
-		}
-		ps->free(reply);
+	CtlPkt repCp; string s1, s2, s3;
+	string noRstr = "handleLeaveComt: drop comtree link request to "
+		 	 + net->getNodeName(cliRtr,s1) + " for comtree "
+	       		 + Misc::num2string((int) comt,s2) + " client "
+			 + Forest::fAdr2string(cliAdr,s3);
+	string negRstr = noRstr;
+	bool success = handleReply(reply,repCp,noRstr,negRstr);
+	if (!success) {
+		pthread_mutex_unlock(&comtLock[ctx]); return false;
 	}
 
 	// identify links to be removed from the comtree
@@ -1342,7 +1227,7 @@ bool handleLeaveComtReq(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 	pthread_mutex_unlock(&comtLock[ctx]);
 	
 	// send positive reply and return
-	CtlPkt repCp(cp.getCpType(),POS_REPLY,cp.getSeqNum());
+	repCp.reset(cp.getCpType(),POS_REPLY,cp.getSeqNum());
 	sendCtlPkt(repCp,cliAdr,inQ,outQ);
 	return true;
 }
@@ -1395,7 +1280,6 @@ int sendCtlPkt(CtlPkt& cp, fAdr_t dest, Queue& inQ, Queue& outQ) {
 	return reply;
 }
 
-
 /** Send a control request packet multiple times before giving up.
  *  This method makes a copy of the original and sends the copy
  *  back to the main thread. If no reply is received after 1 second,
@@ -1439,6 +1323,41 @@ int sendAndWait(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 	return 0;
 }
 
+/** Handle common chores for reply packets.
+ *  @param reply is a packet number for a reply to a control packet
+ *  @param repCp is a reference to a CtlPkt object in which the reply
+ *  information is returned
+ *  @param noRstr is a string to be written to cerr if no reply is
+ *  received; it will be preceded by a generic message indicating that
+ *  no reply was received and followed by a new line. If noRstr has
+ *  zero loength, then nothing is written
+ *  @param negRstr is a string to be written to cerr if a negative reply is
+ *  received; it will be preceded by a generic message indicating that
+ *  a negative reply was received and followed by the error message
+ *  returned as part of the reply packet. If negRstr has zero length,
+ *  then nothing is written
+ */
+bool handleReply(int reply, CtlPkt& repCp, string& noRstr, string& negRstr) {
+	if (reply == 0) {
+		if (noRstr.length() != 0)
+			cerr << "handleReply: no reply to control packet:\n"
+			     << noRstr << endl;
+		return false;
+	}
+	repCp.reset();
+	repCp.unpack(ps->getPayload(reply),
+		     (ps->getHeader(reply)).getLength() - Forest::OVERHEAD);
+	if (repCp.getRrType() == NEG_REPLY) {
+		if (negRstr.length() != 0)
+			cerr << "handleReply: negative reply received:\n"
+		     	     << negRstr << "\n("
+			     << repCp.getErrMsg() << ")" << endl;
+		ps->free(reply);
+		return false;
+	}
+	ps->free(reply);
+	return true;
+}
 
 /** Build and send error reply packet for p.
  *  @param p is the packet number of the request packet

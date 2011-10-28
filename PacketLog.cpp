@@ -49,7 +49,7 @@ void PacketLog::write(ostream& out) const {
 		if (events[i].sendFlag) cout << "send link ";
 		else 			cout << "recv link ";
 		cout << setw(2) << events[i].link << " at "
-		     << Misc::nstime2string(events[i].time,s);
+		     << Misc::nstime2string(events[i].time,s) << " ";
 		int p = events[i].pkt;
 		(ps->getHeader(p)).write(cout,ps->getBuffer(p));
 	}

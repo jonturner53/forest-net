@@ -96,6 +96,7 @@ void	updatePath(int,list<int>&,Queue&,Queue&);
 // helper functions for sending control packets from threads
 int	sendCtlPkt(CtlPkt&, fAdr_t, Queue&, Queue&);
 int 	sendAndWait(int,CtlPkt&,Queue&,Queue&);
+bool	handleReply(int,CtlPkt&,string&,string&);
 void 	errReply(int,CtlPkt&,Queue&, const char*);
 
 void	connect();		

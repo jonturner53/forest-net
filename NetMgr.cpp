@@ -479,9 +479,33 @@ bool handleNewClient(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 	}
 	ps->free(reply);
 
-	// now add the new client to the user signalling comtree
+	// now add the new client to the client connection comtree
 	reqCp.reset(ADD_COMTREE_LINK,REQUEST,0);
-	reqCp.setAttr(COMTREE_NUM,1);
+	reqCp.setAttr(COMTREE_NUM,Forest::CLIENT_CON_COMT);
+	reqCp.setAttr(LINK_NUM,clientLink);
+	reply = sendCtlPkt(reqCp,rtrAdr,inQ,outQ);
+	if (reply == 0) {
+		errReply(p,cp,outQ,"no reply from router to add comtree link");
+		cerr << "handleNewClient: no reply from router to add comtree "
+			"link\n";
+		return false;
+	}
+	repCp.reset();
+	repCp.unpack(ps->getPayload(reply),
+		     (ps->getHeader(reply)).getLength() - Forest::OVERHEAD);
+	if (repCp.getRrType() == NEG_REPLY) {
+		errReply(p,cp,outQ,"router could not add client to signalling "
+				   "comtree");
+		cerr << "handleNewClient: router could not add client to "
+			"signalling comtree";
+		ps->free(reply);
+		return false;
+	}
+	ps->free(reply);
+
+	// now add the new client to the client signaling comtree
+	reqCp.reset(ADD_COMTREE_LINK,REQUEST,0);
+	reqCp.setAttr(COMTREE_NUM,Forest::CLIENT_SIG_COMT);
 	reqCp.setAttr(LINK_NUM,clientLink);
 	reply = sendCtlPkt(reqCp,rtrAdr,inQ,outQ);
 	if (reply == 0) {
