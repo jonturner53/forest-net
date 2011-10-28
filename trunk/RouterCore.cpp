@@ -1631,8 +1631,7 @@ bool RouterCore::dropComtreeLink(int p, CtlPkt& cp, CtlPkt& reply) {
 		return false;
 	}
 	int cLnk = ctt->getComtLink(comt,lnk);
-
-	dropComtreeLink(ctx,lnk,cLnk);
+	if (cLnk != 0) dropComtreeLink(ctx,lnk,cLnk);
 	return true;
 }
 
@@ -1679,7 +1678,7 @@ void RouterCore::dropComtreeLink(int ctx, int lnk, int cLnk) {
 	qm->freeQ(qid);
 	if (!ctt->removeLink(ctx,cLnk)) {
 		cerr << "dropComtreeLink: internal error detected "
-			"final removeLink failed";
+			"final removeLink failed\n";
 	}
 }
 
@@ -1727,7 +1726,7 @@ bool RouterCore::modComtreeLink(int p, CtlPkt& cp, CtlPkt& reply) {
 	int dobr = obr - ctt->getOutBitRate(cLnk);
 	int dopr = opr - ctt->getOutPktRate(cLnk);
 
-	bool success;
+	bool success = true;
 	if (lt->getAvailInBitRate(lnk) < dibr) {
 		reply.setErrMsg("modify comtree link: increase in "
 				"input bit rate exceeds link capacity");
