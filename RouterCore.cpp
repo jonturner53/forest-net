@@ -921,6 +921,7 @@ void RouterCore::subUnsub(int p, int ctx) {
 			rt->addLink(rtx,cLnk);
 			pp[i] = 0; // so, parent will ignore
 		}
+		ctt->registerRte(cLnk,rtx);
 	}
 	// remove subscriptions
 	int dropcnt = ntohl(pp[addcnt+1]);
@@ -933,6 +934,7 @@ void RouterCore::subUnsub(int p, int ctx) {
 		if (!Forest::mcastAdr(addr)) continue; // ignore unicast or 0
 		rtx = rt->getRteIndex(comt,addr);
 		if (rtx == 0) continue;
+		ctt->deregisterRte(cLnk,rtx);
 		rt->removeLink(rtx,cLnk);
 		if (rt->noLinks(rtx)) {
 			rt->removeEntry(rtx);
@@ -1619,6 +1621,11 @@ bool RouterCore::dropComtreeLink(int p, CtlPkt& cp, CtlPkt& reply) {
 	}
 	int cLnk = ctt->getComtLink(comt,lnk);
 
+	dropComtreeLink(ctx,lnk,cLnk);
+	return true;
+}
+
+void RouterCore::dropComtreeLink(int ctx, int lnk, int cLnk) {
 	// release the link bandwidth used by comtree link
 	lt->addAvailInBitRate(lnk,ctt->getInBitRate(cLnk));
 	lt->addAvailInPktRate(lnk,ctt->getInPktRate(cLnk));
@@ -1638,6 +1645,11 @@ bool RouterCore::dropComtreeLink(int p, CtlPkt& cp, CtlPkt& reply) {
 			if (rtx != 0) rt->removeEntry(rtx);
 		}
 	}
+	// remove cLnk from multicast routes for this comtree
+	set<int>& rteSet = ctt->getRteSet(cLnk);
+	set<int>::iterator rp;
+	for (rp = rteSet.begin(); rp != rteSet.end(); rp++)
+		rt->removeLink((*rp),cLnk);
 
 	// release queue and remove link from comtree
 	int qid = ctt->getLinkQ(cLnk);

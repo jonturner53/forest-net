@@ -64,6 +64,7 @@ public:
 	set<int>& getLinks(int) const;
 	set<int>& getRtrLinks(int) const;
 	set<int>& getCoreLinks(int) const;
+	set<int>& getRteSet(int) const;
 
 	// add/remove/modify table entries
 	int	addEntry(comt_t);
@@ -77,6 +78,8 @@ public:
 	void	setInPktRate(int, int);
 	void	setOutBitRate(int, int);
 	void	setOutPktRate(int, int);
+	void	registerRte(int,int);
+	void	deregisterRte(int,int);
 
 	// input/output of table contents 
 	bool 	read(istream&);
@@ -107,6 +110,7 @@ private:
 	int	inPktRate;		///< max incoming packet rate
 	int	outBitRate;		///< max outgoing bit rate
 	int	outPktRate;		///< max outgoing packet rate
+	set<int> *rteSet;		///< set of routes that map to this link
 	};
 	ComtLinkInfo *clTbl;		///< cLnkTbl[cl] has info on comtLink cl
 	IdMap *clMap;			///< maps (comtree,link)->comtLink
@@ -339,7 +343,7 @@ inline int ComtreeTable::getOutPktRate(int cLnk) const {
  *  which is a comtree link number
  */
 inline set<int>& ComtreeTable::getLinks(int ctx) const {
-	return *tbl[ctx].comtLinks;
+	return *(tbl[ctx].comtLinks);
 }
 
 /** Get a reference to the set of comtree links leading to another router.
@@ -351,7 +355,7 @@ inline set<int>& ComtreeTable::getLinks(int ctx) const {
  *  which is a comtree link number
  */
 inline set<int>& ComtreeTable::getRtrLinks(int ctx) const {
-	return *tbl[ctx].rtrLinks;
+	return *(tbl[ctx].rtrLinks);
 }
 
 /** Get a reference to the set of comtree links leading to a core router.
@@ -363,7 +367,19 @@ inline set<int>& ComtreeTable::getRtrLinks(int ctx) const {
  *  which is a comtree link number
  */
 inline set<int>& ComtreeTable::getCoreLinks(int ctx) const {
-	return *tbl[ctx].coreLinks;
+	return *(tbl[ctx].coreLinks);
+}
+
+/** Get a reference to the set of routes registered with a comtree link.
+ *  This method is provided to allow the client program
+ *  to iterate through all the routes that use a comtree link.
+ *  It must not be used to modify the set of routes.
+ *  @param cLnk is a comtree link number
+ *  @return a reference to a set of integers, each of
+ *  which is a route index.
+ */
+inline set<int>& ComtreeTable::getRteSet(int cLnk) const {
+	return *(clTbl[cLnk].rteSet);
 }
 
 /** Set the parent link for a given table entry.
@@ -421,6 +437,22 @@ inline void ComtreeTable::setInPktRate(int cLnk, int pr) {
  */
 inline void ComtreeTable::setOutBitRate(int cLnk, int br) {
 	if (validComtLink(cLnk)) clTbl[cLnk].outBitRate = br;
+}
+
+/** Register a route with a given comtree link.
+ *  @param cLnk is a valid comtree link number
+ *  @param rtx is an integer that is presumed to be a route index
+ */
+inline void ComtreeTable::registerRte(int cLnk, int rtx) {
+	if (validComtLink(cLnk)) clTbl[cLnk].rteSet->insert(rtx);
+}
+
+/** Deegister a route with a given comtree link.
+ *  @param cLnk is a valid comtree link number
+ *  @param rtx is an integer that is presumed to be a route index
+ */
+inline void ComtreeTable::deregisterRte(int cLnk, int rtx) {
+	if (validComtLink(cLnk)) clTbl[cLnk].rteSet->insert(rtx);
 }
 
 /** Set the outgoing packet rate for a comtree link.
