@@ -10,7 +10,7 @@ import princeton.StdDraw;
  */
 class AvatarGraphic {
 	private AvatarStatus avaStatus;
-	private static final double SIZE = .06;
+	private static final double SIZE = .04;
 	
 	/** Constructor for AvatarGraphic class.
 	 *  @param status is a AvatarStatus object that defines the avatar's
@@ -49,7 +49,7 @@ class AvatarGraphic {
 		StdDraw.line(avaStatus.x, avaStatus.y,
 			     avaStatus.x + SIZE*Math.sin(avaStatus.dir*scaleFactor),
 			     avaStatus.y + SIZE*Math.cos(avaStatus.dir*scaleFactor));
-		StdDraw.setPenRadius(.003);
+		StdDraw.setPenRadius(.002);
 		StdDraw.setPenColor(Color.BLACK);
 		StdDraw.filledCircle(avaStatus.x,avaStatus.y,.005);
 

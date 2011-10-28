@@ -221,7 +221,7 @@ void handleIncoming(int p) {
 		CtlPkt cp;
 		cp.unpack(ps->getPayload(p),
 			h.getLength()-Forest::OVERHEAD);
-		if(cp.getRrType() == POS_REPLY) {
+		if(cp.getCpType() == NEW_CLIENT) {
 			writeToAcctFile(cp);
 			int t = tMap->getId(cp.getSeqNum());
 			if(t != 0) {
@@ -296,6 +296,10 @@ void* handler(void * tp) {
 			Np4d::sendInt(avaSock,rtrIp);
 			Np4d::sendInt(avaSock,CC_Adr);
 			close(avaSock);
+		} else if(cp3.getCpType() == NEW_CLIENT &&
+		    cp3.getRrType() == NEG_REPLY) { //send -1 to client
+			cerr << "Client could not connect:" << cp3.getErrMsg() << endl;
+			Np4d::sendInt(avaSock,-1);
 		} else {
 			h3.write(cerr,ps->getBuffer(reply));
 			cp3.write(cerr);
