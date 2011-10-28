@@ -43,7 +43,7 @@ public:
 	int	getAvailInPktRate(int) const;	
 	int	getAvailOutBitRate(int) const;	
 	int	getAvailOutPktRate(int) const;	
-	set<int>& getComtSet(int);
+	set<int>& getComtSet(int) const;
 
 	// modifiers
 	int	addEntry(int,ipa_t,ipp_t);
@@ -62,8 +62,8 @@ public:
 	bool	addAvailInPktRate(int, int);	
 	bool	addAvailOutBitRate(int, int);	
 	bool	addAvailOutPktRate(int, int);	
-	bool	registerComt(int);
-	bool	deregisterComt(int);
+	bool	registerComt(int,int);
+	bool	deregisterComt(int,int);
 
 	// io routines
 	bool read(istream&);
@@ -218,7 +218,7 @@ inline int LinkTable::getAvailOutPktRate(int lnk) const {
  *  @param lnk is a valid link number
  *  @return a reference to the set of comtrees registered for this link
  */
-inline set<int>& LinkTable::getComtSet(int lnk) {
+inline set<int>& LinkTable::getComtSet(int lnk) const {
 	return *(lnkTbl[lnk].comtSet);
 }
 
@@ -370,14 +370,14 @@ inline bool LinkTable::addAvailOutPktRate(int lnk, int pr) {
 	return true;
 }
 
-inline bool LinkTable::registerComt(int lnk) {
+inline bool LinkTable::registerComt(int lnk, int ctx) {
 	if (!valid(lnk)) return false;
-	lnkTbl[lnk].comtSet->insert(lnk);
+	lnkTbl[lnk].comtSet->insert(ctx);
 }
 
-inline bool LinkTable::deregisterComt(int lnk) {
+inline bool LinkTable::deregisterComt(int lnk, int ctx) {
 	if (!valid(lnk)) return false;
-	lnkTbl[lnk].comtSet->erase(lnk);
+	lnkTbl[lnk].comtSet->erase(ctx);
 }
 
 /** Compute key for hash lookup.

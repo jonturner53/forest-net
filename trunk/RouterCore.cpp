@@ -921,7 +921,6 @@ void RouterCore::subUnsub(int p, int ctx) {
 			rt->addLink(rtx,cLnk);
 			pp[i] = 0; // so, parent will ignore
 		}
-		ctt->registerRte(cLnk,rtx);
 	}
 	// remove subscriptions
 	int dropcnt = ntohl(pp[addcnt+1]);
@@ -934,7 +933,6 @@ void RouterCore::subUnsub(int p, int ctx) {
 		if (!Forest::mcastAdr(addr)) continue; // ignore unicast or 0
 		rtx = rt->getRteIndex(comt,addr);
 		if (rtx == 0) continue;
-		ctt->deregisterRte(cLnk,rtx);
 		rt->removeLink(rtx,cLnk);
 		if (rt->noLinks(rtx)) {
 			rt->removeEntry(rtx);
@@ -975,8 +973,9 @@ void RouterCore::handleConnDisc(int p) {
 			sendCpReq(cp,nmAdr);
 		}
 	} else if (h.getPtype() == DISCONNECT) {
-		if (lt->getPeerPort(inLnk) == h.getTunSrcPort())
-			lt->setPeerPort(inLnk,0);
+		if (lt->getPeerPort(inLnk) == h.getTunSrcPort()) {
+			dropLink(inLnk);
+		}
 		if (nmAdr != 0 && lt->getPeerType(inLnk) == CLIENT) {
 			CtlPkt cp(CLIENT_DISCONNECT,REQUEST,0);
 			cp.setAttr(CLIENT_ADR,h.getSrcAdr());
@@ -1277,12 +1276,25 @@ bool RouterCore::dropLink(int p, CtlPkt& cp, CtlPkt& reply) {
 		reply.setRrType(NEG_REPLY);
 		return false;
 	}
-	int lnk = cp.getAttr(LINK_NUM);
+	dropLink(cp.getAttr(LINK_NUM));
+	return true;
+}
+
+void RouterCore::dropLink(int lnk) {
+	set<int>& comtSet = lt->getComtSet(lnk);
+	set<int>::iterator cp;
+	int *comtVec = new int[comtSet.size()]; int i = 0;
+	for (cp = comtSet.begin(); cp != comtSet.end(); cp++)
+		comtVec[i++] = *cp;
+	while (--i >= 0) {
+		int ctx = comtVec[i];
+		int cLnk = ctt->getComtLink(ctt->getComtree(ctx),lnk);
+		dropComtreeLink(ctx,lnk,cLnk);
+	}
 	int iface = lt->getIface(lnk);
 	ift->addAvailBitRate(iface,-lt->getBitRate(lnk));
 	ift->addAvailPktRate(iface,-lt->getPktRate(lnk));
 	lt->removeEntry(lnk);
-	return true;
 }
 
 bool RouterCore::getLink(int p, CtlPkt& cp, CtlPkt& reply) {
@@ -1402,22 +1414,21 @@ bool RouterCore::dropComtree(int p, CtlPkt& cp, CtlPkt& reply) {
 		return false;
 	}
 
-	// release the link bandwidth assigned to the comtree links
-	// and the queue assigned to the comtree
-	set<int>& linkSet = ctt->getLinks(ctx);
-	set<int>::iterator pp;
-	for (pp = linkSet.begin(); pp != linkSet.end(); pp++) {
-		int cLnk = *pp; int lnk = ctt->getLink(cLnk);
-		lt->addAvailInBitRate(lnk,ctt->getInBitRate(cLnk));
-		lt->addAvailOutBitRate(lnk,ctt->getOutBitRate(cLnk));
-		lt->addAvailInPktRate(lnk,ctt->getInPktRate(cLnk));
-		lt->addAvailOutPktRate(lnk,ctt->getOutPktRate(cLnk));
-		qm->freeQ(ctt->getLinkQ(cLnk));
-	}
-
+	// remove all routes involving this comtree
+	// also degisters each route in the comtree table
 	rt->purgeRoutes(comt);
 
-	ctt->removeEntry(ctx); // this also removes all the comtree links
+	// remove all the comtree links
+	// first, copy out the comtree links, then remove them
+	// two step process is needed because dropComtreeLink modifies linkSet
+	set<int>& linkSet = ctt->getLinks(ctx);
+	set<int>::iterator pp;
+	int *clnks = new int[linkSet.size()]; int i = 0;
+	for (pp = linkSet.begin(); pp != linkSet.end(); pp++) clnks[i++] = *pp;
+	while (--i >= 0)  dropComtreeLink(ctx,ctt->getLink(clnks[i]),clnks[i]);
+	delete [] clnks;
+
+	ctt->removeEntry(ctx); // and finally drop entry in comtree table
 	return true;
 }
 
@@ -1634,6 +1645,7 @@ void RouterCore::dropComtreeLink(int ctx, int lnk, int cLnk) {
 
 	// remove unicast route for this comtree
 	fAdr_t peerAdr = lt->getPeerAdr(lnk);
+	int comt = ctt->getComtree(ctx);
 	if (lt->getPeerType(lnk) != ROUTER) {
 		int rtx = rt->getRteIndex(comt,peerAdr);
 		if (rtx != 0) rt->removeEntry(rtx);
@@ -1646,16 +1658,29 @@ void RouterCore::dropComtreeLink(int ctx, int lnk, int cLnk) {
 		}
 	}
 	// remove cLnk from multicast routes for this comtree
+	// must first copy out the routes that are registered for
+	// cLnk, then remove cLnk from all these routes;
+	// two step is process is needed because the removal of the
+	// link from the route, also deregisters the route in the comtree table
+	// causing the rteSet to change
 	set<int>& rteSet = ctt->getRteSet(cLnk);
 	set<int>::iterator rp;
-	for (rp = rteSet.begin(); rp != rteSet.end(); rp++)
-		rt->removeLink((*rp),cLnk);
+	int *routes = new int[rteSet.size()];
+	int i = 0;
+	for (rp = rteSet.begin(); rp != rteSet.end(); rp++) routes[i++] = *rp;
+	while (--i >= 0) rt->removeLink(routes[i],cLnk);
+	delete [] routes;
+
+	// now deregister the comtree from the link
+	lt->deregisterComt(lnk,ctx);
 
 	// release queue and remove link from comtree
 	int qid = ctt->getLinkQ(cLnk);
 	qm->freeQ(qid);
-	ctt->removeLink(ctx,cLnk);
-	return true;
+	if (!ctt->removeLink(ctx,cLnk)) {
+		cerr << "dropComtreeLink: internal error detected "
+			"final removeLink failed";
+	}
 }
 
 bool RouterCore::modComtreeLink(int p, CtlPkt& cp, CtlPkt& reply) {
@@ -1702,41 +1727,41 @@ bool RouterCore::modComtreeLink(int p, CtlPkt& cp, CtlPkt& reply) {
 	int dobr = obr - ctt->getOutBitRate(cLnk);
 	int dopr = opr - ctt->getOutPktRate(cLnk);
 
-	if (dibr != 0 && !lt->addAvailInBitRate(lnk,-dibr)) {
+	bool success;
+	if (lt->getAvailInBitRate(lnk) < dibr) {
 		reply.setErrMsg("modify comtree link: increase in "
 				"input bit rate exceeds link capacity");
-		reply.setRrType(NEG_REPLY);
-		return false;
+		success = false;
 	}
-	if (dipr != 0 && !lt->addAvailInPktRate(lnk,-dipr)) {
-		lt->addAvailInBitRate(lnk,dibr); // de-allocate link bw
+	if (lt->getAvailInPktRate(lnk) < dipr) {
 		reply.setErrMsg("modify comtree link: increase in "
 				"input packet rate exceeds link capacity");
-		reply.setRrType(NEG_REPLY);
-		return false;
+		success = false;
 	}
-	if (dobr != 0 && !lt->addAvailOutBitRate(lnk,-dobr)) {
-		lt->addAvailInBitRate(lnk,dibr); // de-allocate link bw
-		lt->addAvailInPktRate(lnk,dipr);
+	if (lt->getAvailOutBitRate(lnk) < dobr) {
 		reply.setErrMsg("modify comtree link: increase in "
 				"output bit rate exceeds link capacity");
-		reply.setRrType(NEG_REPLY);
-		return false;
+		success = false;
 	}
-	if (dopr != 0 && !lt->addAvailOutPktRate(lnk,-dopr)) {
-		lt->addAvailInBitRate(lnk,dibr); // de-allocate link bw
-		lt->addAvailInPktRate(lnk,dipr);
-		lt->addAvailOutBitRate(lnk,dobr);
+	if (lt->getAvailOutPktRate(lnk) < dopr) {
 		reply.setErrMsg("modify comtree link: increase in "
 				"output packet rate exceeds link capacity");
-		reply.setRrType(NEG_REPLY);
-		return false;
+		success = false;
 	}
+	if (!success) { reply.setRrType(NEG_REPLY); return false; }
 
-	if (dibr != 0) ctt->setInBitRate(cLnk,ibr);
-	if (dipr != 0) ctt->setInPktRate(cLnk,ipr);
-	if (dobr != 0) ctt->setOutBitRate(cLnk,obr);
-	if (dopr != 0) ctt->setOutPktRate(cLnk,obr);
+	if (dibr != 0) {
+		lt->addAvailInBitRate(lnk,dibr);  ctt->setInBitRate(cLnk,ibr);
+	}
+	if (dipr != 0) {
+		lt->addAvailInPktRate(lnk,dipr);  ctt->setInPktRate(cLnk,ipr); 
+	}
+	if (dobr != 0) {
+		lt->addAvailOutBitRate(lnk,dobr); ctt->setOutBitRate(cLnk,obr);
+	}
+	if (dopr != 0) {
+		lt->addAvailOutPktRate(lnk,dopr); ctt->setOutPktRate(cLnk,obr);
+	}
 
 	return true;
 }
@@ -1842,7 +1867,7 @@ bool RouterCore::dropRoute(int p, CtlPkt& cp, CtlPkt& reply) {
 		return false;
 	}
 	int rtx = rt->getRteIndex(comt,dest);
-	if (rtx != 0) rt->removeEntry(rtx);
+	rt->removeEntry(rtx);
 	return true;
 }
 

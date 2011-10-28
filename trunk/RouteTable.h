@@ -172,7 +172,7 @@ inline int RouteTable::getLink(int rtx) const {
  *  set is a comtree link number
  */
 inline set<int>& RouteTable::getSubLinks(int rtx) const {
-	return *tbl[rtx].links;
+	return *(tbl[rtx].links);
 }
 
 /** Set the link for a unicast route.
@@ -196,6 +196,7 @@ inline bool RouteTable::addLink(int rtx, int cLnk) {
 	    !Forest::mcastAdr(tbl[rtx].adr))
 		return false;
 	tbl[rtx].links->insert(cLnk);
+	ctt->registerRte(cLnk,rtx);
 	return true;
 }
 
@@ -209,6 +210,7 @@ inline void RouteTable::removeLink(int rtx, int cLnk) {
 	    !Forest::mcastAdr(tbl[rtx].adr))
 		return;
 	tbl[rtx].links->erase(cLnk);
+	ctt->deregisterRte(cLnk,rtx);
 }
 
 /** Compute a key for a specified (comtree,address) pair.
