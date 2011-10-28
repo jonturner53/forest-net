@@ -134,6 +134,7 @@ private:
 
 	bool	addLink(int, CtlPkt&, CtlPkt&);
 	bool	dropLink(int, CtlPkt&, CtlPkt&);
+	void	dropLink(int);
 	bool	getLink(int, CtlPkt&, CtlPkt&);
 	bool	modLink(int, CtlPkt&, CtlPkt&);
 
@@ -143,6 +144,7 @@ private:
 	bool	modComtree(int, CtlPkt&, CtlPkt&);
 	bool	addComtreeLink(int, CtlPkt&, CtlPkt&);
 	bool	dropComtreeLink(int, CtlPkt&, CtlPkt&);
+	void	dropComtreeLink(int, int, int);
 	bool	modComtreeLink(int, CtlPkt&, CtlPkt&);
 	bool	getComtreeLink(int, CtlPkt&, CtlPkt&);
 

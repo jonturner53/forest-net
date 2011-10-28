@@ -38,7 +38,10 @@ int RouteTable::addEntry(comt_t comt, fAdr_t adr, int cLnk) {
 	if (Forest::mcastAdr(adr)) {
 		tbl[rtx].adr = adr;
 		tbl[rtx].links = new set<int>();
-		if (cLnk != 0) tbl[rtx].links->insert(cLnk);
+		if (cLnk != 0) {
+			tbl[rtx].links->insert(cLnk);
+        		ctt->registerRte(cLnk,rtx);
+		}
 	} else {
 		int zip = Forest::zipCode(adr);
 		tbl[rtx].adr =  (zip == Forest::zipCode(myAdr) ?
@@ -53,22 +56,33 @@ int RouteTable::addEntry(comt_t comt, fAdr_t adr, int cLnk) {
  */
 void RouteTable::removeEntry(int rtx) {
 	if (!validRteIndex(rtx)) return;
-	if (Forest::mcastAdr(tbl[rtx].adr)) delete tbl[rtx].links;
+	if (Forest::mcastAdr(tbl[rtx].adr)) {
+		set<int>& links = *(tbl[rtx].links);
+		set<int>::iterator lp;
+		for (lp = links.begin(); lp != links.end(); lp++)
+			ctt->deregisterRte(*lp,rtx);
+		delete tbl[rtx].links;
+	}
 	rteMap->dropPair(key(tbl[rtx].ct,tbl[rtx].adr));
 }
 
 /** Remove all route table entries for a specific comtree.
- *  This requires iterating through all routes, so it can be slow.
  *  @param comt is a comtree number
  */
 void RouteTable::purgeRoutes(comt_t comt) {
-	set<int> routeSet;
-	for (int rtx = firstRteIndex(); rtx != 0; rtx = nextRteIndex(rtx)) {
-		if (getComtree(rtx) == comt) routeSet.insert(rtx);
+	int ctx = ctt->getComtIndex(comt);
+	set<int>& links = ctt->getLinks(ctx);
+	set<int>::iterator lp;
+	for (lp = links.begin(); lp != links.end(); lp++) {
+		int cLnk = *lp;
+		set<int>& routes = ctt->getRteSet(cLnk);
+		set<int>::iterator rp;
+		int *rvec = new int[routes.size()]; int i = 0;
+		for (rp = routes.begin(); rp != routes.end(); rp++)
+			rvec[i++] = *rp;
+		while (--i >= 0) removeEntry(rvec[i]);
+		delete [] rvec;
 	}
-	set<int>::iterator rp;
-	for (rp = routeSet.begin(); rp != routeSet.end(); rp++)
-		removeEntry(*rp);
 }
 
 /** Read an entry from an input stream and add a routing table entry for it.

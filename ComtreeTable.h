@@ -68,9 +68,9 @@ public:
 
 	// add/remove/modify table entries
 	int	addEntry(comt_t);
-	void	removeEntry(int);
+	bool	removeEntry(int);
 	bool 	addLink(int, int, bool, bool);
-	void 	removeLink(int, int);
+	bool 	removeLink(int, int);
 	void	setCoreFlag(int, bool);
 	void	setPlink(int, int);
 	void	setLinkQ(int, int);

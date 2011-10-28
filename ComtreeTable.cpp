@@ -46,23 +46,26 @@ int ComtreeTable::addEntry(comt_t comt) {
 }
 
 /** Remove a table entry.
- *
+ *  This method requires that all links have been previously
+ *  removed from the comtree;
  *  @param ctx is the index of the entry to be deleted
- *  @return true on success, false on failure (that is, if there
- *  was no such entry in the first place)
+ *  @return true on success, false on failure
  */
-void ComtreeTable::removeEntry(int ctx) {
-	if (!validComtIndex(ctx)) return;
+bool ComtreeTable::removeEntry(int ctx) {
+	if (!validComtIndex(ctx)) return true;
 	
 	set<int>& comtLinks = *tbl[ctx].comtLinks;
 	set<int>::iterator p;
 	// copy out the comtree links, then remove them
+	// so long as none has any registered routes
 	int *clnks = new int[comtLinks.size()];
 	int i = 0;
-	for (p = comtLinks.begin(); p != comtLinks.end(); p++)
+	for (p = comtLinks.begin(); p != comtLinks.end(); p++) {
+		if (clTbl[*p].rteSet->size() != 0) return false;
 		clnks[i++] = *p;
-	for (int i = 0; i < comtLinks.size(); i++)
-		removeLink(ctx,clnks[i]);
+	}
+	while(--i >= 0) removeLink(ctx,clnks[i]);
+	delete [] clnks;
 
 	comtMap->dropPair(key(tbl[ctx].comt));
 	delete tbl[ctx].comtLinks;
@@ -87,6 +90,7 @@ bool ComtreeTable::addLink(int ctx, int lnk, bool rflg, bool cflg) {
 	clTbl[cLnk].ctx = ctx; clTbl[cLnk].lnk = lnk;
 	clTbl[cLnk].dest = 0; clTbl[cLnk].qnum = 0;
 	clTbl[cLnk].rteSet = new set<int>;
+	lt->registerComt(lnk,ctx);
 
         if (rflg) tbl[ctx].rtrLinks->insert(cLnk);
         if (cflg) tbl[ctx].coreLinks->insert(cLnk);
@@ -95,17 +99,22 @@ bool ComtreeTable::addLink(int ctx, int lnk, bool rflg, bool cflg) {
 }
 
 /** Remove a comtree link from the set of valid links for a comtree.
- *
+ *  This method requires that there are no multicast routes
+ *  registered with this comtree.
  *  @param ctx is comtree index of the comtree to be modified
  *  @param cLnk is the number of the comtree link to removed
+ *  @param return true on success, false on failure
  */
-void ComtreeTable::removeLink(int ctx, int cLnk) {
-        if (!validComtIndex(ctx) || !validComtLink(cLnk)) return;
+bool ComtreeTable::removeLink(int ctx, int cLnk) {
+        if (!validComtIndex(ctx) || !validComtLink(cLnk))
+		return false;
 
+	if (clTbl[cLnk].rteSet->size() != 0) return false;
         tbl[ctx].comtLinks->erase(cLnk);
         tbl[ctx].rtrLinks->erase(cLnk);
         tbl[ctx].coreLinks->erase(cLnk);
         delete clTbl[cLnk].rteSet;
+	lt->deregisterComt(getLink(cLnk),ctx);
 
 	clMap->dropPair(key(getComtree(ctx),getLink(cLnk)));
 }
