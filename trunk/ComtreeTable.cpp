@@ -86,6 +86,7 @@ bool ComtreeTable::addLink(int ctx, int lnk, bool rflg, bool cflg) {
 	tbl[ctx].comtLinks->insert(cLnk);
 	clTbl[cLnk].ctx = ctx; clTbl[cLnk].lnk = lnk;
 	clTbl[cLnk].dest = 0; clTbl[cLnk].qnum = 0;
+	clTbl[cLnk].rteSet = new set<int>;
 
         if (rflg) tbl[ctx].rtrLinks->insert(cLnk);
         if (cflg) tbl[ctx].coreLinks->insert(cLnk);
@@ -104,6 +105,7 @@ void ComtreeTable::removeLink(int ctx, int cLnk) {
         tbl[ctx].comtLinks->erase(cLnk);
         tbl[ctx].rtrLinks->erase(cLnk);
         tbl[ctx].coreLinks->erase(cLnk);
+        delete clTbl[cLnk].rteSet;
 
 	clMap->dropPair(key(getComtree(ctx),getLink(cLnk)));
 }
