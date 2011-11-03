@@ -107,7 +107,7 @@ private:
 	void	unsubAll();		
 	void	switchComtree(int);	
 	void	sendCtlPkt2CC(bool,int);
-	void	send2Controller(uint32_t,int);	
+	void	send2Controller(uint32_t,int,int=0);	
 	int	check4input();	
 	void	sendStatus(int);	
 

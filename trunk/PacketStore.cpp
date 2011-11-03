@@ -80,6 +80,6 @@ packet PacketStore::fullCopy(packet p) {
 	int len = (h.getLength()+3)/4;
 	buffer_t& buf = getBuffer(p); buffer_t& buf1 = getBuffer(p1);
 	for (int i = 0; i < len; i++) buf1[i] = buf[i];
-	h1.unpack(getBuffer(p1));
+	h1 = h;
 	return p1;
 }

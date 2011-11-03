@@ -59,6 +59,7 @@ bool init(const char *topoFile) {
 
 	pool = new ThreadInfo[TPSIZE+1];
 	threads = new UiSetPair(TPSIZE);
+	reqMap = new IdMap(TPSIZE);
 	tMap = new IdMap(TPSIZE);
 	if (firstComt < 1 || lastComt < 1 || firstComt > lastComt) {
 		cerr << "init: invalid comtree range\n";
@@ -102,9 +103,9 @@ bool init(const char *topoFile) {
 			int llnk = net->getLocLink(lnk,rtr);
 			int iface = net->getIface(llnk,rtr);
 			if (iface == 0) {
-                                cerr << "ComtCtl:init: comtCtl access link not "
-			                "bound to any interface at my router\n";
-                        }
+				cerr << "ComtCtl:init: comtCtl access link not "
+					"bound to any interface at my router\n";
+			}
 			rtrIp = net->getIfIpAdr(rtr,iface);
 			rtrAdr = net->getNodeAdr(rtr);
 		}
@@ -120,7 +121,7 @@ bool init(const char *topoFile) {
 			fatal("init: can't initialize thread queues\n");
 		if (pthread_create(&pool[t].thid,NULL,handler,
 				   (void *) &pool[t].qp) != 0) 
-                	fatal("init: can't create thread pool");
+			fatal("init: can't create thread pool");
 	}
 
 	// initialize locks used to control access to comtrees
@@ -160,7 +161,7 @@ void cleanup() {
 	cout.flush(); cerr.flush();
 	if (extSock > 0) close(extSock);
 	if (intSock > 0) close(intSock);
-	delete ps; delete [] pool; delete tMap; delete threads;
+	delete ps; delete [] pool; delete tMap; delete threads; delete reqMap;
 
 	pthread_mutex_destroy(&allComtLock);
 	pthread_mutex_destroy(&rateLock);
@@ -213,7 +214,14 @@ void* run(void* finTimeSec) {
 				int t;
 				if (cp.getRrType() == REQUEST) {
 					t = threads->firstOut();
-					if (t != 0) {
+					uint64_t key = h.getSrcAdr();
+					key << 32; key += cp.getSeqNum();
+					if (reqMap->validKey(key)) {
+						// in this case, we've got an
+						// active thread handling this
+						// request, so discard duplicate
+						ps->free(p);
+					} else if (t != 0) {
 						threads->swap(t);
 						pool[t].seqNum = 0;
 						pool[t].qp.in.enq(p);
@@ -244,6 +252,7 @@ void* run(void* finTimeSec) {
 			if (pool[t].qp.out.empty()) continue;
 			int p1 = pool[t].qp.out.deq();
 			if (p1 == 0) { // means thread is done
+				reqMap->dropPair(reqMap->getKey(t));
 				pool[t].qp.in.reset();
 				threads->swap(t);
 				continue;
@@ -254,10 +263,24 @@ void* run(void* finTimeSec) {
 			cp1.unpack(ps->getPayload(p1),
 				   h1.getLength()-Forest::OVERHEAD);
 			if (cp1.getRrType() == REQUEST) {
-				if (tMap->validId(t)) 
-					tMap->dropPair(tMap->getKey(t));
-				tMap->addPair(seqNum,t);
-				cp1.setSeqNum(seqNum);
+				if (cp1.getSeqNum() == 1) {
+					// means this is a repeat of a pending
+					// outgoing request
+					if (tMap->validId(t)) {
+						cp1.setSeqNum(tMap->getKey(t));
+					} else {
+						// in this case, reply has
+						// arrived but was not yet seen
+						// by thread so, suppress
+						// duplicate request
+						ps->free(p1); continue;
+					}
+				} else {
+					if (tMap->validId(t))
+						tMap->dropPair(tMap->getKey(t));
+					tMap->addPair(seqNum,t);
+					cp1.setSeqNum(seqNum++);
+				}
 				cp1.pack(ps->getPayload(p1));
 				h1.payErrUpdate(ps->getBuffer(p1));
 				pool[t].seqNum = seqNum;
@@ -431,7 +454,7 @@ bool handleAddComtReq(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 			+ net->getNodeName(rootRtr,s1);
 	string negRstr = noRstr;
 	bool success = handleReply(reply,repCp,noRstr,negRstr);
-	if (reply == 0) {
+	if (reply == NORESPONSE) {
 		pthread_mutex_lock(&allComtLock);
 		net->removeComtree(ctx);
 		comt -= (firstComt - 1);
@@ -461,7 +484,7 @@ bool handleAddComtReq(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 		 + net->getNodeName(rootRtr,s1);
 	negRstr = noRstr;
 	success = handleReply(reply,repCp,noRstr,negRstr);
-	if (reply == 0) {
+	if (reply == NORESPONSE) {
 		pthread_mutex_lock(&allComtLock);
 		net->removeComtree(ctx);
 		comt -= (firstComt - 1);
@@ -576,7 +599,7 @@ bool handleDropComtReq(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 			+ net->getNodeName(root,s1);
 	string negRstr = noRstr;
 	bool success = handleReply(reply,repCp,noRstr,negRstr);
-	if (reply == 0) {
+	if (reply == NORESPONSE) {
 		errReply(p,cp,outQ,"root router never replied");
 		return false;
 	} else if (!success) {
@@ -679,7 +702,7 @@ bool handleJoinComtReq(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 			+ net->getNodeName(cliRtr,ss);
 	string negRstr = "";
 	bool success = handleReply(reply,repCp,noRstr,negRstr);
-	if (reply == 0) { // no reply
+	if (reply == NORESPONSE) { // no reply
 		dropPath(cliRtr,ctx,inQ,outQ);
 		pthread_mutex_lock(&rateLock);
 		releasePath(cliRtr,ctx);
@@ -713,7 +736,7 @@ bool handleJoinComtReq(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 	noRstr = "handleJoinComt: final mod comtree link request to "
 		 + net->getNodeName(cliRtr,ss);
 	success = handleReply(reply,repCp,noRstr,negRstr);
-	if (reply == 0) { // no reply
+	if (reply == NORESPONSE) { // no reply
 		dropPath(cliRtr,ctx,inQ,outQ);
 		pthread_mutex_lock(&rateLock);
 		releasePath(cliRtr,ctx);
@@ -923,7 +946,7 @@ bool addPath(int ctx, list<int>& path, Queue& inQ, Queue& outQ) {
 		CtlPkt repCp; string s1, s2;
 		string noRstr = "addPath: add comtree link request to "
 			 	+ net->getNodeName(rtr,s1) + " for comtree "
-		         	+ Misc::num2string(comt,s2);
+			 	+ Misc::num2string(comt,s2);
 		string negRstr = "";
 		if (!handleReply(reply,repCp,noRstr,negRstr)) {
 			dropPath(rtr,ctx,inQ,outQ); return false;
@@ -943,14 +966,14 @@ bool addPath(int ctx, list<int>& path, Queue& inQ, Queue& outQ) {
 		       	 + Misc::num2string(comt,s2);
 		negRstr = "";
 		bool success = handleReply(reply,repCp,noRstr,negRstr);
-		if (reply == 0) {
+		if (reply == NORESPONSE) {
 			dropPath(rtr,ctx,inQ,outQ); return false;
 		} else if (!success) {
 			CtlPkt abortCp(DROP_COMTREE_LINK,REQUEST,0);
 			abortCp.setAttr(COMTREE_NUM,comt);
 			abortCp.setAttr(LINK_NUM,net->getLocLink(lnk,rtr));
 			int reply = sendCtlPkt(abortCp,rtrAdr,inQ,outQ);
-			if (reply != 0) ps->free(reply);
+			if (reply != NORESPONSE) ps->free(reply);
 			dropPath(rtr,ctx,inQ,outQ);
 			return false;
 		}
@@ -982,13 +1005,13 @@ bool addPath(int ctx, list<int>& path, Queue& inQ, Queue& outQ) {
 		       	 + Misc::num2string(comt,s2);
 		negRstr = noRstr;
 		success = handleReply(reply,repCp,noRstr,negRstr);
-		if (reply == 0) {
+		if (reply == NORESPONSE) {
 			dropPath(rtr,ctx,inQ,outQ); return false;
 		} else if (!success) {
 			CtlPkt abortCp(DROP_COMTREE,REQUEST,0);
 			abortCp.setAttr(COMTREE_NUM,comt);
 			int reply = sendCtlPkt(abortCp,rtrAdr,inQ,outQ);
-			if (reply != 0) ps->free(reply);
+			if (reply != NORESPONSE) ps->free(reply);
 			dropPath(rtr,ctx,inQ,outQ);
 			return false;
 		}
@@ -1004,13 +1027,13 @@ bool addPath(int ctx, list<int>& path, Queue& inQ, Queue& outQ) {
 		       	 + Misc::num2string(comt,s2);
 		negRstr = noRstr;
 		success = handleReply(reply,repCp,noRstr,negRstr);
-		if (reply == 0) {
+		if (reply == NORESPONSE) {
 			dropPath(rtr,ctx,inQ,outQ); return false;
 		} else if (!success) {
 			CtlPkt abortCp(DROP_COMTREE,REQUEST,0);
 			abortCp.setAttr(COMTREE_NUM,comt);
 			int reply = sendCtlPkt(abortCp,rtrAdr,inQ,outQ);
-			if (reply != 0) ps->free(reply);
+			if (reply != NORESPONSE) ps->free(reply);
 			dropPath(rtr,ctx,inQ,outQ);
 			return false;
 		}
@@ -1029,13 +1052,13 @@ bool addPath(int ctx, list<int>& path, Queue& inQ, Queue& outQ) {
 		       	 + Misc::num2string(comt,s2);
 		negRstr = noRstr;
 		success = handleReply(reply,repCp,noRstr,negRstr);
-		if (reply == 0) {
+		if (reply == NORESPONSE) {
 			dropPath(rtr,ctx,inQ,outQ); return false;
 		} else if (!success) {
 			CtlPkt abortCp(DROP_COMTREE,REQUEST,0);
 			abortCp.setAttr(COMTREE_NUM,comt);
 			int reply = sendCtlPkt(abortCp,childAdr,inQ,outQ);
-			if (reply != 0) ps->free(reply);
+			if (reply != NORESPONSE) ps->free(reply);
 			dropPath(rtr,ctx,inQ,outQ);
 			return false;
 		}
@@ -1113,7 +1136,7 @@ void updatePath(int ctx, list<int>& path, Queue& inQ, Queue& outQ) {
 		CtlPkt reqCp(GET_LINK,REQUEST,0);
 		reqCp.setAttr(LINK_NUM,net->getLocLink(lnk,rtr));
 		int reply = sendCtlPkt(reqCp,rtrAdr,inQ,outQ);
-		if (reply != 0) {
+		if (reply != NORESPONSE) {
 			CtlPkt repCp;
 			repCp.unpack(ps->getPayload(reply),
 	 			(ps->getHeader(reply)).getLength()
@@ -1251,6 +1274,8 @@ int sendCtlPkt(CtlPkt& cp, fAdr_t dest, Queue& inQ, Queue& outQ) {
 		cerr << "sendCtlPkt: no packets left in packet store\n";
 		return 0;
 	}
+	// set default seq# for requests - tells main thread to use "next" seq#
+	if (cp.getRrType() == REQUEST) cp.setSeqNum(0);
 	int plen = cp.pack(ps->getPayload(p));
 	if (plen == 0) {
 		cerr << "sendCtlPkt: packing error\n";
@@ -1300,27 +1325,31 @@ int sendAndWait(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 	int copy = ps->fullCopy(p);
 	if (copy == 0) {
 		cerr << "sendAndWait: no packets left in packet store\n";
-		return 0;
+		return NORESPONSE;
 	}
 
 	outQ.enq(copy);
 
 	for (int i = 1; i < 3; i++) {
 		int reply = inQ.deq(1000000000); // 1 sec timeout
-		if (reply == -1) { // timeout
+		if (reply == Queue::TIMEOUT) {
 			// no reply, make new copy and send
 			int retry = ps->fullCopy(p);
 			if (retry == 0) {
 				cerr << "sendAndWait: no packets "
 					"left in packet store\n";
-				return 0;
+				return NORESPONSE;
 			}
+			cp.setSeqNum(1);	// tag retry as a repeat
+			cp.pack(ps->getPayload(retry));
+			PacketHeader& hr = ps->getHeader(retry);
+			hr.payErrUpdate(ps->getBuffer(retry));
 			outQ.enq(retry);
 		} else {
 			return reply;
 		}
 	}
-	return 0;
+	return NORESPONSE;
 }
 
 /** Handle common chores for reply packets.
@@ -1338,7 +1367,7 @@ int sendAndWait(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
  *  then nothing is written
  */
 bool handleReply(int reply, CtlPkt& repCp, string& noRstr, string& negRstr) {
-	if (reply == 0) {
+	if (reply == NORESPONSE) {
 		if (noRstr.length() != 0)
 			cerr << "handleReply: no reply to control packet:\n"
 			     << noRstr << endl;
@@ -1391,15 +1420,15 @@ void errReply(int p, CtlPkt& cp, Queue& outQ, const char* msg) {
 int rcvFromForest() { 
 	int p = ps->alloc();
 	if (p == 0) return 0;
-        buffer_t& b = ps->getBuffer(p);
+	buffer_t& b = ps->getBuffer(p);
 
-        int nbytes = Np4d::recv4d(intSock,&b[0],1500);
-        if (nbytes < 0) { ps->free(p); return 0; }
+	int nbytes = Np4d::recv4d(intSock,&b[0],1500);
+	if (nbytes < 0) { ps->free(p); return 0; }
 	ps->unpack(p);
 
 	PacketHeader& h = ps->getHeader(p);
 
-        return p;
+	return p;
 }
 
 /** Send packet to Forest router.

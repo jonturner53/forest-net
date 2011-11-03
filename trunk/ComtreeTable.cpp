@@ -117,6 +117,7 @@ bool ComtreeTable::removeLink(int ctx, int cLnk) {
 	lt->deregisterComt(getLink(cLnk),ctx);
 
 	clMap->dropPair(key(getComtree(ctx),getLink(cLnk)));
+	return true;
 }
 
 /** Perform consistency check on table entry.

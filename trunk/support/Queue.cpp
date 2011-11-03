@@ -43,7 +43,6 @@ bool Queue::init() {
  *  @param i is the value to be added.
  */
 void Queue::enq(int i) {
-//cerr << "Queue::enq(" << i <<  ") thread " << pthread_self() << " requesting lock on queue " << this << "\n";
 	pthread_mutex_lock(&lock);
 	while (count == qMax) {
 		pthread_cond_wait(&fullQ,&lock);
@@ -54,10 +53,8 @@ void Queue::enq(int i) {
 	tail = (tail + 1) % qMax;
 
 	pthread_mutex_unlock(&lock);
-//cerr << "Queue::enq(" << i <<  ") thread " << pthread_self() << " released lock on queue " << this << "\n";
 	if (pthread_cond_signal(&emptyQ) != 0) 
 		cerr << "pthread_cond_signal on emptyQ failed";
-//cerr << "Queue::enq(" << i <<  ") thread " << pthread_self() << " signalled empty condition on queue " << this << "\n";
 }
 
 /** Remove and return first item in the queue.
@@ -65,12 +62,9 @@ void Queue::enq(int i) {
  *  @return the next item in the queue
  */
 int Queue::deq() {
-//cerr << "Queue::deq() thread " << pthread_self() << " requesting lock on queue " << this << "\n";
 	pthread_mutex_lock(&lock);
 	while (count == 0) {
-//cerr << "Queue::deq() thread " << pthread_self() << " waiting on empty condition on queue " << this << "\n";
 		pthread_cond_wait(&emptyQ,&lock);
-//cerr << "Queue::deq() thread " << pthread_self() << " woken up from empty condition on queue " << this << "\n";
 	}
 
 	int value = buf[head];
@@ -78,9 +72,7 @@ int Queue::deq() {
 	head = (head + 1) % qMax;
 
 	pthread_mutex_unlock(&lock);
-//cerr << "Queue::deq() thread " << pthread_self() << " released lock on queue " << this << "\n";
 	pthread_cond_signal(&fullQ);
-//cerr << "Queue::deq() thread " << pthread_self() << " signalled full queue condition on queue " << this << "\n";
 	return value;
 }
 
@@ -89,10 +81,9 @@ int Queue::deq() {
  *  but the method returns early if the specified timeout expires.
  *  @param timeout is the number of nanoseconds after which the
  *  method should return, even if nothing has been added to the queue.
- *  @return the next item in the queue, or -1 if timeout occurs
+ *  @return the next item in the queue, or Queue::TIMEOUT if timeout occurs
  */
 int Queue::deq(uint32_t timeout) {
-//cerr << "Queue::deqT() thread " << pthread_self() << " requesting lock on queue " << this << "\n";
 	pthread_mutex_lock(&lock);
 
 	// determine when timeout should expire
@@ -111,21 +102,17 @@ int Queue::deq(uint32_t timeout) {
 
 	int status = 0;
 	while (count == 0 && status != ETIMEDOUT) {
-//cerr << "Queue::deqT() thread " << pthread_self() << " waiting on empty condition on queue " << this << "\n";
 		status = pthread_cond_timedwait(&emptyQ,&lock,&targetTime);
-//cerr << "Queue::deqT() thread " << pthread_self() << " woken up from empty condition on queue " << this << "\n";
 	}
 	int retVal;
 	if (status == ETIMEDOUT) {
-		retVal = -1;
+		retVal = Queue::TIMEOUT;
 	} else {
 		retVal = buf[head];
 		count--;
 		head = (head + 1) % qMax;
 	}
 	pthread_mutex_unlock(&lock);
-//cerr << "Queue::deqT() thread " << pthread_self() << " released lock on queue " << this << "\n";
 	pthread_cond_signal(&fullQ);
-//cerr << "Queue::deqT() thread " << pthread_self() << " signalled full queue condition on queue " << this << "\n";
 	return retVal;
 }

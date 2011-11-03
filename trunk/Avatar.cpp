@@ -90,6 +90,8 @@ bool Avatar::init() {
 			"sockets\n";
 		return false;
 	}
+	string s;
+	cout << Np4d::ip2string(Np4d::myIpAddress(),s) << endl;
 	if (Np4d::bind4d(Controller_sock,Np4d::myIpAddress(),0)) {
 		cout << "remote control port: "
 		     << Np4d::getSockPort(Controller_sock) << endl;
@@ -121,7 +123,8 @@ void Avatar::login(string uname, string pword) {
 	Np4d::sendBufBlock(CM_sock,(char *) buf.c_str(),buf.size()+1);
 	//receive rtrAdr, myAdr,rtrIp, CC_Adr
 	Np4d::recvIntBlock(CM_sock,(uint32_t&)rtrAdr);
-	if(rtrAdr==-1) fatal("Avatar::login: Could not connect, negative reply");
+	if (rtrAdr == -1)
+		fatal("Avatar::login: Could not connect, negative reply");
 	Np4d::recvIntBlock(CM_sock,(uint32_t&)myAdr);
 	Np4d::recvIntBlock(CM_sock,(uint32_t&)rtrIpAdr);
 	Np4d::recvIntBlock(CM_sock,(uint32_t&)CC_Adr);
@@ -256,7 +259,6 @@ void Avatar::run(int finishTime) {
 				} else if (cp.getCpType() ==
 					    CLIENT_LEAVE_COMTREE &&
                                     	   cp.getRrType() == POS_REPLY) {
-					// pick a new comtree to join
 					comt = newcomt;
 					sendCtlPkt2CC(true,comt);
 				}
@@ -266,8 +268,8 @@ void Avatar::run(int finishTime) {
 				// for this avatar
 				uint64_t key = h.getSrcAdr();
 				key = (key << 32) | h.getSrcAdr();
-				send2Controller(now,
-				    (visibleAvatars->lookup(key) == 0 ? 2 : 3));
+				bool isVis = (visibleAvatars->lookup(key) != 0);
+				send2Controller(now,(isVis ? 2 : 3), p);
 			}
 			ps->free(p);
 		}
@@ -329,28 +331,46 @@ void Avatar::switchComtree(int comtree) {
 
 /** Send a status report to the remote controller for this avatar.
  *  @param now is the current time
- *  @paream avType is the type code for the avatar whose status is
+ *  @param avType is the type code for the avatar whose status is
  *  being sent: 1 means the controlled avatar, 2 a visible avatar
  *  and 3 an avatar that we can "hear" but not see
+ *  @param p is an optional packet number; if present and non-zero,
+ *  its payload is unpacked to produce the report to send to the avatar
  */
-void Avatar::send2Controller(uint32_t now, int avType) {
+void Avatar::send2Controller(uint32_t now, int avType, int p) {
 	uint32_t buf[10];
 	buf[0] = htonl((uint32_t) now);
-	buf[1] = htonl((uint32_t) myAdr);
-	buf[2] = htonl((uint32_t) x);
-	buf[3] = htonl((uint32_t) y);
-	buf[4] = htonl((uint32_t) direction);
-	buf[5] = htonl((uint32_t) speed);
-	buf[6] = htonl((uint32_t) stableNumVisible);
-	buf[7] = htonl((uint32_t) stableNumNear);
 	buf[8] = htonl((uint32_t) comt);
 	buf[9] = htonl(avType);
+	if (avType == 1) {
+		buf[1] = htonl((uint32_t) myAdr);
+		buf[2] = htonl((uint32_t) x);
+		buf[3] = htonl((uint32_t) y);
+		buf[4] = htonl((uint32_t) direction);
+		buf[5] = htonl((uint32_t) speed);
+		buf[6] = htonl((uint32_t) stableNumVisible);
+		buf[7] = htonl((uint32_t) stableNumNear);
+	} else if (p != 0) {
+		PacketHeader& h = ps->getHeader(p);
+		uint32_t *pp = ps->getPayload(p);
+		if (h.getComtree() != comt) return;
+
+		buf[1] = htonl(h.getSrcAdr());
+		buf[2] = pp[2];
+		buf[3] = pp[3];
+		buf[4] = pp[4];
+		buf[5] = pp[5];
+		buf[6] = pp[6];
+		buf[7] = pp[7];
+	} else {
+		return;
+	}
 	int nbytes = 10*sizeof(uint32_t);
-	char *p= (char *) buf;
-	while(nbytes > 0) {
-		int n = write(controllerConnSock, (void *) p, nbytes);
+	char *bp= (char *) buf;
+	while (nbytes > 0) {
+		int n = write(controllerConnSock, (void *) bp, nbytes);
 		if (n < 0) fatal("Avatar::send2Controller: failure in write");
-		p += n; nbytes -= n;
+		bp += n; nbytes -= n;
 	}
 }
 
@@ -386,7 +406,7 @@ void Avatar::sendCtlPkt2CC(bool join, int comtree) {
  *  no current input
  */
 int Avatar::check4input() {
-	if(controllerConnSock < 0) {
+	if (controllerConnSock < 0) {
 		controllerConnSock = Np4d::accept4d(Controller_sock);
 		if(controllerConnSock < 0) return -1;
 		if(!Np4d::nonblock(controllerConnSock))
@@ -600,7 +620,7 @@ void Avatar::updateStatus(uint32_t now, int controlInput) {
 		}
 	} else {
 	        // use controlInput
-	        if(controlInput == 2) {
+	        if (controlInput == 2) {
 	        	if(speed == SLOW) speed = MEDIUM;
 	        	else if(speed == MEDIUM) speed = FAST;
 	        } else if(controlInput == 4) {
@@ -651,8 +671,8 @@ bool Avatar::isVis(int region1, int region2) {
 	int minRow = min(row1,row2); int maxRow = max(row1,row2);
 	int minCol = min(col1,col2); int maxCol = max(col1,col2);
 
-	for(size_t i = 0; i < 4; i++) {
-		for(size_t j = 0; j < 4; j++) {
+	for (size_t i = 0; i < 4; i++) {
+		for (size_t j = 0; j < 4; j++) {
 			bool temp = true;
 			double ax = (double) region1xs[i];
 			double ay = (double) region1ys[i];
@@ -823,7 +843,7 @@ void Avatar::updateNearby(int p) {
 	int x1 = ntohl(pp[2]); int y1 = ntohl(pp[3]);
 
 	uint64_t key = h.getSrcAdr(); key = (key << 32) | h.getSrcAdr();
-	if(nearAvatars->lookup(key) == 0) {
+	if (nearAvatars->lookup(key) == 0) {
 		if (numNear <= MAXNEAR)
 			nearAvatars->insert(key, ++numNear);
 	}

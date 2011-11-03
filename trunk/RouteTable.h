@@ -207,10 +207,13 @@ inline bool RouteTable::addLink(int rtx, int cLnk) {
  */
 inline void RouteTable::removeLink(int rtx, int cLnk) {
 	if (!validRteIndex(rtx) || !ctt->validComtLink(cLnk) ||
-	    !Forest::mcastAdr(tbl[rtx].adr))
+	    !Forest::mcastAdr(tbl[rtx].adr)) {
 		return;
+	}
 	tbl[rtx].links->erase(cLnk);
 	ctt->deregisterRte(cLnk,rtx);
+	if (tbl[rtx].links->size() == 0) // no subscribers lefr
+		removeEntry(rtx);
 }
 
 /** Compute a key for a specified (comtree,address) pair.
