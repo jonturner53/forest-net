@@ -25,23 +25,24 @@ public class ShowWorld {
 	private static Map<Integer, AvatarGraphic> status; // avatar status
 	private static final int INTERVAL = 50;	// time between updates (in ms)
 	private static int comtree;	// number of comtree to be monitored
-	private static int SIZE;	//size of full map
-	private static int gridSize;	//number of squares in map (x or y direction)
-	private static final int MON_PORT = 30124; // port number used by monitor
+	private static int SIZE;	// size of full map
+	private static int gridSize;	// # of squares in map (x or y)
+	private static final int MON_PORT = 30124; // port # used by monitor
 	private static int AVA_PORT;
 	private static Scanner mazeFile; // filename of maze
 	private static int[] walls; 	// list of walls
-	private static SocketChannel chan = null;	// channel to remote monitor or avatar
-	private static ByteBuffer repBuf = null; 	// buffer for report packets
-	private static AvatarStatus rep = null;		// most recent report
-	private static final int GRID = 10000;		// size of one grid space
-	private static boolean needData = true;		// true when getReport() needs
-							// more data to process
+	private static SocketChannel chan = null;// channel to remote monitor
+						// or avatar
+	private static ByteBuffer repBuf = null; // buffer for report packets
+	private static AvatarStatus rep = null;	// most recent report
+	private static final int GRID = 10000;	// size of one grid space
+	private static boolean needData = true;	// true when getReport() needs
+						// more data to process
 	
-	private static boolean avaConn = false;			// true if we connect to the avatar,
-							//false if we connect to monitor
-	private static Set<Integer> recentIds;		//list of recently seen ids
-	private static int idCounter;			//counter with which to clear old ids	
+	private static boolean avaConn = false;	// true if connecting to avatar
+						// false if monitor
+	private static Set<Integer> recentIds;	// list of recently seen ids
+	private static int idCounter;		// counter used to clear old ids	
 	/**
 	 * Get the next status report from a buffered status packet.
 	 * Receive additional status packets as needed using nonblocking IO.
@@ -61,7 +62,8 @@ public class ShowWorld {
 				try {					
 					if (chan.read(repBuf) == 0)
 						return null;
-					if (repBuf.position() >= (avaConn ? 40 : 36)) {
+					if (repBuf.position() >=
+					     (avaConn ? 40 : 36)) {
 						repBuf.flip(); needData = false;
 					}
 				} catch(Exception x) {
@@ -82,7 +84,10 @@ public class ShowWorld {
 		rep.numVisible = repBuf.getInt();
 		rep.numNear = repBuf.getInt();
 		rep.comtree = repBuf.getInt();
-		if(avaConn) rep.type = repBuf.getInt();
+		if (avaConn) {
+			if (comtree == 0) comtree = rep.comtree;
+			rep.type = repBuf.getInt();
+		}
 		if (repBuf.remaining() < (avaConn ? 40 : 36)) needData = true;
 
 		recentIds.add(rep.id);
@@ -92,6 +97,7 @@ public class ShowWorld {
 	private static AvatarStatus lastRep = null; // used by processFrame
 	
 	private static void sendMovements(int c) throws IOException {
+		if (!avaConn) return;
 		ByteBuffer buff = ByteBuffer.allocate(4);
 		switch(c) {
 			case KeyEvent.VK_LEFT:
@@ -167,7 +173,8 @@ public class ShowWorld {
 				comtree = Integer.parseInt(inStream.readLine());
 			} else return -1;
 		} catch(Exception e) {
-			System.out.println("input error: type comtree number\n" + e);
+			System.out.println("input error: type comtree number\n"
+					    + e);
 		}
 		System.out.print("\ncomtree=");
 		return comtree;
@@ -177,21 +184,24 @@ public class ShowWorld {
 	private static InetSocketAddress avaSockAdr;
 	/**
 	 *  Process command line arguments
-	 *   - name of monitor host (or localhost)
+	 *   - name/address of monitor host (or localhost)
+	 *   - walls file
+	 *   - port # when connecting to avatar (rather than monitor)
 	 */
 	private static boolean processArgs(String[] args) {
 		try {
 			mazeFile = new Scanner(new File(args[1]));
 			if(args.length > 2) {
 				avaConn = true;
-				avaSockAdr = new InetSocketAddress(args[0],Integer.valueOf(args[2]));
+				avaSockAdr = new InetSocketAddress(args[0],							     Integer.valueOf(args[2]));
 			} else {
-				monSockAdr = new InetSocketAddress(args[0], MON_PORT);
+				monSockAdr = new InetSocketAddress(args[0],
+					    	     MON_PORT);
 			}
 			int counter = 1;
-			while(mazeFile.hasNextLine()) {
+			while (mazeFile.hasNextLine()) {
 				String temp = mazeFile.nextLine();
-				if(walls==null) {
+				if (walls==null) {
 					gridSize = temp.length();
 					SIZE = gridSize*GRID;
 					walls = new int[gridSize*gridSize];
@@ -210,13 +220,16 @@ public class ShowWorld {
 						walls[(gridSize-counter)
 							*gridSize+i] = 0;
 					} else {
-						System.out.println("Unrecognized symbol in map file!");
+						System.out.println(
+						  "Unrecognized symbol in map "
+					  	  + "file!");
 					}
 				}
 				counter++;
 			}
 		} catch (Exception e) {
-			System.out.println("usage: ShowWorldNet monIp wallfile avaConn [avaIp port]");
+			System.out.println("usage: ShowWorldNet remoteIp "
+					    + "wallfile [port]");
 			System.out.println(e);
 			System.exit(1);
 		}
@@ -292,11 +305,15 @@ public class ShowWorld {
 				
 		// Open channel to monitor and make it nonblocking
 		try {
-			if(avaConn) chan = SocketChannel.open(avaSockAdr);
-			else chan = SocketChannel.open(monSockAdr);
+			if (avaConn) {
+				chan = SocketChannel.open(avaSockAdr);
+			} else {
+				chan = SocketChannel.open(monSockAdr);
+			}
 			chan.configureBlocking(false);
 		} catch (Exception e) {
-			System.out.println("Can't open channel to monitor/avatar");
+			System.out.println("Can't open channel to "
+					    + "monitor/avatar");
 			System.out.println(e);
 			System.exit(1);
 		}
@@ -316,7 +333,7 @@ public class ShowWorld {
 		recentIds = new HashSet<Integer>();
 		idCounter = 0;
 		// Prompt for comtree number and send to monitor
-		if(!avaConn) {
+		if (!avaConn) {
 			comtree = readComtree();
 			sendComtree(comtree);
 		}
@@ -347,11 +364,24 @@ public class ShowWorld {
 			monTime += INTERVAL; targetLocalTime += INTERVAL;
 			
 			//StdDraw.show(INTERVAL);
-			if(!avaConn) {
+			if (!avaConn) {
 				int newComtree = readComtree();
 				if (newComtree >= 0 && newComtree != comtree) {
-					comtree = newComtree; sendComtree(comtree);
+					comtree = newComtree;
+					sendComtree(comtree);
 				}
+			} else {
+				//write movement commands to avaChan socket
+	                        try {
+	                                if (StdDraw.hasNextKeyPressed())
+	                                        sendMovements(
+						     StdDraw.nextKeyPressed());
+	                        } catch(Exception e) {
+	                                System.out.println("Could not send "
+						+ "movement command to Avatar");
+	                                System.out.println(e);
+	                                System.exit(1);
+	                        }
 			}
 		}
 	}

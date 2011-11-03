@@ -107,6 +107,13 @@ bool QuManager::enq(int p, int qid, uint64_t now) {
 	if (sm->getLinkQlen(lnk) >= maxppl ||
 	    sm->getQlen(qid) >= q.pktLim ||
 	    sm->getQbytes(qid) + pleng > q.byteLim) {
+PacketHeader& h = ps->getHeader(p);
+if (h.getPtype() == NET_SIG) {
+cerr << "QuManager::enq: dropping signalling packet for qid=" << qid 
+<< " bound to lnk " << lnk << " linkqlen=" << sm->getLinkQlen(lnk)
+<< " qlen=" << sm->getQlen(qid) << " qBytes=" << sm->getQbytes(qid) << endl;
+h.write(cerr,ps->getBuffer(p));
+}
 		return false;
 	}
 

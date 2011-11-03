@@ -161,10 +161,10 @@ void send(int p) {
  *
  */
 void* run(void* finishTime) {
-	uint32_t now = Misc::getTimeNs();
+	uint64_t now = Misc::getTimeNs();
 	uint64_t finTime = *((uint32_t *) finishTime);
 	finTime *= 1000000000;
-	while(now <= finTime) {
+	while (now <= finTime) {
 		bool nothing2do = true;
 		ipa_t avIp; ipp_t port;
 		int avaSock = Np4d::accept4d(extSock,avIp,port);
@@ -180,32 +180,44 @@ void* run(void* finishTime) {
 		}
 		//first receieve packets and send to threads
 		int p = recvFromForest();
-		if(p != 0) {
+		if (p != 0) {
 			nothing2do = false;
 			handleIncoming(p);	
 		} else {
 			ps->free(p);
 		}
 		//now do some sending
-		for(int t = threads->firstIn(); t != 0;
+		for (int t = threads->firstIn(); t != 0;
 			t = threads->nextIn(t)) {
 			if(pool[t].qp.out.empty()) continue;
 			nothing2do = false;
 			int p1 = pool[t].qp.out.deq();
-			if(p1 == 0) { //thread is done
+			if (p1 == 0) { //thread is done
 				pool[t].qp.in.reset();
 				threads->swap(t);
 				close(pool[t].sock);
 				continue;
 			}
-			PacketHeader & h1 = ps->getHeader(p1);
+			PacketHeader& h1 = ps->getHeader(p1);
 			CtlPkt cp1;
 			cp1.unpack(ps->getPayload(p1),
 				   h1.getLength()-Forest::OVERHEAD);
-			if(tMap->validId(t))
-				tMap->dropPair(tMap->getKey(t));
-			cp1.setSeqNum(++seqNum);
-			tMap->addPair(cp1.getSeqNum(),t);
+			if (cp1.getSeqNum() == 1) {
+				// means this is a repeat of a pending
+				// outgoing request
+				if (tMap->validId(t)) {
+					cp1.setSeqNum(tMap->getKey(t));
+		 		} else {
+					// in this case, reply has arrived
+					// so, suppress duplicate request
+					ps->free(p1); continue;
+				}
+			} else {
+				if (tMap->validId(t))
+					tMap->dropPair(tMap->getKey(t));
+				tMap->addPair(seqNum,t);
+				cp1.setSeqNum(seqNum++);
+			}
 			cp1.pack(ps->getPayload(p1));
 			h1.payErrUpdate(ps->getBuffer(p1));
 			send(p1);
@@ -215,18 +227,20 @@ void* run(void* finishTime) {
 	}
 	disconnect();
 }
+
 void handleIncoming(int p) {
 	PacketHeader& h = ps->getHeader(p);
 	if(h.getPtype() == NET_SIG) {
 		CtlPkt cp;
 		cp.unpack(ps->getPayload(p),
 			h.getLength()-Forest::OVERHEAD);
-		if(cp.getCpType() == NEW_CLIENT) {
+		if (cp.getCpType() == NEW_CLIENT) {
 			writeToAcctFile(cp);
 			int t = tMap->getId(cp.getSeqNum());
-			if(t != 0) {
+			if (t != 0) {
 				pool[t].seqNum = 0;
 				pool[t].qp.in.enq(p);
+// might want to print error message in this case
 			} else ps->free(p);
 		} else if(cp.getRrType() == REQUEST &&
 		    (cp.getCpType() == CLIENT_CONNECT ||
@@ -234,9 +248,10 @@ void handleIncoming(int p) {
 			writeToAcctFile(cp);
 			CtlPkt cp2(cp.getCpType(),POS_REPLY,cp.getSeqNum());
 			int p1 = ps->alloc();
-			if(p1==0) fatal("packetstore out of packets!");
+			if (p1 == 0) fatal("packetstore out of packets!");
 			PacketHeader & h1 = ps->getHeader(p1);
-			h1.setDstAdr(h.getSrcAdr()); h1.setSrcAdr(h.getDstAdr());
+			h1.setDstAdr(h.getSrcAdr());
+			h1.setSrcAdr(h.getDstAdr());
 			h1.setFlags(0); h1.setComtree(Forest::NET_SIG_COMT);
 			int len = cp2.pack(ps->getPayload(p1));
 			h1.setLength(Forest::OVERHEAD + len);
@@ -262,9 +277,17 @@ void handleIncoming(int p) {
 void* handler(void * tp) {
 	Queue& inQ = (((ThreadPool *) tp)->qp).in;
 	Queue& outQ = (((ThreadPool *) tp)->qp).out;
-	while(true) {
+
+	while (true) {
 		int start = inQ.deq();
-		if(start!=1) {(ps->getHeader(start)).write(cerr,ps->getBuffer(start)); fatal("handler: Thread not waiting to start");}
+		if (start != 1) {
+			(ps->getHeader(start)).write(cerr,ps->getBuffer(start));
+			cerr << "handler: Thread synchronization error, "
+				"abandoning this attempt\n";
+			outQ.enq(0); //signal completion to main thread
+			close(avaSock);
+			continue;
+		}
 		int aip = ((ThreadPool *) tp)->ipa;
 		int avaSock = ((ThreadPool *) tp)->sock;
 		int seqNum = ((ThreadPool *) tp)->seqNum;
@@ -275,16 +298,26 @@ void* handler(void * tp) {
 		string uname, pword, portStr;
 		iss >> uname >> pword >> portStr;
 		sscanf(portStr.c_str(),"%d",&port);
+
 		CtlPkt cp2(NEW_CLIENT,REQUEST,seqNum);
-		cp2.setAttr(CLIENT_IP,aip); cp2.setAttr(CLIENT_PORT,(ipp_t)port);
-		int reply = sendCtlPkt(cp2,Forest::NET_SIG_COMT,netMgrAdr,inQ,outQ);
-		if(reply == -1) {
-			cerr << "handler: no reply from net manager\n";
+		cp2.setAttr(CLIENT_IP,aip);
+		cp2.setAttr(CLIENT_PORT,(ipp_t)port);
+		int reply = sendCtlPkt(cp2,Forest::NET_SIG_COMT,
+					netMgrAdr,inQ,outQ);
+		if (reply == NORESPONSE) {
+			// abandon this attempt
+			cerr << "handler: no reply from net manager to\n";
+			cp2.write(cerr);
+			Np4d::sendInt(avaSock,-1);
+			outQ.enq(0); //signal completion to main thread
+			close(avaSock);
+			continue;
 		}
 		//get response
 		PacketHeader &h3 = ps->getHeader(reply);
 		CtlPkt cp3;
-		cp3.unpack(ps->getPayload(reply),h3.getLength()-Forest::OVERHEAD);
+		cp3.unpack(ps->getPayload(reply),
+			   h3.getLength()-Forest::OVERHEAD);
 		if(cp3.getCpType() == NEW_CLIENT &&
 		    cp3.getRrType() == POS_REPLY) {
 			fAdr_t rtrAdr = cp3.getAttr(RTR_ADR);
@@ -295,20 +328,22 @@ void* handler(void * tp) {
 			Np4d::sendInt(avaSock,cliAdr);
 			Np4d::sendInt(avaSock,rtrIp);
 			Np4d::sendInt(avaSock,CC_Adr);
-			close(avaSock);
 		} else if(cp3.getCpType() == NEW_CLIENT &&
-		    cp3.getRrType() == NEG_REPLY) { //send -1 to client
-			cerr << "Client could not connect:" << cp3.getErrMsg() << endl;
+		    	  cp3.getRrType() == NEG_REPLY) { //send -1 to client
+			cerr << "Client could not connect:" << cp3.getErrMsg()
+			     << endl;
 			Np4d::sendInt(avaSock,-1);
 		} else {
 			h3.write(cerr,ps->getBuffer(reply));
 			cp3.write(cerr);
 			cerr << "handler: unrecognized ctl pkt\n";
 		}
+		close(avaSock);
 		ps->free(reply);
 		outQ.enq(0); //signal completion to main thread
 	}
 }
+
 /** Send initial connect packet to forest router
  *  Uses comtree 1, which is for user signalling.
  */
@@ -352,6 +387,7 @@ int recvFromForest() {
         cp.unpack(ps->getPayload(p), h.getLength() - (Forest::OVERHEAD));
 	return p;
 }
+
 /** Send a control packet multiple times before giving up.
  *  This method makes a copy of the original and sends the copy
  *  back to the main thread. If no reply is received after 1 second,
@@ -372,26 +408,30 @@ int sendAndWait(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 	int copy = ps->fullCopy(p);
 	if (copy == 0) {
 		cerr << "sendAndWait: no packets left in packet store\n";
-		return 0;
+		return NORESPONSE;
 	}
 	outQ.enq(copy);
 
 	for (int i = 1; i < 3; i++) {
-		int reply = inQ.deq(1000000000); // 1 sec timeout
-		if (reply == 0) { // timeout
+		int reply = inQ.deq(2000000000); // 2 sec timeout
+		if (reply == Queue::TIMEOUT) {
 			// no reply, make new copy and send
 			int retry = ps->fullCopy(p);
 			if (retry == 0) {
 				cerr << "sendAndWait: no packets "
 					"left in packet store\n";
-				return 0;
+				return NORESPONSE;
 			}
+			cp.setSeqNum(1);        // tag retry as a repeat
+                        cp.pack(ps->getPayload(retry));
+                        PacketHeader& hr = ps->getHeader(retry);
+                        hr.payErrUpdate(ps->getBuffer(retry));
 			outQ.enq(retry);
 		} else {
 			return reply;
 		}
 	}
-	return 0;
+	return NORESPONSE;
 }
 
 /** Send a control packet back through the main thread.
@@ -414,6 +454,8 @@ int sendCtlPkt(CtlPkt& cp, comt_t comt, fAdr_t dest, Queue& inQ, Queue& outQ) {
                 cerr << "sendCtlPkt: no packets left in packet store\n";
                 return 0;
         }
+	// set default seq# for requests, tells main thread to use "next" seq#
+	if (cp.getRrType() == REQUEST) cp.setSeqNum(0);
         int plen = cp.pack(ps->getPayload(p));
         if (plen == 0) {
                 cerr << "sendCtlPkt: packing error\n";

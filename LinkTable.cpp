@@ -31,7 +31,6 @@ int LinkTable::addEntry(int lnk, ipa_t peerIp, ipp_t peerPort) {
 	if (!links->isOut(lnk)) return 0;
 	if (ht->lookup(hashkey(peerIp, peerPort)) != 0) return 0;
 	if (!ht->insert(hashkey(peerIp, peerPort),lnk)) return 0;
-
 	links->swap(lnk);
 
 	lnkTbl[lnk].peerIp = peerIp;

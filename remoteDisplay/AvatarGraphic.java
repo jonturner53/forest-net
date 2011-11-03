@@ -39,21 +39,21 @@ class AvatarGraphic {
 	 *  right quadrant.
 	 */
 	public void draw() {
-		double scaleFactor = 2*Math.PI/360; // for converting degrees to radians
+		double scaleFactor = 2*Math.PI/360; // for degrees to radians
 		StdDraw.setPenColor(Color.GRAY);
-		if(avaStatus.type==1)
+		if(avaStatus.type == 1)
 			StdDraw.setPenRadius(.010);
-		else if(avaStatus.type==3)
+		else if (avaStatus.type == 3)
 			StdDraw.setPenColor(Color.GREEN);
 		StdDraw.circle(avaStatus.x,avaStatus.y,SIZE);		
 		StdDraw.line(avaStatus.x, avaStatus.y,
-			     avaStatus.x + SIZE*Math.sin(avaStatus.dir*scaleFactor),
-			     avaStatus.y + SIZE*Math.cos(avaStatus.dir*scaleFactor));
+			avaStatus.x + SIZE*Math.sin(avaStatus.dir*scaleFactor),
+			avaStatus.y + SIZE*Math.cos(avaStatus.dir*scaleFactor));
 		StdDraw.setPenRadius(.002);
 		StdDraw.setPenColor(Color.BLACK);
 		StdDraw.filledCircle(avaStatus.x,avaStatus.y,.005);
 
-		StdDraw.text(avaStatus.x-SIZE/3,avaStatus.y+SIZE/3,
+		StdDraw.text(avaStatus.x-SIZE/4,avaStatus.y+SIZE/3,
 			     ((avaStatus.id >> 16) & 0xffff) + "." +
 			     (avaStatus.id & 0xffff));
 		StdDraw.text(avaStatus.x+SIZE/3,avaStatus.y-SIZE/3,

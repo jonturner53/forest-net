@@ -39,8 +39,10 @@ bool IoProcessor::setup(int i) {
 
 	// bind it to an address/port
         if (!Np4d::bind4d(sock[i], ift->getIpAdr(i), Forest::ROUTER_PORT)) {
-		cerr << "IoProcessor::setup: bind call failed, "
-		     << "check interface's IP address\n";
+		string s;
+		cerr << "IoProcessor::setup: bind call failed for "
+		     << Np4d::ip2string(ift->getIpAdr(i),s) << ":"
+		     << Forest::ROUTER_PORT << ", check interface's IP address\n";
                 return false;
         }
 	return true;

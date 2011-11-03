@@ -18,8 +18,11 @@ fAdr_t netMgrAdr;	///< Forest address of NetMgr
 fAdr_t rtrAdr;		///< Forest address of router
 fAdr_t myAdr;		///< Forest address of self
 fAdr_t CC_Adr;		///< Forest address of ComtreeController
+
 const static int LISTEN_PORT = 30140; ///< TCP port to listen for avatars on
 static const int TPSIZE = 500;
+static const int NORESPONSE = (1 << 31);
+
 PacketStoreTs *ps;	///< pointer to packet store
 int sock;		///< Forest socket
 int extSock;		///< Listen for avatars socket
@@ -36,18 +39,18 @@ struct clientStruct {
 	ipa_t aip;//avatar IP
 };
 struct QueuePair {
-Queue in;
-Queue out;
+	Queue in; Queue out;
 };
 int threadCount;
 struct ThreadPool {
-pthread_t th;
-QueuePair qp;
-uint64_t seqNum;
-uint64_t ts;
-ipa_t ipa;
-int sock;
+	pthread_t th;
+	QueuePair qp;
+	uint64_t seqNum;
+	uint64_t ts;
+	ipa_t ipa;
+	int sock;
 };
+
 ThreadPool *pool;
 UiSetPair *threads;
 IdMap *tMap;

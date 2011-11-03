@@ -68,10 +68,12 @@ void PacketStoreTs::free(packet p) {
 packet PacketStoreTs::fullCopy(packet p) {
         int p1 = alloc();
         if (p1 == 0) return 0;
-        int len = ((getHeader(p)).getLength()+3)/4;
+	PacketHeader& h = getHeader(p);
+	PacketHeader& h1 = getHeader(p1);
+        int len = (h.getLength()+3)/4;
         buffer_t& buf = getBuffer(p); buffer_t& buf1 = getBuffer(p1);
         for (int i = 0; i < len; i++) buf1[i] = buf[i];
-        (getHeader(p1)).unpack(getBuffer(p1));
+	h1 = h;
         return p1;
 }
 

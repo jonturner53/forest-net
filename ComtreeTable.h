@@ -452,7 +452,7 @@ inline void ComtreeTable::registerRte(int cLnk, int rtx) {
  *  @param rtx is an integer that is presumed to be a route index
  */
 inline void ComtreeTable::deregisterRte(int cLnk, int rtx) {
-	if (validComtLink(cLnk)) clTbl[cLnk].rteSet->insert(rtx);
+	if (validComtLink(cLnk)) clTbl[cLnk].rteSet->erase(rtx);
 }
 
 /** Set the outgoing packet rate for a comtree link.

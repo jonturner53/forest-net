@@ -10,8 +10,8 @@ LIBFILES = CommonDefs.o IoProcessor.o IfaceTable.o LinkTable.o ComtreeTable.o \
 	   QuManager.o PacketHeader.o PacketStore.o  PacketStoreTs.o \
 	   NetInfo.o PacketLog.o
 
-all : supportLib fHost fRouter fAvatar fMonitor fCliMgr fNetMgr \
-	fConsole fComtCtl BuildRtables
+all : supportLib fHost fRouter fAvatar fMonitor fNetMgr fCliMgr fComtCtl \
+	fConsole BuildRtables
 
 supportLib:
 	${MAKE} -C support
@@ -57,4 +57,4 @@ lib : ${LIBFILES}
 
 clean :
 	${MAKE} -C support clean
-	rm -f *.o lib fHost fRouter fAvatar fMonitor fNetMgr fCli fCliMgr fComtreeController fComtreeController_NetInfo
+	rm -f *.o lib fHost fRouter fAvatar fMonitor fNetMgr fCliMgr fComtCtl

@@ -20,7 +20,9 @@ typedef int packet;
  *  The object is locked when allocating, de-allocating, or copying
  *  a packet. No locking is done for other methods. This is fine
  *  so long as no two threads attempt to access the same packet
- *  concurrently.
+ *  concurrently. Also note that this version of packet store
+ *  does not support multiple packets that reference the same buffer,
+ *  as it is intended for use with end systems, not routers.
  */
 class PacketStoreTs {
 public:
@@ -52,7 +54,7 @@ private:
         int     n;                      ///< number of packets in use
 
         PacketHeader *phdr;             ///< phdr[i] = header for packet i
-        buffer_t *buff;                 ///< array of packet buffers
+        buffer_t *buff;                 ///< buff[i] = buffer for packet i
 
         UiList    *freePkts;            ///< list of free packets/buffers
 

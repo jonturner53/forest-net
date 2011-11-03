@@ -58,6 +58,7 @@ bool init(const char *topoFile) {
 
 	pool = new ThreadInfo[TPSIZE+1];
 	threads = new UiSetPair(TPSIZE);
+	reqMap = new IdMap(TPSIZE);
 	tMap = new IdMap(TPSIZE);
 
 	booting = true;
@@ -132,7 +133,7 @@ void cleanup() {
 	cout.flush(); cerr.flush();
 	if (extSock > 0) close(extSock);
 	if (intSock > 0) close(intSock);
-	delete ps; delete [] pool; delete tMap; delete threads;
+	delete ps; delete [] pool; delete reqMap; delete tMap; delete threads;
 	delete net;
 }
 
@@ -169,48 +170,61 @@ void* run(void* finTimeSec) {
 				cp.unpack(ps->getPayload(p),
 					  h.getLength()-Forest::OVERHEAD);
 				int t;
+				fAdr_t srcAdr = h.getSrcAdr();
 				if (cp.getRrType() == REQUEST) {
+					// first make sure this is not a repeat
+					// of a request we're already working on
 					t = threads->firstOut();
-					if (t != 0) {
+					uint64_t key = h.getSrcAdr();
+					key << 32; key += cp.getSeqNum();
+					if (reqMap->validKey(key)) {
+						// in this case, we've got an
+						// active thread handling this
+						// request, so discard duplicate
+						ps->free(p);
+					} else if (t != 0) {
 						threads->swap(t);
+						reqMap->addPair(key,t);
 						pool[t].seqNum = 0;
 						pool[t].qp.in.enq(p);
 					} else {
-						cerr << "run: thread "
-							"pool is exhausted\n";
+						cerr << "run: thread pool is "
+							"exhausted\n";
 						ps->free(p);
 					}
-				} else {
-					fAdr_t srcAdr = h.getSrcAdr();
-					if (booting &&
+				} else if (booting &&
 					    cp.getCpType() == BOOT_COMPLETE &&
 					    cp.getRrType() == POS_REPLY) {
-						doneBooting.insert(srcAdr);
-						if (doneBooting.size() ==
-						                  numRouters) {
-							booting = false;
-
-							string s;
-							cout << "done booting "
-							<< "at " //<< now
-							<< Misc::nstime2string(
-									  now,s)
-							<< endl;
-
-							connect();
-							usleep(1000000);
-							// sleep for SPP context
-							// allows time for NAT
-						}
-					} else if (booting &&
+					doneBooting.insert(srcAdr);
+					t = tMap->getId(cp.getSeqNum());
+					if (t != 0) {
+						tMap->dropPair(cp.getSeqNum());
+						pool[t].seqNum = 0;
+						pool[t].qp.in.enq(p);
+					} else {
+						ps->free(p);
+					}
+					if (doneBooting.size() == numRouters) {
+						booting = false;
+						string s;
+						cout << "done booting at " 
+						<< Misc::nstime2string( now,s)
+						<< endl;
+						connect();
+						usleep(1000000);
+						// sleep for SPP context
+						// allows time for NAT
+					}
+				} else if (booting &&
 					    cp.getCpType() == BOOT_COMPLETE &&
 					    cp.getRrType() == NEG_REPLY) {
-						string s;
-						cerr << "router at address "
-						<< Forest::fAdr2string(srcAdr,s)
-						<< " failed to boot\n";
-						pthread_exit(NULL);
-					} 
+					string s;
+					cerr << "router at address "
+					     << Forest::fAdr2string(srcAdr,s)
+					     << " failed to boot\n";
+					pthread_exit(NULL);
+				} else {
+					// normal case of a reply
 					t = tMap->getId(cp.getSeqNum());
 					if (t != 0) {
 						tMap->dropPair(cp.getSeqNum());
@@ -233,6 +247,7 @@ void* run(void* finTimeSec) {
 			int p1 = pool[t].qp.out.deq();
 			if (p1 == 0) { // means thread is done
 				pool[t].qp.in.reset();
+				reqMap->dropPair(reqMap->getKey(t));
 				threads->swap(t);
 				continue;
 			}
@@ -244,15 +259,34 @@ void* run(void* finTimeSec) {
 			if (h1.getDstAdr() == 0) {
 				sendToCons(p1);
 			} else if (cp1.getRrType() == REQUEST) {
-				if (tMap->validId(t)) 
-					tMap->dropPair(tMap->getKey(t));
-				tMap->addPair(seqNum,t);
-				cp1.setSeqNum(seqNum);
+				// this is to catch race condition that can
+				// trigger spurious BOOT_COMPLETE
+				if (cp1.getCpType() == BOOT_COMPLETE &&
+				    !booting) {
+					ps->free(p1); continue;
+				}
+				if (cp1.getSeqNum() == 1) {
+					// means this is a repeat of a pending
+					// outgoing request
+					if (tMap->validId(t)) {
+						cp1.setSeqNum(tMap->getKey(t));
+					} else {
+						// in this case, reply has 
+						// arrived but was not yet seen
+						// by thread so, suppress 
+						// duplicate request
+						ps->free(p1); continue;
+					}
+				} else {
+					if (tMap->validId(t)) 
+						tMap->dropPair(tMap->getKey(t));
+					tMap->addPair(seqNum,t);
+					cp1.setSeqNum(seqNum++);
+				}
 				cp1.pack(ps->getPayload(p1));
 				h1.payErrUpdate(ps->getBuffer(p1));
-				pool[t].seqNum = seqNum;
+				pool[t].seqNum = cp1.getSeqNum();
 				pool[t].ts = now + 2000000000; // 2 sec timeout
-				seqNum++;
 				sendToForest(p1);
 			} else {
 				sendToForest(p1);
@@ -267,7 +301,7 @@ void* run(void* finTimeSec) {
 				pool[t].seqNum = 0;
 			}
 		}
-		if (nothing2do && threads->firstIn() == 0) usleep(1000);
+		if (nothing2do && threads->firstIn() == 0) usleep(10000);
 		sched_yield();
 		now = Misc::getTimeNs();
 	}
@@ -337,7 +371,7 @@ void* handler(void *qp) {
  */
 bool handleConsReq(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 	int reply = sendAndWait(p,cp,inQ,outQ);
-	if (reply != 0) {
+	if (reply != NORESPONSE) {
 		PacketHeader& h = ps->getHeader(reply);
 		// use 0 destination address to tell main thread to send
 		// this packet to remote console
@@ -377,7 +411,7 @@ bool handleConDisc(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 	reqCp.setAttr(CLIENT_ADR,cp.getAttr(CLIENT_ADR));
 	reqCp.setAttr(RTR_ADR,h.getSrcAdr());
 	int reply = sendCtlPkt(reqCp,cliMgrAdr,inQ,outQ);
-	if (reply == 0) {
+	if (reply == NORESPONSE) {
 		cerr << "handleConDisc: no reply from client manager\n";
 		cerr.flush();
 		errReply(p,cp,outQ,"client manager never replied");
@@ -435,11 +469,12 @@ bool handleNewClient(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
         reqCp.setAttr(PEER_PORT,cp.getAttr(CLIENT_PORT));
         reqCp.setAttr(PEER_TYPE,CLIENT);
 	int reply = sendCtlPkt(reqCp,rtrAdr,inQ,outQ);
-	if (reply == 0) {
+	if (reply == NORESPONSE) {
 		errReply(p,cp,outQ,"router did not reply to add link");
 		cerr << "handleNewClient: no reply from router to add link\n";
 		return false;
 	}
+
 	CtlPkt repCp;
 	repCp.unpack(ps->getPayload(reply),
 		     (ps->getHeader(reply)).getLength()-Forest::OVERHEAD);
@@ -461,7 +496,7 @@ bool handleNewClient(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 	reqCp.setAttr(BIT_RATE,500); // default value of 500 Kb/s
 	reqCp.setAttr(PKT_RATE,250); // 250 p/s
 	reply = sendCtlPkt(reqCp,rtrAdr,inQ,outQ);
-	if (reply == 0) {
+	if (reply == NORESPONSE) {
 		errReply(p,cp,outQ,"no reply from router to modify link");
 		cerr << "handleNewClient: no reply from router to modify"
 			"link\n";
@@ -484,7 +519,7 @@ bool handleNewClient(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 	reqCp.setAttr(COMTREE_NUM,Forest::CLIENT_CON_COMT);
 	reqCp.setAttr(LINK_NUM,clientLink);
 	reply = sendCtlPkt(reqCp,rtrAdr,inQ,outQ);
-	if (reply == 0) {
+	if (reply == NORESPONSE) {
 		errReply(p,cp,outQ,"no reply from router to add comtree link");
 		cerr << "handleNewClient: no reply from router to add comtree "
 			"link\n";
@@ -508,7 +543,7 @@ bool handleNewClient(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 	reqCp.setAttr(COMTREE_NUM,Forest::CLIENT_SIG_COMT);
 	reqCp.setAttr(LINK_NUM,clientLink);
 	reply = sendCtlPkt(reqCp,rtrAdr,inQ,outQ);
-	if (reply == 0) {
+	if (reply == NORESPONSE) {
 		errReply(p,cp,outQ,"no reply from router to add comtree link");
 		cerr << "handleNewClient: no reply from router to add comtree "
 			"link\n";
@@ -587,10 +622,10 @@ bool handleBootRequest(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 		reqCp.setAttr(MAX_BIT_RATE,net->getIfBitRate(rtr,i));
 		reqCp.setAttr(MAX_PKT_RATE,net->getIfPktRate(rtr,i));
 		int reply = sendCtlPkt(reqCp,rtrAdr,rtrIp,rtrPort,inQ,outQ);
-		if (reply == 0) {
+		if (reply == NORESPONSE) {
 			cerr << "handleBootRequest: no reply from router to "
 				"add interface message for "
-				"interface" << i << "\n";
+				"interface " << i << "\n";
 			ps->free(reply);
 			return false;
 		}
@@ -601,7 +636,7 @@ bool handleBootRequest(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 			CtlPkt acp(BOOT_ABORT,REQUEST,0);
 			int aRep = sendCtlPkt(acp,rtrAdr,rtrIp,rtrPort,
 						inQ,outQ);
-			if (aRep != 0) ps->free(aRep); // ignore reply
+			if (aRep != NORESPONSE) ps->free(aRep); // ignore reply
 			cerr << "handleBootRequest: router could not add "
 				"interface";
 			ps->free(reply);
@@ -636,10 +671,10 @@ bool handleBootRequest(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 		reqCp.setAttr(PEER_PORT,peerPort);
 		reqCp.setAttr(PEER_ADR,net->getNodeAdr(peer));
 		int reply = sendCtlPkt(reqCp,rtrAdr,rtrIp,rtrPort,inQ,outQ);
-		if (reply == 0) {
+		if (reply == NORESPONSE) {
 			cerr << "handleBootRequest: no reply from router "
 			     << rtr << " to add link message for "
-				"local link" << llnk << "\n";
+				"local link " << llnk << "\n";
 			ps->free(reply);
 			return false;
 		}
@@ -650,7 +685,7 @@ bool handleBootRequest(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 			CtlPkt acp(BOOT_ABORT,REQUEST,0);
 			int aRep = sendCtlPkt(acp,rtrAdr,rtrIp,rtrPort,
 						inQ,outQ);
-			if (aRep != 0) ps->free(aRep); // ignore reply
+			if (aRep != NORESPONSE) ps->free(aRep); // ignore reply
 			cerr << "handleBootRequest: router " << rtr << " could "
 				"not add local link " << llnk << endl;
 			ps->free(reply);
@@ -664,7 +699,7 @@ bool handleBootRequest(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 		reqCp.setAttr(BIT_RATE,net->getLinkBitRate(lnk));
 		reqCp.setAttr(PKT_RATE,net->getLinkPktRate(lnk));
 		reply = sendCtlPkt(reqCp,rtrAdr,rtrIp,rtrPort,inQ,outQ);
-		if (reply == 0) {
+		if (reply == NORESPONSE) {
 			cerr << "handleBootRequest: no reply from router "
 			     << rtr << " to modify link message for local link"
 			     << llnk << "\n";
@@ -678,7 +713,7 @@ bool handleBootRequest(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 			CtlPkt acp(BOOT_ABORT,REQUEST,0);
 			int aRep = sendCtlPkt(acp,rtrAdr,rtrIp,rtrPort,
 						inQ,outQ);
-			if (aRep != 0) ps->free(aRep); // ignore reply
+			if (aRep != NORESPONSE) ps->free(aRep); // ignore reply
 			cerr << "handleBootRequest: router " << rtr << " could "
 				"not set link rates for link " << llnk << endl;
 			ps->free(reply);
@@ -701,7 +736,7 @@ bool handleBootRequest(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 		reqCp.setAttr(COMTREE_NUM,comt);
 		int reply = sendCtlPkt(reqCp,rtrAdr,rtrIp,rtrPort,
 					inQ,outQ);
-		if (reply == 0) {
+		if (reply == NORESPONSE) {
 			cerr << "handleBootRequest: no reply from router "
 			     << rtr << " to add comtree message for comtree "
 			     << comt << "\n";
@@ -715,7 +750,7 @@ bool handleBootRequest(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 			CtlPkt acp(BOOT_ABORT,REQUEST,0);
 			int aRep = sendCtlPkt(acp,rtrAdr,rtrIp,rtrPort,
 						inQ,outQ);
-			if (aRep != 0) ps->free(aRep); // ignore reply
+			if (aRep != NORESPONSE) ps->free(aRep); // ignore reply
 			cerr << "handleBootRequest: router " << rtr << " could "
 				"not add comtree " << comt << endl;
 			ps->free(reply);
@@ -745,7 +780,7 @@ bool handleBootRequest(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 			reqCp.setAttr(PEER_CORE_FLAG,peerCoreFlag);
 			int reply = sendCtlPkt(reqCp,rtrAdr,rtrIp,rtrPort,
 							inQ,outQ);
-			if (reply == 0) {
+			if (reply == NORESPONSE) {
 				cerr << "handleBootRequest: no reply from "
 				     << "router " << rtr << " to add comtree "
 				     << "link message for comtree " << comt
@@ -761,7 +796,8 @@ bool handleBootRequest(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 				CtlPkt acp(BOOT_ABORT,REQUEST,0);
 				int aRep = sendCtlPkt(acp,rtrAdr,rtrIp,rtrPort,
 							inQ,outQ);
-				if (aRep != 0) ps->free(aRep); // ignore reply
+				if (aRep != NORESPONSE)
+					ps->free(aRep); // ignore reply
 				cerr << "handleBootRequest: router "
 				     << rtr << " could not add comtree link for"
 				     << " comtree " << comt << " link "
@@ -797,7 +833,7 @@ bool handleBootRequest(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 			reqCp.setAttr(PKT_RATE_IN,prIn);
 			reqCp.setAttr(PKT_RATE_OUT,prOut);
 			reply = sendCtlPkt(reqCp,rtrAdr,rtrIp,rtrPort,inQ,outQ);
-			if (reply == 0) {
+			if (reply == NORESPONSE) {
 				cerr << "handleBootRequest: no reply from "
 				     << "router " << rtr << " to modify "
 				     << "comtree link message for comtree "
@@ -813,7 +849,8 @@ bool handleBootRequest(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 				CtlPkt acp(BOOT_ABORT,REQUEST,0);
 				int aRep = sendCtlPkt(acp,rtrAdr,rtrIp,rtrPort,
 							inQ,outQ);
-				if (aRep != 0) ps->free(aRep); // ignore reply
+				if (aRep != NORESPONSE)
+					ps->free(aRep); // ignore reply
 				cerr << "handleBootRequest: router " << rtr
 				     << " could not set comtree link rates for "
 				     << "comtree " << comt << " link "
@@ -830,7 +867,7 @@ bool handleBootRequest(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 		reqCp.setAttr(CORE_FLAG,net->isComtCoreNode(ctx,rtr));
 		reqCp.setAttr(PARENT_LINK,net->getLocLink(plnk,rtr));
 		reply = sendCtlPkt(reqCp,rtrAdr,rtrIp,rtrPort,inQ,outQ);
-		if (reply == 0) {
+		if (reply == NORESPONSE) {
 			cerr << "handleBootRequest: no reply from router "
 			     << rtr << " to modify comtree message for comtree "
 			     << comt << "\n";
@@ -844,7 +881,7 @@ bool handleBootRequest(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 			CtlPkt acp(BOOT_ABORT,REQUEST,0);
 			int aRep = sendCtlPkt(acp,rtrAdr,rtrIp,rtrPort,
 						inQ,outQ);
-			if (aRep != 0) ps->free(aRep); // ignore reply
+			if (aRep != NORESPONSE) ps->free(aRep); // ignore reply
 			cerr << "handleBootRequest: router " << rtr << " could "
 				"not add comtree " << comt << endl;
 			ps->free(reply);
@@ -855,7 +892,7 @@ bool handleBootRequest(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 	// finally, send the boot complete message to the router
 	CtlPkt reqCp(BOOT_COMPLETE,REQUEST,0);
 	int reply = sendCtlPkt(reqCp,rtrAdr,rtrIp,rtrPort,inQ,outQ);
-	if (reply == 0) {
+	if (reply == NORESPONSE) {
 		cerr << "handleBootRequest: no reply from router " << rtr <<
 			" to boot complete message\n";
 		ps->free(reply);
@@ -895,6 +932,8 @@ int sendCtlPkt(CtlPkt& cp, fAdr_t dest, ipa_t destIp, ipp_t destPort,
 		cerr << "sendCtlPkt: no packets left in packet store\n";
 		return 0;
 	}
+	// set default seq# for requests - tells main thread to use "next" seq#
+	if (cp.getRrType() == REQUEST) cp.setSeqNum(0);
 	int plen = cp.pack(ps->getPayload(p));
 	if (plen == 0) {
 		cerr << "sendCtlPkt: packing error for packet:\n";
@@ -944,37 +983,32 @@ int sendAndWait(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 	int copy = ps->fullCopy(p);
 	if (copy == 0) {
 		cerr << "sendAndWait: no packets left in packet store\n";
-		return 0;
+		return NORESPONSE;
 	}
-	// copy the tunnel ip and port numbers also
-	PacketHeader& hc = ps->getHeader(copy);
-	hc.setTunSrcIp(h.getTunSrcIp());
-	hc.setTunSrcPort(h.getTunSrcPort());
 
-//cerr << "sendAndWait: sending request for thread " << pthread_self() << "\n";
-//h.write(cerr,ps->getBuffer(p));
 	outQ.enq(copy);
 
 	for (int i = 1; i < 3; i++) {
 		int reply = inQ.deq(1000000000); // 1 sec timeout
-		if (reply == 0) { // timeout
-//cerr << "sendAndWait: timeout\n";
+		if (reply == Queue::TIMEOUT) { // timeout
 			// no reply, make new copy and send
 			int retry = ps->fullCopy(p);
 			if (retry == 0) {
 				cerr << "sendAndWait: no packets "
 					"left in packet store\n";
-				return 0;
+				return NORESPONSE;
 			}
+			cp.setSeqNum(1); 	// tag retry as a repeat
+			cp.pack(ps->getPayload(retry));
+			PacketHeader& hr = ps->getHeader(retry);
+			hr.payErrUpdate(ps->getBuffer(retry));
 			outQ.enq(retry);
 		} else {
-//cerr << "sendAndWait: got reply\n";
 			return reply;
 		}
 	}
-	return 0;
+	return NORESPONSE;
 }
-
 
 /** Build and send error reply packet for p.
  *  @param p is the packet number of the request packet
@@ -1120,7 +1154,9 @@ void sendToForest(int p) {
 	if (booting) { destIp = h.getTunSrcIp(); destPort = h.getTunSrcPort(); }
 	else	     { destIp = rtrIp; destPort = Forest::ROUTER_PORT; }
 	int rv = Np4d::sendto4d(intSock,(void *) &buf,leng, destIp, destPort);
-	if (rv == -1) fatal("sendToForest: failure in sendto");
+	if (rv == -1) {
+		fatal("sendToForest: failure in sendto");
+	}
 	ps->free(p);
 }
 

@@ -27,6 +27,7 @@ public:		Queue(int=10);
 	void	enq(int);
 	int	deq();	
 	int	deq(uint32_t);	
+	static	int const TIMEOUT = (1 << 31); // largest 32 bit negative number
 private:
 	int	qMax;			///< max number of items in queue
 

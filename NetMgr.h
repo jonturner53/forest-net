@@ -64,6 +64,8 @@ Queue	in;
 Queue	out;
 };
 
+static const int NORESPONSE = (1 << 31); ///< to indicate non-reponse to ctl pkt
+
 // defines thread pool
 static const int TPSIZE = 500;	///< number of concurrent threads at NetMgr
 struct ThreadInfo {
@@ -74,6 +76,7 @@ struct ThreadInfo {
 };
 ThreadInfo *pool;		///< pool[i]: i-th thread in pool
 UiSetPair *threads;		///< in-use and unused thread indices
+IdMap *reqMap;			///< maps rcvd requests to handling thread
 
 IdMap	*tMap;			///< maps sequence numbers to thread #
 
