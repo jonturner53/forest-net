@@ -1293,8 +1293,8 @@ void RouterCore::dropLink(int lnk) {
 		dropComtreeLink(ctx,lnk,cLnk);
 	}
 	int iface = lt->getIface(lnk);
-	ift->addAvailBitRate(iface,-lt->getBitRate(lnk));
-	ift->addAvailPktRate(iface,-lt->getPktRate(lnk));
+	ift->addAvailBitRate(iface,lt->getBitRate(lnk));
+	ift->addAvailPktRate(iface,lt->getPktRate(lnk));
 	lt->removeEntry(lnk);
 }
 
