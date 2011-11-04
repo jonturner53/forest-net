@@ -1358,7 +1358,7 @@ bool RouterCore::modLink(int p, CtlPkt& cp, CtlPkt& reply) {
 		if (cp.isSet(PKT_RATE)) {
 			int pr = cp.getAttr(PKT_RATE);
 			int dpr = pr - lt->getPktRate(link);
-			if (!ift->addAvailBitRate(iface,-dpr)) {
+			if (!ift->addAvailPktRate(iface,-dpr)) {
 				if (cp.isSet(BIT_RATE)) { //undo earlier changes
 					ift->addAvailBitRate(iface,dbr);
 					lt->setBitRate(link,br-dbr);
