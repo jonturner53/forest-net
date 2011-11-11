@@ -12,8 +12,43 @@ import java.awt.Color;
 import java.awt.geom.Point2D;
 import princeton.*;
 
-/**
-* A GUI for viewing comtrees based on the packets recieved from the ComtreeController.
+/** Display comtrees based on the information received from a ComtCtl object.
+ *  Connect to the ComtCtl object using a stream socket (port 30133).
+ *  On connecting, the ComtCtl sends a sequence of "topology definitions"
+ *  identifying the nodes in the network graph and the links connecting them.
+ *  After sending the topology definitions, the ComtCtl sends comtree 
+ *  comtree definitions, after which it sends status messages whenever
+ *  any comtree that it controls changes.
+ *
+ *  Each message from the ComtCtl is sent on a line by itself, starting
+ *  with a keyword and one or more attributes in a fixed order.
+ *  More specifically, we can have
+ *
+ *  node nodeName nodeType latitude longitude address firstLeafAdr lastLeafAdr
+ *  link (nodeName.5,nodeName.3) length bitRate pktRate
+ *  comtree comtreeNum rootNodeName
+ *  coreNode comtreeNum nodeName
+ *  comtreeNode comtreeNum leafCount
+ *  comtreeLink (nodeName,nodeName.5) bitRateL pktRateL bitRateR pktRateR
+ *
+ *  The node and link messages define the underlying network topology.
+ *  The nodeType can be one of router, controller, client. The latitude
+ *  and longitude are given in degrees and affect the placement of the
+ *  nodes in the graphical display. The links are defined by their endpoints.
+ *  For routers, these include a link number. For leaf nodes, they do not.
+ *  Lengths are given in km, bit rates in kb/s, packet rates in packets/sec.
+ *  The leaf count for a comtree node is the number of leaves in the comtree.
+ *  The bit rates for a comtree link are the rights from the left endpoint
+ *  (as the link is given) and the right endpoint.
+ *  If a comtree message is given without a rootNodeName, it is
+ *  interpreted as "delete comtree" message. If a comtreeNode message
+ *  is given without a leafCount, it is intepreted a "delete comtree node"
+ *  message. If a comtreeLink message omits the link rates, it is interpreted
+ *  as a "delete comtree link" message.
+ */
+
+
+
 * Moving between comtrees, each "router" displays the number of avatars subscribing to that router.
 * A thick line around a circle means a root of a comtree
 * Blue links are links for that particular comtree.

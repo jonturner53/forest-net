@@ -1,4 +1,4 @@
-/** @file Graph.h
+/** @file Clist.h
  *
  *  @author Jon Turner
  *  @date 2011
@@ -40,7 +40,7 @@ private:
  *  @return the item that follows i in its list
  */
 inline item Clist::suc(item i) const {
-	assert(0 <= i <= N); return node[i].next;
+	assert(0 <= i && i <= N); return node[i].next;
 }
 
 /** Get the predecessor of a list item.
@@ -49,7 +49,7 @@ inline item Clist::suc(item i) const {
  */
 inline item Clist::pred(item i) const {
 // Return predecessor of item i
-	assert(0 <= i <= N); return node[i].prev;
+	assert(0 <= i && i <= N); return node[i].prev;
 }
 
 #endif
