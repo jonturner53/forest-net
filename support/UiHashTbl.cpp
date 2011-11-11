@@ -129,14 +129,14 @@ bool UiHashTbl::insert(uint64_t key, uint32_t val) {
  *  @param key is the key of the pair to be removed
  */
 void UiHashTbl::remove(uint64_t key) {
-	int i; uint32_t b, val, fp; uint32_t *bucket;
+	int i; uint32_t b, val, fp;
 
 	hashit(key,0,b,fp);
 	for (i = 0; i < BKT_SIZ; i++) {
 		if ((bkt[b][i] & fpMsk) == fp) {
 			val = bkt[b][i] & valMsk;
 			if (keyVec[val] == key) {
-				bkt[b][i] = 0; return;
+				keyVec[val] = bkt[b][i] = 0; return;
 			}
 		}
 	}
@@ -145,7 +145,7 @@ void UiHashTbl::remove(uint64_t key) {
 		if ((bkt[b][i] & fpMsk) == fp) {
 			val = bkt[b][i] & valMsk;
 			if (keyVec[val] == key) {
-				bkt[b][i] = 0; return;
+				keyVec[val] = bkt[b][i] = 0; return;
 			}
 		}
 	}

@@ -131,7 +131,7 @@ RouterCore::RouterCore(bool booting1, const RouterInfo& config)
 	sm = new StatsModule(1000, nLnks, nQus, ctt);
 	iop = new IoProcessor(nIfaces, ift, lt, ps, sm);
 	qm = new QuManager(nLnks, nPkts, nQus, min(50,5*nPkts/nLnks), ps, sm);
-	pktLog = new PacketLog(10000,500,ps);
+	pktLog = new PacketLog(5000,500,ps);
 
 	if (!booting)
 		leafAdr = new UiSetPair((config.lastLeafAdr - firstLeafAdr)+1);
@@ -1296,6 +1296,7 @@ void RouterCore::dropLink(int lnk) {
 	ift->addAvailBitRate(iface,lt->getBitRate(lnk));
 	ift->addAvailPktRate(iface,lt->getPktRate(lnk));
 	lt->removeEntry(lnk);
+	freeLeafAdr(lt->getPeerAdr(lnk));
 }
 
 bool RouterCore::getLink(int p, CtlPkt& cp, CtlPkt& reply) {
@@ -1378,7 +1379,7 @@ bool RouterCore::modLink(int p, CtlPkt& cp, CtlPkt& reply) {
 			qm->setLinkRates(link,lt->getBitRate(link),pr);
 		}
 		return true;
-	} 
+	}
 	reply.setErrMsg("get link: invalid link number");
 	reply.setRrType(NEG_REPLY);
 	return false;

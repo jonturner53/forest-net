@@ -32,9 +32,8 @@ int LinkTable::addEntry(int lnk, ipa_t peerIp, ipp_t peerPort) {
 	if (ht->lookup(hashkey(peerIp, peerPort)) != 0) return 0;
 	if (!ht->insert(hashkey(peerIp, peerPort),lnk)) return 0;
 	links->swap(lnk);
-
 	lnkTbl[lnk].peerIp = peerIp;
-	setPeerPort(lnk,peerPort);
+	lnkTbl[lnk].peerPort = peerPort;
 	setIface(lnk,0);
 	setPeerAdr(lnk,0); setPeerType(lnk,UNDEF_NODE);
 	setBitRate(lnk,Forest::MINBITRATE);
