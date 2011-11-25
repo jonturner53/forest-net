@@ -12,7 +12,7 @@
  *  N1 is the limit on the range of values; it must be less than 2^20.
  */
 UiHashTbl::UiHashTbl(int n1) : n(n1) {
-	n = min(n, MAXVAL);
+	if (n > MAXVAL) fatal("UiHashTbl: size out of range");
 
 	for (nb = 1; 8*nb < n; nb <<= 1) {}
 	nb = max(nb,4);
@@ -49,17 +49,17 @@ void UiHashTbl::clear() {
  *  fingerprint for the given key
  */
 void UiHashTbl::hashit(uint64_t key, int hf, uint32_t& b, uint32_t& fp) {
-	const uint32_t A0 = 0xa8134c35;
-	const uint32_t A1 = 0xe626c2d3;
+	const uint32_t A0 = 0xa96347c5;
+	const uint32_t A1 = 0xe65ac2d3;
 
 	uint32_t x, y; uint64_t z;
 
 	x = (key >> 16) & 0xffff0000; x |= (key & 0xffff);
-	y = (key >> 48) & 0xffff0000; y |= ((key >> 16) & 0xffff); 
+	y = (key >> 48) & 0xffff; y |= (key & 0xffff0000); 
 	z = x ^ y;
 	z *= (hf == 0 ? A0 : A1);
-	b = (z >> 32) & bktMsk;
-	fp  = (z >> 29) & fpMsk;
+	b = (z >> 16) & bktMsk;
+	fp  = (z >> 13) & fpMsk;
 }
 
 /** Perform a lookup in the hash table.
@@ -129,14 +129,14 @@ bool UiHashTbl::insert(uint64_t key, uint32_t val) {
  *  @param key is the key of the pair to be removed
  */
 void UiHashTbl::remove(uint64_t key) {
-	int i; uint32_t b, val, fp;
+	int i; uint32_t b, val, fp; uint32_t *bucket;
 
 	hashit(key,0,b,fp);
 	for (i = 0; i < BKT_SIZ; i++) {
 		if ((bkt[b][i] & fpMsk) == fp) {
 			val = bkt[b][i] & valMsk;
 			if (keyVec[val] == key) {
-				keyVec[val] = bkt[b][i] = 0; return;
+				bkt[b][i] = 0; return;
 			}
 		}
 	}
@@ -145,7 +145,7 @@ void UiHashTbl::remove(uint64_t key) {
 		if ((bkt[b][i] & fpMsk) == fp) {
 			val = bkt[b][i] & valMsk;
 			if (keyVec[val] == key) {
-				keyVec[val] = bkt[b][i] = 0; return;
+				bkt[b][i] = 0; return;
 			}
 		}
 	}
