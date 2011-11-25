@@ -14,7 +14,7 @@
 UiHashTbl::UiHashTbl(int n1) : n(n1) {
 	if (n > MAXVAL) fatal("UiHashTbl: size out of range");
 
-	for (nb = 1; 8*nb < n; nb <<= 1) {}
+	for (nb = 1; 8*nb <= n; nb <<= 1) {}
 	nb = max(nb,4);
 	bktMsk = nb - 1; valMsk = (8*nb) - 1; fpMsk = ~valMsk;
 
