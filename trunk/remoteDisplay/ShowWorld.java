@@ -27,10 +27,14 @@ public class ShowWorld {
 	private static int comtree;	// number of comtree to be monitored
 	private static int SIZE;	// size of full map
 	private static int gridSize;	// # of squares in map (x or y)
+	private static int viewSize;	// # of map squares viewed at one time
+	private static int cornerX = 0; //x and y of the bottom left of the viewing window
+	private static int cornerY = 0;
 	private static final int MON_PORT = 30124; // port # used by monitor
 	private static int AVA_PORT;
 	private static Scanner mazeFile; // filename of maze
 	private static int[] walls; 	// list of walls
+	private static int[] currWalls; // list of walls currently in view
 	private static SocketChannel chan = null;// channel to remote monitor
 						// or avatar
 	private static ByteBuffer repBuf = null; // buffer for report packets
@@ -77,8 +81,8 @@ public class ShowWorld {
 		if (rep == null) rep = new AvatarStatus();
 		rep.when = repBuf.getInt()/1000;
 		rep.id = repBuf.getInt();
-		rep.x = repBuf.getInt()/(double)SIZE;
-		rep.y = repBuf.getInt()/(double)SIZE;
+		rep.x = (repBuf.getInt()-cornerX*GRID)/(double)SIZE;
+		rep.y = (repBuf.getInt()-cornerY*GRID)/(double)SIZE;
 		rep.dir = repBuf.getInt();
 		repBuf.getInt(); // discard value
 		rep.numVisible = repBuf.getInt();
@@ -95,7 +99,61 @@ public class ShowWorld {
 	}
 
 	private static AvatarStatus lastRep = null; // used by processFrame
-	
+	private static void viewMovements(int c) throws IOException {
+		if(avaConn) return;
+		ByteBuffer buff = ByteBuffer.allocate(8);
+		boolean didMove = true;
+		switch(c) {
+			case 97:
+				buff.putLong(1L<<32);
+				if(cornerX!=0) cornerX--;
+				else didMove = false;
+				break;
+			case 119:
+				buff.putLong(2L<<32);
+				if(cornerY!=gridSize-viewSize) cornerY++;
+				else didMove = false;
+				break;
+			case 100:
+				buff.putLong(3L<<32);
+				if(cornerX!=gridSize-viewSize) cornerX++;
+				else didMove = false;
+				break;
+			case 115:
+				buff.putLong(4L<<32);
+				if(cornerY!=0) cornerY--;
+				else didMove = false;
+				break;
+			case 111:
+				buff.putLong(5L<<32);
+				if(viewSize!=1) viewSize--;
+				else didMove = false;
+				break;
+			case 112:
+				buff.putLong(6L<<32);
+				if(viewSize!=gridSize) viewSize++;
+				else didMove = false;
+				break;
+		}
+		if(didMove) {
+			buff.flip();
+			chan.write(buff);
+			updateCurrWalls();
+			chan.socket().getOutputStream().flush();
+		}
+	}
+	private static void updateCurrWalls() {
+		if(cornerX+viewSize>gridSize) cornerX=gridSize-viewSize;
+		if(cornerY+viewSize>gridSize) cornerY=gridSize-viewSize;
+		SIZE = viewSize*GRID;
+		currWalls = new int[viewSize*viewSize];
+		for(int i = 0; i < viewSize; i++) {
+			for(int j = 0; j < viewSize; j++) {
+				currWalls[i*viewSize+j] =
+				  walls[(i+cornerY)*gridSize+j+cornerX];
+			}
+		}
+	}
 	private static void sendMovements(int c) throws IOException {
 		if (!avaConn) return;
 		ByteBuffer buff = ByteBuffer.allocate(4);
@@ -191,9 +249,11 @@ public class ShowWorld {
 	private static boolean processArgs(String[] args) {
 		try {
 			mazeFile = new Scanner(new File(args[1]));
-			if(args.length > 2) {
+			viewSize = Integer.parseInt(args[2]);
+			if(args.length > 3) {
 				avaConn = true;
-				avaSockAdr = new InetSocketAddress(args[0],							     Integer.valueOf(args[2]));
+				avaSockAdr = new InetSocketAddress(args[0],
+					Integer.valueOf(args[3]));
 			} else {
 				monSockAdr = new InetSocketAddress(args[0],
 					    	     MON_PORT);
@@ -203,9 +263,10 @@ public class ShowWorld {
 				String temp = mazeFile.nextLine();
 				if (walls==null) {
 					gridSize = temp.length();
-					SIZE = gridSize*GRID;
+					SIZE = viewSize*GRID;
 					walls = new int[gridSize*gridSize];
 				}
+				currWalls = new int[viewSize*viewSize];
 				for(int i = 0; i < gridSize; i++) {
 					if(temp.charAt(i)=='+') {
 						walls[(gridSize-counter)
@@ -227,6 +288,7 @@ public class ShowWorld {
 				}
 				counter++;
 			}
+			updateCurrWalls();
 		} catch (Exception e) {
 			System.out.println("usage: ShowWorldNet remoteIp "
 					    + "wallfile [port]");
@@ -242,14 +304,12 @@ public class ShowWorld {
 	 *  @param comtree is the comtree number to send
 	 */
 	private static void sendComtree(int comtree) {
-		if (sendBuf == null) sendBuf = ByteBuffer.allocate(16); 	
+		if (sendBuf == null) sendBuf = ByteBuffer.allocate(8); 	
 		//  send comtree # to remote monitor
 		try { 		
-			sendBuf.putInt(comtree);
+			sendBuf.putLong((long)comtree);
 			sendBuf.flip();
-			do {
-				chan.write(sendBuf);
-			} while (sendBuf.position() == 0);
+			chan.write(sendBuf);
 			sendBuf.clear();
 		} catch(Exception e) { 
 			System.out.println("Can't send comtree to Monitor"); 
@@ -265,22 +325,22 @@ public class ShowWorld {
 		StdDraw.clear(c);
 		StdDraw.setPenRadius(.002);
 		StdDraw.setPenColor(Color.GRAY);
-		double frac = 1.0/gridSize;
-		for (int i = 0; i <= gridSize; i++) {
+		double frac = 1.0/viewSize;
+		for (int i = 0; i <= viewSize; i++) {
 			StdDraw.line(0,frac*i,1,frac*i);
 			StdDraw.line(frac*i,0,frac*i,1);
 		}
 		StdDraw.setPenColor(Color.BLACK);
 		StdDraw.setPenRadius(.006);
-		StdDraw.line(0,0,0,1); StdDraw.line(0,0,1,0);
-		StdDraw.line(1,1,0,1); StdDraw.line(1,1,1,0);
-		for(int i = 0; i < gridSize*gridSize; i++) {
-			int row = i/gridSize; int col = i%gridSize;
-			if(walls[i] == 1 || walls[i] == 3) {
+		//StdDraw.line(0,0,0,1); StdDraw.line(0,0,1,0);
+		//StdDraw.line(1,1,0,1); StdDraw.line(1,1,1,0);
+		for(int i = 0; i < viewSize*viewSize; i++) {
+			int row = i/viewSize; int col = i%viewSize;
+			if(currWalls[i] == 1 || currWalls[i] == 3) {
 				StdDraw.line(frac*col,frac*row,
 					     frac*col,frac*(row+1));
 			} 
-			if(walls[i]==2 || walls[i] == 3) {
+			if(currWalls[i]==2 || currWalls[i] == 3) {
 				StdDraw.line(frac*col,     frac*(row+1),
 					     frac*(col+1), frac*(row+1));
 			}
@@ -301,8 +361,7 @@ public class ShowWorld {
 	 */
 	public static void main(String[] args) {	
 		// process command line arguments	
-		processArgs(args);
-				
+		processArgs(args);	
 		// Open channel to monitor and make it nonblocking
 		try {
 			if (avaConn) {
@@ -317,7 +376,17 @@ public class ShowWorld {
 			System.out.println(e);
 			System.exit(1);
 		}
-
+		//send viewsize to Monitor.cpp
+		ByteBuffer buff = ByteBuffer.allocate(8);
+		buff.putLong(7L<<32|viewSize);
+		buff.flip();
+		try {
+			chan.write(buff);
+		}catch(Exception e) {
+			System.out.println("Could not"+
+			" write viewSize to Monitor.cpp");
+			System.exit(0);
+		}
 		// setup canvas
 		comtree = 0;
 		StdDraw.setCanvasSize(700,700);
@@ -342,7 +411,6 @@ public class ShowWorld {
 		int monTime = firstRep.when + 3000; // build in some delay
 		long localTime = System.nanoTime()/1000000;
 		long targetLocalTime = localTime;
-
 		while (true) {
 			processFrame(monTime+INTERVAL);
 			Set<Integer> idSet = status.keySet();
@@ -362,9 +430,18 @@ public class ShowWorld {
 			}
 
 			monTime += INTERVAL; targetLocalTime += INTERVAL;
-			
 			//StdDraw.show(INTERVAL);
 			if (!avaConn) {
+				try {
+					if(StdDraw.hasNextKeyTyped()) {
+						viewMovements(StdDraw.nextKeyTyped());
+					}
+				} catch(Exception e) {
+					System.out.println("Could not get map "
+						+ "movement from key");
+					System.out.println(e);
+					System.exit(1);
+				}
 				int newComtree = readComtree();
 				if (newComtree >= 0 && newComtree != comtree) {
 					comtree = newComtree;
@@ -373,9 +450,11 @@ public class ShowWorld {
 			} else {
 				//write movement commands to avaChan socket
 	                        try {
-	                                if (StdDraw.hasNextKeyPressed())
-	                                        sendMovements(
-						     StdDraw.nextKeyPressed());
+	                                if (StdDraw.hasNextKeyPressed()) {
+	           				int nextKey = StdDraw.nextKeyPressed();
+						sendMovements(nextKey);
+					}
+					
 	                        } catch(Exception e) {
 	                                System.out.println("Could not send "
 						+ "movement command to Avatar");

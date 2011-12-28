@@ -31,7 +31,7 @@ private:
 	const static int NUMITEMS = 9;	///<number of distinct items in a status packet
 	int SIZE;			///< xy extent of virtual world
 	const static int GRID = 10000;	///< xy extent of one grid square
-
+	int viewSize;
 	const static int UPDATE_PERIOD = 50;	///< # ms between status updates
 	const static int MAX_AVATARS = 1000;	///< max # of avatars to monitor
 	
@@ -44,7 +44,8 @@ private:
 	int	intSock;		///< internal socket number
 	int	extSock;		///< external listening socket
 	int	connSock;		///< external connection socket
-
+	int	cornerX;		///< used to remember which groups to subscribe to
+	int	cornerY;
 	comt_t	comt;			///< current comtree number
 
 	// avatar properties
@@ -79,6 +80,7 @@ private:
 
 	void	updateStatus(int,int);
 	void	updateSubscriptions(comt_t,comt_t);
+	void	updateSubscriptions();
 };
 
 #endif

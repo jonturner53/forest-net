@@ -7,7 +7,6 @@
  */
 
 #include "Monitor.h"
-
 /** usage:
  *       Monitor extIp intIp rtrIp myAdr rtrAdr gridSize finTime [logfile]
  * 
@@ -73,7 +72,8 @@ Monitor::Monitor(ipa_t xipa, ipa_t iipa, ipa_t ripa, fAdr_t ma, fAdr_t ra,
 	watchedAvatars = new UiHashTbl(MAX_AVATARS);
 	avData = new avatarData[MAX_AVATARS+1];
 	nextAvatar = 1;
-
+	cornerX = 0;
+	cornerY = 0;
 	comt = 0;
 	connSock = -1;
 }
@@ -175,8 +175,8 @@ void Monitor::check4comtree() {
 			perror("");
 		}
 	}
-	comt_t newComt;
-        int nbytes = read(connSock, (char *) &newComt, sizeof(uint32_t));
+	uint64_t input;
+        int nbytes = read(connSock, (char *) &input, sizeof(uint64_t));
         if (nbytes < 0) {
                 if (errno == EAGAIN) return;
                 fatal("Monitor::check4comtree: error in read call");
@@ -188,8 +188,23 @@ void Monitor::check4comtree() {
         } else if (nbytes < sizeof(uint32_t)) {
 		fatal("Monitor::check4comtree: incomplete comtree number");
 	}
+	uint32_t lowerBits = (uint32_t) (input);
+	comt_t newComt = (comt_t) (input >> 32);
+	lowerBits = ntohl(lowerBits);
 	newComt = ntohl(newComt);
+	if(lowerBits != 0) { //not a comtree, but a movement instruction
+		if(lowerBits == 1) cornerX--;
+		else if(lowerBits == 2) cornerY++;
+		else if(lowerBits == 3) cornerX++;
+		else if(lowerBits == 4) cornerY--;
+		else if(lowerBits == 5) viewSize--;
+		else if(lowerBits == 6) viewSize++;
+		else if(lowerBits == 7) viewSize = newComt;
+		else fatal("unrecognized number from remote client");
 
+		updateSubscriptions();
+		return;
+	}
 	if (newComt == comt) return;
 	updateSubscriptions(comt, newComt);
 	comt = newComt;
@@ -248,12 +263,70 @@ void Monitor::send2gui(uint32_t now, int avNum) {
 int Monitor::groupNum(int x1, int y1) {
 	return 1 + (x1/GRID) + (y1/GRID)*(SIZE/GRID);
 }
+/** If oldcomt != 0, send a packet to unsubscribe from all multicasts
+ *  in oldcomt. if newcomt != 0 send a packet to subscribe to all
+ *  multicasts in newcomt.
+ */
+void Monitor::updateSubscriptions() {	
+	packet p = ps->alloc();
+	PacketHeader& h = ps->getHeader(p);
+	uint32_t *pp = ps->getPayload(p);
 
+	// unsubscriptions
+	int nunsub = 0;
+	for (int x = 0; x < SIZE; x += GRID) {
+		for (int y = 0; y < SIZE; y += GRID) {
+			nunsub++;
+			if (nunsub > 350) {
+				pp[0] = 0; pp[1] = htonl(nunsub-1);
+				h.setLength(Forest::OVERHEAD +
+					    4*(1+nunsub));
+				h.setPtype(SUB_UNSUB); h.setFlags(0);
+				h.setComtree(comt);
+				h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
+				send2router(p);
+				nunsub = 1;
+			}
+			pp[nunsub+1] = htonl(-groupNum(x,y));
+		}
+	}
+	pp[0] = 0; pp[1] = htonl(nunsub);
+	h.setLength(Forest::OVERHEAD + 4*(1+nunsub));
+	h.setPtype(SUB_UNSUB); h.setFlags(0);
+	h.setComtree(comt); h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
+	send2router(p);	
+	// subscriptions
+	int nsub = 0;
+	for (int x = GRID*cornerX; x < GRID*(viewSize+cornerX); x += GRID) {
+		for (int y = GRID*cornerY; y < GRID*(viewSize+cornerX); y += GRID) {
+			nsub++;
+			if (nsub > 350) {
+				pp[0] = htonl(nsub-1); pp[nsub] = 0;
+				h.setLength(Forest::OVERHEAD +
+					    4*(1+nsub));
+				h.setPtype(SUB_UNSUB); h.setFlags(0);
+				h.setComtree(comt);
+				h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
+				send2router(p);
+				nsub = 1;
+			}
+			pp[nsub] = htonl(-groupNum(x,y));
+		}
+	}
+	pp[0] = htonl(nsub); pp[nsub+1] = 0;
+
+	h.setLength(Forest::OVERHEAD + 4*(2+nsub));
+	h.setPtype(SUB_UNSUB); h.setFlags(0);
+	h.setComtree(comt); h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
+	send2router(p);
+	ps->free(p);
+}
 /** If oldcomt != 0, send a packet to unsubscribe from all multicasts
  *  in oldcomt. if newcomt != 0 send a packet to subscribe to all
  *  multicasts in newcomt.
  */
 void Monitor::updateSubscriptions(comt_t oldcomt, comt_t newcomt) {
+cerr << "updateSubscriptions(comt_t,comt_t)" << endl;
 	packet p = ps->alloc();
 	PacketHeader& h = ps->getHeader(p);
 	uint32_t *pp = ps->getPayload(p);
