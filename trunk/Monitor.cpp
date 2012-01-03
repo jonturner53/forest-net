@@ -202,7 +202,7 @@ void Monitor::check4comtree() {
 		else if(lowerBits == 7) viewSize = newComt;
 		else fatal("unrecognized number from remote client");
 
-		updateSubscriptions();
+		if(lowerBits != 7) updateSubscriptions();
 		return;
 	}
 	if (newComt == comt) return;
@@ -280,7 +280,7 @@ void Monitor::updateSubscriptions() {
 			if (nunsub > 350) {
 				pp[0] = 0; pp[1] = htonl(nunsub-1);
 				h.setLength(Forest::OVERHEAD +
-					    4*(1+nunsub));
+					    4*(2+nunsub));
 				h.setPtype(SUB_UNSUB); h.setFlags(0);
 				h.setComtree(comt);
 				h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
@@ -291,19 +291,19 @@ void Monitor::updateSubscriptions() {
 		}
 	}
 	pp[0] = 0; pp[1] = htonl(nunsub);
-	h.setLength(Forest::OVERHEAD + 4*(1+nunsub));
+	h.setLength(Forest::OVERHEAD + 4*(2+nunsub));
 	h.setPtype(SUB_UNSUB); h.setFlags(0);
 	h.setComtree(comt); h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
 	send2router(p);	
 	// subscriptions
 	int nsub = 0;
 	for (int x = GRID*cornerX; x < GRID*(viewSize+cornerX); x += GRID) {
-		for (int y = GRID*cornerY; y < GRID*(viewSize+cornerX); y += GRID) {
+		for (int y = GRID*cornerY; y < GRID*(viewSize+cornerY); y += GRID) {
 			nsub++;
 			if (nsub > 350) {
 				pp[0] = htonl(nsub-1); pp[nsub] = 0;
 				h.setLength(Forest::OVERHEAD +
-					    4*(1+nsub));
+					    4*(2+nsub));
 				h.setPtype(SUB_UNSUB); h.setFlags(0);
 				h.setComtree(comt);
 				h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
@@ -326,13 +326,12 @@ void Monitor::updateSubscriptions() {
  *  multicasts in newcomt.
  */
 void Monitor::updateSubscriptions(comt_t oldcomt, comt_t newcomt) {
-cerr << "updateSubscriptions(comt_t,comt_t)" << endl;
 	packet p = ps->alloc();
 	PacketHeader& h = ps->getHeader(p);
 	uint32_t *pp = ps->getPayload(p);
 
-	// unsubscriptions
-	if (oldcomt != 0) {
+	if(oldcomt != 0) {
+		// unsubscriptions
 		int nunsub = 0;
 		for (int x = 0; x < SIZE; x += GRID) {
 			for (int y = 0; y < SIZE; y += GRID) {
@@ -340,7 +339,7 @@ cerr << "updateSubscriptions(comt_t,comt_t)" << endl;
 				if (nunsub > 350) {
 					pp[0] = 0; pp[1] = htonl(nunsub-1);
 					h.setLength(Forest::OVERHEAD +
-						    4*(1+nunsub));
+						    4*(2+nunsub));
 					h.setPtype(SUB_UNSUB); h.setFlags(0);
 					h.setComtree(oldcomt);
 					h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
@@ -351,22 +350,21 @@ cerr << "updateSubscriptions(comt_t,comt_t)" << endl;
 			}
 		}
 		pp[0] = 0; pp[1] = htonl(nunsub);
-		h.setLength(Forest::OVERHEAD + 4*(1+nunsub));
+		h.setLength(Forest::OVERHEAD + 4*(2+nunsub));
 		h.setPtype(SUB_UNSUB); h.setFlags(0);
 		h.setComtree(oldcomt); h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
 		send2router(p);
 	}
-
-	// subscriptions
-	if (newcomt != 0) {
+	if(newcomt != 0) {
+		// subscriptions
 		int nsub = 0;
-		for (int x = 0; x < SIZE; x += GRID) {
-			for (int y = 0; y < SIZE; y += GRID) {
+		for (int x = GRID*cornerX; x < GRID*(viewSize+cornerX); x += GRID) {
+			for (int y = GRID*cornerY; y < GRID*(viewSize+cornerX); y += GRID) {
 				nsub++;
 				if (nsub > 350) {
 					pp[0] = htonl(nsub-1); pp[nsub] = 0;
 					h.setLength(Forest::OVERHEAD +
-						    4*(1+nsub));
+						    4*(2+nsub));
 					h.setPtype(SUB_UNSUB); h.setFlags(0);
 					h.setComtree(newcomt);
 					h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
@@ -381,10 +379,9 @@ cerr << "updateSubscriptions(comt_t,comt_t)" << endl;
 		h.setLength(Forest::OVERHEAD + 4*(2+nsub));
 		h.setPtype(SUB_UNSUB); h.setFlags(0);
 		h.setComtree(newcomt); h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
-	
 		send2router(p);
+		ps->free(p);
 	}
-	ps->free(p);
 }
 
 /** If the given packet is a status report, track the sender.
