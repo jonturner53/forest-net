@@ -406,6 +406,7 @@ bool RouterCore::checkTables() {
 		}
 	}
 	// come back later and add checks for route table
+	return success;
 }
 
 /** Set available rates for interfaces and links.

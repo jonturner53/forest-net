@@ -14,7 +14,7 @@
 #include "Misc.h"
 
 /** This class implements a simple thread-safe queue for communication
- *  between two threads. It assumes a single reader and a single writer.
+ *  among threads.
  */
 class Queue {
 public:		Queue(int=10);
