@@ -1710,7 +1710,7 @@ for (int ctx = firstComtIndex(); ctx != 0; ctx = nextComtIndex(ctx)) {
 	return status;
 }
 
-string& NetInfo::link2string(int lnk, string& s) {
+string& NetInfo::link2string(int lnk, string& s) const {
 	if (lnk == 0) { s = "-"; return s; }
 	int left = getLinkL(lnk); int right = getLinkR(lnk);
 	string s1;
@@ -1735,109 +1735,131 @@ string& NetInfo::link2string(int lnk, string& s) {
  *  to the old one.
  *  @param out is an open output stream
  */
-void NetInfo::write(ostream& out) {
+void NetInfo::write(ostream& out) const {
+	string s = ""; out << toString(s);
+}
+
+string& NetInfo::toString(string& s) const {
 	// First write the "Routers" section
-	out << "Routers\n\n";
+	string s1 = "";
+	s = "Routers\n\n";
 	for (int r = firstRouter(); r != 0; r = nextRouter(r)) {
-		writeRtr(out,r);
+		s += rtr2string(r,s1);
 	}
-	out << ";\n\n";
+	s += ";\n\n";
 
 	// Next write the LeafNodes, starting with the controllers
-	out << "LeafNodes\n\n";
+	s += "LeafNodes\n\n";
 	for (int c = firstController(); c != 0; c = nextController(c)) {
-		writeLeaf(out,c);
+		s += leaf2string(c,s1);
 	}
 	for (int n = firstLeaf(); n != 0; n = nextLeaf(n)) {
-		if (getNodeType(n) != CONTROLLER) writeLeaf(out,n);
+		if (getNodeType(n) != CONTROLLER) s += leaf2string(n,s1);
 	}
-	out << ";\n\n";
+	s += ";\n\n";
 
 	// Now, write the Links
-	out << "Links\n\n"; 
+	s += "Links\n\n"; 
 	for (int lnk = firstLink(); lnk != 0; lnk = nextLink(lnk)) {
-		writeLink(out,lnk);
+		s += netlink2string(lnk,s1);
 	}
-	out << ";\n\n"; 
+	s += ";\n\n"; 
 
 	// And finally, the Comtrees
-	out << "Comtrees\n\n"; 
+	s += "Comtrees\n\n"; 
 	for (int ctx = firstComtIndex(); ctx != 0; ctx = nextComtIndex(ctx)) {
-		writeComt(out,ctx);
+		s += comt2string(ctx,s1);
 	}
-	out << ";\n"; 
+	s += ";\n"; 
+	return s;
 }
 
-void NetInfo::writeRtr(ostream& out, int rtr) {
+string& NetInfo::rtr2string(int rtr, string& s) const {
 	string s1,s2,s3;
-	out << "name=" << getNodeName(rtr,s1) << " "
-	    << "type=" << Forest::nodeType2string(getNodeType(rtr),s2)
-	    << " fAdr=" << Forest::fAdr2string(getNodeAdr(rtr),s3);
-	out << " leafAdrRange=("
-	    << Forest::fAdr2string(getFirstLeafAdr(rtr),s1) << "-"
-	    << Forest::fAdr2string(getLastLeafAdr(rtr),s2) << ")";
-	out << "\n\tlocation=(" << getNodeLat(rtr) << ","
-	    		     << getNodeLong(rtr) << ")\n";
-	out << "interfaces\n"
-	    << "# iface#   ipAdr  linkRange  bitRate  pktRate\n";
+	s = "";
+	s += "name=" + getNodeName(rtr,s1) + " "
+	  +  "type=" + Forest::nodeType2string(getNodeType(rtr),s2)
+	  + " fAdr=" + Forest::fAdr2string(getNodeAdr(rtr),s3);
+	s += " leafAdrRange=("
+	  + Forest::fAdr2string(getFirstLeafAdr(rtr),s1) + "-"
+	  + Forest::fAdr2string(getLastLeafAdr(rtr),s2) + ")";
+	char buf[100];
+	sprintf(buf,"%f",getNodeLat(rtr));
+	s1 = buf; s += "\n\tlocation=(" + s1 + ",";
+	sprintf(buf,"%f",getNodeLong(rtr));
+	s1 = buf; s += s1 + ")\n";
+	s += "interfaces\n";
+	s += "# iface#   ipAdr  linkRange  bitRate  pktRate\n";
 	for (int i = 1; i <= getNumIf(rtr); i++) {
 		if (!validIf(rtr,i)) continue;
-		out << "   " << i << "  "
-		    << Np4d::ip2string(getIfIpAdr(rtr,i),s1); 
+		s += "   " + Misc::num2string(i,s1) + "  "
+		  +  Np4d::ip2string(getIfIpAdr(rtr,i),s2); 
 		if (getIfFirstLink(rtr,i) == getIfLastLink(rtr,i)) 
-			out << " " << getIfFirstLink(rtr,i) << " ";
+			s += " " + Misc::num2string(getIfFirstLink(rtr,i),s1)
+			  +  " ";
 		else
-			out << " " << getIfFirstLink(rtr,i) << "-"
-			    << getIfLastLink(rtr,i) << "  ";
-		out << getIfBitRate(rtr,i) << "  "
-		    << getIfPktRate(rtr,i) << ";\n";
+			s += " " + Misc::num2string(getIfFirstLink(rtr,i),s1)
+			  +  "-" + Misc::num2string(getIfLastLink(rtr,i), s2)
+			  +  "  ";
+		s += Misc::num2string(getIfBitRate(rtr,i),s1) + "  "
+		  +  Misc::num2string(getIfPktRate(rtr,i),s2) + ";\n";
 	}
-	out << "end\n;\n";
+	s += "end\n;\n";
+	return s;
 }
 
-void NetInfo::writeLeaf(ostream& out, int leaf) {
+string& NetInfo::leaf2string(int leaf, string& s) const {
 	string s0, s1, s2, s3;
-	out << "name=" << getNodeName(leaf,s0) << " "
-	    << "type=" << Forest::nodeType2string(getNodeType(leaf),s1)
-	    << " ipAdr=" << Np4d::ip2string(getLeafIpAdr(leaf),s2) 
-	    << " fAdr=" << Forest::fAdr2string(getNodeAdr(leaf),s3);
-	out << "\n\tlocation=(" << getNodeLat(leaf) << ","
-	    		     << getNodeLong(leaf) << ");\n";
+	s = "";
+	s += "name=" + getNodeName(leaf,s0) + " "
+	  +  "type=" + Forest::nodeType2string(getNodeType(leaf),s1)
+	  +  " ipAdr=" + Np4d::ip2string(getLeafIpAdr(leaf),s2) 
+	  +  " fAdr=" + Forest::fAdr2string(getNodeAdr(leaf),s3);
+	char buf[100];
+	sprintf(buf,"%f",getNodeLat(leaf)); 
+	s1 = buf; s += "\n\tlocation=(" + s1 + ",";
+	sprintf(buf,"%f",getNodeLong(leaf));
+	s1 = buf; s += s1 + ")\n";
+	return s;
 }
 
-void NetInfo::writeLink(ostream& out, int lnk) {
-	string s0;
-	out << "link=" << link2string(lnk,s0)
-	    << " bitRate=" << getLinkBitRate(lnk)
-	    << " pktRate=" << getLinkPktRate(lnk)
-	    << " length=" << getLinkLength(lnk) << ";\n"; 
+string& NetInfo::netlink2string(int lnk, string& s) const {
+	string s0,s1,s2,s3;
+	s = "";
+	s += "link=" + link2string(lnk,s0) + " bitRate="
+	  +  Misc::num2string(getLinkBitRate(lnk),s1) +  " pktRate="
+	  +  Misc::num2string(getLinkPktRate(lnk),s2) +  " length=" 
+	  +  Misc::num2string(getLinkLength(lnk),s3) + ";\n"; 
+	return s;
 }
 
-void NetInfo::writeComt(ostream& out, int ctx) {
-	if (!validComtIndex(ctx)) return;
-	string s0;
-	out << "comtree=" << getComtree(ctx)
-	    << " root=" << getNodeName(getComtRoot(ctx),s0)
-	    << "\nbitRateDown=" << getComtBrDown(ctx)
-	    << " bitRateUp=" << getComtBrUp(ctx)
-	    << " pktRateDown=" << getComtPrDown(ctx)
-	    << " pktRateUp=" << getComtPrUp(ctx)
-	    << "\nleafBitRateDown=" << getComtLeafBrDown(ctx)
-	    << " leafBitRateUp=" << getComtLeafBrUp(ctx)
-	    << " leafPktRateDown=" << getComtLeafPrDown(ctx)
-	    << " leafPktRateUp=" << getComtLeafPrUp(ctx); 
+string& NetInfo::comt2string(int ctx, string& s) const {
+	s = "";
+	if (!validComtIndex(ctx)) return s;
+	string s0,s1,s2,s3;
+	s += "comtree=" + Misc::num2string(getComtree(ctx),s0)
+	  +  " root=" + getNodeName(getComtRoot(ctx),s1)
+	  +  "\nbitRateDown=" + Misc::num2string(getComtBrDown(ctx),s2)
+	  +  " bitRateUp=" + Misc::num2string(getComtBrUp(ctx),s3);
+	s += " pktRateDown=" + Misc::num2string(getComtPrDown(ctx),s0)
+	  +  " pktRateUp=" + Misc::num2string(getComtPrUp(ctx),s1)
+	  +  "\nleafBitRateDown=" + Misc::num2string(getComtLeafBrDown(ctx),s2)
+	  +  " leafBitRateUp=" + Misc::num2string(getComtLeafBrUp(ctx),s3);
+	s += "leafPktRateDown=" + Misc::num2string(getComtLeafPrDown(ctx),s0)
+	  +  " leafPktRateUp=" + Misc::num2string(getComtLeafPrUp(ctx),s1); 
 
 	// iterate through core nodes and print
-	out << "\n"; 
+	s += "\n"; 
 	for (int c = firstCore(ctx); c != 0; c = nextCore(c,ctx)) {
 		if (c != getComtRoot(ctx)) 
-			out << "core=" << getNodeName(c,s0) << " ";
+			s += "core=" + getNodeName(c,s0) + " ";
 	}
-	out << "\n"; 
+	s += "\n"; 
 	// iterate through links and print
 	for (int lnk = firstComtLink(ctx); lnk != 0;
 		 lnk = nextComtLink(lnk,ctx)) {
-		out << "link=" << link2string(lnk,s0) << " ";
+		s += "link=" + link2string(lnk,s0) + " ";
 	}
-	out << "\n;\n"; 
+	s += "\n;\n"; 
+	return s;
 }

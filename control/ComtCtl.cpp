@@ -115,6 +115,11 @@ bool init(const char *topoFile) {
 		return false;
 	}
 
+	// setup queue used to inform displayHandler of updates
+	dhQueue = new Gqueue<EventStruct>(TPSIZE);
+	if (!dhQueue->init())
+		fatal("init: can't initialize displayHandler queue\n");
+
 	// setup thread pool for handling control packets
 	for (int t = 1; t <= TPSIZE; t++) {
 		if (!pool[t].qp.in.init() || !pool[t].qp.out.init())
@@ -332,9 +337,10 @@ void* handler(void *qp) {
 		int p = inQ.deq();
 		bool success;
 		if (p < 0) {
-			// then p is really a negated socket number
-			// for a remote comtree display
-			// add handler for this later
+			// in this case, p is really a negated socket number
+			// for a remote comtree display module
+			int sock = -p;
+			success = handleComtreeDisplay(sock,inQ,outQ);
 		} else {
 			PacketHeader& h = ps->getHeader(p);
 			CtlPkt cp; 
@@ -366,6 +372,76 @@ void* handler(void *qp) {
 		ps->free(p); // release p now that we're done
 		outQ.enq(0); // signal completion to main thread
 	}
+}
+
+/** Handle a connection to a remote comtree display module.
+ *  @param sock is an open stream socket
+ *  @param inQ is the queue coming from the main thread
+ *  @param outQ is the queue going back to the main thread
+ *  @return true if the interaction proceeds normally, followed
+ *  by a normal close; return false if an error occurs
+ */
+bool handleComtreeDisplay(int sock, Queue& inQ, Queue& outQ) {
+	// start by sending network topology info to ComtreeDisplay
+	string netString;
+	net->toString(netString);
+	const int BSIZE = 10000;
+	char buf[BSIZE+1];
+	for (int i = 0; i < netString.size(); i += BSIZE) {
+		int nbytes = netString.copy(buf,BSIZE,i);
+		buf[nbytes++] = EOS;
+		char *bufp = buf;
+		while (nbytes > 0) {
+			int n = send(sock,bufp,nbytes,0);
+			if (n < 0) {
+				cerr << "handleComtreeDisplay: unable to send "
+					"network topology to display\n";
+				return false;
+			}
+			nbytes -= n; bufp += n;
+		}
+	}
+
+	// check for changes to comtrees and send updates to
+	// ComtreeDisplay
+	while (true) {
+		// wait for an update from another handler
+		EventStruct ev = dhQueue->deq();
+
+		// format command to send to remote display
+		string s = ""; string s1, s2, s3;
+		if (ev.rtr == 0) {
+			s += "addModifyComtree " + Misc::num2string(ev.comt,s1)
+			  +  " "
+			  +  net->comt2string(net->lookupComtree(ev.comt),s2);
+		} else if (ev.rtr < 0) {
+			s += "dropComtree " + Misc::num2string(ev.comt,s1)
+			  +  "\n";
+		} else {
+			// send modLinkCount command to remote display
+			s += "modLinkCount " + Misc::num2string(ev.comt,s1)
+			  +  " " + Misc::num2string(ev.rtr,s2)
+			  +  " " + Misc::num2string(ev.upDown,s3) + "\n";
+		}
+		
+		// send the update to the remote display
+		for (int i = 0; i < s.size(); i += BSIZE) {
+			int nbytes = s.copy(buf,BSIZE,i);
+			buf[nbytes++] = EOS;
+			char *bufp = buf;
+			while (nbytes > 0) {
+				int n = send(sock,bufp,nbytes,0);
+				if (n < 0) {
+					cerr << "handleComtreeDisplay: unable "
+						"to send network topology to "
+						"display\n";
+					return false;
+				}
+				nbytes -= n; bufp += n;
+			}
+		}
+	}
+	return true;
 }
 
 /** Handle an add comtree request.
