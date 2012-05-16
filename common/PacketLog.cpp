@@ -1,4 +1,4 @@
-/** @file PacketLog.h 
+/** @file PacketLog.cpp 
  *
  *  @author Jon Turner
  *  @date 2011

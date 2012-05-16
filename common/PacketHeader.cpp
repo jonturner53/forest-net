@@ -54,11 +54,11 @@ void PacketHeader::payErrUpdate(buffer_t& b) {
 bool PacketHeader::read(istream& in, buffer_t& b) {
 // Read an input packet from in and initialize (*this) and buffer *b.
 	int lng, ptyp, flgs, comt; fAdr_t src, dst; string ptypString;
-	Misc::skipBlank(in);
-	if (!Misc::readNum(in,lng) ||
-	    !Misc::readWord(in,ptypString) ||
-	    !Misc::readNum(in,flgs) ||
-	    !Misc::readNum(in,comt) ||
+	Util::skipBlank(in);
+	if (!Util::readNum(in,lng) ||
+	    !Util::readWord(in,ptypString) ||
+	    !Util::readNum(in,flgs) ||
+	    !Util::readNum(in,comt) ||
 	    !Forest::readForestAdr(in,src) ||
 	    !Forest::readForestAdr(in,dst))
 		return false;
@@ -76,7 +76,7 @@ bool PacketHeader::read(istream& in, buffer_t& b) {
 
 	pack(b); int32_t x;
 	for (int i = 0; i < min(8,(getLength()-Forest::HDR_LENG)/4); i++) {
-		if (Misc::readNum(in,x)) b[(Forest::HDR_LENG/4)+i] = htonl(x);
+		if (Util::readNum(in,x)) b[(Forest::HDR_LENG/4)+i] = htonl(x);
 		else b[(Forest::HDR_LENG/4)+i] = 0;
 	}
 	hdrErrUpdate(b); payErrUpdate(b);

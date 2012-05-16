@@ -8,7 +8,7 @@
 #include "ClientMgr.h"
 #include "CommonDefs.h"
 #include "stdinc.h"
-#include "support/Np4d.h"
+#include "Np4d.h"
 #include <string>
 #include <map>
 #include <iostream>
