@@ -6,6 +6,7 @@
  *  See http://www.apache.org/licenses/LICENSE-2.0 for details.
  */
 
+#include "Gqueue.cpp"
 #include "ComtCtl.h"
 
 /** usage:
@@ -175,6 +176,7 @@ void cleanup() {
 	}
 	delete net;
 	delete [] comtLock;
+	delete dhQueue;
 }
 
 /** Run the ComtCtl.
@@ -194,8 +196,8 @@ void* run(void* finTimeSec) {
 	while (finishTime == 0 || now <= finishTime) {
 		bool nothing2do = true;
 
-		// check for packets
-		int p = 0; int connSock = -1;
+		// check for connection requessts from remote display
+		int connSock = -1;
 		if ((connSock = Np4d::accept4d(extSock)) > 0) {
 			// let handler know this is socket# for remote host
 			int t = threads->firstOut();
@@ -205,9 +207,9 @@ void* run(void* finTimeSec) {
 				pool[t].qp.in.enq(-connSock);
 			} else
 				cerr << "run: thread pool is exhausted\n";
-		} else {
-			p = rcvFromForest();
-		}
+		} 
+		// check for packets from the Forest net
+		int p = rcvFromForest();
 		if (p != 0) {
 			// send p to a thread, possibly assigning one
 			PacketHeader& h = ps->getHeader(p);
@@ -251,7 +253,7 @@ void* run(void* finTimeSec) {
 			nothing2do = false;
 		}
 
-		// now handle packets from the thread pool
+		// now handle outgoing packets from the thread pool
 		for (int t = threads->firstIn(); t != 0;
 			 t = threads->nextIn(t)) {
 			if (pool[t].qp.out.empty()) continue;
@@ -381,6 +383,16 @@ void* handler(void *qp) {
  *  @return true if the interaction proceeds normally, followed
  *  by a normal close; return false if an error occurs
  */
+/*
+Idea is that handlers that modify comtree will send messages
+to this handler through dhQueue. The Gqueue data structure
+takes generic structs and handles multiple writers.
+
+This handler then forwards the reports it receives to
+the remote display handler.
+
+Still need to add code in other handlers.
+*/
 bool handleComtreeDisplay(int sock, Queue& inQ, Queue& outQ) {
 	// start by sending network topology info to ComtreeDisplay
 	string netString;
@@ -433,8 +445,7 @@ bool handleComtreeDisplay(int sock, Queue& inQ, Queue& outQ) {
 				int n = send(sock,bufp,nbytes,0);
 				if (n < 0) {
 					cerr << "handleComtreeDisplay: unable "
-						"to send network topology to "
-						"display\n";
+						"to send update to display\n";
 					return false;
 				}
 				nbytes -= n; bufp += n;

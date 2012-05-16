@@ -1,4 +1,4 @@
-package remoteDisplay;
+package forest.vworld1;
 
 /** Class used to record the status of an Avatar.
  *  @author Jon Turner

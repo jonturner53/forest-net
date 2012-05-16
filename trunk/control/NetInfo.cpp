@@ -20,7 +20,7 @@ NetInfo::NetInfo(int maxNode1, int maxLink1,
 		 : maxNode(maxNode1), maxLink(maxLink1),
 		   maxRtr(maxRtr1), maxCtl(maxCtl1), maxComtree(maxComtree1) {
 	maxLeaf = maxNode-maxRtr;
-	netTopo = new Graph(maxNode, maxLink);
+	netTopo = new Wgraph(maxNode, maxLink);
 
 	rtr = new RtrNodeInfo[maxRtr+1];
 	routers = new UiSetPair(maxRtr);
@@ -603,8 +603,9 @@ int NetInfo::addLeaf(const string& name, ntyp_t nTyp) {
  *  link number with a specified router)
  */
 int NetInfo::addLink(int u, int v, int uln, int vln ) {
-	int lnk = netTopo->join(u,v,0);
+	int lnk = netTopo->join(u,v);
 	if (lnk == 0) return 0;
+	netTopo->setWeight(lnk,0);
 	if (getNodeType(u) == ROUTER) {
 		if (!locLnk2lnk->insert(ll2l_key(u,uln),2*lnk)) {
 			netTopo->remove(lnk); return 0;

@@ -11,9 +11,8 @@
 
 #include <list>
 #include "stdinc.h"
-#include "Misc.h"
+#include "Util.h"
 
-typedef uint64_t keytyp;
 typedef int item;
 
 /** This class implements a collection of heaps.
@@ -31,16 +30,16 @@ public:		HeapSet(int,int);
 
 	// access methods
 	item	findMin(int) const;
-	keytyp	getKey(item) const;
+	uint64_t getKey(item) const;
 	int	heapSize(int) const;
 
 	// predicates 
 	bool	empty(int);	
 
 	// modifiers 
-	bool	insert(item, keytyp, int);
+	bool	insert(item, uint64_t, int);
 	item 	deleteMin(int);
-	void	changeKeyMin(keytyp, int);
+	void	changeKeyMin(uint64_t, int);
 
 	string& toString(int, string&) const;
 private:
@@ -49,7 +48,7 @@ private:
 	int	maxHeap;		///< max number of heaps
 
 	item	*heaps;			///< holds all items
-	keytyp	*key;			///< key[i] is key of item i
+	uint64_t *key;			///< key[i] is key of item i
 
 	int	*root;			///< root[h] is position of heap h root
 	int	*bot;			///< bot[h] is position of "bottom" node
@@ -90,7 +89,7 @@ cerr << "HeapSet::findMin: nodeMinPos returned " << p
 }
 
 // Return key of i.
-inline keytyp HeapSet::getKey(item i) const { return key[i]; }
+inline uint64_t HeapSet::getKey(item i) const { return key[i]; }
 
 // Return true if heap is empty, else false.
 inline bool HeapSet::empty(int h) { return hSize[h] == 0; };

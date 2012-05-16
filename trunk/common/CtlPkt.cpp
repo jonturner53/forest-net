@@ -84,7 +84,7 @@ int CtlPkt::pack(uint32_t* pl) {
 			}
 		}
 	} else {
-		int j = Misc::strnlen(errMsg,MAX_MSG_LEN);
+		int j = Util::strnlen(errMsg,MAX_MSG_LEN);
 		if (j == MAX_MSG_LEN) errMsg[MAX_MSG_LEN] = 0;
 		strncpy((char*) &payload[pp], errMsg, j+1);
 		return 4*pp + j+1;

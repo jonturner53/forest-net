@@ -10,6 +10,7 @@
 #define NP4D_H
 
 #include "stdinc.h"
+#include "Util.h"
 #include "Misc.h"
 
 // shorthands for internet address/port types

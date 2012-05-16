@@ -20,9 +20,9 @@ bool Forest::readForestAdr(istream& in, fAdr_t& fa) {
 // The address is returned in host byte order.
 	int b1, b2;
 	
-	if (!Misc::readNum(in,b1)) return false;
+	if (!Util::readNum(in,b1)) return false;
 	if (b1 < 0) { fa = b1; return true; }
-	if (!Misc::verify(in,'.') || !Misc::readNum(in,b2))
+	if (!Util::verify(in,'.') || !Util::readNum(in,b2))
 		return false;
 	if (b1 == 0 && b2 != 0) return false;
 	if (b1 > 0xffff || b2 > 0xffff) return false;

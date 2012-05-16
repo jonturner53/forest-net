@@ -49,9 +49,9 @@ string& Np4d::ip2string(ipa_t ipa, string& s) {
 bool Np4d::readIpAdr(istream& in, ipa_t& ipa) {
 	char adr[4];
 	
-	if (!Misc::readNum(in,adr[0]) || !Misc::verify(in,'.') ||
-	    !Misc::readNum(in,adr[1]) || !Misc::verify(in,'.') ||
-	    !Misc::readNum(in,adr[2]) || !Misc::verify(in,'.') || 
+	if (!Misc::readNum(in,adr[0]) || !Util::verify(in,'.') ||
+	    !Misc::readNum(in,adr[1]) || !Util::verify(in,'.') ||
+	    !Misc::readNum(in,adr[2]) || !Util::verify(in,'.') || 
 	    !Misc::readNum(in,adr[3]))
 		return false;
 	ipa = ntohl(*((ipa_t*) &adr[0]));

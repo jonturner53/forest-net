@@ -58,7 +58,7 @@ HeapSet::HeapSet(int maxItem1, int maxHeap1)
 	parent = new int[numNodes];   	// note, one per node
 	pred = new int[numNodes];     	// ditto
 
-	key = new keytyp[maxItem+1];
+	key = new uint64_t[maxItem+1];
 
 	root = new int[maxHeap+1];	// values are indices in heaps array
 	bot = new int[maxHeap+1];	// ditto
@@ -86,7 +86,7 @@ HeapSet::~HeapSet() {
  *  @param h is the number of the heap in which i is to be inserted
  *  @return true on success, false on failure
  */
-bool HeapSet::insert(item i, keytyp k, int h) {
+bool HeapSet::insert(item i, uint64_t k, int h) {
 	key[i] = k;
 	if (i == 0) return false;
 	int n = hSize[h]; int r = (n-1)%D;
@@ -178,7 +178,7 @@ void HeapSet::siftdown(item i, int p) {
 }
 
 // Change the key of the min item in a heap.
-void HeapSet::changeKeyMin(keytyp k, int h) {
+void HeapSet::changeKeyMin(uint64_t k, int h) {
 	int p = nodeMinPos(root[h]);
 	item i = heaps[p]; key[i] = k;
 	siftdown(i,p);
@@ -202,8 +202,8 @@ string& HeapSet::toString(int h, string& s) const {
 		while (q < p+D && heaps[q] != 0) {
 			if (q > p) s += " ";
 			item i = heaps[q++];
-			s += Misc::num2string(i,s1) + ":";
-			s += Misc::num2string(key[i],s1);
+			s += Util::num2string(i,s1) + ":";
+			s += Util::num2string(key[i],s1);
 		}
 		s += "] ";
 		if (++cnt == numPerRow) {

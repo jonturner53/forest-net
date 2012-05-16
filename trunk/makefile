@@ -1,60 +1,31 @@
-CXXFLAGS = -O2 -m64 -I . -I support
+SHELL := /bin/bash
+ALGOLIBROOT = ~/src/algoLib
+FLIB = $(shell pwd)/lib/lib-forest.a
+LIBS = ${FLIB} ${ALGOLIBROOT}/lib/lib-ds.a ${ALGOLIBROOT}/lib/lib-util.a
+CXXFLAGS = -O2 -m64 -I ../include -I ${ALGOLIBROOT}/include
+BIN = ~/bin
 
-LIBS = lib support/lib
+all:
+	make -C common          ALGOLIBROOT='${ALGOLIBROOT}' FLIB='${FLIB}' \
+				BIN='${BIN}' CXXFLAGS='${CXXFLAGS}' \
+				LIBS='${LIBS}' all
+	make -C router          ALGOLIBROOT='${ALGOLIBROOT}' FLIB='${FLIB}' \
+				BIN='${BIN}' CXXFLAGS='${CXXFLAGS}' \
+				LIBS='${LIBS}' all
+	make -C control         ALGOLIBROOT='${ALGOLIBROOT}' FLIB='${FLIB}' \
+				BIN='${BIN}' CXXFLAGS='${CXXFLAGS}' \
+				LIBS='${LIBS}' all
+	make -C vworld1         ALGOLIBROOT='${ALGOLIBROOT}' FLIB='${FLIB}' \
+				BIN='${BIN}' CXXFLAGS='${CXXFLAGS}' \
+				LIBS='${LIBS}' all
+	make -C misc            ALGOLIBROOT='${ALGOLIBROOT}' FLIB='${FLIB}' \
+				BIN='${BIN}' CXXFLAGS='${CXXFLAGS}' \
+				LIBS='${LIBS}' all
 
-%.o: %.cpp %.h stdinc.h
-	${CXX} ${CXXFLAGS} -c $<
-
-LIBFILES = CommonDefs.o IoProcessor.o IfaceTable.o LinkTable.o ComtreeTable.o \
-	   RouteTable.o StatsModule.o CpAttr.o CpType.o CtlPkt.o \
-	   QuManager.o PacketHeader.o PacketStore.o  PacketStoreTs.o \
-	   NetInfo.o PacketLog.o
-
-all : supportLib fHost fRouter fAvatar fMonitor fNetMgr fCliMgr fComtCtl \
-	fConsole BuildRtables
-
-supportLib:
-	${MAKE} -C support
-
-fRouter : RouterCore.o ${LIBS}
-	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
-	cp $@ ${HOME}/bin
-
-fHost : Host.o ${LIBS}
-	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
-	cp $@ ${HOME}/bin
-
-fAvatar : Avatar.o ${LIBS}
-	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
-	cp $@ ${HOME}/bin
-
-fMonitor : Monitor.o ${LIBS}
-	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
-	cp $@ ${HOME}/bin
-
-fNetMgr : NetMgr.o ${LIBS}
-	${CXX} ${CXXFLAGS} $< ${LIBS} -lpthread -o $@
-	cp $@ ${HOME}/bin
-
-fConsole : Console.o ${LIBS}
-	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
-	cp $@ ${HOME}/bin
-
-fCliMgr : ClientMgr.o ${LIBS}
-	${CXX} ${CXXFLAGS} $< ${LIBS} -lpthread -o $@
-	cp $@ ${HOME}/bin
-
-fComtCtl : ComtCtl.o ${LIBS}
-	${CXX} ${CXXFLAGS} $< support/Gqueue.cpp ${LIBS} -lpthread -o $@
-	cp $@ ${HOME}/bin
-
-BuildRtables : BuildRtables.o ${LIBS}
-	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
-	cp $@ ${HOME}/bin
-
-lib : ${LIBFILES}
-	ar -ru lib ${LIBFILES}
-
-clean :
-	${MAKE} -C support clean
-	rm -f *.o lib fHost fRouter fAvatar fMonitor fNetMgr fCliMgr fComtCtl
+clean:
+	rm -f ${FLIB} 
+	make -C misc    clean
+	make -C common  clean
+	make -C router  clean
+	make -C control clean
+	make -C vworld1 clean

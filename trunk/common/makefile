@@ -1,15 +1,22 @@
 ALGOLIBROOT = ../../algoLib
-FLIB = ../lib/lib-forest
-LIBS = ${FLIB} ${ALGOLIBROOT}/lib/lib-util ${ALGOLIBROOT}/lib/lib-ds
+JAVAROOT = ~/bin/java
+FLIB = ../lib/lib-forest.a
+LIBS = ${FLIB} ${ALGOLIBROOT}/lib/lib-util.a ${ALGOLIBROOT}/lib/lib-ds.a
 LIBFILES = CommonDefs.o CpAttr.o CpType.o CtlPkt.o PacketHeader.o \
-	   PacketLog.o PacketStore.o  PacketStoreTs.o
+	   PacketLog.o PacketStore.o  PacketStoreTs.o \
+	   Queue.o Np4d.o Heap.o HeapSet.o Misc.o
+CLASSFILES = Forest.class
 CXXFLAGS = -O2 -m64 -I ../include -I ${ALGOLIBROOT}/include
 
 %.o: %.cpp %.h stdinc.h
 	${CXX} ${CXXFLAGS} -c $<
 
-${FLIB} : ${LIBFILES}
-	ar -ru lib ${LIBFILES}
+%.class: %.java
+	javac -cp ${JAVAROOT} $<
+	mv *.class ${JAVAROOT}/forest/common
+
+all : ${LIBFILES} ${CLASSFILES}
+	ar -ru ${FLIB} ${LIBFILES}
 
 clean :
 	rm -f *.o

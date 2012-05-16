@@ -1,7 +1,6 @@
-package remoteDisplay;
+package forest.vworld1;
 
 import java.awt.*;
-
 import princeton.StdDraw;
 
 /** Class used to represent avatars in the graphic display.

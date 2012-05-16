@@ -1,4 +1,4 @@
-package remoteDisplay;
+package forest.vworld1;
 
 import java.awt.Color;
 import java.awt.event.*;
