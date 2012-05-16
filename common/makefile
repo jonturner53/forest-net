@@ -1,4 +1,4 @@
-ALGOLIBROOT = ../../algoLib
+ALGOLIBROOT = ../../algolib-jst
 JAVAROOT = ~/bin/java
 FLIB = ../lib/lib-forest.a
 LIBS = ${FLIB} ${ALGOLIBROOT}/lib/lib-util.a ${ALGOLIBROOT}/lib/lib-ds.a
