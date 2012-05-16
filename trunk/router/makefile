@@ -1,4 +1,4 @@
-ALGOLIBROOT = ../../algoLib
+ALGOLIBROOT = ../../algolib-jst
 FLIB = ../lib/lib-forest.a
 LIBS = ${FLIB} ${ALGOLIBROOT}/lib/lib-util.a ${ALGOLIBROOT}/lib/lib-ds.a
 LIBFILES = IoProcessor.o IfaceTable.o LinkTable.o ComtreeTable.o \

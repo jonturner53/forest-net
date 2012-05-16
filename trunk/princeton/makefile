@@ -1,4 +1,4 @@
-ALGOLIBROOT = ../../algoLib
+ALGOLIBROOT = ../../algolib-jst
 JAVAROOT = ~/bin/java
 CLASSFILES = StdDraw.class
 

@@ -1,5 +1,5 @@
 JAVAROOT = ~/bin/java
-ALGOLIBROOT = ../../algoLib
+ALGOLIBROOT = ../../algolib-jst
 FLIB = ../lib/lib-forest.a
 LIBS = ${FLIB} ${ALGOLIBROOT}/lib/lib-ds.a ${ALGOLIBROOT}/lib/lib-util.a
 CXXFLAGS = -O2 -m64 -I ../include -I ${ALGOLIBROOT}/include
