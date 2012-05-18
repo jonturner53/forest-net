@@ -73,7 +73,7 @@ public:
 	static int  sendBuf(int, char*, int);
 	static int  recvBufBlock(int, char*, int);
 	static int  sendBufBlock(int, char*, int);
-
+	static int  sendString(int, string&);
 };
 
 #endif

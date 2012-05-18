@@ -22,7 +22,7 @@ import princeton.*;
  *  On connecting, the ComtCtl sends a sequence of "topology definitions"
  *  identifying the nodes in the network graph and the links connecting them.
  *  After sending the topology definitions, the ComtCtl sends comtree 
- *  comtree definitions, after which it sends status messages whenever
+ *  definitions, after which it sends status messages whenever
  *  any comtree that it controls changes.
  *
  *  Each message from the ComtCtl is sent on a line by itself, starting
@@ -67,7 +67,6 @@ public class ComtreeDisplay {
 	private static InetSocketAddress ccSockAdr; ///< address for ComtCtl
 	private static SocketChannel ccChan = null; ///< for ComtCtl connection
 
-
 	private static int currentComtree; ///< comtree to be displayed
 	private static boolean linkDetail; ///< when true, show link details
 
@@ -100,26 +99,34 @@ public class ComtreeDisplay {
 			Util.fatal("can't create scanner for ComtCtl channel "
 				   + e);
 		}
+		OutputStream out = null;
+		try {
+			out = ccChan.socket().getOutputStream();
+		} catch(Exception e) {
+			Util.fatal("can't open output stream to ComtCtl " + e);
+		}
 
 		// start main loop
 		setupDisplay();
-		currentComtree = 0;
+		int x = net.firstComtIndex();
+		if (x == 0) Util.fatal("Network contains no comtrees");
+		currentComtree = net.getComtree(net.firstComtIndex());
 		while (true) {
-			// process commands from ComtCtl
-			while (ccIn.hasNext()) {
-				String errMsg = processComtCtlCmd(ccIn);
-				if (!errMsg.equals(""))
-					System.err.println("Error in message "
-						+ "from ComtCtl: " + errMsg);
-			}
 			String lineBuf = readKeyboardIn();
 			if (lineBuf.length() > 0) {
 				processKeyboardIn(lineBuf);
 			}
-			if (currentComtree == 0) {
-				currentComtree = net.getComtree(
-						 net.firstComtIndex());
+			if (currentComtree == 0) break;
+			// send currentComtree to ComtCtl
+			Integer CurComt = currentComtree;
+			String s = CurComt.toString() + "\n";
+			try {
+				out.write(s.getBytes());
+			} catch(Exception e) {
+				Util.fatal("can't write to ComtCtl " + e);
 			}
+			// now read updated status
+			
 			updateDisplay();
 		}
 	}
@@ -237,7 +244,7 @@ public class ComtreeDisplay {
 			}
                 } catch(Exception e) {
                         System.out.println("input error: " + e);
-		return null;
+			return null;
                 }
                 return lineBuf;
         }
@@ -372,6 +379,6 @@ public class ComtreeDisplay {
 					"prD=" + net.getComtPrDown(ctx,lnk));
 			}
 		}
-		StdDraw.show(50);
+		StdDraw.show(500);
 	}
 }

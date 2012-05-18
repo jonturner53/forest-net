@@ -1196,11 +1196,23 @@ public class NetInfo {
 	
 	/** Add a new comtree.
 	 *  Defines a new comtree, with attributes left undefined.
-	 *  @param comt is the comtree number for the new comtree.
+	 *  @param nuComt is a ComtreeInfo object for the new comtree
 	 *  @return true on success, false on failure
 	 */
 	public boolean addComtree(ComtreeInfo nuComt) {
 		int ctx = comtreeMap.addPair(nuComt.comtreeNum);
+		if (ctx == 0) return false;
+		comtree[ctx] = nuComt;
+		return true;
+	}
+	
+	/** Update a comtree.
+	 *  Replaces the comtree information for an existing comtree.
+	 *  @param nuComt is a ComtreeInfo object
+	 *  @return true on success, false on failure
+	 */
+	public boolean updateComtree(ComtreeInfo nuComt) {
+		int ctx = comtreeMap.getId(nuComt.comtreeNum);
 		if (ctx == 0) return false;
 		comtree[ctx] = nuComt;
 		return true;
@@ -1235,6 +1247,24 @@ public class NetInfo {
 			ComtRtrInfo rtr = new ComtRtrInfo();
 			rtr.lnkCnt = 0; rtr.plnk = 0;
 			comtree[ctx].rtrMap.put(r,rtr);
+		}
+		return true;
+	}
+	
+	/** Add a new router to a ComtreeInfo object.
+	 *  If the specified node is a leaf, we do nothing and return false,
+	 *  as leaf nodes are not explictly represented in the data class
+	 *  for comtrees.
+	 *  @param cti is a ComtreeInfo object
+	 *  @param r is the node number of the router
+	 *  @return true on success, false on failure
+	 */
+	public boolean addComtNode(ComtreeInfo cti, int r) {
+		if (!isRouter(r)) return false;
+		if (cti.rtrMap.get(r) == null) {
+			ComtRtrInfo rtr = new ComtRtrInfo();
+			rtr.lnkCnt = 0; rtr.plnk = 0;
+			cti.rtrMap.put(r,rtr);
 		}
 		return true;
 	}
@@ -2214,6 +2244,9 @@ public class NetInfo {
 			while (s.hasNext("#.*")) s.nextLine();
 			if (!s.hasNext()) { status = true; break; }
 			if (s.hasNext(";")) { // end of section
+				if (context == ParseContexts.TOP) {
+					status = true; break;
+				}
 				context = ParseContexts.TOP;
 				s.next(); continue; 
 			}
@@ -2655,50 +2688,171 @@ public class NetInfo {
 				nuComt.leafPktRateUp =
 					Integer.parseInt(part[1]);
 			} else if (part[0].equals("link")) {
-				int leftNum = 0; int rightNum = 0;
-				part = part[1].split("[(.,)]",6);
-				if (part.length < 5) 
-					return "invalid token: " + inWord;
-				String leftName = part[1];
-				Integer left =nameNodeMap.get(leftName);
-				if (left == null) 
-					return "unrecognized node name in "
-					    	+ inWord;
-				int rpos = 2;
-				if (getNodeType(left) ==Forest.NodeTyp.ROUTER) {
-					leftNum = Integer.parseInt(part[2]);
-					rpos = 3;
-				}
-				String rightName = part[rpos];
-				Integer right = nameNodeMap.get(rightName);
-				if (right == null)
-					return "unrecognized node name in "
-					    	+ inWord;
-				if (getNodeType(right)==Forest.NodeTyp.ROUTER)
-					rightNum = Integer.parseInt(
-							part[rpos+1]);
-				int ll = (isLeaf(left) ? getLinkNum(left)
-						: getLinkNum(left,leftNum));
-				int lr = (isLeaf(right) ? getLinkNum(right)
-						: getLinkNum(right,rightNum));
-				if (ll == 0 || ll != lr )
-					return "reference to a non-existent " +
-						"link " + inWord;
+				int lnk = parseLink(part[1]);
+				if (lnk <= 0) 
+					return "cannot parse link " + part[1];
 				RateSpec rs = new RateSpec();
 				rs.bitRateUp = 0; rs.bitRateDown = 0;
 				rs.pktRateUp = 0; rs.pktRateDown = 0;
-				nuComt.lnkMap.put(ll,rs);
-				ComtRtrInfo cri = new ComtRtrInfo();
-				if (getNodeType(left) == Forest.NodeTyp.ROUTER)
+				nuComt.lnkMap.put(lnk,rs);
+				int left = netTopo.left(lnk);
+				if (getNodeType(left) ==Forest.NodeTyp.ROUTER) {
+					ComtRtrInfo cri = new ComtRtrInfo();
 					nuComt.rtrMap.put(left,cri);
-				cri = new ComtRtrInfo();
-				cri.plnk = 0; cri.lnkCnt = 0;
-				if (getNodeType(right) == Forest.NodeTyp.ROUTER)
+				}
+				int right = netTopo.right(lnk);
+				if (getNodeType(right)==Forest.NodeTyp.ROUTER) {
+					ComtRtrInfo cri = new ComtRtrInfo();
 					nuComt.rtrMap.put(right,cri);
+				}
 			} else {
 				return "invalid token " + inWord;
 			}
 		}
+	}
+
+	/** Read comtree status information from an input stream.
+	 */
+	public ComtreeInfo readComtStatus(InputStream in) {
+		ComtreeInfo nuComt = new ComtreeInfo();
+		nuComt.coreSet = new HashSet<Integer>();
+		nuComt.lnkMap = new HashMap<Integer,RateSpec>();
+		nuComt.rtrMap = new HashMap<Integer,ComtRtrInfo>();
+
+		Scanner s = new Scanner(in);
+		String inWord;
+		String[] part;
+		while (true) {
+			// skip comments
+			while (s.hasNext("#.*")) s.nextLine();
+			if (s.hasNext(";")) { // end of comtree definition
+				s.next(); break;
+			}
+			// parse next chunk of comtree definition
+			if (!s.hasNext("[a-zA-Z_]+=.*")) {
+				nuComt.comtreeNum = 0; return nuComt;
+			}
+			inWord = s.next();
+			part = inWord.split("=",2);
+			if (part[0].equals("comtree")) {
+				nuComt.comtreeNum = Integer.parseInt(part[1]);
+			} else if (part[0].equals("owner")) {
+				int owner = getNodeNum(part[1]);
+				if (owner == 0) break;
+				nuComt.ownerAdr = getNodeAdr(owner);
+			} else if (part[0].equals("root")) {
+				Integer root = nameNodeMap.get(part[1]);
+				if (root == null) break;
+				nuComt.root = root;
+				if (!isRouter(nuComt.root)) break;
+				nuComt.coreSet.add(nuComt.root);
+			} else if (part[0].equals("core")) {
+				Integer r = nameNodeMap.get(part[1]);
+				if (r == null) break;
+				if (!isRouter(r)) break;
+				nuComt.coreSet.add(r);
+			} else if (part[0].equals("bitRateDown")) {
+				nuComt.bitRateDown = Integer.parseInt(part[1]);
+			} else if (part[0].equals("bitRateUp")) {
+				nuComt.bitRateUp = Integer.parseInt(part[1]);
+			} else if (part[0].equals("pktRateDown")) {
+				nuComt.pktRateDown = Integer.parseInt(part[1]);
+			} else if (part[0].equals("pktRateUp")) {
+				nuComt.pktRateUp = Integer.parseInt(part[1]);
+			} else if (part[0].equals("leafBitRateDown")) {
+				nuComt.leafBitRateDown =
+					Integer.parseInt(part[1]);
+			} else if (part[0].equals("leafBitRateUp")) {
+				nuComt.leafBitRateUp =
+					Integer.parseInt(part[1]);
+			} else if (part[0].equals("leafPktRateDown")) {
+				nuComt.leafPktRateDown =
+					Integer.parseInt(part[1]);
+			} else if (part[0].equals("leafPktRateUp")) {
+				nuComt.leafPktRateUp =
+					Integer.parseInt(part[1]);
+			} else if (part[0].equals("link")) {
+				int lnk = parseLink(part[1]);
+				if (lnk <= 0) break;
+				RateSpec rs = new RateSpec();
+				rs.bitRateUp = 0; rs.bitRateDown = 0;
+				rs.pktRateUp = 0; rs.pktRateDown = 0;
+				nuComt.lnkMap.put(lnk,rs);
+				int left = netTopo.left(lnk);
+				if (getNodeType(left) ==Forest.NodeTyp.ROUTER) {
+					ComtRtrInfo cri = new ComtRtrInfo();
+					nuComt.rtrMap.put(left,cri);
+				}
+				int right = netTopo.right(lnk);
+				if (getNodeType(right)==Forest.NodeTyp.ROUTER) {
+					ComtRtrInfo cri = new ComtRtrInfo();
+					nuComt.rtrMap.put(right,cri);
+				}
+			} else if (part[0].equals("node")) {
+				part = part[1].split("[(,]",4);
+				if (part.length < 4) break;
+				String nodeName = part[1];
+				Integer node = nameNodeMap.get(nodeName);
+				if (node == null) break;
+				int lnkCnt = Integer.parseInt(part[2]);
+				int plnk = parseLink(part[3]);
+				if (plnk < 0) break;
+				if (getNodeType(node) != Forest.NodeTyp.ROUTER)
+					break;
+				addComtNode(nuComt,node);
+				ComtRtrInfo cri = new ComtRtrInfo();
+				cri.plnk = plnk; cri.lnkCnt = lnkCnt;
+				nuComt.rtrMap.put(node,cri);
+			} else {
+				nuComt.comtreeNum = 0; break;
+			}
+		}
+		if (nuComt.root == 0 || nuComt.comtreeNum == 0 ||
+		    nuComt.bitRateDown == 0 || nuComt.bitRateUp == 0 ||
+		    nuComt.pktRateDown == 0 || nuComt.pktRateUp == 0 ||
+		    nuComt.leafBitRateDown == 0 || nuComt.leafBitRateUp == 0 ||
+		    nuComt.leafPktRateDown == 0 || nuComt.leafPktRateUp == 0) {
+			nuComt.comtreeNum = 0;
+		}
+		return nuComt;
+	}
+
+	/** Extract a link from a given string.
+	 *  @param s is a string that represents a link
+	 *  @return the link number of the link represented by s;
+	 *  if the link is not already part of the network, add it;
+	 *  return -1 on failure
+	 */
+	public int parseLink(String s) {
+		if (s.equals("-")) return 0;
+		String[] part;
+		part = s.split("[(.,)]",6);
+		if (part.length < 3) return -1;
+		String leftName = part[1];
+		Integer left = nameNodeMap.get(leftName);
+		if (left == null) return -1;
+		int rpos = 2;
+		int leftLnum = 0;
+		if (getNodeType(left) == Forest.NodeTyp.ROUTER) {
+			leftLnum = Integer.parseInt(part[2]);
+			rpos = 3;
+		}
+		if (part.length < rpos) return -1;
+		String rightName = part[rpos];
+		Integer right = nameNodeMap.get(rightName);
+		if (right == null) return -1;
+		int rightLnum = 0;
+		if (getNodeType(right) == Forest.NodeTyp.ROUTER) {
+			if (part.length < rpos+1) return -1;
+			rightLnum = Integer.parseInt(part[rpos+1]);
+		}
+		int ll = (isLeaf(left) ? getLinkNum(left)
+				: getLinkNum(left,leftLnum));
+		int lr = (isLeaf(right) ? getLinkNum(right)
+				: getLinkNum(right,rightLnum));
+		if (ll != 0) return (ll == lr ? ll : -1);
+		ll = addLink(left,right,leftLnum,rightLnum);
+		return ll;	
 	}
 	
 	public String link2string(int lnk) {

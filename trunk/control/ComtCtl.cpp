@@ -6,7 +6,6 @@
  *  See http://www.apache.org/licenses/LICENSE-2.0 for details.
  */
 
-#include "Gqueue.cpp"
 #include "ComtCtl.h"
 
 /** usage:
@@ -116,11 +115,6 @@ bool init(const char *topoFile) {
 		return false;
 	}
 
-	// setup queue used to inform displayHandler of updates
-	dhQueue = new Gqueue<EventStruct>(TPSIZE);
-	if (!dhQueue->init())
-		fatal("init: can't initialize displayHandler queue\n");
-
 	// setup thread pool for handling control packets
 	for (int t = 1; t <= TPSIZE; t++) {
 		if (!pool[t].qp.in.init() || !pool[t].qp.out.init())
@@ -176,7 +170,6 @@ void cleanup() {
 	}
 	delete net;
 	delete [] comtLock;
-	delete dhQueue;
 }
 
 /** Run the ComtCtl.
@@ -383,76 +376,78 @@ void* handler(void *qp) {
  *  @return true if the interaction proceeds normally, followed
  *  by a normal close; return false if an error occurs
  */
-/*
-Idea is that handlers that modify comtree will send messages
-to this handler through dhQueue. The Gqueue data structure
-takes generic structs and handles multiple writers.
-
-This handler then forwards the reports it receives to
-the remote display handler.
-
-Still need to add code in other handlers.
-*/
 bool handleComtreeDisplay(int sock, Queue& inQ, Queue& outQ) {
 	// start by sending network topology info to ComtreeDisplay
-	string netString;
-	net->toString(netString);
-	const int BSIZE = 10000;
-	char buf[BSIZE+1];
-	for (int i = 0; i < netString.size(); i += BSIZE) {
-		int nbytes = netString.copy(buf,BSIZE,i);
-		buf[nbytes++] = EOS;
-		char *bufp = buf;
-		while (nbytes > 0) {
-			int n = send(sock,bufp,nbytes,0);
-			if (n < 0) {
-				cerr << "handleComtreeDisplay: unable to send "
-					"network topology to display\n";
+	pthread_mutex_lock(&allComtLock);
+	string netString; net->toString(netString);
+	pthread_mutex_unlock(&allComtLock);
+	if (Np4d::sendString(sock,netString) < 0) {
+		cerr << "handleComtreeDisplay: unable to send "
+			"network topology to display\n";
+		return false;
+	}
+	while (true) {
+		// wait for a comtree status request
+		// these take the form of a digit string with at most
+		// 10 characters followed by a newline
+		char buf[20]; char *p = buf; int nleft = 20;
+		// read characters into buffer until a newline;
+		// expect remote display to send single comtree status request
+		// and wait for reply before sending another
+		while (true) {
+			if (nleft <= 0) {
+				cerr << "handleComtreeDisplay: unable "
+					"to receive comtree number "
+					"from remote display\n";
 				return false;
 			}
-			nbytes -= n; bufp += n;
-		}
-	}
-
-	// check for changes to comtrees and send updates to
-	// ComtreeDisplay
-	while (true) {
-		// wait for an update from another handler
-		EventStruct ev = dhQueue->deq();
-
-		// format command to send to remote display
-		string s = ""; string s1, s2, s3;
-		if (ev.rtr == 0) {
-			s += "addModifyComtree " + Misc::num2string(ev.comt,s1)
-			  +  " "
-			  +  net->comt2string(net->lookupComtree(ev.comt),s2);
-		} else if (ev.rtr < 0) {
-			s += "dropComtree " + Misc::num2string(ev.comt,s1)
-			  +  "\n";
-		} else {
-			// send modLinkCount command to remote display
-			s += "modLinkCount " + Misc::num2string(ev.comt,s1)
-			  +  " " + Misc::num2string(ev.rtr,s2)
-			  +  " " + Misc::num2string(ev.upDown,s3) + "\n";
-		}
-		
-		// send the update to the remote display
-		for (int i = 0; i < s.size(); i += BSIZE) {
-			int nbytes = s.copy(buf,BSIZE,i);
-			buf[nbytes++] = EOS;
-			char *bufp = buf;
-			while (nbytes > 0) {
-				int n = send(sock,bufp,nbytes,0);
-				if (n < 0) {
+			int nbytes = read(sock,p,nleft);
+			if (nbytes < 0) {
+				if (errno != EINTR) {
 					cerr << "handleComtreeDisplay: unable "
-						"to send update to display\n";
+						"to receive comtree number "
+						"from remote display\n";
+					perror("");
 					return false;
 				}
-				nbytes -= n; bufp += n;
+				nbytes = 0;
+			} else if (nbytes == 0) {
+				close(sock); return true;
 			}
+			char *q = p + nbytes;
+			while (p < q) {
+				if (*p == '\n') { *p = EOS; break; }
+				p++;
+			}
+			nleft -= nbytes;
+		}
+		uint32_t comt;
+		if (sscanf(buf,"%d",&comt) != 1) {
+			cerr << "handleComtreeDisplay: unable "
+				"to receive comtree number "
+				"from remote display\n";
+			return false;
+		}
+		// send requested status
+		string s;
+		pthread_mutex_lock(&allComtLock);
+		int ctx = net->lookupComtree(comt);
+		if (ctx == 0) {
+			// send back blank comtree status string
+			pthread_mutex_unlock(&allComtLock);
+			s = ";\n";
+		} else {
+			pthread_mutex_unlock(&allComtLock);
+			pthread_mutex_lock(&comtLock[ctx]);
+			net->comtStatusString(ctx,s);
+			pthread_mutex_unlock(&comtLock[ctx]);
+		}
+		if (Np4d::sendString(sock,s) < 0) {
+			cerr << "handleComtreeDisplay: unable to send "
+				"comtree status update to display\n";
+			return false;
 		}
 	}
-	return true;
 }
 
 /** Handle an add comtree request.
