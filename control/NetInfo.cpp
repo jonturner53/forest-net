@@ -1837,30 +1837,74 @@ string& NetInfo::netlink2string(int lnk, string& s) const {
 string& NetInfo::comt2string(int ctx, string& s) const {
 	s = "";
 	if (!validComtIndex(ctx)) return s;
-	string s0,s1,s2,s3;
-	s += "comtree=" + Misc::num2string(getComtree(ctx),s0)
-	  +  " root=" + getNodeName(getComtRoot(ctx),s1)
-	  +  "\nbitRateDown=" + Misc::num2string(getComtBrDown(ctx),s2)
-	  +  " bitRateUp=" + Misc::num2string(getComtBrUp(ctx),s3);
-	s += " pktRateDown=" + Misc::num2string(getComtPrDown(ctx),s0)
-	  +  " pktRateUp=" + Misc::num2string(getComtPrUp(ctx),s1)
-	  +  "\nleafBitRateDown=" + Misc::num2string(getComtLeafBrDown(ctx),s2)
-	  +  " leafBitRateUp=" + Misc::num2string(getComtLeafBrUp(ctx),s3);
-	s += "leafPktRateDown=" + Misc::num2string(getComtLeafPrDown(ctx),s0)
-	  +  " leafPktRateUp=" + Misc::num2string(getComtLeafPrUp(ctx),s1); 
+	stringstream ss;
+	ss << "comtree=" << getComtree(ctx)
+	   << " root=" << getNodeName(getComtRoot(ctx),s)
+	   << "\nbitRateDown=" << getComtBrDown(ctx)
+	   << " bitRateUp=" << getComtBrUp(ctx)
+	   << " pktRateDown=" << getComtPrDown(ctx)
+	   << " pktRateUp=" << getComtPrUp(ctx)
+	   << "\nleafBitRateDown=" << getComtLeafBrDown(ctx)
+	   << " leafBitRateUp=" << getComtLeafBrUp(ctx)
+	   << " leafPktRateDown=" << getComtLeafPrDown(ctx)
+	   << " leafPktRateUp=" << getComtLeafPrUp(ctx) << "\n"; 
 
 	// iterate through core nodes and print
-	s += "\n"; 
 	for (int c = firstCore(ctx); c != 0; c = nextCore(c,ctx)) {
 		if (c != getComtRoot(ctx)) 
-			s += "core=" + getNodeName(c,s0) + " ";
+			ss << "core=" << getNodeName(c,s) << " ";
 	}
-	s += "\n"; 
+	ss << "\n"; 
 	// iterate through links and print
 	for (int lnk = firstComtLink(ctx); lnk != 0;
 		 lnk = nextComtLink(lnk,ctx)) {
-		s += "link=" + link2string(lnk,s0) + " ";
+		ss << "link=" << link2string(lnk,s) << " ";
 	}
-	s += "\n;\n"; 
+	ss << "\n;\n"; 
+	s = ss.str();
+	return s;
+}
+
+string& NetInfo::comtStatusString(int ctx, string& s) const {
+	s = "";
+	if (!validComtIndex(ctx)) return s;
+	stringstream ss;
+	ss << "comtree=" << getComtree(ctx)
+	   << " root=" << getNodeName(getComtRoot(ctx),s)
+	   << "\nbitRateDown=" << getComtBrDown(ctx)
+	   << " bitRateUp=" << getComtBrUp(ctx)
+	   << " pktRateDown=" << getComtPrDown(ctx)
+	   << " pktRateUp=" << getComtPrUp(ctx)
+	   << "\nleafBitRateDown=" << getComtLeafBrDown(ctx)
+	   << " leafBitRateUp=" << getComtLeafBrUp(ctx)
+	   << " leafPktRateDown=" << getComtLeafPrDown(ctx)
+	   << " leafPktRateUp=" << getComtLeafPrUp(ctx) << "\n"; 
+
+	// iterate through core nodes and print
+	for (int c = firstCore(ctx); c != 0; c = nextCore(c,ctx)) {
+		if (c != getComtRoot(ctx)) 
+			ss << "core=" << getNodeName(c,s) << " ";
+	}
+	ss << "\n"; 
+	// iterate through links and print
+	for (int lnk = firstComtLink(ctx); lnk != 0;
+		 lnk = nextComtLink(lnk,ctx)) {
+		ss << "link=" << link2string(lnk,s) << " ";
+	}
+	ss << "\n"; 
+	// iterate through nodes and print
+	map<int,ComtRtrInfo>::iterator p = comtree[ctx].rtrMap->begin();
+	int i = 1;
+	while (p != comtree[ctx].rtrMap->end()) {
+		int r = p->first;
+		int plnk = p->second.plnk;
+		ss << "node=(" << getNodeName(r,s) << ","
+		   << p->second.lnkCnt << ",";
+		ss << link2string(plnk,s) << ") ";
+		if ((++i%10) == 0) ss << "\n";
+		p++;
+	}
+	ss << "\n;\n"; 
+	s = ss.str();
 	return s;
 }

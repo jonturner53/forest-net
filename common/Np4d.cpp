@@ -327,6 +327,7 @@ bool Np4d::recvIntBlock(int sock, uint32_t& val) {
 	val = ntohl(temp);
 	return true;
 }
+
 /** Send a 32 bit integer on a stream socket.
  *  Uses send() system call but hides the ugliness.
  *  @param sock is socket number
@@ -431,6 +432,7 @@ int Np4d::recvBufBlock(int sock, char* buf, int buflen) {
 	nbytes = recv(sock,(void *) buf, length, 0);
 	return nbytes;
 }
+
 int Np4d::sendBuf(int sock, char* buf, int buflen) {
 	if (spaceAvail(sock) < buflen + sizeof(uint32_t))
 		return -1;
@@ -451,4 +453,25 @@ int Np4d::sendBufBlock(int sock, char* buf, int buflen) {
 	if (nbytes != buflen)
 		fatal("Np4d::sendBuf: can't send buffer");
 	return buflen;
+}
+
+/** Write a string over a blocking stream socket.
+ *  @param sock is an open, blocking stream socket
+ *  @param s is the string to be sent
+ *  @return the number of bytes sent from the string on success,
+ *  -1 on failure
+ */
+int Np4d::writeString(int sock, string& s) {
+	const char *p; p = s.c_str();
+	int numLeft = s.size()+1; // extra 1 accounts for EOS terminator
+	while (numLeft > 0) {
+		int nbytes = write(sock,(void *) p,numLeft);
+		if (nbytes <= 0) {
+			if (nbytes < 0 && errno == EINTR)
+				nbytes = 0;
+			else return -1;
+		}
+		numLeft -= nbytes; p += nbytes;
+	}
+	return s.size();
 }
