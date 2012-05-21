@@ -19,40 +19,15 @@ import princeton.*;
 
 /** Display comtrees based on the information received from a ComtCtl object.
  *  Connect to the ComtCtl object using a stream socket (port 30133).
- *  On connecting, the ComtCtl sends a sequence of "topology definitions"
- *  identifying the nodes in the network graph and the links connecting them.
- *  After sending the topology definitions, the ComtCtl sends comtree 
- *  definitions, after which it sends status messages whenever
- *  any comtree that it controls changes.
+ *  On connecting, the ComtCtl sends the initial network configuration in
+ *  the form of  NetInfo string. This is read into a local NetInfo object.
  *
- *  Each message from the ComtCtl is sent on a line by itself, starting
- *  with a keyword and one or more attributes in a fixed order.
- *  More specifically, we can have
- *
- *  node nodeName nodeType lat long address
- *  link (nodeName.5,nodeName.3) length bitRate pktRate
- *  comtree comtreeNum rootNodeName
- *  coreNode comtreeNum nodeName
- *  incLnkCnt comtreeNum rtrName
- *  decLnkCnt comtreeNum rtrName
- *  addComtreeLink comtNum (nodeName,nodeName.5)
- *  	bRateL pRateL bRateR pRateR
- *  dropComtreeLink comtNum (nodeName,nodeName.5)
- *
- *  The node and link messages define the underlying network topology.
- *  The nodeType can be one of router, controller, client. The latitude
- *  and longitude are given in degrees and affect the placement of the
- *  nodes in the graphical display. The links are defined by their endpoints.
- *  For routers, these include a link number. For leaf nodes, they do not.
- *  Lengths are given in km, bit rates in kb/s, packet rates in packets/sec.
- *  The leaf count for a comtree node is the number of leaves in the comtree.
- *  The bit rates for a comtree link are the rights from the left endpoint
- *  (as the link is given) and the right endpoint.
- *  If a comtree message is given without a rootNodeName, it is
- *  interpreted as "delete comtree" message. If a comtreeNode message
- *  is given without a leafCount, it is intepreted a "delete comtree node"
- *  message. If a comtreeLink message omits the link rates, it is interpreted
- *  as a "delete comtree link" message.
+ *  Then, we periodically query the ComtCtl object for updates to the
+ *  the current comtree. It responds to such requests with a comtree status
+ *  string which is used to update the current comtree.
+ * 
+ *  The current comtree can be changed using the keyboard. The keyboard
+ *  can also be used to turn on/off the display of  detailed link information.
  */
 public class ComtreeDisplay {
 	private static final int maxNode    = 10000;
@@ -86,11 +61,13 @@ public class ComtreeDisplay {
 			Util.fatal("can't connect to ComtCtl");
 
 		net = new NetInfo(maxNode, maxLink, maxRtr, maxCtl, maxComtree);
+		InputStream in = null;
 		try {
-			if (!net.read(ccChan.socket().getInputStream()))
+			in = ccChan.socket().getInputStream();
+			if (!net.read(in))
 				Util.fatal("can't read network topology\n");
 		} catch(Exception e) {
-			Util.fatal("can't read network topology " + e);
+			Util.fatal("can't read network topology\n" + e);
 		}
 
 		Scanner ccIn = null;
@@ -106,16 +83,17 @@ public class ComtreeDisplay {
 			Util.fatal("can't open output stream to ComtCtl " + e);
 		}
 
-		// start main loop
+		// initial display
+		linkDetail = false;
 		setupDisplay();
-		int x = net.firstComtIndex();
-		if (x == 0) Util.fatal("Network contains no comtrees");
-		currentComtree = net.getComtree(net.firstComtIndex());
+		int ctx = net.firstComtIndex();
+		if (ctx == 0) Util.fatal("Network contains no comtrees");
+		currentComtree = net.getComtree(ctx);
+		updateDisplay();
+		// start main loop
 		while (true) {
 			String lineBuf = readKeyboardIn();
-			if (lineBuf.length() > 0) {
-				processKeyboardIn(lineBuf);
-			}
+			if (lineBuf.length() > 0) processKeyboardIn(lineBuf);
 			if (currentComtree == 0) break;
 			// send currentComtree to ComtCtl
 			Integer CurComt = currentComtree;
@@ -125,8 +103,17 @@ public class ComtreeDisplay {
 			} catch(Exception e) {
 				Util.fatal("can't write to ComtCtl " + e);
 			}
-			// now read updated status
-			
+			// now read updated status and update comtree
+			NetInfo.ComtreeInfo modComt;
+			modComt = net.readComtStatus(in);
+			if (modComt.comtreeNum != currentComtree) {
+				Util.fatal("received comtree info does not "
+					   + "match request");
+			}
+			if (net.validComtree(currentComtree)) 
+				net.updateComtree(modComt);
+			else 
+				net.addComtree(modComt);
 			updateDisplay();
 		}
 	}
@@ -150,80 +137,18 @@ public class ComtreeDisplay {
                 return sockAdr;
         }
 
-	private static SocketChannel connectToComtCtl(
-		InetSocketAddress sockAdr) {
-		// Open channel to monitor and make it nonblocking
+	private static SocketChannel
+	connectToComtCtl(InetSocketAddress sockAdr) {
+		// Open channel to monitor
 		SocketChannel chan;
                 try {
                         chan = SocketChannel.open(sockAdr);
-                        chan.configureBlocking(false);
                 } catch (Exception e) {
                         System.out.println("Can't open channel to monitor");
                         System.out.println(e);
                         return null;
                 }
 		return chan;
-	}
-
-	/** Process command from the comtree controller.
-	 *  node nodeName nodeType lat long address
- 	 *  link (nodeName.5,nodeName.3) length bitRate pktRate
- 	 *  comtree comtreeNum rootNodeName
- 	 *  coreNode comtreeNum nodeName
-	 *  incLnkCnt comtreeNum rtrName
-	 *  decLnkCnt comtreeNum rtrName
-         *  addComtreeLink comtNum (nodeName,nodeName.5)
-	 *  	bRateL pRateL bRateR pRateR
-         *  dropComtreeLink comtNum (nodeName,nodeName.5)
-	 *
-	 *  addModComtree comtreeNum ...
-	 *  dropComtree comtreeNum
-	 *  incLnkCnt comtreeNum rtrName
-         *  decLnkCnt comtreeNum rtrName
-	 */
-	private static String processComtCtlCmd(Scanner ccChan) {
-		if (ccChan.hasNext("addModifyComtree")) {
-			ccChan.next();
-			if (net.readComt(ccChan).length() == 0) {
-				return "could not read comtree in "
-					+ "addModifyComtree command";
-			}
-		} else if (ccChan.hasNext("dropComtree")) {
-			ccChan.next();
-			if (!ccChan.hasNextInt()) {
-				return	"cannot read expected comtree number "
-					+ "in dropComtree command";
-			}
-			int comt = ccChan.nextInt();
-			int ctx = net.getComtIndex(comt);
-			if (ctx == 0) return "";
-			if (!net.removeComtree(ctx)) 
-				return "unable to remove comtree " + comt;
-		} else if (ccChan.hasNext("modLinkCnt")) {
-			ccChan.next();
-			if (!ccChan.hasNextInt()) {
-				return	"cannot read expected comtree number "
-					+ "in modLinkCnt command";
-			}
-			int comt = ccChan.nextInt();
-			int ctx = net.getComtIndex(comt);
-			if (ctx == 0)
-				return "invalid comtree number in modLinkCnt "
-					+ " command";
-			if (!ccChan.hasNextInt()) {
-				return	"cannot read expected router number "
-					+ "in modLinkCnt command";
-			}
-			int rtr = ccChan.nextInt();
-			if (!ccChan.hasNextInt()) {
-				return	"cannot read expected increment value "
-					+ "in modLinkCnt command";
-			}
-			int delta = ccChan.nextInt();
-			if (delta < 0) net.decComtLnkCnt(ctx,rtr);
-			if (delta > 0) net.incComtLnkCnt(ctx,rtr);
-		}
-		return "";	
 	}
 
 	private static BufferedReader kbStream; ///< for keyboard input
@@ -255,8 +180,10 @@ public class ComtreeDisplay {
 			currentComtree = line.nextInt();
 		} else if (line.hasNext("linkDetail")) {
 			linkDetail = true;
-		} else if (line.hasNext("linkNoDetail")) {
+		} else if (line.hasNext("noLinkDetail")) {
 			linkDetail = false;
+		} else if (line.hasNext("quit")) {
+			System.exit(0);
 		} else return false;
 		return true;
 	}
@@ -273,19 +200,23 @@ public class ComtreeDisplay {
 	private static void updateDisplay() {
                 Color c = new Color(210,230,255);
 		StdDraw.clear(c);
-		double lmargin = .1;	// left margin
+		double lmargin = .05;	// left margin
 		double rmargin = .85;	// right margin
-		double tmargin = .9;	// top margin
-		double bmargin = .1;	// bottom margin
+		double tmargin = .95;	// top margin
+		double bmargin = .05;	// bottom margin
+		double xorigin = (rmargin + lmargin)/2;
+		double yorigin = (tmargin + bmargin)/2;
 
 		// list all comtree numbers in the right margin
 		double x, y, delta;
-		x = rmargin + .07; delta = .02; y = tmargin;
+		x = rmargin + .12; delta = .03; y = tmargin;
+		StdDraw.setPenColor(Color.RED);
+		StdDraw.text(x, y, "" + currentComtree);
+		y -= 2*delta;
+		StdDraw.setPenColor(Color.BLACK);
 		for (int ctx = net.firstComtIndex(); ctx != 0 && y > bmargin;
 			 ctx = net.nextComtIndex(ctx)) {
-			StdDraw.setPenColor(Color.BLACK);
-			if (net.getComtree(ctx) == currentComtree)
-				StdDraw.setPenColor(Color.RED);
+			if (net.getComtree(ctx) == currentComtree) continue;
 			StdDraw.text(x, y, "" + net.getComtree(ctx));
 			y -= delta;
 		}
@@ -295,8 +226,6 @@ public class ComtreeDisplay {
 		// expressed in degrees
 		double minLat  =   90; double maxLat  =  -90;
 		double minLong =  180; double maxLong = -180;
-		double xdelta  = maxLong - minLong;
-		double ydelta  = maxLat  - minLat;
 		for (int node = net.firstNode(); node != 0;
 			 node = net.nextNode(node)) {
 			minLat  = Math.min(minLat,  net.getNodeLat(node));
@@ -304,25 +233,79 @@ public class ComtreeDisplay {
 			minLong = Math.min(minLong, net.getNodeLong(node));
 			maxLong = Math.max(minLong, net.getNodeLong(node));
 		}
+		double xdelta  = maxLong - minLong;
+		double ydelta  = maxLat  - minLat;
+		double xcenter = (maxLong + minLong)/2;
+		double ycenter = (maxLat  + minLat)/2;
+		double xscale  = (rmargin-lmargin)/(maxLong-minLong);
+		double yscale  = (tmargin-bmargin)/(maxLat-minLat);
+		double scale   = Math.min(xscale,yscale);
+
+		int ctx = net.getComtIndex(currentComtree);
+		double nodeRadius = .05;
+		// draw all the links
+		for (int lnk = net.firstLink(); lnk != 0;
+			 lnk = net.nextLink(lnk)) {
+			int left = net.getLinkL(lnk);
+			int right = net.getLinkR(lnk);
+			double lx = xorigin +
+				     (net.getNodeLong(left) - xcenter)*scale;
+			double ly = yorigin +
+				     (net.getNodeLat(left) - ycenter)*scale;
+			double rx = xorigin +
+				     (net.getNodeLong(right) - xcenter)*scale;
+			double ry = yorigin +
+				     (net.getNodeLat(right) - ycenter)*scale;
+			StdDraw.setPenColor(Color.BLACK);
+			StdDraw.setPenRadius(PEN_RADIUS);
+			if (net.isComtLink(ctx,lnk))
+				StdDraw.setPenRadius(5*PEN_RADIUS);
+			StdDraw.line(lx,ly,rx,ry);
+			StdDraw.setPenRadius(PEN_RADIUS);
+			if (net.isComtLink(ctx,lnk) && linkDetail) {
+				x = (lx+rx)/2; y = (ly+ry)/2;
+				StdDraw.setPenColor(Color.WHITE);
+				StdDraw.filledSquare(x, y, 1.5*nodeRadius);
+				StdDraw.setPenColor(Color.BLACK);
+				StdDraw.setPenRadius(PEN_RADIUS);
+				StdDraw.square(x, y, 1.5*nodeRadius);
+				int bru, pru, brd, prd;
+				if (net.isLeaf(left) || net.isLeaf(right)) {
+					bru = net.getComtLeafBrUp(ctx);
+					pru = net.getComtLeafPrUp(ctx);
+					brd = net.getComtLeafBrDown(ctx);
+					prd = net.getComtLeafPrDown(ctx);
+				} else {
+					bru = net.getComtBrUp(ctx);
+					pru = net.getComtPrUp(ctx);
+					brd = net.getComtBrDown(ctx);
+					prd = net.getComtPrDown(ctx);
+				}
+				StdDraw.text(x, y+.8*nodeRadius, "brU=" + bru);
+				StdDraw.text(x, y+.3*nodeRadius, "prU=" + pru);
+				StdDraw.text(x, y-.3*nodeRadius, "brD=" + brd);
+				StdDraw.text(x, y-.8*nodeRadius, "prD=" + prd);
+			}
+		}
 
 		// draw all the nodes in the net
-		int ctx = net.getComtIndex(currentComtree);
-		double nodeRadius = .03;
 		for (int node = net.firstNode(); node != 0;
 			 node = net.nextNode(node)) {
-			x = lmargin + ((net.getNodeLong(node) - minLong)/xdelta)
-				    * (rmargin-lmargin);
-			y = bmargin + ((net.getNodeLat(node) - minLat)/ydelta)
-				    * (tmargin-bmargin);
-			if(net.isComtNode(ctx,node))
-				StdDraw.setPenColor(Color.LIGHT_GRAY);
-			else
+			x = xorigin + (net.getNodeLong(node) - xcenter)*scale;
+			y = yorigin + (net.getNodeLat(node) - ycenter)*scale;
+			if (node == net.getComtRoot(ctx))
+				StdDraw.setPenColor(Color.YELLOW);
+			else if (net.isComtNode(ctx,node))
 				StdDraw.setPenColor(Color.WHITE);
+			else
+				StdDraw.setPenColor(Color.LIGHT_GRAY);
 			if (net.getNodeType(node) == Forest.NodeTyp.ROUTER) {
 				StdDraw.filledCircle(x, y, nodeRadius);
 				StdDraw.setPenColor(Color.BLACK);
-				StdDraw.setPenRadius(PEN_RADIUS);
+				if (net.isComtCoreNode(ctx,node))
+					StdDraw.setPenRadius(3*PEN_RADIUS);
 				StdDraw.circle(x, y, nodeRadius);
+				StdDraw.setPenRadius(PEN_RADIUS);
 				StdDraw.text(x, y+nodeRadius/3,
 					     net.getNodeName(node));
 				StdDraw.text(x, y-nodeRadius/3,
@@ -339,46 +322,6 @@ public class ComtreeDisplay {
 						     net.getNodeAdr(node)));
 			}
 		}
-		// draw all the links
-		for (int lnk = net.firstLink(); lnk != 0;
-			 lnk = net.nextLink(lnk)) {
-			int left = net.getLinkL(lnk);
-			int right = net.getLinkR(lnk);
-			double lx = lmargin +
-				     ((net.getNodeLong(left) - minLong)/xdelta)
-				     * (rmargin-lmargin);
-			double ly = bmargin +
-				     ((net.getNodeLat(left) - minLat)/ydelta)
-				     * (tmargin-bmargin);
-			double rx = lmargin +
-				     ((net.getNodeLong(right) - minLong)/xdelta)
-				     * (rmargin-lmargin);
-			double ry = bmargin +
-				     ((net.getNodeLat(right) - minLat)/ydelta)
-				     * (tmargin-bmargin);
-			StdDraw.setPenColor(Color.BLACK);
-			StdDraw.setPenRadius(PEN_RADIUS);
-			if (net.isComtLink(ctx,lnk))
-				StdDraw.setPenRadius(3*PEN_RADIUS);
-			StdDraw.line(lx,ly,rx,ry);
-			StdDraw.setPenRadius(PEN_RADIUS);
-			if (net.isComtLink(ctx,lnk) && linkDetail) {
-				x = (lx+rx)/2; y = (ly+ry)/2;
-				StdDraw.setPenColor(Color.WHITE);
-				StdDraw.filledSquare(x, y, nodeRadius);
-				StdDraw.setPenColor(Color.BLACK);
-				StdDraw.setPenRadius(PEN_RADIUS);
-				StdDraw.square(x, y, nodeRadius);
-				StdDraw.text(x, y+.3*nodeRadius,
-					"brU=" + net.getComtBrUp(ctx,lnk));
-				StdDraw.text(x, y+.1*nodeRadius,
-					"prU=" + net.getComtPrUp(ctx,lnk));
-				StdDraw.text(x, y-.1*nodeRadius,
-					"brD=" + net.getComtBrDown(ctx,lnk));
-				StdDraw.text(x, y-.3*nodeRadius,
-					"prD=" + net.getComtPrDown(ctx,lnk));
-			}
-		}
-		StdDraw.show(500);
+		StdDraw.show(50);
 	}
 }

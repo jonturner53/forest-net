@@ -961,8 +961,6 @@ public class NetInfo {
 	}
 	
 	/** Determine if a node belongs to a comtree or not.
-	 *  This method scans the links incident to the node, so its running
-	 *  time is proportional to the number of links, in the worst-case.
 	 *  @param ctx is the comtree index of the comtree of interest
 	 *  @param n is number of the node that we want to check for membership
 	 *  in the comtree
@@ -1306,6 +1304,24 @@ public class NetInfo {
 	 */
 	public boolean removeComtCoreNode(int ctx, int n) {
 		comtree[ctx].coreSet.remove(n);
+		return true;
+	}
+	
+	/** Set the link count for a router in a comtree.
+	 *  This method is provided to allow link counts to be used to
+	 *  track the presence of leaf nodes that may not be represented
+	 *  explicitly in the comtree. The client program must take care
+	 *  to maintain these counts appropriately.
+	 *  @param ctx is a valid comtree index
+	 *  @param r is a router in the comtree
+	 *  @param cnt is the new value for the link count
+	 *  @return true on success, false on failure
+	 */
+	public boolean setComtLnkCnt(int ctx, int r, int cnt) {
+		if (isLeaf(r)) return true;
+		ComtRtrInfo rtr = comtree[ctx].rtrMap.get(r);
+		if (rtr == null) return false;
+		rtr.lnkCnt = cnt;
 		return true;
 	}
 	
@@ -1914,6 +1930,7 @@ public class NetInfo {
 			pending.addLast(root);
 			Map<Integer,Integer> plink =
 				new HashMap<Integer,Integer>();
+			setComtPlink(ctx,root,0);
 			plink.put(root,0);
 			Integer u;
 			while ((u = pending.peekFirst()) != null) {
@@ -1929,7 +1946,7 @@ public class NetInfo {
 					pending.addLast(v);
 					if (!setLinkRates(ctx,lnk,v)) {
 						System.err.println(
-						    "setComtLinkRates: could "
+						    "setComtLnkNodeInfo: could "
 						    + "not set comtree link "
 						    + "rates as specified for "
 						    + "comtree " + comt
@@ -2416,7 +2433,7 @@ public class NetInfo {
 					nuRtr.iface[i] = iface[i];
 				return "";
 			}
-			if (!s.hasNext()) return "missing interface number";
+			if (!s.hasNextInt()) return "missing interface number";
 			int ifNum = s.nextInt();
 			if (ifNum < 1 || ifNum > Forest.MAXINTF)
 				return "interface num is out of range";
@@ -2437,8 +2454,9 @@ public class NetInfo {
 			inWord = s.next();
 			part = inWord.split("-",2);
 			iface[ifNum].firstLink = Integer.parseInt(part[0]);
+			iface[ifNum].lastLink = iface[ifNum].firstLink;
 			if (part.length == 2) 
-				iface[ifNum].firstLink =
+				iface[ifNum].lastLink =
 				    	Integer.parseInt(part[1]);
 			if (!s.hasNext()) return "missing bit rate";
 			iface[ifNum].bitRate = s.nextInt();
@@ -2579,8 +2597,12 @@ public class NetInfo {
 					     Integer.parseInt(part[rpos+1]);
 			} else if (part[0].equals("bitRate")) {
 				nuLnk.bitRate = Integer.parseInt(part[1]);
+				nuLnk.availBitRateL = nuLnk.bitRate;
+				nuLnk.availBitRateR = nuLnk.bitRate;
 			} else if (part[0].equals("pktRate")) {
 				nuLnk.pktRate = Integer.parseInt(part[1]);
+				nuLnk.availPktRateL = nuLnk.pktRate;
+				nuLnk.availPktRateR = nuLnk.pktRate;
 			} else if (part[0].equals("length")) {
 				linkLength = Integer.parseInt(part[1]);
 			} else {
@@ -2724,7 +2746,9 @@ public class NetInfo {
 		String[] part;
 		while (true) {
 			// skip comments
-			while (s.hasNext("#.*")) s.nextLine();
+			while (s.hasNext("#.*")) {
+				System.out.println(s.nextLine());
+			}
 			if (s.hasNext(";")) { // end of comtree definition
 				s.next(); break;
 			}
@@ -2795,7 +2819,9 @@ public class NetInfo {
 				Integer node = nameNodeMap.get(nodeName);
 				if (node == null) break;
 				int lnkCnt = Integer.parseInt(part[2]);
-				int plnk = parseLink(part[3]);
+				int plnk;
+				if (part[3].charAt(0) == '-') plnk = 0;
+				else plnk = parseLink(part[3]);
 				if (plnk < 0) break;
 				if (getNodeType(node) != Forest.NodeTyp.ROUTER)
 					break;
