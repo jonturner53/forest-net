@@ -455,13 +455,13 @@ int Np4d::sendBufBlock(int sock, char* buf, int buflen) {
 	return buflen;
 }
 
-/** Write a string over a blocking stream socket.
+/** Send a string over a blocking stream socket.
  *  @param sock is an open, blocking stream socket
  *  @param s is the string to be sent
  *  @return the number of bytes sent from the string on success,
  *  -1 on failure
  */
-int Np4d::writeString(int sock, string& s) {
+int Np4d::sendString(int sock, string& s) {
 	const char *p; p = s.c_str();
 	int numLeft = s.size()+1; // extra 1 accounts for EOS terminator
 	while (numLeft > 0) {

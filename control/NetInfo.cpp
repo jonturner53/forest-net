@@ -1700,9 +1700,9 @@ for (int ctx = firstComtIndex(); ctx != 0; ctx = nextComtIndex(ctx)) {
 	     << getComtree(ctx) << endl;
 	for (rp = rmap.begin(); rp != rmap.end(); rp++) {
 		string ss1, ss2;
-		cerr << "[" << getNodeName(rp->first,ss1) << ": "
+		cerr << "(" << getNodeName(rp->first,ss1) << ": "
 		     << link2string(rp->second.plnk,ss2) << " "
-		     << rp->second.lnkCnt << "] ";
+		     << rp->second.lnkCnt << ") ";
 	}
 	cerr << endl;
 }
@@ -1771,7 +1771,7 @@ string& NetInfo::toString(string& s) const {
 	for (int ctx = firstComtIndex(); ctx != 0; ctx = nextComtIndex(ctx)) {
 		s += comt2string(ctx,s1);
 	}
-	s += ";\n"; 
+	s += ";\n;\n"; 
 	return s;
 }
 
@@ -1803,7 +1803,7 @@ string& NetInfo::rtr2string(int rtr, string& s) const {
 			  +  "-" + Misc::num2string(getIfLastLink(rtr,i), s2)
 			  +  "  ";
 		s += Misc::num2string(getIfBitRate(rtr,i),s1) + "  "
-		  +  Misc::num2string(getIfPktRate(rtr,i),s2) + ";\n";
+		  +  Misc::num2string(getIfPktRate(rtr,i),s2) + " ;\n";
 	}
 	s += "end\n;\n";
 	return s;
@@ -1820,7 +1820,7 @@ string& NetInfo::leaf2string(int leaf, string& s) const {
 	sprintf(buf,"%f",getNodeLat(leaf)); 
 	s1 = buf; s += "\n\tlocation=(" + s1 + ",";
 	sprintf(buf,"%f",getNodeLong(leaf));
-	s1 = buf; s += s1 + ")\n";
+	s1 = buf; s += s1 + ") ;\n";
 	return s;
 }
 
@@ -1830,7 +1830,7 @@ string& NetInfo::netlink2string(int lnk, string& s) const {
 	s += "link=" + link2string(lnk,s0) + " bitRate="
 	  +  Misc::num2string(getLinkBitRate(lnk),s1) +  " pktRate="
 	  +  Misc::num2string(getLinkPktRate(lnk),s2) +  " length=" 
-	  +  Misc::num2string(getLinkLength(lnk),s3) + ";\n"; 
+	  +  Misc::num2string(getLinkLength(lnk),s3) + " ;\n"; 
 	return s;
 }
 

@@ -31,7 +31,8 @@ main(int argc, char *argv[]) {
 	    (sscanf(argv[4],"%d", &firstComt)) != 1 ||
 	    (sscanf(argv[5],"%d", &lastComt)) != 1 ||
 	     sscanf(argv[6],"%d", &finTime) != 1)
-		fatal("usage: ComtCtl intIp extIp topoFile clientInfo finTime");
+		fatal("usage: ComtCtl intIp extIp topoFile firstComt "
+			"lastComt finTime");
 	if (extIp == Np4d::ipAddress("127.0.0.1")) extIp = Np4d::myIpAddress(); 
 	if (extIp == 0) fatal("can't retrieve default IP address");
 
@@ -152,7 +153,7 @@ bool init(const char *topoFile) {
 	// setup external TCP socket for use by remote display program
 	extSock = Np4d::streamSocket();
 	if (extSock < 0) return false;
-	return	Np4d::bind4d(extSock,extIp,Forest::NM_PORT) &&
+	return	Np4d::bind4d(extSock,extIp,Forest::CC_PORT) &&
 		Np4d::listen4d(extSock) && 
 		Np4d::nonblock(extSock);
 }
@@ -403,22 +404,23 @@ bool handleComtreeDisplay(int sock, Queue& inQ, Queue& outQ) {
 			}
 			int nbytes = read(sock,p,nleft);
 			if (nbytes < 0) {
+/* not sure why this is not working, but comment out for now
 				if (errno != EINTR) {
+cerr << "error errno=" << errno << "\n";
 					cerr << "handleComtreeDisplay: unable "
 						"to receive comtree number "
 						"from remote display\n";
 					perror("");
 					return false;
 				}
+*/
 				nbytes = 0;
 			} else if (nbytes == 0) {
 				close(sock); return true;
 			}
 			char *q = p + nbytes;
-			while (p < q) {
-				if (*p == '\n') { *p = EOS; break; }
-				p++;
-			}
+			while (p < q && *p != '\n') p++;
+			if (p < q) { *p = EOS; break; }
 			nleft -= nbytes;
 		}
 		uint32_t comt;
@@ -437,8 +439,8 @@ bool handleComtreeDisplay(int sock, Queue& inQ, Queue& outQ) {
 			pthread_mutex_unlock(&allComtLock);
 			s = ";\n";
 		} else {
-			pthread_mutex_unlock(&allComtLock);
 			pthread_mutex_lock(&comtLock[ctx]);
+			pthread_mutex_unlock(&allComtLock);
 			net->comtStatusString(ctx,s);
 			pthread_mutex_unlock(&comtLock[ctx]);
 		}
