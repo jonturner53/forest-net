@@ -25,18 +25,17 @@
 main(int argc, char *argv[]) {
 	int comt; uint32_t finTime;
 
-	if (argc != 7 ||
-  	    (intIp  = Np4d::ipAddress(argv[1])) == 0 ||
-  	    (extIp  = Np4d::ipAddress(argv[2])) == 0 ||
-	    (sscanf(argv[4],"%d", &firstComt)) != 1 ||
-	    (sscanf(argv[5],"%d", &lastComt)) != 1 ||
-	     sscanf(argv[6],"%d", &finTime) != 1)
-		fatal("usage: ComtCtl intIp extIp topoFile firstComt "
+	if (argc != 6 ||
+  	    (extIp  = Np4d::ipAddress(argv[1])) == 0 ||
+	    (sscanf(argv[3],"%d", &firstComt)) != 1 ||
+	    (sscanf(argv[4],"%d", &lastComt)) != 1 ||
+	     sscanf(argv[5],"%d", &finTime) != 1)
+		fatal("usage: ComtCtl extIp topoFile firstComt "
 			"lastComt finTime");
 	if (extIp == Np4d::ipAddress("127.0.0.1")) extIp = Np4d::myIpAddress(); 
 	if (extIp == 0) fatal("can't retrieve default IP address");
 
-	if (!init(argv[3])) {
+	if (!init(argv[2])) {
 		fatal("ComtCtl: initialization failure");
 	}
 	pthread_t run_thread;
@@ -154,7 +153,7 @@ bool init(const char *topoFile) {
 	extSock = Np4d::streamSocket();
 	if (extSock < 0) return false;
 	return	Np4d::bind4d(extSock,extIp,Forest::CC_PORT) &&
-		Np4d::listen4d(extSock) && 
+		Np4d::listen4d(extSock) &&
 		Np4d::nonblock(extSock);
 }
 

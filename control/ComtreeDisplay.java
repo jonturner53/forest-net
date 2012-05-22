@@ -229,9 +229,9 @@ public class ComtreeDisplay {
 		for (int node = net.firstNode(); node != 0;
 			 node = net.nextNode(node)) {
 			minLat  = Math.min(minLat,  net.getNodeLat(node));
-			maxLat  = Math.max(minLat,  net.getNodeLat(node));
+			maxLat  = Math.max(maxLat,  net.getNodeLat(node));
 			minLong = Math.min(minLong, net.getNodeLong(node));
-			maxLong = Math.max(minLong, net.getNodeLong(node));
+			maxLong = Math.max(maxLong, net.getNodeLong(node));
 		}
 		double xdelta  = maxLong - minLong;
 		double ydelta  = maxLat  - minLat;
@@ -293,12 +293,16 @@ public class ComtreeDisplay {
 			 node = net.nextNode(node)) {
 			x = xorigin + (net.getNodeLong(node) - xcenter)*scale;
 			y = yorigin + (net.getNodeLat(node) - ycenter)*scale;
-			if (node == net.getComtRoot(ctx))
-				StdDraw.setPenColor(Color.YELLOW);
-			else if (net.isComtNode(ctx,node))
-				StdDraw.setPenColor(Color.WHITE);
-			else
-				StdDraw.setPenColor(Color.LIGHT_GRAY);
+
+			int lnkCnt = 0;
+			Color nodeColor = Color.LIGHT_GRAY;
+			if (net.isComtNode(ctx,node)) {
+				lnkCnt = net.getComtLnkCnt(ctx,node);
+				nodeColor = Color.WHITE;
+				if (node == net.getComtRoot(ctx))
+					nodeColor = Color.YELLOW;
+			}
+			StdDraw.setPenColor(nodeColor);
 			if (net.getNodeType(node) == Forest.NodeTyp.ROUTER) {
 				StdDraw.filledCircle(x, y, nodeRadius);
 				StdDraw.setPenColor(Color.BLACK);
@@ -308,8 +312,7 @@ public class ComtreeDisplay {
 				StdDraw.setPenRadius(PEN_RADIUS);
 				StdDraw.text(x, y+nodeRadius/3,
 					     net.getNodeName(node));
-				StdDraw.text(x, y-nodeRadius/3,
-					     "" + net.getComtLnkCnt(ctx,node));
+				StdDraw.text(x, y-nodeRadius/3, "" + lnkCnt);
 			} else {
 				StdDraw.filledSquare(x, y, nodeRadius);
 				StdDraw.setPenColor(Color.BLACK);
