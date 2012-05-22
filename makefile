@@ -25,7 +25,7 @@ all:
 clean:
 	rm -f ${FLIB} 
 	make -C misc    clean
-	make -C common  clean
+#	make -C common  clean
 	make -C router  clean
 	make -C control clean
 	make -C vworld1 clean
