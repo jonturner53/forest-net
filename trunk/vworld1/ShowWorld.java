@@ -244,6 +244,7 @@ public class ShowWorld {
 	 *  Process command line arguments
 	 *   - name/address of monitor host (or localhost)
 	 *   - walls file
+	 *   - size of view
 	 *   - port # when connecting to avatar (rather than monitor)
 	 */
 	private static boolean processArgs(String[] args) {
@@ -353,11 +354,12 @@ public class ShowWorld {
 	 * The ShowWorldNet program displays a visualization of a very
 	 * simple virtual world. Avatars moving around in the virtual
 	 * world are displayed as they move.
-	 * 
-	 * There are two command line arguments. The first is the IP address
-	 * of the remote Monitor program from which we receive reports
-	 * concerning the virtual world. The second is the comtree 
-	 * to be monitored
+	 *
+	 *  Command line arguments
+	 *   - name/address of monitor host (or localhost)
+	 *   - walls file
+	 *   - size of view
+	 *   - port # when connecting to avatar (rather than monitor)
 	 */
 	public static void main(String[] args) {	
 		// process command line arguments	

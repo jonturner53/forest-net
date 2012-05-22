@@ -19,4 +19,4 @@ all : ${LIBFILES} ${CLASSFILES}
 	ar -ru ${FLIB} ${LIBFILES}
 
 clean :
-	rm -f *.o
+	rm -f *.o *.class
