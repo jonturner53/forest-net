@@ -46,7 +46,7 @@ public:
 
 	// io routines
 	bool	read(istream&);
-	void	write(ostream&) const;
+	string&	toString(string&) const;
 private:
 	int	maxIf;			///< largest interface number
 	int	defaultIf;		///< default interface
@@ -63,7 +63,6 @@ private:
 
 	// helper methods
 	int	readEntry(istream&);		
-	void	writeEntry(ostream&, int) const;
 	string& entry2string(int, string&) const;
 };
 

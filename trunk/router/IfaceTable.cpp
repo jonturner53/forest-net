@@ -99,27 +99,33 @@ bool IfaceTable::read(istream& in) {
 	return true;
 }
 
-/** Write an interface table entry.
- *  @param out is an open output stream
+/** Create a string representation of an entry.
  *  @param iface is the number of the interface to be written
+ *  @param s is a reference to a string inwhich result is returned
+ *  @return a reference to s
  */
-void IfaceTable::writeEntry(ostream& out, int iface) const {
-	string s;
-	out << setw(5) << iface << "   "
-	    << Np4d::ip2string(ift[iface].ipa,s)
-	    << setw(9) << ift[iface].maxbitrate
-	    << setw(9) << ift[iface].maxpktrate
-	    << endl;
+string& IfaceTable::entry2string(int iface, string& s) const {
+	stringstream ss;
+	ss << setw(5) << iface << "   "
+	   << Np4d::ip2string(ift[iface].ipa,s)
+	   << setw(9) << ift[iface].maxbitrate
+	   << setw(9) << ift[iface].maxpktrate
+	   << endl;
+	s = ss.str();
+	return s;
 }
 
-/** Write the complete interface table.
+/** Create a string representation of the interface table.
  *  The output format matches the format expected by the read method.
- *  @param out is an open output stream
+ *  @param s is a reference to a string in which result is returned
+ *  @return a reference to s
  */
-void IfaceTable::write(ostream& out) const {
-	string s;
-	out << Misc::num2string(ifaces->getNumIn(),s) << endl;
-	out << "# iface  ipAddress      bitRate  pktRate\n";
+string& IfaceTable::toString(string& s) const {
+	stringstream ss;
+	ss << ifaces->getNumIn() << endl;
+	ss << "# iface  ipAddress      bitRate  pktRate\n";
 	for (int i = firstIface(); i != 0; i = nextIface(i)) 
-		writeEntry(out,i);
+		ss << entry2string(i,s);
+	s = ss.str();
+	return s;
 }

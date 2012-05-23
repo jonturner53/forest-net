@@ -36,7 +36,7 @@ public:
 
 	// input/output 
 	bool read(istream&);
-	void write(ostream&) const;
+	string& toString(string&) const;
 private:
 	int	maxStats;		// max number of recorded statistics
 	int	maxLnk;			// largest link number
@@ -94,8 +94,8 @@ private:
 	ComtreeTable *ctt;
 
 	// helper functions
-	bool	readStat(istream&);	 	// read one new statistic
-	void	writeStat(ostream&, int) const; // write a single stat entry
+	bool	readStat(istream&);	 
+	string&	stat2string(int, string&) const;
 };
 
 inline int StatsModule::iPktCnt(int lnk) const {

@@ -162,34 +162,39 @@ bool LinkTable::read(istream& in) {
 	return true;
 }
 
-/** Write a single entry to an output stream.
- *  @param out is an open output stream
+/** Create a string representing a table entry.
  *  @param lnk is the number of the link to be written out
+ *  @param s is a reference to a string in which the result is returned
+ *  @return a reference to s
  */
-void LinkTable::writeEntry(ostream& out, int lnk) const {
-	if (!valid(lnk)) return;
-
-	out << setw(5) << right << lnk << setw(6) << getIface(lnk) << "  ";
+string& LinkTable::entry2string(int lnk, string& s) const {
+	if (!valid(lnk)) { s = ""; return s; }
+	stringstream ss;
+	ss << setw(5) << right << lnk << setw(6) << getIface(lnk) << "  ";
 	
-	string s;
-	out << setw(12) << Np4d::ip2string(getPeerIpAdr(lnk),s)
-	    << ":" << setw(5) << left << getPeerPort(lnk) << "  ";
-	out << setw(10) << left << Forest::nodeType2string(getPeerType(lnk),s);
+	ss << setw(12) << Np4d::ip2string(getPeerIpAdr(lnk),s)
+	   << ":" << setw(5) << left << getPeerPort(lnk) << "  ";
+	ss << setw(10) << left << Forest::nodeType2string(getPeerType(lnk),s);
 
-	out << " " << setw(10) << left <<Forest::fAdr2string(getPeerAdr(lnk),s);
+	ss << " " << setw(10) << left <<Forest::fAdr2string(getPeerAdr(lnk),s);
 	
-	out << " " << setw(6) << right << getBitRate(lnk)
-	    << " " << setw(6) << right << getPktRate(lnk)
-	    << endl;
+	ss << " " << setw(6) << right << getBitRate(lnk)
+	   << " " << setw(6) << right << getPktRate(lnk) << endl;
+	s = ss.str();
+	return s;
 }
 
-/** Write the link table to an output stream.
- *  @param out is an open output stream
+/** Create a string representing the table.
+ *  @param s is a reference to a string in which result is returned
+ *  @return a reference to s
  */
-void LinkTable::write(ostream& out) const {
-	out << links->getNumIn() << endl;
-	out << "# link  iface    peerIp:port     peerType  peerAdr   ";
-        out << "  bitRate pktRate\n";
+string& LinkTable::toString(string& s) const {
+	stringstream ss;
+	ss << links->getNumIn() << endl;
+	ss << "# link  iface    peerIp:port     peerType  peerAdr   ";
+        ss << "  bitRate pktRate\n";
 	for (int i = firstLink(); i != 0; i = nextLink(i)) 
-		writeEntry(out,i);
+		ss << entry2string(i,s);
+	s = ss.str();
+	return s;
 }

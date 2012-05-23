@@ -109,17 +109,24 @@ bool init(fAdr_t nma, ipa_t ri, fAdr_t ra, fAdr_t cca, ipa_t mi, fAdr_t ma, char
  */
 void writeToAcctFile(CtlPkt cp) {
 	if(acctFileStream.good()) {
-		if(cp.getCpType() == NEW_CLIENT && cp.getRrType() == POS_REPLY) {
-			acctFileStream << Misc::getTimeNs() << " Client "; Forest::writeForestAdr(acctFileStream,cp.getAttr(CLIENT_ADR));
-			acctFileStream << " added to router "; Forest::writeForestAdr(acctFileStream,cp.getAttr(RTR_ADR));
+		string s;
+		if(cp.getCpType() ==NEW_CLIENT && cp.getRrType() == POS_REPLY) {
+			acctFileStream << Misc::getTimeNs() << " Client "
+			  << Forest::fAdr2string(cp.getAttr(CLIENT_ADR),s);
+			acctFileStream << " added to router "
+			  << Forest::fAdr2string(cp.getAttr(RTR_ADR),s);
 			acctFileStream << endl;
 		} else if(cp.getCpType() == CLIENT_CONNECT) {
-			acctFileStream << Misc::getTimeNs() << " Client "; Forest::writeForestAdr(acctFileStream,cp.getAttr(CLIENT_ADR));
-			acctFileStream << " connected to router "; Forest::writeForestAdr(acctFileStream,cp.getAttr(RTR_ADR));
+			acctFileStream << Misc::getTimeNs() << " Client "
+			  << Forest::fAdr2string(cp.getAttr(CLIENT_ADR),s);
+			acctFileStream << " connected to router "
+			  << Forest::fAdr2string(cp.getAttr(RTR_ADR),s);
 			acctFileStream << endl;
 		} else if(cp.getCpType() == CLIENT_DISCONNECT) {
-			acctFileStream << Misc::getTimeNs() << " Client "; Forest::writeForestAdr(acctFileStream,cp.getAttr(CLIENT_ADR));
-			acctFileStream << " disconnected from router "; Forest::writeForestAdr(acctFileStream,cp.getAttr(RTR_ADR));
+			acctFileStream << Misc::getTimeNs() << " Client "
+			  << Forest::fAdr2string(cp.getAttr(CLIENT_ADR),s);
+			acctFileStream << " disconnected from router "
+			  << Forest::fAdr2string(cp.getAttr(RTR_ADR),s);
 			acctFileStream << endl;
 		} else {
 			acctFileStream << "Unrecognized control packet" << endl;
@@ -260,11 +267,13 @@ void handleIncoming(int p) {
 			send(p1);
 		/*} else if(cp.getRrType() == NEG_REPLY &&
 			    h.getSrcAdr()==netMgrAdr) {
-			cerr << "Negative reply from NetMgr:" << endl;
-			cp.write(cerr);
+			string s;
+			cerr << "Negative reply from NetMgr:" << endl
+			     << cp.toString(s);
 		*/} else {
-			cerr << "unrecognized ctl pkt\n" << endl;
-			cp.write(cerr);
+			string s;
+			cerr << "unrecognized ctl pkt\n" << endl
+			     << cp.toString(s);
 			ps->free(p);
 		}
 	} else {
@@ -281,8 +290,10 @@ void* handler(void * tp) {
 	while (true) {
 		int start = inQ.deq();
 		if (start != 1) {
-			(ps->getHeader(start)).write(cerr,ps->getBuffer(start));
-			cerr << "handler: Thread synchronization error, "
+			string s;
+			PacketHeader& h = ps->getHeader(start);
+			cerr << h.toString(ps->getBuffer(start),s)
+			     << "handler: Thread synchronization error, "
 				"abandoning this attempt\n";
 			outQ.enq(0); //signal completion to main thread
 			close(avaSock);
@@ -306,8 +317,9 @@ void* handler(void * tp) {
 					netMgrAdr,inQ,outQ);
 		if (reply == NORESPONSE) {
 			// abandon this attempt
-			cerr << "handler: no reply from net manager to\n";
-			cp2.write(cerr);
+			string s;
+			cerr << "handler: no reply from net manager to\n"
+			     << cp2.toString(s);
 			Np4d::sendInt(avaSock,-1);
 			outQ.enq(0); //signal completion to main thread
 			close(avaSock);
@@ -334,8 +346,9 @@ void* handler(void * tp) {
 			     << endl;
 			Np4d::sendInt(avaSock,-1);
 		} else {
-			h3.write(cerr,ps->getBuffer(reply));
-			cp3.write(cerr);
+			string s;
+			cerr << h3.toString(ps->getBuffer(reply),s);
+			cerr << cp3.toString(s);
 			cerr << "handler: unrecognized ctl pkt\n";
 		}
 		close(avaSock);
@@ -458,8 +471,8 @@ int sendCtlPkt(CtlPkt& cp, comt_t comt, fAdr_t dest, Queue& inQ, Queue& outQ) {
 	if (cp.getRrType() == REQUEST) cp.setSeqNum(0);
         int plen = cp.pack(ps->getPayload(p));
         if (plen == 0) {
-                cerr << "sendCtlPkt: packing error\n";
-                cp.write(cerr);
+		string s;
+                cerr << "sendCtlPkt: packing error\n" << cp.toString(s);
                 ps->free(p);
                 return 0;
         }

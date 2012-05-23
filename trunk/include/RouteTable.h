@@ -61,8 +61,8 @@ public:
 
 	// input/output
 	bool 	read(istream&);
-	void 	write(ostream&) const;
-	void	writeEntry(ostream&, int) const; 
+	string& toString(string&) const;
+	string&	entry2string(int, string&) const; 
 private:
 	int	maxRtx;			///< max number of table entries
 	int	myAdr;			///< address of this router

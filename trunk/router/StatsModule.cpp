@@ -175,34 +175,47 @@ bool StatsModule::read(istream& in) {
 	return true;
 }
 
-void StatsModule::writeStat(ostream& out, int i) const {
-// Print i-th entry
-	StatItem& s = stat[i];
-	switch(s.typ) {
+/** Create a string representing an entry in the table.
+ *  @param i is the index of an entry
+ *  @param s is a reference to a string in which result is returned
+ *  @return a reference to s
+ */
+string& StatsModule::stat2string(int i, string& s) const {
+	stringstream ss;
+	StatItem& si = stat[i];
+	switch(si.typ) {
 	case  inPkt:
-		out << " inPkt " << setw(2) << s.lnk << endl;
+		ss << " inPkt " << setw(2) << si.lnk << endl;
 		break;
 	case  outPkt:
-		out << "outPkt " << setw(2) << s.lnk << endl;
+		ss << "outPkt " << setw(2) << si.lnk << endl;
 		break;
 	case  inByt:
-		out << " inByt " << setw(2) << s.lnk << endl;
+		ss << " inByt " << setw(2) << si.lnk << endl;
 		break;
 	case outByt:
-		out << "outByt " << setw(2) << s.lnk << endl;
+		ss << "outByt " << setw(2) << si.lnk << endl;
 		break;
 	case   qPkt:
-		out << "  qPkt " << setw(2) << s.lnk
-		   << " " << setw(2) << s.comt << endl;
+		ss << "  qPkt " << setw(2) << si.lnk
+		   << " " << setw(2) << si.comt << endl;
 		break;
 	case   qByt:
-		out << "  qByt " << setw(2) << s.lnk
-		   << " " << setw(2) << s.comt << endl;
+		ss << "  qByt " << setw(2) << si.lnk
+		   << " " << setw(2) << si.comt << endl;
 		break;
 	}
+	s = ss.str();
+	return s;
 }
 
-// Output human readable representation of stats module.
-void StatsModule::write(ostream& out) const {
-	for (int i = 1; i <= n; i++) writeStat(out,i);
+/** Create a string representing the stats module.
+ *  @param s is a reference to a string in which the result is returned
+ *  @return a reference to s
+ */
+string& StatsModule::toString(string& s) const {
+	string s1;
+	s = "";
+	for (int i = 1; i <= n; i++) s += stat2string(i,s1);
+	return s;
 }

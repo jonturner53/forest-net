@@ -67,7 +67,7 @@ public:
 
 	// io routines
 	bool read(istream&);
-	void write(ostream&) const;
+	string& toString(string&) const;
 
 private:
 	int	maxLnk;			///< maximum link number
@@ -93,7 +93,7 @@ private:
 	// helper functions
 	uint64_t hashkey(ipa_t, ipp_t) const;
 	int	readEntry(istream&);	 	
-	void	writeEntry(ostream&, int) const;
+	string&	entry2string(int, string&) const;
 };
 
 /** Determine if a link number is valid.

@@ -508,11 +508,12 @@ void RouterCore::addLocalRoutes() {
  *  @param out is an open output stream
  */
 void RouterCore::dump(ostream& out) {
-	out << "Interface Table\n\n"; ift->write(out); out << endl;
-	out << "Link Table\n\n"; lt->write(out); out << endl;
-	out << "Comtree Table\n\n"; ctt->write(out); out << endl;
-	out << "Routing Table\n\n"; rt->write(out); out << endl;
-	out << "Statistics\n\n"; sm->write(out); out << endl;
+	string s;
+	out << "Interface Table\n\n" << ift->toString(s) << endl;
+	out << "Link Table\n\n" << lt->toString(s) << endl;
+	out << "Comtree Table\n\n" << ctt->toString(s) << endl;
+	out << "Routing Table\n\n" << rt->toString(s) << endl;
+	out << "Statistics\n\n" << sm->toString(s) << endl;
 }
 
 /** Main router processing loop.
@@ -576,7 +577,8 @@ void RouterCore::run(uint64_t finishTime) {
 			if (!pktCheck(p,ctx)) {
 if (!booting) {
 cerr << "pkt check rejected packet received after booting\n";
-h.write(cerr,ps->getBuffer(p));
+string s;
+cerr << h.toString(ps->getBuffer(p),s);
 }
 				ps->free(p);
 			} else if (booting) {
@@ -730,10 +732,11 @@ if (h.getPtype() == NET_SIG) {
 CtlPkt cp; 
 cp.unpack(ps->getPayload(p),h.getLength()-Forest::OVERHEAD);
 if (cp.getCpType() == CLIENT_CONNECT) {
+string s;
 cerr << "forward discarding net signaling pkt lnk=" << lnk << " qid=" << qid
      << " qlen=" << sm->getQlen(qid) << " qbytes=" << sm->getQbytes(qid)
-     << " inLink=" << h.getInLink() << "\n";
-h.write(cerr,ps->getBuffer(p));
+     << " inLink=" << h.getInLink() << "\n"
+     << h.toString(ps->getBuffer(p),s);
 }
 }
 				ps->free(p);
@@ -1007,9 +1010,9 @@ void RouterCore::handleCtlPkt(int p) {
 
 	int len = h.getLength() - (Forest::HDR_LENG + 4);
 	if (!cp.unpack(ps->getPayload(p), len)) {
+		string s;
 		cerr << "RouterCore::handleCtlPkt: misformatted control "
-			" packet\n";
-		h.write(cerr,ps->getBuffer(p));
+			" packet\n" << h.toString(ps->getBuffer(p),s);
 		cp.setRrType(NEG_REPLY);
 		cp.setErrMsg("misformatted control packet");
 		returnToSender(p,cp.pack(ps->getPayload(p)));
@@ -2052,9 +2055,10 @@ void RouterCore::resendCpReq() {
 		int p = pp->second.p;
 		PacketHeader h = ps->getHeader(p);
 		if (pp->second.nSent >= 3) { // give up on this packet
+			string s;
 			cerr << "RouterCore::resendCpReq: received no reply to "
-				"control packet after three attempts\n";
-			h.write(cerr,ps->getBuffer(p));
+				"control packet after three attempts\n"
+			     << h.toString(ps->getBuffer(p),s);
 			ps->free(p);
 			pending->erase(pp->first);
 			continue;

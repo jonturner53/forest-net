@@ -30,20 +30,6 @@ bool Forest::readForestAdr(istream& in, fAdr_t& fa) {
 	return true;
 }
 
-void Forest::writeForestAdr(ostream& out, fAdr_t fa) {
-// Print the given forest address.
-	if (fa < 0) out << fa;
-	else out << zipCode(fa) << "." << localAdr(fa);
-}
-
-void Forest::addNodeType2string(string& s, ntyp_t nt) {
-	if (nt == CLIENT) s += "client";
-	else if (nt == SERVER) s += "server";
-	else if (nt == ROUTER) s += "router";
-	else if (nt == CONTROLLER) s += "controller";
-	else s += "unknown node type";
-}
-
 string& Forest::nodeType2string(ntyp_t nt, string& s) {
 	if (nt == CLIENT) s = "client";
 	else if (nt == SERVER) s = "server";

@@ -44,8 +44,7 @@ main() {
 	}
 
 	for (int r = net.firstRouter(); r != 0; r = net.nextRouter(r)) {
-		string s;
-		string& rName = net.getNodeName(r,s);
+		string rName; net.getNodeName(r,rName);
 
 		// build and write interface table for r
 		IfaceTable *ifTbl = new IfaceTable(Forest::MAXINTF);
@@ -60,7 +59,8 @@ main() {
 			cerr << "buildTables:: can't open interface table\n";
 			exit(1);
 		}
-		ifTbl->write(ifts); ifts.close();
+		string s;
+		ifts << ifTbl->toString(s); ifts.close();
 
 		// build and write link table for r
 		LinkTable *lnkTbl = new LinkTable(Forest::MAXLNK);
@@ -75,7 +75,7 @@ main() {
 			cerr << "buildTables:: can't open link table\n";
 			exit(1);
 		}
-		lnkTbl->write(lts); lts.close();
+		lts << lnkTbl->toString(s); lts.close();
 
 		// build and write comtree table for r
 		ComtreeTable *comtTbl = new ComtreeTable(10*Forest::MAXLNK,
@@ -91,7 +91,7 @@ main() {
 			cerr << "buildTables:: can't open comtree table\n";
 			exit(1);
 		}
-		comtTbl->write(ctts); ctts.close();
+		ctts << comtTbl->toString(s); ctts.close();
 
 		delete lnkTbl; delete comtTbl;
 	}

@@ -143,36 +143,43 @@ bool RouteTable::read(istream& in) {
         return true;
 }
 
-/** Write a route table entry to an output stream.
- *  @param out is an open output stream
+/** Create a string representing a table entry.
  *  @param rtx is the route index for the route to be written
+ *  @param s is a reference to a string in which result is returned
+ *  @return a reference to s
  */
-void RouteTable::writeEntry(ostream& out, int rtx) const {
-	string s;
-	out << getComtree(rtx) << " ";
+string& RouteTable::entry2string(int rtx, string& s) const {
+	stringstream ss;
+	ss << getComtree(rtx) << " ";
 	fAdr_t adr = getAddress(rtx);
 	if (Forest::mcastAdr(adr)) {
-	   	out << Forest::fAdr2string(adr,s) << " ";
-		if (noLinks(rtx)) { out << "-\n"; return; }
+	   	ss << Forest::fAdr2string(adr,s) << " ";
+		if (noLinks(rtx)) { ss << "-\n"; s = ss.str(); return s; }
 		bool first = true;
 		set<int>& subLinks = getSubLinks(rtx);
 		set<int>::iterator p;
 		for (p = subLinks.begin(); p != subLinks.end(); p++) {
 			if (first) first = false;
-			else out << ",";
-			out << ctt->getLink(*p);
+			else ss << ",";
+			ss << ctt->getLink(*p);
 		}
 	} else 
-		out << Forest::fAdr2string(adr,s) << " "
+		ss << Forest::fAdr2string(adr,s) << " "
 		    << ctt->getLink(getLink(rtx));
-	out << endl;
+	ss << endl;
+	s = ss.str();
+	return s;
 }
 
-/** Write the entire route table to an output stream.
- *  @param out is an open output stream
+/** Create a string representing the table.
+ *  @param s is a reference to a string in which result is returned
+ *  @return a reference to s
  */
-void RouteTable::write(ostream& out) const {
-	out << rteMap->size() << endl;
+string& RouteTable::toString(string& s) const {
+	stringstream ss;
+	ss << rteMap->size() << endl;
 	for (int rtx = firstRteIndex(); rtx != 0; rtx = nextRteIndex(rtx))
-                writeEntry(out,rtx);
+                ss << entry2string(rtx,s);
+	s = ss.str();
+	return s;
 }
