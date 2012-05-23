@@ -31,10 +31,8 @@ class Np4d {
 public:
 	// ip address utilities
 	static ipa_t ipAddress(const char*); 		
-	static void addIp2string(string&, ipa_t);		
 	static string& ip2string(ipa_t, string&);		
 	static bool readIpAdr(istream&, ipa_t&); 
-	static void writeIpAdr(ostream&, ipa_t);
 	static ipa_t getIpAdr(char*);
 	static ipa_t myIpAddress();
 

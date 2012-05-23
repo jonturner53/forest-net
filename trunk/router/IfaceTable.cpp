@@ -104,9 +104,10 @@ bool IfaceTable::read(istream& in) {
  *  @param iface is the number of the interface to be written
  */
 void IfaceTable::writeEntry(ostream& out, int iface) const {
-	out << setw(5) << iface << "   ";
-	Np4d::writeIpAdr(out,ift[iface].ipa);
-	out << setw(9) << ift[iface].maxbitrate
+	string s;
+	out << setw(5) << iface << "   "
+	    << Np4d::ip2string(ift[iface].ipa,s)
+	    << setw(9) << ift[iface].maxbitrate
 	    << setw(9) << ift[iface].maxpktrate
 	    << endl;
 }

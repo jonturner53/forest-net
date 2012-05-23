@@ -1043,14 +1043,14 @@ void errReply(int p, CtlPkt& cp, Queue& outQ, const char* msg) {
  */
 bool findCliRtr(ipa_t cliIp, fAdr_t& rtrAdr) {
 	string cip;
-	Np4d::addIp2string(cip,cliIp);
+	Np4d::ip2string(cliIp,cip);
 	for(size_t i = 0; i < numPrefixes; ++i) {
 		string ip = prefixes[i].prefix;
 		for(size_t j = 0; j < ip.size(); ++j) {
-			if(ip[j]=='*') {
+			if(ip[j] == '*') {
 				rtrAdr = prefixes[i].rtrAdr;
 				return true;
-			} else if(cip[j]!=ip[j]) {
+			} else if(cip[j] != ip[j]) {
 				break;
 			}
 		}
