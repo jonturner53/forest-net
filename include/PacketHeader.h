@@ -54,7 +54,7 @@ public:
 
 	/** input/output */
 	bool	read(istream&, buffer_t&);
-	void	write(ostream&, buffer_t&) const;
+	string&	toString(buffer_t&, string&) const;
 private:
 	int	ver;			// version number field
 	int	lng;			// length field

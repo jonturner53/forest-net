@@ -83,8 +83,8 @@ public:
 
 	// input/output of table contents 
 	bool 	read(istream&);
-	void	write(ostream&) const;
-	void	writeEntry(ostream&, const int) const;
+	string&	toString(string&) const;
+	string&	entry2string(int, string&) const;
 private:
 	int	maxCtx;			///< largest comtree index
 	int	maxComtLink;		///< largest comtLink
@@ -122,7 +122,7 @@ private:
 	uint64_t key(comt_t, int) const;
 	bool 	readEntry(istream&);
 	void	readLinks(istream&, set<int>&);	
-	void	writeLinks(ostream&,int) const;
+	string&	links2string(int, string&) const;
 };
 
 /** Determine if the table has an entry for a given comtree.

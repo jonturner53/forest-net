@@ -91,8 +91,8 @@ public:
 	void	setErrMsg(const char*);	
 
 	/** input/output */
-	void	writeAvPair(ostream&, CpAttrIndex); 
-	void	write(ostream&) ; 
+	string&	avPair2string(CpAttrIndex, string&); 
+	string&	toString(string&); 
 private:
 	CpTypeIndex cpType;		///< control packet type index
 	CpRrType rrType;		///< request/return type

@@ -53,15 +53,16 @@ main(int argc, char *argv[]) {
 		if (line.find("show") == 0) {
 			// show target and all defined attributes
 			if (target != 0) {
-				cout << "target=";
-				Forest::writeForestAdr(cout,target);
-				cout << endl;
+				string s;
+				cout << "target="
+				     << Forest::fAdr2string(target,s) << endl;
 			}
 			for (int i = CPA_START+1; i < CPA_END; i++) {
 				CpAttrIndex ii = CpAttrIndex(i);
 				if (cpTemplate.isSet(ii)) {
-					cpTemplate.writeAvPair(cout,ii);
-					cout << endl;
+					string s;
+					cout << cpTemplate.avPair2string(ii,s)
+					     << endl;
 				}
 			}
 			continue;
@@ -118,7 +119,8 @@ void posResponse(CtlPkt& cp) {
 		if (ii == COMTREE_OWNER || ii == LEAF_ADR ||
 		    ii == PEER_ADR || ii == PEER_DEST ||
 		    ii == DEST_ADR) {
-			Forest::writeForestAdr(cout,(fAdr_t) val);
+			string s;
+			cout << Forest::fAdr2string((fAdr_t) val,s);
 		} else if (ii == LOCAL_IP || ii == PEER_IP || ii == RTR_IP) {
 			string s; cout << Np4d::ip2string(val,s);
 		} else if (ii == PEER_TYPE) {

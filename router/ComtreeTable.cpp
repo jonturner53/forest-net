@@ -248,40 +248,48 @@ bool ComtreeTable::read(istream& in) {
 }
 
 /** Write a table entry to an output stream.
- *  @param out is an open output stream
  *  @param ctx is the comtree index of the comtree to be written
+ *  @param s is a reference to a string in which result is returned
+ *  @return a reference to s
  */
-void ComtreeTable::writeEntry(ostream& out, int ctx) const {
-	out << setw(9) << getComtree(ctx) << " "  
-	   << setw(6) << inCore(ctx)
-	   << setw(8) << getPlink(ctx) << "    ";
+string& ComtreeTable::entry2string(int ctx,string& s) const {
+	stringstream ss;
+	ss << setw(9) << getComtree(ctx) << " "  
+	  << setw(6) << inCore(ctx)
+	  << setw(8) << getPlink(ctx) << "    ";
 
 	set<int>& comtLinks = *tbl[ctx].comtLinks;
 	set<int>::iterator p = comtLinks.begin();
 	while (p != comtLinks.end()) {
-		out << getLink(*p++);
-		if (p != comtLinks.end()) out << ",";
+		ss << getLink(*p++);
+		if (p != comtLinks.end()) ss << ",";
 	}
 
-	out << "   ";
+	ss << "   ";
 	set<int>& coreLinks = *tbl[ctx].coreLinks;
 	p = coreLinks.begin();
 	if (p == coreLinks.end())
-		out << "0";
+		ss << "0";
 	while (p != coreLinks.end()) {
-		out << getLink(*p++);
-		if (p != coreLinks.end()) out << ",";
+		ss << getLink(*p++);
+		if (p != coreLinks.end()) ss << ",";
 	}
-	out << endl;
+	ss << endl;
+	s = ss.str();
+	return s;
 }
 
-/** Write the comtree table to an output stream.
- *  @param out is an open output stream
+/** Create a string representation of the table
+ *  @param s is a reference to a string in which the result is returned
+ *  @return a reference to s
  */
-void ComtreeTable::write(ostream& out) const {
-	out << comtMap->size() << endl;
-	out << "# comtree  coreFlag  pLink  links"
-	    << "            coreLinks" << endl;
+string& ComtreeTable::toString(string& s) const {
+	stringstream ss;
+	ss << comtMap->size() << endl;
+	ss << "# comtree  coreFlag  pLink  links"
+	   << "            coreLinks" << endl;
 	for (int ctx = firstComtIndex(); ctx != 0; ctx = nextComtIndex(ctx))
-                writeEntry(out,ctx);
+                ss << entry2string(ctx,s);
+	s = ss.str();
+	return s;
 }

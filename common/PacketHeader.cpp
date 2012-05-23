@@ -83,36 +83,43 @@ bool PacketHeader::read(istream& in, buffer_t& b) {
 	return true;
 }
 
-void PacketHeader::write(ostream& out, buffer_t& b) const {
-// Prints PacketHeader fields and first 8 payload words of buffer.
-        out << "len=" << setw(3) << getLength();
-        out << " typ=";
+/** Create a string representing packet header.
+ *  @param b is a reference to a buffer containing the packet
+ *  @param s is a reference to a string in which result is returned
+ *  @return a reference to s
+ */
+string& PacketHeader::toString(buffer_t& b, string& s) const {
+	stringstream ss;
+        ss << "len=" << setw(3) << getLength();
+        ss << " typ=";
 
-        if (getPtype() == CLIENT_DATA)     out << "data      ";
-        else if (getPtype() == SUB_UNSUB)  out << "sub_unsub ";
-        else if (getPtype() == CLIENT_SIG) out << "client_sig";
-        else if (getPtype() == CONNECT)    out << "connect   ";
-        else if (getPtype() == DISCONNECT) out << "disconnect";
-        else if (getPtype() == NET_SIG)    out << "net_sig   ";
-        else if (getPtype() == RTE_REPLY)  out << "rteRep    ";
-        else if (getPtype() == RTR_CTL)    out << "rtr_ctl   ";
-        else if (getPtype() == VOQSTATUS)  out << "voq_status";
-        else                            out << "--------- ";
-        out << " flags=" << int(getFlags());
-        out << " comt=" << setw(3) << getComtree();
-        out << " sadr="; Forest::writeForestAdr(out, getSrcAdr());
-        out << " dadr="; Forest::writeForestAdr(out, getDstAdr());
+        if (getPtype() == CLIENT_DATA)     ss << "data      ";
+        else if (getPtype() == SUB_UNSUB)  ss << "sub_unsub ";
+        else if (getPtype() == CLIENT_SIG) ss << "client_sig";
+        else if (getPtype() == CONNECT)    ss << "connect   ";
+        else if (getPtype() == DISCONNECT) ss << "disconnect";
+        else if (getPtype() == NET_SIG)    ss << "net_sig   ";
+        else if (getPtype() == RTE_REPLY)  ss << "rteRep    ";
+        else if (getPtype() == RTR_CTL)    ss << "rtr_ctl   ";
+        else if (getPtype() == VOQSTATUS)  ss << "voq_status";
+        else                               ss << "--------- ";
+        ss << " flags=" << int(getFlags());
+        ss << " comt=" << setw(3) << getComtree();
+        ss << " sadr=" << Forest::fAdr2string(getSrcAdr(),s);
+        ss << " dadr=" << Forest::fAdr2string(getDstAdr(),s);
 
 	int32_t x;
         for (int i = 0; i < min(8,(getLength()-Forest::HDR_LENG)/4); i++) {
 		x = ntohl(b[(Forest::HDR_LENG/4)+i]);
-                out << " " << x;
+                ss << " " << x;
 	}
-        out << endl;
+        ss << endl;
 	if (getPtype() == CLIENT_SIG || getPtype() == NET_SIG) {
 		CtlPkt cp;
 		cp.unpack(&b[Forest::HDR_LENG/4],
 			  getLength()-(Forest::HDR_LENG+4));
-		cp.write(out);
+		ss << cp.toString(s);
 	}
+	s = ss.str();
+	return s;
 }

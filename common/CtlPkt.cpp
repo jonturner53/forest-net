@@ -143,11 +143,16 @@ bool CtlPkt::unpack(uint32_t* pl, int pleng) {
 	return true;
 }
 
-void CtlPkt::writeAvPair(ostream& out, CpAttrIndex ii) {
-	out << CpAttr::getName(ii) << "=";
+/** Create a string representing an (attribute,value) pair.
+ *  @param ii is the index of an attribute
+ *  @param s is a reference to a string in which result is returned
+ *  @return a reference to s
+ */
+string& CtlPkt::avPair2string(CpAttrIndex ii, string& s) {
+	stringstream ss;
+	ss << CpAttr::getName(ii) << "=";
 	if (!isSet(ii)) {
-		cout << "(missing)";
-		return;
+		ss << "(missing)"; s = ss.str(); return s;
 	}
 	int32_t val = getAttr(ii);
 	if (ii == COMTREE_OWNER || ii == LEAF_ADR ||
@@ -155,33 +160,34 @@ void CtlPkt::writeAvPair(ostream& out, CpAttrIndex ii) {
 	    ii == RTR_ADR || ii == CLIENT_ADR ||
 	    ii == FIRST_LEAF_ADR || ii == LAST_LEAF_ADR ||
 	    ii == DEST_ADR) {
-		Forest::writeForestAdr(out,(fAdr_t) val);
+		ss << Forest::fAdr2string((fAdr_t) val,s);
 	} else if (ii == LOCAL_IP || ii == PEER_IP ||
 		   ii == CLIENT_IP || ii == RTR_IP) {
-		string s;
-		out << Np4d::ip2string(val,s);
+		ss << Np4d::ip2string(val,s);
 	} else if (ii == PEER_TYPE) {
-		string s;
-		out << Forest::nodeType2string((ntyp_t) val,s);
+		ss << Forest::nodeType2string((ntyp_t) val,s);
 	} else {
-		out << val;
+		ss << val;
 	}
+	s = ss.str();
+	return s;
 }
 
-void CtlPkt::write(ostream& out) {
-// Prints CtlPkt content.
+/** Create a string representing the control packet header fields.
+ *  @param s is a reference to a string in which result is returned
+ *  @return a reference to s
+ */
+string& CtlPkt::toString(string& s) {
+	stringstream ss;
 	bool reqPkt = (rrType == REQUEST);
 	bool replyPkt = !reqPkt;
 	bool success = (rrType == POS_REPLY);
 
-	char xstr[50];
-	if (reqPkt) strncpy(xstr," (request,",15);
-	else if (rrType == POS_REPLY) strncpy(xstr," (pos reply,",15);
-	else strncpy(xstr," (neg reply,",15);
-	char seqStr[20];
-	sprintf(seqStr,"%lld",seqNum);
-	strncat(xstr,seqStr,20); strncat(xstr,"):",5);
-	out << CpType::getName(cpType) << xstr;
+	ss << CpType::getName(cpType);
+	if (reqPkt) ss << " (request,";
+	else if (rrType == POS_REPLY) ss << " (pos reply,";
+	else ss << " (neg reply,";
+	ss << seqNum << "):";
 
 	if (rrType == REQUEST) {
 		for (int i = CPA_START+1; i < CPA_END; i++) {
@@ -189,16 +195,18 @@ void CtlPkt::write(ostream& out) {
 			if (!CpType::isReqAttr(cpType,ii)) continue;
 			if (!CpType::isReqReqAttr(cpType,ii) && !isSet(ii))
 				continue;
-			out << " "; writeAvPair(out, ii);
+			ss << " " << avPair2string(ii,s);
 		}
 	} else if (rrType == POS_REPLY) {
 		for (int i = CPA_START+1; i < CPA_END; i++) {
 			CpAttrIndex ii = CpAttrIndex(i);
 			if (!CpType::isRepAttr(cpType,ii)) continue;
-			out << " "; writeAvPair(out, ii);
+			ss << " " << avPair2string(ii,s);
 		}
 	} else {
-		out << " errMsg=" << errMsg;
+		ss << " errMsg=" << errMsg;
 	}
-	out << endl;
+	ss << endl;
+	s = ss.str();
+	return s;
 }

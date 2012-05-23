@@ -212,7 +212,8 @@ void Host::run(bool repeatFlag, uint32_t delta, uint32_t finishTime) {
 			cout << "recv[";
 		cout << setw(2) << setw(8) << events[i].time << "] ";
 		p = events[i].pkt;
-		ps->getHeader(p).write(cout,ps->getBuffer(p));
+		string s;
+		cout << ps->getHeader(p).toString(ps->getBuffer(p),s);
 	}
 	cout << endl;
 	cout << nRcvd << " packets received, " << nSent << " packets sent, "; 

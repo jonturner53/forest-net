@@ -353,8 +353,9 @@ void* handler(void *qp) {
 			}
 		}
 		if (!success) {
-			cerr << "handler: operation failed\n";
-			h.write(cerr,ps->getBuffer(p));
+			string s;
+			cerr << "handler: operation failed\n"
+			     << h.toString(ps->getBuffer(p),s);
 		}
 		ps->free(p); // release p now that we're done
 		outQ.enq(0); // signal completion to main thread
@@ -936,8 +937,9 @@ int sendCtlPkt(CtlPkt& cp, fAdr_t dest, ipa_t destIp, ipp_t destPort,
 	if (cp.getRrType() == REQUEST) cp.setSeqNum(0);
 	int plen = cp.pack(ps->getPayload(p));
 	if (plen == 0) {
-		cerr << "sendCtlPkt: packing error for packet:\n";
-		cp.write(cerr);
+		string s;
+		cerr << "sendCtlPkt: packing error for packet:\n"
+		     << cp.toString(s);
 		ps->free(p);
 		return 0;
 	}
