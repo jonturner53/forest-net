@@ -120,11 +120,10 @@ void posResponse(CtlPkt& cp) {
 		    ii == DEST_ADR) {
 			Forest::writeForestAdr(cout,(fAdr_t) val);
 		} else if (ii == LOCAL_IP || ii == PEER_IP || ii == RTR_IP) {
-			string s; Np4d::addIp2string(s,val);
-			cout << s;
+			string s; cout << Np4d::ip2string(val,s);
 		} else if (ii == PEER_TYPE) {
-			string s; Forest::addNodeType2string(s,(ntyp_t) val);
-			cout << s;
+			string s;
+			cout << Forest::nodeType2string((ntyp_t) val,s);
 		} else {
 			cout << val;
 		}

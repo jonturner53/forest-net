@@ -85,7 +85,7 @@ bool Host::init() {
 	sock = Np4d::datagramSocket();
 
 	return  sock >= 0 &&
-        	Np4d::bind(sock, myIpAdr, 0) &&
+        	Np4d::bind4d(sock, myIpAdr, 0) &&
 		Np4d::nonblock(sock);
 }
 
@@ -236,7 +236,7 @@ bool Host::readPacket(packet p, int& pause, int& cnt) {
 void Host::send(int p) {
 // Send packet and recycle storage.
 	int length = ps->getHeader(p).getLength();
-	int rv = Np4d::sendto(sock,(void *) ps->getBuffer(p),length,
+	int rv = Np4d::sendto4d(sock,(void *) ps->getBuffer(p),length,
 		    		rtrIpAdr, Forest::ROUTER_PORT);
 	if (rv == -1) fatal("Host::send: failure in sendto");
 }
@@ -252,7 +252,7 @@ int Host::receive() {
         buffer_t& b = ps->getBuffer(p);
 
 	ipa_t remoteIp; ipp_t remotePort;
-        nbytes = Np4d::recvfrom(sock, &b[0], 1500,
+        nbytes = Np4d::recvfrom4d(sock, &b[0], 1500,
                           	  remoteIp, remotePort);
         if (nbytes < 0) {
                 if (errno == EWOULDBLOCK) {

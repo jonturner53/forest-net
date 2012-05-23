@@ -17,17 +17,6 @@ ipa_t Np4d::ipAddress(const char *ips) {
 	return ntohl(ipa);
 }
 
-/** Add the string representation of an IP address to a given string.
- *  @param s is the string to be extended
- *  @param ipa is the IP address in host byte order
- */
-void Np4d::addIp2string(string& s, ipa_t ipa) {
-	// ugly code thanks to inet_ntoa's dreadful interface
-	struct in_addr ipa_struct;
-	ipa_struct.s_addr = htonl(ipa);
-	s += inet_ntoa(ipa_struct);
-}
-
 /** Create a string representation of an IP address.
  *  @param ipa is the IP address in host byte order
  *  @param s is a string in which the result is returned
@@ -56,11 +45,6 @@ bool Np4d::readIpAdr(istream& in, ipa_t& ipa) {
 		return false;
 	ipa = ntohl(*((ipa_t*) &adr[0]));
 	return true;
-}
-
-
-void Np4d::writeIpAdr(ostream& out, ipa_t adr) {
-	string s; addIp2string(s,adr); out << s;
 }
 
 /** Get the default IP address of a specified host
