@@ -1,26 +1,42 @@
 #! /bin/sh
 # Run a forest avatar
 #
-# usage: fAvatar dir hip rip hfa rfa comt tlim tag
+# usage: AvaScript dir n hip cmIp walls comt1 comt2
+#		      user pass tlim tag
 #
-# dir is the directory in which to run fHost
-# hip is this host's IP address in the forest network
-# rip is the IP address of the host's router
-# hfa is this host's forest address
-# rip is the forest address of the host's router
-# comt is the comtree number on which the avatar sends
-# and receives data packets
+# Dir is the directory in which to run fHost,
+# n is the number of instances to run,
+# hip is this host's IP address in the forest network,
+# cmIp is the IP address of the client manager,
+# wallsFile is a file that contains a specification of the
+# walls in the virtual world (path is relative to dir),
+# comt1 is the first in a range of comtrees amont which
+# the avatar will switch as it runs, comt2 is the second
+# comtree in the range,
+# user is a user name and pass is a password
 # tlim is the number of seconds to run
 # tag is an integer tag used to identify logging files
 #
 # The script assumes that the directory in which
 # the script is run contains log and err subdirectories.
-# The logging output is placed in the file log/ai,
-# where i is the value of the tag argument.
+# The logging output of the first Avatar is placed in the
+# file log/ai, where i is the value of the tag argument.
 # The standard error output is sent to err/ai.
+# The tag is incremented for each subsequent Avatar.
 #
-# The forest host is run in the background, so the
-# script returns immediately.
+# The Avatars are run in the background, so the
+# script returns as soon as they are all started.
 #
+
+# usage: CliAvaScript dir n hip cmIp walls comt1 comt2
+#		      user pass tlim tag
+
 cd $1
-fAvatar $2 $3 $4 $5 $6 $7 >log/a${8} 2>err/a${8} &
+tag=${11}
+i=1
+while [ $i -le $2 ]; do
+	Avatar $3 $4 $5 $6 $7 $8 $9 ${10} >log/a${tag} 2>err/a${tag} &
+	i=$((i+1))
+	tag=$((tag+1))
+done
+
