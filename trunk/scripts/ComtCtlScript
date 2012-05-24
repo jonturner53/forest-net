@@ -1,0 +1,25 @@
+#!/bin/sh
+
+# Run a forest Comtree Controller
+#
+# usage: ComtreeController dir extIp intIp topoFile firstComt lastComt tlim
+#
+# dir is the directory in which to run fHost
+# extIp is the IP address to be used by remote hosts to display comtree status
+# intIp is the IP address used within the Forest overlay
+# topoFile is a NetInfo file describing the network topology
+# firstComt and lastComt define the range of comtree numbers that
+# this comtree controller is responsible for
+# tlim is the number of seconds to run
+#
+# The script assumes that the directory in which
+# the script is run contains log and err subdirectories.
+# The logging output is placed in the file log/ai,
+# where i is the value of the tag argument.
+# The standard error output is sent to err/ai.
+#
+# The forest host is run in the background, so the
+# script returns immediately.
+#
+cd $1
+ComtCtl $2 $3 $4 $5 $6 $7 >log/cc 2>err/cc &

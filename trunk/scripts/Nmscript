@@ -1,16 +1,16 @@
 #! /bin/sh
-# Run a Monitor for a forest network
+# Run a Network Manager for a forest network
 #
-# usage: MonScript dir xip hip rip hfa rfa gridSize tlim
+# usage: NmScript dir xip hip rip hfa rfa tlim clientInfo
 #
-# dir is the directory in which to run fHost
+# dir is the directory in which to run fNetMgr
 # xip is this host's externally visible IP address
 # hip is this host's IP address in the forest network
 # rip is the IP address of the host's router
 # hfa is this host's forest address
 # rfa is the forest address of the host's router
-# gridSize is number of squares in x and y dimensions
 # tlim is the number of seconds to run
+# clientInfo is a file of information about clients
 #
 # The script assumes that the directory in which
 # the script is run contains log and err subdirectories.
@@ -21,4 +21,4 @@
 # script returns immediately.
 #
 cd $1
-Monitor $2 $3 $4 $5 $6 $7 $8 >log/m 2>err/m &
+NetMgr $2 $3 $4 $5 >log/nm 2>err/nm &

@@ -1,0 +1,33 @@
+#! /bin/sh
+# Run a forest router
+#
+# usage: Router dir myAdr nmAdr firstLeaf lastLeaf finTime
+#
+# Dir is the directory in which to run fRouter.
+# MyAdr is the host's address in the forest network.
+# NmAdr is the forest address of the network manager.
+# FirstLeaf is the first forest address
+# in the router's range of assignable addresses.
+# LastLeaf is the last forest address in the router's
+# range of assignable addresses.
+# finTime is the number of seconds to run; if zero,
+# the router runs until it is killed
+#
+# The script assumes that the directory in which
+# the router is run includes configuration files for
+# the interface table (called ift), link table (lt),
+# comtree table (ctt), routing table (rt) and
+# statistics spec (ss). Logging output is placed
+# in the file log/r and the standard error output
+# is sent to err/r.
+#
+# The router is run in the background, so the script
+# returns immediately.
+#
+cd $1
+
+echo Router mode=remote bootIp=$2 myAdr=$3 nmIp=$4 nmAdr=$5 statSpec=ss \
+finTime=$6 >log/r 2>err/r >echoOut
+
+Router mode=remote bootIp=$2 myAdr=$3 nmIp=$4 nmAdr=$5 statSpec=ss \
+finTime=$6 >log/r 2>err/r &

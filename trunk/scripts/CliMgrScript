@@ -1,16 +1,18 @@
 #! /bin/sh
 # Run a Monitor for a forest network
 #
-# usage: MonScript dir xip hip rip hfa rfa gridSize tlim
+# usage: CliMgrScript dir xip hip rip hfa rfa tlim
 #
 # dir is the directory in which to run fHost
 # xip is this host's externally visible IP address
 # hip is this host's IP address in the forest network
 # rip is the IP address of the host's router
 # hfa is this host's forest address
-# rfa is the forest address of the host's router
-# gridSize is number of squares in x and y dimensions
+# rip is the forest address of the host's router
+# comt is the comtree number on which the avatar sends
+# and receives data packets
 # tlim is the number of seconds to run
+# tag is an integer tag used to identify logging files
 #
 # The script assumes that the directory in which
 # the script is run contains log and err subdirectories.
@@ -21,4 +23,4 @@
 # script returns immediately.
 #
 cd $1
-Monitor $2 $3 $4 $5 $6 $7 $8 >log/m 2>err/m &
+CliMgr $2 $3 $4 $5 $6 $7 $8 $9 ${10} >log/cm 2>err/cm &
