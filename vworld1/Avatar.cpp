@@ -229,8 +229,8 @@ void Avatar::run(int finishTime) {
 	uint32_t nextTime;		// time of next operational cycle
 	uint32_t lastComtSwitch;	// last time a comt switched
 	now = nextTime = lastComtSwitch = Misc::getTime();
-	comt = randint(comt1,comt2);
-	int comtSwitchTime = randint(100,150);
+	comt = (comt1-1) + randTruncGeo(0.5,(int) (comt2-comt1)+1);
+	int comtSwitchTime = randint(10,15);
 	sendCtlPkt2CC(true,comt); // join initial comtree
 	bool replyPending = true;	// true when waiting for reply to a join
 	while (now <= finishTime) {
@@ -281,13 +281,14 @@ void Avatar::run(int finishTime) {
 		    (now-lastComtSwitch) > (1000000*comtSwitchTime) &&
 		    !replyPending) {
 			lastComtSwitch = now;
-			newcomt = randint(comt1,comt2);
+			newcomt = (comt1-1) +
+				  randTruncGeo(0.5,(int) (comt2-comt1)+1);
 			if (comt != newcomt) {
 				unsubAll();
 				sendCtlPkt2CC(false,comt);
 				replyPending = true;
 			}
-			comtSwitchTime = randint(100,150);
+			comtSwitchTime = randint(10,15);
 		}
 		now = Misc::getTime();
 		useconds_t delay = nextTime - now;

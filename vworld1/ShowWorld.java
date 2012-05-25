@@ -2,7 +2,6 @@ package forest.vworld1;
 
 import java.awt.Color;
 import java.awt.event.*;
-import java.lang.Math;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.HashSet;
@@ -31,7 +30,6 @@ public class ShowWorld {
 	private static int cornerX = 0; //x and y of the bottom left of the viewing window
 	private static int cornerY = 0;
 	private static final int MON_PORT = 30124; // port # used by monitor
-	private static int AVA_PORT;
 	private static Scanner mazeFile; // filename of maze
 	private static int[] walls; 	// list of walls
 	private static int[] currWalls; // list of walls currently in view
