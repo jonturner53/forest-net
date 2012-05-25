@@ -8,8 +8,6 @@
 
 package forest.common;
 
-import java.util.Scanner;
-
 /** Miscellaneous utility functions.
  *  This class defines various constants and common functions useful
  *  within a Forest router and Forest hosts.

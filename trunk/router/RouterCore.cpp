@@ -1413,12 +1413,8 @@ bool RouterCore::dropComtree(int p, CtlPkt& cp, CtlPkt& reply) {
 	}
 	int comt = cp.getAttr(COMTREE_NUM);
 	int ctx = ctt->getComtIndex(comt);
-	if (!ctt->validComtIndex(ctx)) {
-		reply.setErrMsg("drop comtree: invalid comtree "
-			       "attribute");
-		reply.setRrType(NEG_REPLY);
-		return false;
-	}
+	if (!ctt->validComtIndex(ctx))
+		return true; // so dropComtree op is idempotent
 
 	// remove all routes involving this comtree
 	// also degisters each route in the comtree table

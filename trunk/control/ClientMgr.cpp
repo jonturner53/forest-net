@@ -15,7 +15,7 @@
 #include <fstream>
 #include <sstream>
 /** usage:
- *  fClientMgr netMgrAdr rtrAdr rtrIp myIp myAdr finTime usersFile
+ *  ClientMgr netMgrAdr rtrAdr rtrIp myIp myAdr finTime usersFile
  *
  *  Command line arguments include the following:
  *  netMgrAdr - The Forest address of a Network Manager
@@ -142,7 +142,7 @@ void writeToAcctFile(CtlPkt cp) {
  */
 void readUsernames() {
 	ifstream ifs(unamesFile);
-	if(ifs.good()) {
+	if (ifs.good()) {
 		while(!ifs.eof()) {
 			string uname; string pword;
 			ifs >> uname;

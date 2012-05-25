@@ -599,6 +599,9 @@ bool handleBootRequest(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 	for (rtr = net->firstRouter(); rtr != 0; rtr = net->nextRouter(rtr)) {
 		if (net->getNodeAdr(rtr) == rtrAdr) break;
 	}
+{ string s;
+cerr << "got boot request from " << rtr << " " << Forest::fAdr2string(rtrAdr,s) << endl;
+}
 	if (rtr == 0) {
 		errReply(p,cp,outQ,"boot request from unknown router "
 				   "rejected\n");
@@ -1046,15 +1049,17 @@ void errReply(int p, CtlPkt& cp, Queue& outQ, const char* msg) {
 bool findCliRtr(ipa_t cliIp, fAdr_t& rtrAdr) {
 	string cip;
 	Np4d::ip2string(cliIp,cip);
-	for(size_t i = 0; i < numPrefixes; ++i) {
+	for(int i = 0; i < numPrefixes; ++i) {
 		string ip = prefixes[i].prefix;
-		for(size_t j = 0; j < ip.size(); ++j) {
-			if(ip[j] == '*') {
+		int j = 0;
+		while (j < ip.size() && j < cip.size()) {
+			if (cip[j] != ip[j]) break;
+			if (ip[j] == '*' ||
+			    j+1 == ip.size() && j+1 == cip.size()) {
 				rtrAdr = prefixes[i].rtrAdr;
 				return true;
-			} else if(cip[j] != ip[j]) {
-				break;
 			}
+			j++;
 		}
 	}
 	return false;

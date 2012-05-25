@@ -33,7 +33,6 @@ public class ComtreeDisplay {
 	private static final int maxNode    = 10000;
 	private static final int maxLink    = 20000;
 	private static final int maxRtr     =  1000;
-	private static final int maxCtl     =   100;
         private static final int maxComtree = 20000;
 
 	private static final int SIZE = 700;        	///<size of gui frame
@@ -60,7 +59,7 @@ public class ComtreeDisplay {
 		if (ccChan == null)
 			Util.fatal("can't connect to ComtCtl");
 
-		net = new NetInfo(maxNode, maxLink, maxRtr, maxCtl, maxComtree);
+		net = new NetInfo(maxNode, maxLink, maxRtr, maxComtree);
 		InputStream in = null;
 		try {
 			in = ccChan.socket().getInputStream();

@@ -460,11 +460,12 @@ bool NetInfo::setComtLnkNodeInfo() {
 				plink[v] = lnk;
 				pending.push(v);
 				if (!setLinkRates(ctx,lnk,v)) {
-					cerr << "NetInfo::setComtLinkRates: "
+					string s;
+					cerr << "NetInfo::setComtLnkNodeInfo: "
 						"could not set comtree link "
 						"rates as specified for "
-						"comtree " << comt <<
-						" lnk " << lnk << endl;
+						"comtree " << comt << " lnk "
+					     << link2string(lnk,s) << endl;
 					status = false;
 				}
 			}
@@ -486,14 +487,16 @@ bool NetInfo::setLinkRates(int ctx, int lnk, int child) {
 		if (!setComtBrDown(ctx,getComtLeafBrDown(ctx),lnk) ||
 		    !setComtBrUp(ctx,getComtLeafBrUp(ctx),lnk) ||
 		    !setComtPrDown(ctx,getComtLeafPrDown(ctx),lnk) ||
-		    !setComtPrUp(ctx,getComtLeafPrUp(ctx),lnk))
+		    !setComtPrUp(ctx,getComtLeafPrUp(ctx),lnk)) {
 			return false;
+		}
 	} else {
 		if (!setComtBrDown(ctx,getComtBrDown(ctx),lnk) ||
 		    !setComtBrUp(ctx,getComtBrUp(ctx),lnk) ||
 		    !setComtPrDown(ctx,getComtPrDown(ctx),lnk) ||
-		    !setComtPrUp(ctx,getComtPrUp(ctx),lnk))
+		    !setComtPrUp(ctx,getComtPrUp(ctx),lnk)) {
 			return false;
+		}
 	}
 	// next, adjust the available rates on the network links
 	int brl, prl, brr, prr;

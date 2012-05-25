@@ -745,31 +745,35 @@ bool handleJoinComtReq(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 
 	list<int> path; // used to hold list of links
 
-	int tryCount = 1;
+	int tryCount = 1; int branchRtr = 0;
 	while (true) {
 		// lock link rates while looking for path
 		pthread_mutex_lock(&rateLock);
-		if (tryCount++ > 3 || !findPath(cliRtr,ctx,path)) {
+		if (tryCount++ > 3 ||
+		    (branchRtr = findPath(cliRtr,ctx,path)) == 0) {
 			pthread_mutex_unlock(&rateLock);
 			pthread_mutex_unlock(&comtLock[ctx]);
 			errReply(p,cp,outQ,"cannot find path to comtree");
 			return true;
 		}
-		reservePath(ctx,path); // update internal data structures
+		reservePath(ctx,branchRtr,path); // update data structures
 		pthread_mutex_unlock(&rateLock);
 		// we now have the path reserved in the internal data structure,
 		// so no other thread can interfere with completion
 	
 		// now configure routers on path and exit loop if successful
-		if (addPath(ctx,path,inQ,outQ)) break;
+		if (addPath(ctx,branchRtr,path,inQ,outQ)) {
+			break;
+		}
 
-		// failed to configure some router in path
-		// so release reserved rates and update available rate info  
-		// before trying again
+		// failed to configure some router in path; probably means
+		// router resources reserved by another ComtCtl
+		// so release reserved rates and get fresh rate info
+		// from routers on path before trying again
 		pthread_mutex_lock(&rateLock);
 		releasePath(cliRtr,ctx);
 		pthread_mutex_unlock(&rateLock);
-		updatePath(ctx,path,inQ,outQ);
+		updatePath(ctx,branchRtr,path,inQ,outQ);
 		path.clear();
 	}
 
@@ -859,16 +863,18 @@ bool handleJoinComtReq(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
  *  @param path is a reference to a path, which on completion will
  *  contain link numbers leading from src to the comtree; the first
  *  link on the list is the one incident to src.
- *  @return true if a path was found, else false
+ *  @return the router number of the "branchRouter" at which the
+ *  path ends
  */
-bool findPath(int src, int ctx, list<int>& path) {
+int findPath(int src, int ctx, list<int>& path) {
 	path.clear();
-	if (net->isComtNode(ctx,src)) return true;
+	if (net->isComtNode(ctx,src)) return src;
 	int n = 0;
 	for (int r = net->firstRouter(); r != 0; r = net->nextRouter(r)) {
 		n = max(r,n);
 	}
-	Heap h(n); int d[n+1]; int plnk[n+1];
+	Heap h(n); int d[n+1];
+	int plnk[n+1]; // note: reverse from direction in comtree
 	for (int r = net->firstRouter(); r != 0; r = net->nextRouter(r)) {
 		plnk[r] = 0; d[r] = BIGINT;
 	}
@@ -876,7 +882,8 @@ bool findPath(int src, int ctx, list<int>& path) {
 	int brd = net->getComtBrDown(ctx);
 	int pru = net->getComtPrUp(ctx);
 	int prd = net->getComtPrDown(ctx);
-	h.insert(src,0);
+	d[src] = 0;
+	h.insert(src,d[src]);
 	while (!h.empty()) {
 		int r = h.deletemin();
 		for (int lnk = net->firstLinkAt(r); lnk != 0;
@@ -894,10 +901,10 @@ bool findPath(int src, int ctx, list<int>& path) {
 				plnk[peer] = lnk;
 				int u = peer;
 				for (int pl = plnk[u]; pl != 0; pl = plnk[u]) {
-					path.push_back(pl);
+					path.push_front(pl);
 					u = net->getPeer(u,plnk[u]);
 				}
-				return true;
+				return peer;
 			}
 			if (d[peer] > d[r] + net->getLinkLength(lnk)) {
 				plnk[peer] = lnk;
@@ -907,7 +914,7 @@ bool findPath(int src, int ctx, list<int>& path) {
 			}
 		}
 	}
-	return false;
+	return 0;
 }
 
 /** Reserve a path from a router to a comtree.
@@ -916,16 +923,15 @@ bool findPath(int src, int ctx, list<int>& path) {
  *  If it fails at any point, it undoes its previous
  *  changes before returning.
  *  @param ctx is a valid comtree index for the comtree of interest
+ *  @param branchRtr is the last node on the path
  *  @param path is a reference to a path, containing a list of links,
  *  leading from some router outside the comtree to a router in the comtree
  *  @return true on success, else false
  */
-bool reservePath(int ctx, list<int>& path) {
+bool reservePath(int ctx, int branchRtr, list<int>& path) {
 	// work from top going down, meaning from the end of the list
 	if (path.rbegin() == path.rend()) return true;
-	int lastLnk = *(path.rbegin());
-	int rtr = net->getLinkL(lastLnk);
-	if (!net->isComtNode(ctx,rtr)) rtr = net->getLinkR(lastLnk);
+	int rtr = branchRtr;
 	list<int>::reverse_iterator pp;
 	for (pp = path.rbegin(); pp != path.rend(); pp++) {
 		int lnk = *pp; int child = net->getPeer(rtr,lnk);
@@ -1000,21 +1006,20 @@ void releasePath(int firstRtr, int ctx) {
 /** Configure the routers on a path to add them to a comtree.
  *  This method sends configuration configuration messages to the routers
  *  along a specified the path. The first link in the path should be
- *  incident to a leaf router, and the last link should be incident
+ *  incident to a new leaf router, and the last link should be incident
  *  to a router in the comtree.  If it is unable to add any link, it unwinds
  *  its changes  before returning.
  *  @param ctx is a valid comtree index for the comtree of interest
+ *  @param branchRtr is the last node on the path
  *  @param path is a reference to a list, defining a path in the network,
  *  with the last link in the path incident to the comtree
  *  @return true on success, else false
  */
-bool addPath(int ctx, list<int>& path, Queue& inQ, Queue& outQ) {
+bool addPath(int ctx, int branchRtr, list<int>& path, Queue& inQ, Queue& outQ) {
 	// work from top going down, meaning from the end of the list
-	if (path.rbegin() == path.rend()) return true;
-	int lastLnk = *(path.rbegin());
-	int rtr = net->getLinkL(lastLnk);
-	if (!net->isComtNode(ctx,rtr)) rtr = net->getLinkR(lastLnk);
 	int comt = net->getComtree(ctx);
+	if (path.rbegin() == path.rend()) return true;
+	int rtr = branchRtr;
 	list<int>::reverse_iterator pp;
 	for (pp = path.rbegin(); pp != path.rend(); pp++) {
 		int lnk = *pp; int child = net->getPeer(rtr,lnk);
@@ -1204,13 +1209,16 @@ bool dropPath(int firstRtr, int ctx, Queue& inQ, Queue& outQ) {
 }
 
 /** Update the available link rates for the links in a path.
+ *  This method is called when an attempt to setup a path fails
+ *  because one or more of the routers rejects the link configuration
+ *  messages. This can occur when our rate information is out of date,
+ *  and another ComtCtl routes a comtree through a link.
  */
-void updatePath(int ctx, list<int>& path, Queue& inQ, Queue& outQ) {
+void updatePath(int ctx, int branchRtr, list<int>& path,
+		Queue& inQ, Queue& outQ) {
 	// work from top going down, meaning from the end of the list
 	if (path.rbegin() == path.rend()) return;
-	int lastLnk = *(path.rbegin());
-	int rtr = net->getLinkL(lastLnk);
-	if (!net->isComtNode(ctx,rtr)) rtr = net->getLinkR(lastLnk);
+	int rtr = branchRtr;
 	int comt = net->getComtree(ctx);
 	list<int>::reverse_iterator pp;
 	for (pp = path.rbegin(); pp != path.rend(); pp++) {
@@ -1312,15 +1320,6 @@ bool handleLeaveComtReq(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 		pthread_mutex_unlock(&comtLock[ctx]); return false;
 	}
 
-	// identify links to be removed from the comtree
-	int r = cliRtr;
-	int plnk = net->getComtPlink(ctx,r);
-	list<int> path;
-	while (plnk != 0 && net->getComtLnkCnt(ctx,r) < 3) {
-		path.push_back(plnk);
-		r = net->getPeer(r,plnk);
-		plnk = net->getComtPlink(ctx,r);
-	}
 	net->decComtLnkCnt(ctx,cliRtr);
 
 	// now, reconfigure routers to drop links

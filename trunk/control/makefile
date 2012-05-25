@@ -12,7 +12,7 @@ CLASSFILES = NetInfo.class TestNetInfo.class ComtreeDisplay.class
 	${CXX} ${CXXFLAGS} -c $<
 
 %.class: %.java
-	javac -cp ${JAVAROOT} $<
+	javac -nowarn -cp ${JAVAROOT} $<
 	mv *.class ${JAVAROOT}/forest/control
 
 all : lib ${CLASSFILES} ${XFILES}

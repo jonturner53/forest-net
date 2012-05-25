@@ -21,7 +21,6 @@ public class NetInfo {
 	private int maxNode;	///< max node number in netTopo graph
 	private int maxLink;	///< max link number in netTopo graph
 	private int maxLeaf;	///< max number of leafs
-	private int maxCtl;	///< maximum number of controllers
 	private int maxComtree;	///< maximum number of comtrees
 
 	/** NetTopo is a weighted graph defining the network topology.
@@ -155,14 +154,12 @@ public class NetInfo {
 	 *  @param maxNode1 is the max # of nodes in this NetInfo object
 	 *  @param maxLink1 is the max # of links in this NetInfo object
 	 *  @param maxRtr1 is the max # of routers in this NetInfo object
-	 *  @param maxCtl1 is the max # of controllers in this NetInfo object
 	 *  @param maxComtree1 is the max # of comtrees in this NetInfo object
 	 */
-	public NetInfo(int maxNode, int maxLink, int maxRtr, int maxCtl,
-		int maxComtree) {
+	public NetInfo(int maxNode, int maxLink, int maxRtr, int maxComtree) {
 
 		this.maxNode = maxNode; this.maxLink = maxLink;
-		this.maxRtr = maxRtr; this.maxCtl = maxCtl;
+		this.maxRtr = maxRtr;
 		this.maxComtree = maxComtree;
 
 		maxLeaf = maxNode-maxRtr;
@@ -1785,7 +1782,6 @@ public class NetInfo {
 						+ "interface bit rate");
 				}
 				if (ifpr[i] > getIfPktRate(r,i)) {
-					String s;
 					System.err.println("check: links at "
 						+ "interface " + i  + " of "
 						+ "router " + r + " have total "
