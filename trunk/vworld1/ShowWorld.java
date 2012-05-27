@@ -290,7 +290,7 @@ public class ShowWorld {
 			updateCurrWalls();
 		} catch (Exception e) {
 			System.out.println("usage: ShowWorldNet remoteIp "
-					    + "wallfile [port]");
+					    + "wallfile viewSize [port]");
 			System.out.println(e);
 			System.exit(1);
 		}
