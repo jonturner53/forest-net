@@ -98,12 +98,12 @@ bool 	handleDropComtReq(int,CtlPkt&, Queue&, Queue&);
 bool 	handleJoinComtReq(int,CtlPkt&, Queue&, Queue&);
 bool 	handleLeaveComtReq(int,CtlPkt&, Queue&, Queue&);
 // helper funnctions for adding removing paths to comtrees
-bool	findPath(int, int, list<int>&);
-bool	reservePath(int, list<int>&);
+int	findPath(int, int, list<int>&);
+bool	reservePath(int, int, list<int>&);
 void	releasePath(int, int);
-bool	addPath(int, list<int>&, Queue&, Queue&);
+bool	addPath(int, int, list<int>&, Queue&, Queue&);
 bool	dropPath(int,int,Queue&,Queue&);
-void	updatePath(int,list<int>&,Queue&,Queue&);
+void	updatePath(int,int,list<int>&,Queue&,Queue&);
 // helper functions for sending control packets from threads
 int	sendCtlPkt(CtlPkt&, fAdr_t, Queue&, Queue&);
 int 	sendAndWait(int,CtlPkt&,Queue&,Queue&);
