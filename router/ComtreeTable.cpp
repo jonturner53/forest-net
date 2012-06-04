@@ -71,6 +71,7 @@ bool ComtreeTable::removeEntry(int ctx) {
 	delete tbl[ctx].comtLinks;
 	delete tbl[ctx].rtrLinks;
 	delete tbl[ctx].coreLinks;
+	return true;
 }
 
 /** Add the link to the set of links for a comtree.
@@ -126,8 +127,6 @@ bool ComtreeTable::removeLink(int ctx, int cLnk) {
  *  @return true if the entry is consistent, else false
  */
 bool ComtreeTable::checkEntry(int ctx) const {
-	int i, n; uint16_t lnkvec[Forest::MAXLNK+1];
-
 	if (!validComtIndex(ctx)) return false;
 
 	// every router link must be a comtree link

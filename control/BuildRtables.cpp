@@ -31,7 +31,7 @@ bool buildIfaceTable(int, const NetInfo&, IfaceTable&);
 bool buildLinkTable(int, const NetInfo&, LinkTable&);
 bool buildComtTable(int, const NetInfo&, ComtreeTable&);
 
-main() {
+int main() {
 	int maxNode = 100000; int maxLink = 10000;
 	int maxRtr = 5000; int maxCtl = 200;
 	int maxComtree = 10000;
@@ -105,6 +105,7 @@ bool buildIfaceTable(int r, const NetInfo& net, IfaceTable& ift) {
 				net.getIfPktRate(r,i)
 			    );
 	}
+	return true;
 }
 
 bool buildLinkTable(int r, const NetInfo& net, LinkTable& lt) {
@@ -202,10 +203,8 @@ bool buildComtTable(int r, const NetInfo& net, ComtreeTable& comtTbl) {
 			}
 		}
 	}
-	int num = comtrees.size();
 
 	set<int>::iterator p;
-	int qnum = 1;
 	for (p = comtrees.begin(); p != comtrees.end(); p++) {
 		int ctx = *p;
 		int ctte = comtTbl.addEntry(net.getComtree(ctx));

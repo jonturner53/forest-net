@@ -2,7 +2,7 @@ SHELL := /bin/bash
 ALGOLIBROOT = ~/src/algolib-jst
 FLIB = $(shell pwd)/lib/lib-forest.a
 LIBS = ${FLIB} ${ALGOLIBROOT}/lib/lib-ds.a ${ALGOLIBROOT}/lib/lib-util.a
-CXXFLAGS = -O2 -m64 -I ../include -I ${ALGOLIBROOT}/include
+CXXFLAGS = -Wall -O2 -m64 -I ../include -I ${ALGOLIBROOT}/include
 BIN = ~/bin
 
 all:

@@ -20,8 +20,8 @@
  *  clients and routers. finTime is the number of seconds to run.
  *  If zero, the NetMgr runs forever.
  */
-main(int argc, char *argv[]) {
-	int comt; uint32_t finTime;
+int main(int argc, char *argv[]) {
+	uint32_t finTime;
 
 	if (argc != 5 ||
   	    (extIp  = Np4d::ipAddress(argv[1])) == 0 ||
@@ -152,7 +152,7 @@ void* run(void* finTimeSec) {
 
 	bool nothing2do;
 	while (finishTime == 0 || now <= finishTime) {
-		bool nothing2do = true;
+		nothing2do = true;
 
 		// check for packets
 		int p = recvFromCons();
@@ -176,7 +176,7 @@ void* run(void* finTimeSec) {
 					// of a request we're already working on
 					t = threads->firstOut();
 					uint64_t key = h.getSrcAdr();
-					key << 32; key += cp.getSeqNum();
+					key <<= 32; key += cp.getSeqNum();
 					if (reqMap->validKey(key)) {
 						// in this case, we've got an
 						// active thread handling this
@@ -204,7 +204,8 @@ void* run(void* finTimeSec) {
 					} else {
 						ps->free(p);
 					}
-					if (doneBooting.size() == numRouters) {
+					if ((int) doneBooting.size() ==
+					     numRouters) {
 						booting = false;
 						string s;
 						cout << "done booting at " 
@@ -331,7 +332,7 @@ void* handler(void *qp) {
 		PacketHeader& h = ps->getHeader(p);
 		CtlPkt cp; 
 		cp.unpack(ps->getPayload(p),h.getLength()-Forest::OVERHEAD);
-		bool success;
+		bool success = false;
 		if (h.getSrcAdr() == 0) {
 			success = handleConsReq(p, cp, inQ, outQ);
 		} else {
@@ -423,7 +424,7 @@ bool handleConDisc(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 		     (ps->getHeader(reply)).getLength()-Forest::OVERHEAD);
 	if (repCp.getRrType() == NEG_REPLY) {
 		errReply(p,cp,outQ,"negative reply from client manager");
-		cerr << "handleConDisc: negative reply from client manager";
+		cerr << "handleConDisc: negative reply from client manager "
 			"manager\n";
 		ps->free(reply);
 		return false;
@@ -1049,9 +1050,9 @@ void errReply(int p, CtlPkt& cp, Queue& outQ, const char* msg) {
 bool findCliRtr(ipa_t cliIp, fAdr_t& rtrAdr) {
 	string cip;
 	Np4d::ip2string(cliIp,cip);
-	for(int i = 0; i < numPrefixes; ++i) {
+	for(unsigned int i = 0; i < (unsigned int) numPrefixes; ++i) {
 		string ip = prefixes[i].prefix;
-		int j = 0;
+		unsigned int j = 0;
 		while (j < ip.size() && j < cip.size()) {
 			if (cip[j] != ip[j]) break;
 			if (ip[j] == '*' ||

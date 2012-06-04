@@ -36,11 +36,11 @@
  *  basic grid (actually, the grid is worldSizeXworldSize) and
  *  finTime is the number of seconds to run before terminating.
  */
-main(int argc, char *argv[]) {
+int main(int argc, char *argv[]) {
 	ipa_t intIp, extIp, rtrIp; fAdr_t myAdr, rtrAdr;
-	int comt, finTime, worldSize;
+	uint32_t finTime; int worldSize;
 
-	if (argc !=8 ||
+	if (argc != 8 ||
   	    (extIp  = Np4d::ipAddress(argv[1])) == 0 ||
   	    (intIp  = Np4d::ipAddress(argv[2])) == 0 ||
 	    (rtrIp  = Np4d::ipAddress(argv[3])) == 0 ||
@@ -101,7 +101,6 @@ bool Monitor::init() {
 	// setup external TCP socket for use by remote GUI
 	extSock = Np4d::streamSocket();
 	if (extSock < 0) return false;
-	bool status;
 	if (!Np4d::bind4d(extSock,extIp,MON_PORT)) return false;
 	return Np4d::listen4d(extSock) && Np4d::nonblock(extSock);
 }
@@ -112,7 +111,7 @@ bool Monitor::init() {
  *  that period and store results.
  *  Print a record of all avatar's status, once per second. 
  */
-void Monitor::run(int finishTime) {
+void Monitor::run(uint32_t finishTime) {
 	int p;
 
 	uint32_t now;    	// free-running microsecond time
@@ -139,7 +138,6 @@ void Monitor::run(int finishTime) {
 /** Send packet to Forest router (connect, disconnect, sub_unsub).
  */
 void Monitor::send2router(int p) {
-	static sockaddr_in sa;
 	int leng = ps->getHeader(p).getLength();
 	ps->pack(p);
 	int rv = Np4d::sendto4d(intSock,(void *) ps->getBuffer(p),leng,
@@ -394,7 +392,7 @@ void Monitor::forwardReport(int p, int now) {
 	uint32_t *pp = ps->getPayload(p);
 
 	if (h.getComtree() != comt || h.getPtype() != CLIENT_DATA ||
-	    ntohl(pp[0]) != Avatar::STATUS_REPORT) {
+	    ntohl(pp[0]) != (int) Avatar::STATUS_REPORT) {
 		// ignore packets for other comtrees, or that are not
 		// avatar status reports
 		ps->free(p); return;

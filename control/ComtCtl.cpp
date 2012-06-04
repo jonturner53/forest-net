@@ -22,8 +22,8 @@
  *  FinTime is the number of seconds to run.
  *  If zero, ComtCtl runs forever.
  */
-main(int argc, char *argv[]) {
-	int comt; uint32_t finTime;
+int main(int argc, char *argv[]) {
+	uint32_t finTime;
 
 	if (argc != 6 ||
   	    (extIp  = Np4d::ipAddress(argv[1])) == 0 ||
@@ -187,7 +187,7 @@ void* run(void* finTimeSec) {
 
 	bool nothing2do;
 	while (finishTime == 0 || now <= finishTime) {
-		bool nothing2do = true;
+		nothing2do = true;
 
 		// check for connection requessts from remote display
 		int connSock = -1;
@@ -215,7 +215,7 @@ void* run(void* finTimeSec) {
 				if (cp.getRrType() == REQUEST) {
 					t = threads->firstOut();
 					uint64_t key = h.getSrcAdr();
-					key << 32; key += cp.getSeqNum();
+					key <<= 32; key += cp.getSeqNum();
 					if (reqMap->validKey(key)) {
 						// in this case, we've got an
 						// active thread handling this
@@ -330,7 +330,7 @@ void* handler(void *qp) {
 
 	while (true) {
 		int p = inQ.deq();
-		bool success;
+		bool success = false;
 		if (p < 0) {
 			// in this case, p is really a negated socket number
 			// for a remote comtree display module
@@ -658,7 +658,7 @@ bool handleDropComtReq(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 	map<int,int>::iterator rcp;
 	for (rcp = rtrCnt.begin(); rcp != rtrCnt.end(); rcp++) {
 		if (rcp->second != 1) continue;
-		int rtr = rcp->first; fAdr_t rtrAdr = net->getNodeAdr(rtr);
+		int rtr = rcp->first;
 		dropPath(rtr,ctx,inQ,outQ);
 		pthread_mutex_lock(&rateLock);
 		releasePath(rtr,ctx);
@@ -1219,12 +1219,10 @@ void updatePath(int ctx, int branchRtr, list<int>& path,
 	// work from top going down, meaning from the end of the list
 	if (path.rbegin() == path.rend()) return;
 	int rtr = branchRtr;
-	int comt = net->getComtree(ctx);
 	list<int>::reverse_iterator pp;
 	for (pp = path.rbegin(); pp != path.rend(); pp++) {
 		int lnk = *pp; int child = net->getPeer(rtr,lnk);
 		fAdr_t rtrAdr   = net->getNodeAdr(rtr);
-		fAdr_t childAdr = net->getNodeAdr(child);
 		CtlPkt reqCp(GET_LINK,REQUEST,0);
 		reqCp.setAttr(LINK_NUM,net->getLocLink(lnk,rtr));
 		int reply = sendCtlPkt(reqCp,rtrAdr,inQ,outQ);
@@ -1508,8 +1506,6 @@ int rcvFromForest() {
 	int nbytes = Np4d::recv4d(intSock,&b[0],1500);
 	if (nbytes < 0) { ps->free(p); return 0; }
 	ps->unpack(p);
-
-	PacketHeader& h = ps->getHeader(p);
 
 	return p;
 }

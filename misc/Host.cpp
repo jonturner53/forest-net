@@ -50,8 +50,7 @@
  *  It saves the first 50 of these and writes them to stdout
  *  at the end of execution. This is done as a basic debugging aid.
  */
-main(int argc, char *argv[]) {
-	int mip0, mip1, mip2, mip3, rip0, rip1, rip2, rip3;
+int main(int argc, char *argv[]) {
 	ipa_t myIpAdr, rtrIpAdr;
 	int repeatFlag, delta, finTime;
 
@@ -99,8 +98,6 @@ void Host::run(bool repeatFlag, uint32_t delta, uint32_t finishTime) {
 	struct { bool sendFlag; uint32_t time; int pkt;} events[MAXEVENTS];
 	int evCnt = 0;
 	int nRcvd = 0; int nSent = 0; 	// counts of received and sent packets
-	int discards = 0;		// count of number discards
-	int statsTime = 0;		// time statistics were last processed
 	bool didNothing;
 	struct { int pause, p, cnt, iter; } pkt[nPkts+1];
 
@@ -245,7 +242,6 @@ void Host::send(int p) {
 int Host::receive() { 
 // Return next waiting packet or Null if there is none. 
 	int nbytes;	  // number of bytes in received packet
-	int lnk;	  // # of link on which packet received
 
 	int p = ps->alloc();
 	if (p == Null) return Null;

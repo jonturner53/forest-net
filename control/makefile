@@ -2,7 +2,7 @@ JAVAROOT = ~/bin/java
 ALGOLIBROOT = ../../algolib-jst
 FLIB = ../lib/lib-forest.a
 LIBS = ${FLIB} ${ALGOLIBROOT}/lib/lib-ds.a ${ALGOLIBROOT}/lib/lib-util.a
-CXXFLAGS = -O2 -m64 -I ../include -I ${ALGOLIBROOT}/include
+CXXFLAGS = -Wall -O2 -m64 -I ../include -I ${ALGOLIBROOT}/include
 
 LIBFILES = NetInfo.o
 XFILES = NetMgr CliMgr ComtCtl Console BuildRtables
@@ -13,7 +13,7 @@ CLASSFILES = NetInfo.class TestNetInfo.class ComtreeDisplay.class
 
 %.class: %.java
 	javac -nowarn -cp ${JAVAROOT} $<
-	mv *.class ${JAVAROOT}/forest/control
+	cp *.class ${JAVAROOT}/forest/control
 
 all : lib ${CLASSFILES} ${XFILES}
 

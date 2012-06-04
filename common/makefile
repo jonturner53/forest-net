@@ -6,14 +6,14 @@ LIBFILES = CommonDefs.o CpAttr.o CpType.o CtlPkt.o PacketHeader.o \
 	   PacketLog.o PacketStore.o  PacketStoreTs.o \
 	   Queue.o Np4d.o Heap.o HeapSet.o Misc.o
 CLASSFILES = Forest.class
-CXXFLAGS = -O2 -m64 -I ../include -I ${ALGOLIBROOT}/include
+CXXFLAGS = -Wall -O2 -m64 -I ../include -I ${ALGOLIBROOT}/include
 
 %.o: %.cpp %.h stdinc.h
 	${CXX} ${CXXFLAGS} -c $<
 
 %.class: %.java
 	javac -cp ${JAVAROOT} $<
-	mv *.class ${JAVAROOT}/forest/common
+	cp *.class ${JAVAROOT}/forest/common
 
 all : ${LIBFILES} ${CLASSFILES}
 	ar -ru ${FLIB} ${LIBFILES}

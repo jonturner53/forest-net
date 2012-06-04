@@ -9,7 +9,7 @@
  * that it has a right wall only, and pBoth is the probability that
  * it has both. Seed is used to intialize the random number genrator.
  */
-main(int argc, char* argv[]) {
+int main(int argc, char* argv[]) {
 	int n, seed; double pLeft, pTop, pBoth;
 	if (argc != 6 ||
 	    sscanf(argv[1],"%d",&n) != 1 ||

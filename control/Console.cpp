@@ -25,7 +25,7 @@ void posResponse(CtlPkt&);
 /** usage:
  *       Console NetMgrIp
  */
-main(int argc, char *argv[]) {
+int main(int argc, char *argv[]) {
 	ipa_t nmIp;
 
 	if (argc != 2 || (nmIp = Np4d::getIpAdr(argv[1])) == 0)
@@ -272,14 +272,14 @@ void buildWordList(string line, list<string>& wordList) {
 	int pos = 0;
 	while (true) {
 		int start = line.find_first_not_of(white,pos);
-		if (start == string::npos) return;
+		if (start == (int) string::npos) return;
 		int end;
 		if (line[start] == '=') {
 			wordList.push_back("=");
 			pos = start+1;
 		} else if (isalnum(line[start]) || line[start] == '-') {
 			end = line.find_first_of(delim,start);
-			string s = (end == string::npos ?
+			string s = (end == (int) string::npos ?
 				    line.substr(start) :
 				    line.substr(start,end-start));
 			wordList.push_back(s);

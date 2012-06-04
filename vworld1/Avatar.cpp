@@ -34,9 +34,10 @@
  *  payload length of 6 words (24 bytes), giving a total
  *  packet length of 52 bytes. 
  */
-main(int argc, char *argv[]) {
-	ipa_t myIpAdr, cliMgrIpAdr; ipp_t port;
-	int comt, firstComt, lastComt, finTime, worldSize;
+int main(int argc, char *argv[]) {
+	ipa_t myIpAdr, cliMgrIpAdr;
+	comt_t firstComt, lastComt;
+	uint32_t finTime;
 	if (!argc == 9 ||
 	    (myIpAdr  = Np4d::ipAddress(argv[1])) == 0 ||
 	    (cliMgrIpAdr   = Np4d::ipAddress(argv[2])) == 0 ||
@@ -180,7 +181,7 @@ bool Avatar::setupWalls(const char *wallsFile) {
 			worldSize = line.size();
 			y = worldSize-1;
 			walls = new int[worldSize*worldSize];
-		} else if (line.size() != worldSize) {
+		} else if ((int) line.size() != worldSize) {
 			cerr << "setupWalls: format error, all lines must have "
 			        "same length\n";
 			return false;
@@ -326,7 +327,7 @@ cerr << endl;
  *  @param finishTime is the number of microseconds to 
  *  to run before halting.
  */
-void Avatar::run(int finishTime) {
+void Avatar::run(uint32_t finishTime) {
 	connect(); 			// send initial connect packet
 	uint32_t now;			// free-running us clock
 	uint32_t nextTime;		// time of next operational cycle
@@ -334,11 +335,11 @@ void Avatar::run(int finishTime) {
 
 	now = nextTime = lastComtSwitch = Misc::getTime();
 	comt = randint(firstComt, lastComt);
-	int comtSwitchTime = randint(10,15);
+	uint32_t comtSwitchTime = (uint32_t) randint(10,15);
 	send2comtCtl(CLIENT_JOIN_COMTREE); // join initial comtree
 	bool waiting4comtCtl = true;	// true when waiting for reply to a join
 
-	int newcomt;
+	comt_t newcomt = 0;
 	while (now <= finishTime) {
 		//reset hashtables and report
 		numNear = nearAvatars->size(); nearAvatars->clear();
@@ -405,7 +406,7 @@ void Avatar::run(int finishTime) {
 		nextTime += 1000*UPDATE_PERIOD;
 		now = Misc::getTime();
 		useconds_t delay = nextTime - now;
-		if (delay < (1 << 31)) usleep(delay);
+		if (delay < ((uint32_t) 1) << 31) usleep(delay);
 		else nextTime = now + 1000*UPDATE_PERIOD;
 	}
 	disconnect(); 		// send final disconnect packet
@@ -1014,7 +1015,7 @@ void Avatar::updateNearby(int p) {
 	ps->unpack(p);
 	PacketHeader& h = ps->getHeader(p);
 	uint32_t *pp = ps->getPayload(p);
-	if (ntohl(pp[0]) != STATUS_REPORT) return;
+	if (ntohl(pp[0]) != (int) STATUS_REPORT) return;
 
 	// add the Avatar that sent this status report to the nearAvatars set
 	uint64_t avId = h.getSrcAdr(); avId = (avId << 32) | h.getSrcAdr();

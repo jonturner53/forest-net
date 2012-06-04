@@ -17,8 +17,8 @@
  */
 NetInfo::NetInfo(int maxNode1, int maxLink1,
 		 int maxRtr1, int maxCtl1 , int maxComtree1)
-		 : maxNode(maxNode1), maxLink(maxLink1),
-		   maxRtr(maxRtr1), maxCtl(maxCtl1), maxComtree(maxComtree1) {
+		 : maxRtr(maxRtr1), maxNode(maxNode1), maxLink(maxLink1),
+		   maxCtl(maxCtl1), maxComtree(maxComtree1) {
 	maxLeaf = maxNode-maxRtr;
 	netTopo = new Wgraph(maxNode, maxLink);
 
@@ -152,7 +152,7 @@ bool NetInfo::check() {
 			pending.push(v);
 		}
 	}
-	if (seen.size() != getNumRouters()) {
+	if ((int) seen.size() != getNumRouters()) {
 		cerr << "NetInfo::check: network is not connected";
 		status = false;
 	}
@@ -345,7 +345,7 @@ bool NetInfo::check() {
 			nodes.insert(getLinkR(lnk));
 			lnkCnt++;
 		}
-		if (lnkCnt != nodes.size() - 1) {
+		if (lnkCnt != ((int) nodes.size()) - 1) {
 			cerr << "NetInfo::check: links in comtree "
 			     << comt << " do not form a tree\n";
 			status = false; continue;

@@ -32,6 +32,7 @@ void StatsModule::record(uint64_t now) {
 // Record statistics at time now.
 	int i, val, cLnk, qid;
 
+	val = -1;
 	if (n == 0) return;
 	for (i = 1; i <= n; i++) {
 		StatItem& s = stat[i];
@@ -119,9 +120,8 @@ void StatsModule::record(uint64_t now) {
  *  the link.
  */ 
 bool StatsModule::readStat(istream& in) {
-	int lnk, comt, lcIn, lcOut;
+	int lnk, comt;
 	cntrTyp typ; string typStr, fname;
-	char buf[32];
 
 	Misc::skipBlank(in);
 	if (!Misc::readWord(in,typStr)) return false;
@@ -202,6 +202,10 @@ string& StatsModule::stat2string(int i, string& s) const {
 		break;
 	case   qByt:
 		ss << "  qByt " << setw(2) << si.lnk
+		   << " " << setw(2) << si.comt << endl;
+		break;
+	case disc:
+		ss << "  disc " << setw(2) << si.lnk
 		   << " " << setw(2) << si.comt << endl;
 		break;
 	}

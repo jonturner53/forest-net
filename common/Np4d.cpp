@@ -294,7 +294,7 @@ int Np4d::spaceAvail(int sock) {
  *  @return true on success, false on failure
  */
 bool Np4d::recvInt(int sock, uint32_t& val) {
-	if (dataAvail(sock) < sizeof(uint32_t)) return false;
+	if (dataAvail(sock) < (int) sizeof(uint32_t)) return false;
 	uint32_t temp;
 	int nbytes = recv(sock, (void *) &temp, sizeof(uint32_t), 0);
 	if (nbytes != sizeof(uint32_t)) 
@@ -319,7 +319,7 @@ bool Np4d::recvIntBlock(int sock, uint32_t& val) {
  *  @return true on success, false on failure
  */
 bool Np4d::sendInt(int sock, uint32_t val) {
-	if (spaceAvail(sock) < sizeof(uint32_t)) return false;
+	if (spaceAvail(sock) < (int) sizeof(uint32_t)) return false;
 	val = htonl(val);
 	int nbytes = send(sock, (void *) &val, sizeof(uint32_t), 0);
 	if (nbytes != sizeof(uint32_t))
@@ -364,11 +364,11 @@ bool Np4d::recvIntVec(int sock, uint32_t vec[], int length) {
  */
 bool Np4d::sendIntVec(int sock, uint32_t vec[], int length) {
 	socklen_t vecSiz = length * sizeof(uint32_t);
-	if (spaceAvail(sock) < vecSiz) return false;
+	if (spaceAvail(sock) < (int) vecSiz) return false;
 	uint32_t buf[length];
 	for (int i = 0; i < length; i++) buf[i] = htonl(vec[i]);
 	int nbytes = send(sock, (void *) buf, vecSiz, 0);
-	if (nbytes != vecSiz) 
+	if (nbytes != (int) vecSiz) 
 		fatal("Np4d::sendIntVec: can't send vector");
 	return true;
 }
@@ -397,7 +397,7 @@ int Np4d::recvBuf(int sock, char* buf, int buflen) {
 	int nbytes = recv(sock,(void *) &length, sizeof(uint32_t), MSG_PEEK);
 	if (nbytes <= 0) return nbytes;
 	if (nbytes != sizeof(uint32_t)) return -1;
-	if (dataAvail(sock) < length + sizeof(uint32_t)) return -1;
+	if (dataAvail(sock) < ((int) (length + sizeof(uint32_t)))) return -1;
 	length = min(length, buflen);
 	nbytes = recv(sock,(void *) &length, sizeof(uint32_t), 0);
 	nbytes = recv(sock,(void *) buf, length, 0);
@@ -418,7 +418,7 @@ int Np4d::recvBufBlock(int sock, char* buf, int buflen) {
 }
 
 int Np4d::sendBuf(int sock, char* buf, int buflen) {
-	if (spaceAvail(sock) < buflen + sizeof(uint32_t))
+	if (spaceAvail(sock) < buflen + (int) sizeof(uint32_t))
 		return -1;
 	int nbytes = send(sock, (void *) &buflen, sizeof(uint32_t), 0);
 	if (nbytes != sizeof(uint32_t))

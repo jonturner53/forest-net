@@ -30,8 +30,9 @@
  */
 
 int main(int argc, char ** argv) {
+	uint32_t finTime = 0;
 	ipa_t rtrIp, myIp; fAdr_t rtrAdr, myAdr, CC_Adr, netMgrAdr;
-	uint32_t finTime;
+	rtrIp = myIp = 0; rtrAdr = myAdr = CC_Adr = netMgrAdr = 0;
 	if(argc != 10 ||
 	    (netMgrAdr = Forest::forestAdr(argv[1])) == 0 ||
 	    (rtrAdr = Forest::forestAdr(argv[2])) == 0 ||

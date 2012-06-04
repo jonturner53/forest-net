@@ -180,8 +180,6 @@ string& CtlPkt::avPair2string(CpAttrIndex ii, string& s) {
 string& CtlPkt::toString(string& s) {
 	stringstream ss;
 	bool reqPkt = (rrType == REQUEST);
-	bool replyPkt = !reqPkt;
-	bool success = (rrType == POS_REPLY);
 
 	ss << CpType::getName(cpType);
 	if (reqPkt) ss << " (request,";

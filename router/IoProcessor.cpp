@@ -73,7 +73,6 @@ int IoProcessor::receive() {
 // Return next waiting packet or 0 if there is none. 
 	if (bootSock >= 0) {
 		int nbytes;	  	// number of bytes in received packet
-		int lnk;	  	// # of link on which packet received
 	
 		packet p = ps->alloc();
 	        if (p == 0) { return 0; }

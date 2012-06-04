@@ -73,7 +73,7 @@ bool Misc::prefix(string s1, string s2) {
  *  return false without reading the newline character.
  */
 bool Misc::readAlpha(istream& in, int& x) {
-	char c1, c2;
+	char c1;
 	while (1) {
 		in.get(c1); if (!in.good()) return false;
 		if (c1 == '\n') { in.putback(c1); return false; }
