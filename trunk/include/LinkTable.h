@@ -373,11 +373,13 @@ inline bool LinkTable::addAvailOutPktRate(int lnk, int pr) {
 inline bool LinkTable::registerComt(int lnk, int ctx) {
 	if (!valid(lnk)) return false;
 	lnkTbl[lnk].comtSet->insert(ctx);
+	return true;
 }
 
 inline bool LinkTable::deregisterComt(int lnk, int ctx) {
 	if (!valid(lnk)) return false;
 	lnkTbl[lnk].comtSet->erase(ctx);
+	return true;
 }
 
 /** Compute key for hash lookup.

@@ -27,7 +27,7 @@ public:
 		~Monitor();
 
 	bool	init();			///< open and setup socket
-	void	run(int); 		///< run avatar
+	void	run(uint32_t); 		///< run avatar
 private:
 	const static short MON_PORT = 30124;///< port# for connection to GUI
 	const static int NUMITEMS = 9;	///< # distinct items in status packet

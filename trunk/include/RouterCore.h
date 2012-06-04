@@ -54,7 +54,7 @@ public:
 
 	bool	readTables(const RouterInfo&);
 	bool	setup();
-	bool	setBooting(bool state) { booting = state; }
+	bool	setBooting(bool state) { return booting = state; }
 	void	run(uint64_t);
 	void	dump(ostream& os);
 private:

@@ -4,7 +4,7 @@ LIBS = ${FLIB} ${ALGOLIBROOT}/lib/lib-util.a ${ALGOLIBROOT}/lib/lib-ds.a
 XFILES = Avatar Monitor genWalls
 CLASSFILES = AvatarStatus.class AvatarGraphic.class ShowWorld.class \
 	DriveAvatar.class
-CXXFLAGS = -O2 -m64 -I ../include -I ${ALGOLIBROOT}/include
+CXXFLAGS = -Wall -O2 -m64 -I ../include -I ${ALGOLIBROOT}/include
 
 %.o: %.cpp %.h stdinc.h
 	${CXX} ${CXXFLAGS} -c $<

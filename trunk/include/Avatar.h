@@ -35,7 +35,7 @@ public:
 		~Avatar();
 
 	bool	init(ipa_t, string&, string&, char*);
-	void	run(int);
+	void	run(uint32_t);
 	const static int STATUS_REPORT = 1; ///< status report payload code
 private:
 	const static int UPDATE_PERIOD = 50;  ///< # ms between status updates

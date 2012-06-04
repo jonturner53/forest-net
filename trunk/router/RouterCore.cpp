@@ -85,7 +85,7 @@ bool processArgs(int argc, char *argv[], RouterInfo& args) {
 
 /** Main program for starting a forest router.
  */
-main(int argc, char *argv[]) {
+int main(int argc, char *argv[]) {
 	RouterInfo args;
 	
 	if (!processArgs(argc, argv, args))
@@ -458,7 +458,6 @@ bool RouterCore::setAvailRates() {
 	int ctx;
 	for (ctx = ctt->firstComtIndex(); ctx != 0;
 	     ctx = ctt->nextComtIndex(ctx)) {
-		int comt = ctt->getComtree(ctx);
 		set<int>& comtLinks = ctt->getLinks(ctx);
 		set<int>::iterator p;
 		for (p = comtLinks.begin(); p != comtLinks.end(); p++) {
@@ -602,7 +601,6 @@ cerr << h.toString(ps->getBuffer(p),s);
 		int lnk;
 		while ((p = qm->deq(lnk, now)) != 0) {
 			didNothing = false;
-			PacketHeader& h = ps->getHeader(p);
 			pktLog->log(p,lnk,true,now);
 			iop->send(p,lnk);
 		}
@@ -695,9 +693,10 @@ bool RouterCore::pktCheck(int p, int ctx) {
 			return false;
 		int comt = ctt->getComtree(ctx);
 		if ((ptype == CONNECT || ptype == DISCONNECT) &&
-		     comt != Forest::CLIENT_CON_COMT)
+		     comt != (int) Forest::CLIENT_CON_COMT)
 			return false;
-		if (ptype == CLIENT_SIG && comt != Forest::CLIENT_SIG_COMT)
+		if (ptype == CLIENT_SIG &&
+		    comt != (int) Forest::CLIENT_SIG_COMT)
 			return false;
 	}
 	return true;
@@ -962,7 +961,6 @@ void RouterCore::subUnsub(int p, int ctx) {
 void RouterCore::handleConnDisc(int p) {
 	PacketHeader& h = ps->getHeader(p);
 	int inLnk = h.getInLink();
-	buffer_t& b = ps->getBuffer(p);
 
 	if (!validLeafAdr(h.getSrcAdr())) {
 		ps->free(p); return;
@@ -1002,10 +1000,7 @@ void RouterCore::handleConnDisc(int p) {
  *  @param p is a packet number
  */
 void RouterCore::handleCtlPkt(int p) {
-	int ctx, rtx;
 	PacketHeader& h = ps->getHeader(p);
-	int inLnk = h.getInLink();
-	buffer_t& b = ps->getBuffer(p);
 	CtlPkt cp;
 
 	int len = h.getLength() - (Forest::HDR_LENG + 4);
@@ -1345,7 +1340,7 @@ bool RouterCore::modLink(int p, CtlPkt& cp, CtlPkt& reply) {
 	if (lt->valid(link)) {
 		reply.setAttr(LINK_NUM,link);
 		int iface = lt->getIface(link);
-		int br, dbr;
+		int br, dbr; br = dbr = 0;
 		if (cp.isSet(BIT_RATE)) {
 			br = cp.getAttr(BIT_RATE);
 			dbr = br - lt->getBitRate(link);
