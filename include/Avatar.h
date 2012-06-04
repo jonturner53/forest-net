@@ -9,12 +9,14 @@
 #ifndef AVATAR_H
 #define AVATAR_H
 
+#include <set>
+#include <list>
+#include <bitset>
 #include "CommonDefs.h"
 #include "PacketHeader.h"
 #include "PacketStore.h"
-#include "UiDlist.h"
-#include "UiHashTbl.h"
-#include <bitset>
+#include "HashSet.h"
+
 /** Class that implements a simulated avatar in a virtual world.
  *  
  *  This class implements an avatar in a very simple virtual world.
@@ -29,24 +31,19 @@
  */ 
 class Avatar {
 public:
-		Avatar(ipa_t, ipa_t, comt_t, comt_t);
+		Avatar(ipa_t, comt_t, comt_t);
 		~Avatar();
 
-	bool	init();
-	void	setup(const char*);
+	bool	init(ipa_t, string&, string&, char*);
 	void	run(int);
-	void	login(string,string); 	///< send login string and get forest
-					///< address, and router info back
 	const static int STATUS_REPORT = 1; ///< status report payload code
 private:
 	const static int UPDATE_PERIOD = 50;  ///< # ms between status updates
 	const static int CLIMGR_PORT = 30140; ///< port number for client mgr
 	const static int CONTROLLER_PORT = 30130;///< port for remote controller
+	const static int NUM_ITEMS = 10;///< # of items in status report
 	const static int GRID = 10000;	///< xy extent of one grid square
-	int	SIZE;		   	///< xy extent of virtual world
-	int*	WALLS; 			///< array of walls
-	int 	gridSize;		///< # of grid squares vertically 
-					///< or horizontally
+	const static int MAXNEAR = 1000;///< max # of nearby avatars
 	// speeds below are the amount avatar moves during an update period
 	const static int SLOW  =100;	///< slow avatar speed
 	const static int MEDIUM=250;	///< medium avatar speed
@@ -54,22 +51,20 @@ private:
 
 	// network parameters 
 	ipa_t	myIpAdr;		///< IP address of interface
-	ipa_t	cliMgrIpAdr;		///< IP address of the Client Manager
 	ipp_t	port;			///< port to connect to Controller on
 	uint16_t myPort;		///< port number for all io
 	ipa_t	rtrIpAdr;		///< IP address of router
 	fAdr_t	myAdr;			///< forest address of host
 	fAdr_t	rtrAdr;			///< forest address of router
-	fAdr_t	CC_Adr;			///< forest address of ComtreeController
+	fAdr_t	comtCtlAdr;		///< forest address of ComtreeController
 	int	sock;			///< socket number for forest network
-	int	CM_sock;		///< socket number for the ClientMgr
-	int	Controller_sock;	///< listen socket for remote Controller
-	int	controllerConnSock;	///< connect socket for Controllers
+	int	extSock;		///< listen socket for remote driver
+	int	connSock;		///< connect socket for driver
 
 	// comtrees
 	comt_t	comt;			///< current comtree
-	comt_t	comt1;			///< lower range of comtrees
-	comt_t	comt2;			///< upper range of comtrees
+	comt_t	firstComt;		///< lower range of comtrees
+	comt_t	lastComt;		///< upper range of comtrees
 
 	// avatar properties
 	int	x;			///< x coordinate in virtual world
@@ -78,37 +73,42 @@ private:
 	double	deltaDir;		///< change in direction per period
 	double	speed;			///< speed moving in UNITS/update period
 
-	UiDlist	*mcGroups;		///< multicast groups subscribed to
-	bool ** visibility;		///< visibility[i][j]=true if region i
-					///< can see region j
-	const static int MAXNEAR = 1000;///< max # of nearby avatars
-	UiHashTbl *visibleAvatars;	///< set of visible avatars
-	UiHashTbl *nearAvatars;		///< set of nearby avatars
+	// data structures defining walls in virtual world
+	int	worldSize;	   	///< # of grid squares per dimension
+	int*	walls; 			///< array of walls
+	set<int> *visSet;		///< visSet[g] contains multicast groups
+					///< for squares visible from g's square
+
+	// data structures for multicast subscriptions and other avatars
+	set<int> *mySubs;		///< multicast group subscriptions
+	HashSet *visibleAvatars;	///< set of visible avatars
+	HashSet *nearAvatars;		///< set of nearby avatars
 					///< (those we receive packets from)
 	int numVisible;			///< number of visible avatars
 	int numNear;			///< number of nearby avatars
-	int stableNumNear;		///< number of nearby avatars reported
-	int stableNumVisible;		///< number of visible avatars reported
 
 	int	seqNum;			///< sequence number for control packets
 
 	PacketStore *ps;		///< pointer to packet store
 
 	// private helper methods 
-	void	setupWalls(const char*);
+	bool	login(ipa_t,string,string); 	
+	bool	setupWalls(const char*);
 	int	groupNum(int, int);
 	bool	isVis(int, int);
 	bool	linesIntersect( double, double, double, double,
 				double, double, double, double);
-	void	updateStatus(uint32_t,int);
-	void	updateSubscriptions();	
+	void	updateStatus(uint32_t);
 	void	updateNearby(int);
+	void	updateSubs();	
 	
-	void	unsubAll();		
-	void	switchComtree(int);	
-	void	sendCtlPkt2CC(bool,int);
-	void	send2Controller(uint32_t,int,int=0);	
-	int	check4input();	
+	void	subscribeAll();		
+	void	unsubscribeAll();		
+	void	subscribe(list<int>&);
+	void	unsubscribe(list<int>&);
+	void	send2comtCtl(CpTypeIndex);
+	void	forwardReport(uint32_t,int,int=0);	
+	void	check4command();	
 	void	sendStatus(int);	
 
 	void	connect();		

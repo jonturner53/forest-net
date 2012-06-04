@@ -29,7 +29,7 @@ class AvatarGraphic {
 	}
 	
 	/** Draw a graphic representation of the Avatar.
-	 *  Avataris drawn as a circle with a radius that represents
+	 *  Avatar is drawn as a circle with a radius that represents
 	 *  its visibility range. A line is drawn from the center to
 	 *  the circumference, to show the direction in which the 
 	 *  Avatar is moving. The Avatar's Forest address is displayed

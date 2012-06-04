@@ -14,30 +14,28 @@ import java.nio.channels.*;
 import princeton.StdDraw;
 import java.util.Scanner;
 /**
- *  ShowWorld provides a visual display of the avatars moving around
- *  within a virtual world. It connects to a remote monitor that
- *  delivers reports of avatar movements and displays the data
- *  in in the form of a simple animation
+ *  DriveAvatar provides a visual display of the avatars moving around
+ *  within a virtual world from the perspective of a single avatar.
  *  @author Jon Turner
  */
-public class ShowWorld {
-	private static final int MON_PORT = 30124; // port # used by monitor
+public class DriveAvatar {
 	private static final int INTERVAL = 50;	// time between updates (in ms)
 	private static final int GRID = 10000;	// size of one grid space
 	private static int MAX_WORLD = 30000; // max extent of virtual world
 	private static int MAX_VIEW = 1000; // max extent of view
-	private static int NUM_ITEMS = 9; // # of items in status report
+	private static int NUM_ITEMS = 10; // # of items in status report
 
 	private static int worldSize;	// # of squares in full map
 	private static int gridSize;	// # of squares in map (x or y)
 	private static int viewSize;	// # of map squares viewed at one time
 	private static int cornerX = 0; // x coordinate of current view
 	private static int cornerY = 0; // y coordinate of current view
+	private static int avx = 0; 	// x coordinate of avatar (in squares)
+	private static int avy = 0; 	// y coordinate of avatar (in squares)
 	private static int comtree;	// number of comtree to be monitored
 	private static Scanner mazeFile; // filename of maze
 	private static int[] walls; 	// list of walls
-	private static SocketChannel chan = null;// channel to remote monitor
-						// or avatar
+	private static SocketChannel chan = null;// channel to remote  avatar
 	private static ByteBuffer repBuf = null; // buffer for report packets
 	private static AvatarStatus rep = null;	// most recent report
 	private static boolean needData = true;	// true when getReport() needs
@@ -47,44 +45,37 @@ public class ShowWorld {
 	private static int idCounter;		// counter used to clear old ids	
 	private static Map<Integer, AvatarGraphic> status; // avatar status
 
-	private static InetSocketAddress monSockAdr;
+	private static InetSocketAddress avaSockAdr;
+
 
 	/**
-	 * The ShowWorldNet program displays a visualization of a very
-	 * simple virtual world. Avatars moving around in the virtual
-	 * world are displayed as they move.
+	 * The DriveAvatar program displays a visualization of a very
+	 * simple virtual world from the perspective of a single Avatar.
+	 * It also allows the user to control the Avatar using the arrow
+	 * keys.
 	 *
 	 *  Command line arguments
-	 *   - name/address of monitor host (or localhost)
+	 *   - name/address of Avatar host (or localhost, when using tunnel)
+	 *   - port number used by Avatar host (or local tunnel endpoint)
 	 *   - walls file
 	 */
 	public static void main(String[] args) {	
-		// process command line arguments	
+		// process command line arguments and set initial view
 		processArgs(args);	
+		cornerX = cornerY = 0;
+		viewSize = Math.min(10,worldSize);
 
 		// Open channel to monitor and make it nonblocking
 		try {
-			chan = SocketChannel.open(monSockAdr);
+			chan = SocketChannel.open(avaSockAdr);
 			chan.configureBlocking(false);
 		} catch (Exception e) {
-			System.out.println("Can't open channel to monitor");
+			System.out.println("Can't open channel to Avatar");
 			System.out.println(e);
-			System.exit(1);
-		}
-		//send viewsize to Monitor.cpp
-		ByteBuffer buff = ByteBuffer.allocate(8);
-		buff.put((byte) 'v'); buff.putInt(viewSize);
-		buff.flip();
-		try {
-			chan.write(buff);
-		} catch(Exception e) {
-			System.out.println("Could not write viewSize to "
-					+ "Monitor");
 			System.exit(1);
 		}
 
 		// setup canvas
-		comtree = 0;
 		StdDraw.setCanvasSize(700,700);
 		StdDraw.setPenRadius(.003);
 		Color c = new Color(210,230,255);
@@ -98,61 +89,68 @@ public class ShowWorld {
 		recentIds = new HashSet<Integer>();
 		idCounter = 0;
 
-		// Prompt for comtree number and send to monitor
-		comtree = readComtree();
-		sendCommand('c',comtree);
-
+		comtree = 0;	// first report sets comtree
 		AvatarStatus firstRep;
 		while ((firstRep = getReport()) == null) {}
-		int monTime = firstRep.when + 3000; // build in some delay
+		int avaTime = firstRep.when + 3000; // build in some delay
 		long localTime = System.nanoTime()/1000000;
 		long targetLocalTime = localTime;
+
 		while (true) {
-			processFrame(monTime+INTERVAL);
+			// process reports for current frame
+			processFrame(avaTime+INTERVAL);
+
+			// draw the grid and avatars, based on reports
 			Set<Integer> idSet = status.keySet();
 			drawGrid(c);
 			for (Integer id : idSet) {
 				AvatarGraphic m = status.get(id);
-				if (m.getComtree() == comtree)
-					m.draw();
+				if (m.getComtree() == comtree) m.draw();
 			}
-		
 			localTime = System.nanoTime()/1000000;
 			if (localTime < targetLocalTime + INTERVAL) {
-				StdDraw.show((int) ((targetLocalTime+INTERVAL)
+				StdDraw.show((int) ((targetLocalTime + INTERVAL)
 						     - localTime));
 			} else {
 				StdDraw.show(0);
 			}
-			monTime += INTERVAL; targetLocalTime += INTERVAL;
+			avaTime += INTERVAL; targetLocalTime += INTERVAL;
 
+			// check for input from the graphics window and respond
 			try {
 				if(StdDraw.hasNextKeyTyped()) {
-					processMoves(StdDraw.nextKeyTyped());
+					processKeys(StdDraw.nextKeyTyped());
 				}
 			} catch(Exception e) {
-				System.out.println("Could not get map "
-					+ "movement from key");
+				System.out.println("Could not get keyboard "
+					+ "input");
 				System.out.println(e);
 				System.exit(1);
 			}
-			int newComtree = readComtree();
-			if (newComtree >= 0 && newComtree != comtree) {
-				comtree = newComtree;
-				sendCommand('c',comtree);
-			}
+
+			// keep avatar in view
+			stayInBounds();
+
+			// check for a new comtree and tell Avatar to switch
+			//int newComtree = readComtree();
+			//if (newComtree >= 0 && newComtree != comtree) {
+			//	comtree = newComtree;
+			//	sendCommand('c',comtree);
+			//}
 		}
 	}
 
 	/**
 	 *  Process command line arguments
-	 *   - name/address of monitor host (or localhost)
+	 *   - name/address of Avatar host (or localhost when using tunnel)
+	 *   - port number used by Avatar (or local tunnel endpoint)
 	 *   - walls file
 	 */
 	private static boolean processArgs(String[] args) {
 		try {
-			monSockAdr = new InetSocketAddress(args[0],MON_PORT);
-			mazeFile = new Scanner(new File(args[1]));
+			int port = Integer.parseInt(args[1]);
+			avaSockAdr = new InetSocketAddress(args[0],port);
+			mazeFile = new Scanner(new File(args[2]));
 			int y = 0; walls = null;
 			while (mazeFile.hasNextLine() && y >= 0) {
 				String temp = mazeFile.nextLine();
@@ -179,6 +177,7 @@ public class ShowWorld {
 						System.out.println(
 						  "Unrecognized symbol in map "
 					  	  + "file!");
+						System.exit(1);
 					}
 				}
 				y--;
@@ -188,111 +187,44 @@ public class ShowWorld {
 				System.exit(1);
 			}
 		} catch (Exception e) {
-			System.out.println("usage: ShowWorld remoteIp mapfile");
+			System.out.println("usage: DriveAvatar remoteIp mapfile");
 			System.out.println(e);
 			System.exit(1);
 		}
 		return true;
 	}
-
-	/** Process movement commands.
-	 *  This method processes characters typed in the graphics window,
-	 *  interpreting them as commands to change the current view
-	 *  of the virtual world. The commands modify local variables
-	 *  describing the current view and the new values of the variables
-	 *  describing the current view are forwarded to the Monitor,
-	 *  so that it can adjust its view.
+	
+	private static BufferedReader inStream = null;
+	
+	/**
+	 * Attempt to read a new comtree number from System.in.
+	 * Return the comtree number or -1 if no input is available.
 	 */
-	private static void processMoves(char c) throws IOException {
-		ByteBuffer buff = ByteBuffer.allocate(8);
-		boolean didMove = false;
-		switch (c) {
-		case 'a':
-			if (cornerX > 0) {
-				sendCommand('x',--cornerX);
-			}
-			break;
-		case 'A':
-			if (cornerX > 0) {
-				cornerX = Math.max(0,cornerX-viewSize);
-				sendCommand('x',cornerX);
-			}
-			break;
-		case 'd':
-			if (cornerX < worldSize-viewSize) {
-				sendCommand('x',++cornerX);
-			}
-			break;
-		case 'D':
-			if (cornerX < worldSize-viewSize) {
-				cornerX = Math.min(cornerX+viewSize,
-					      	   worldSize-viewSize);
-				sendCommand('x',cornerX);
-			}
-			break;
-		case 's':
-			if (cornerY > 0) {
-				sendCommand('y',--cornerY);
-			}
-			break;
-		case 'S':
-			if (cornerY > 0) {
-				cornerY = Math.max(0,cornerY-viewSize);
-				sendCommand('y',cornerY);
-			}
-			break;
-		case 'w':
-			if (cornerY < worldSize-viewSize) {
-				sendCommand('y',++cornerY);
-			}
-			break;
-		case 'W':
-			if (cornerY < worldSize-viewSize) {
-				cornerY = Math.min(cornerY+viewSize,
-					      	   worldSize-viewSize);
-				sendCommand('y',cornerY);
-			}
-			break;
-		case 'o':
-			if (viewSize > 1) {
-				sendCommand('v',--viewSize);
-			}
-			break;
-		case 'O':
-			if (viewSize > 1) {
-				viewSize /= 2;
-				sendCommand('v',viewSize);
-			}
-			break;
-		case 'p':
-			if (viewSize < MAX_VIEW &&
-			    viewSize < worldSize &&
-			    cornerX + viewSize < worldSize &&
-			    cornerY + viewSize < worldSize) {
-				sendCommand('v',++viewSize);
-			}
-			break;
-		case 'P':
-			if (viewSize < MAX_VIEW &&
-			    viewSize < worldSize &&
-			    cornerX + viewSize < worldSize &&
-			    cornerY + viewSize < worldSize) {
-				viewSize = Math.min(2*viewSize,
-					   Math.min(worldSize-cornerX,
-					   Math.min(worldSize-cornerY,
-					   	    MAX_VIEW)));
-				sendCommand('v',viewSize);
-			}
-			break;
+	private static int readComtree() {
+		int comtree = 0;
+		try {
+			if (inStream == null) {
+				inStream = new BufferedReader(
+					   new InputStreamReader(System.in));
+				System.out.print("\ncomtree=");
+				comtree = Integer.parseInt(inStream.readLine());
+			} else if (inStream.ready()) {
+				comtree = Integer.parseInt(inStream.readLine());
+			} else return -1;
+		} catch(Exception e) {
+			System.out.println("can't read comtree number" + e);
+			System.exit(1);
 		}
+		System.out.print("\ncomtree=");
+		return comtree;
 	}
 
 	private static ByteBuffer sendBuf = null;    // used by sendCommand
 
-	/** Send a command to the Monitor.
+	/** Send a command to the Avatar.
 	 *  Each command consists of a character denoting the command
 	 *  and an integer parameter. These are sent over the channel
-	 *  to the Monitor.
+	 *  to the Avatar.
 	 *  @param c is the character denoting the command
 	 *  @param p is a parameter associated with the command
 	 */
@@ -307,10 +239,121 @@ public class ShowWorld {
 			chan.socket().getOutputStream().flush();
 			sendBuf.clear();
 		} catch(Exception e) { 
-			System.out.println("Can't send command to Monitor"); 
+			System.out.println("Can't send command to Avatar"); 
 			System.out.println(e);
 			System.exit(1); 
 		}	
+	}
+
+	/** Process input keys.
+	 *  This method processes characters typed in the graphics window,
+	 *  interpreting them as commands to change the current view
+	 *  of the virtual world or change the way the Avatar moves.
+	 *
+	 *  The keys and their commands are summarized below.
+	 *   a	shift current view to the left by one square
+	 *   d	shift current view to the right by one square
+	 *   s	shift current view down by one square
+	 *   w	shift current view up by one square
+	 *   o  reduce the view size by one
+	 *   p  increase the view size by one
+	 *   j  steer the avatar to the left
+	 *   l  steer the avatar to the right
+	 *   i  speed up the avatar
+	 *   k  slow down the avatar
+	 *
+	 *  There are also upper case versions of the adsw and op
+	 *  keys that make larger adjustments to the window.
+	 */
+	private static void processKeys(char c) throws IOException {
+		switch (c) {
+		case 'a':
+			if (cornerX > 0) {
+				cornerX--; 
+			}
+			break;
+		case 'A':
+			if (cornerX > 0) {
+				cornerX = Math.max(0,cornerX-viewSize);
+			}
+			break;
+		case 'd':
+			if (cornerX < worldSize-viewSize) {
+				cornerX++; 
+			}
+			break;
+		case 'D':
+			if (cornerX < worldSize-viewSize) {
+				cornerX = Math.min(cornerX+viewSize,
+					      	   worldSize-viewSize);
+			}
+			break;
+		case 's':
+			if (cornerY > 0) {
+				cornerY--; 
+			}
+			break;
+		case 'S':
+			if (cornerY > 0) {
+				cornerY = Math.max(0,cornerY-viewSize);
+			}
+			break;
+		case 'w':
+			if (cornerY < worldSize-viewSize) {
+				cornerY++; 
+			}
+			break;
+		case 'W':
+			if (cornerY < worldSize-viewSize) {
+				cornerY = Math.min(cornerY+viewSize,
+					      	   worldSize-viewSize);
+			}
+			break;
+		case 'o':
+			if (viewSize > 1) {
+				viewSize--; 
+			}
+			break;
+		case 'O':
+			if (viewSize > 1) {
+				viewSize /= 2; 
+			}
+			break;
+		case 'p':
+			if (viewSize < MAX_VIEW &&
+			    viewSize < worldSize &&
+			    cornerX + viewSize < worldSize &&
+			    cornerY + viewSize < worldSize) {
+				viewSize++; 
+			}
+			break;
+		case 'P':
+			if (viewSize < MAX_VIEW &&
+			    viewSize < worldSize &&
+			    cornerX + viewSize < worldSize &&
+			    cornerY + viewSize < worldSize) {
+				viewSize = Math.min(2*viewSize,
+					   Math.min(worldSize-cornerX,
+					   Math.min(worldSize-cornerY,
+					   	    MAX_VIEW)));
+			}
+			break;
+		case 'j': case 'k': case 'l': case 'i':
+			sendCommand(c,0); break;
+		}
+	}
+
+	private static void stayInBounds() {
+		if (avx < cornerX) {
+			cornerX = avx;
+		} else if (avx >= cornerX + viewSize) {
+			cornerX = (avx - viewSize) + 1;
+		}
+		if (avy < cornerY) {
+			cornerY = avy;
+		} else if (avy >= cornerY + viewSize) {
+			cornerY = (avy - viewSize) + 1;
+		}
 	}
 
 	private static AvatarStatus lastRep = null; // used by processFrame
@@ -331,6 +374,28 @@ public class ShowWorld {
 			if (rep.when > bound) {		
 				lastRep = rep; break;
 			}
+			// assign initial comtree or filter out reports from
+			// other comtrees
+			if (comtree == 0) comtree = rep.comtree;
+			else if (rep.comtree != comtree) {
+				rep = getReport(); continue; 
+			}
+			// track square containing this avatar
+			if (rep.type == 1) {
+				avx = ((int) rep.x)/GRID;
+				avy = ((int) rep.y)/GRID;
+			}
+			// filter out reports from out of view Avatars
+			if (rep.x < cornerX*GRID ||
+			    rep.x >= (cornerX + viewSize)*GRID ||
+		    	    rep.y < cornerY*GRID ||
+			    rep.y >= (cornerY + viewSize)*GRID) {
+				rep = getReport(); continue;
+			}
+			// remap xy coordinates to (0,1) scale
+			rep.x = (rep.x - cornerX*GRID)/((double) viewSize*GRID);
+			rep.y = (rep.y - cornerY*GRID)/((double) viewSize*GRID);
+
 			AvatarGraphic m = status.get(rep.id);
 			if (m == null) {
 				m = new AvatarGraphic(rep);		
@@ -352,11 +417,11 @@ public class ShowWorld {
 		}
 		return firstTimeStamp;
 	}
-	/**
-	 * Get the next status report from a buffered status packet.
-	 * Receive additional status packets as needed using nonblocking IO.
-	 * @return the AvatarStatus object for the most recent status report
-	 * or null if there is no report available
+
+	/** Get the next status report from a buffered status packet.
+	 *  Receive additional status packets as needed using nonblocking IO.
+	 *  @return the AvatarStatus object for the most recent status report
+	 *  or null if there is no report available
 	 */
 	private static AvatarStatus getReport() {
 		if (repBuf == null) {
@@ -385,47 +450,20 @@ public class ShowWorld {
 		if (rep == null) rep = new AvatarStatus();
 		rep.when = repBuf.getInt()/1000;
 		rep.id = repBuf.getInt();
-		// remap xy coordinates to (0,1) scale
-		rep.x = (repBuf.getInt() - cornerX*GRID)
-			/ ((double) viewSize*GRID);
-		rep.y = (repBuf.getInt() - cornerY*GRID)
-			/ ((double) viewSize*GRID);
+		rep.x = repBuf.getInt();
+		rep.y = repBuf.getInt();
 		rep.dir = repBuf.getInt();
 		repBuf.getInt(); // discard value
 		rep.numVisible = repBuf.getInt();
 		rep.numNear = repBuf.getInt();
 		rep.comtree = repBuf.getInt();
+		rep.type = repBuf.getInt();
 		if (repBuf.remaining() <  4*NUM_ITEMS) needData = true;
 
 		recentIds.add(rep.id);
 		return rep;
 	}
 	
-	private static BufferedReader inStream = null;
-	
-	/**
-	 * Attempt to read a new comtree number from System.in.
-	 * Return the comtree number or -1 if no input is available.
-	 */
-	private static int readComtree() {
-		int comtree = 0;
-		try {
-			if (inStream == null) {
-				inStream = new BufferedReader(
-					   new InputStreamReader(System.in));
-				System.out.print("\ncomtree=");
-				comtree = Integer.parseInt(inStream.readLine());
-			} else if (inStream.ready()) {
-				comtree = Integer.parseInt(inStream.readLine());
-			} else return -1;
-		} catch(Exception e) {
-			System.out.println("input error: type comtree number\n"
-					    + e);
-		}
-		System.out.print("\ncomtree=");
-		return comtree;
-	}
-
 	/** Draw grid with a background color of c.
 	 */
 	private static void drawGrid(Color c) {
@@ -445,10 +483,10 @@ public class ShowWorld {
 				int xy = x + y * worldSize;
 				int row = y - cornerY; int col = x - cornerX;
 				if (walls[xy] == 1 || walls[xy] == 3) {
-					StdDraw.line(frac*col, frac*row,
-						     frac*col, frac*(row+1));
+					StdDraw.line(frac*col,frac*row,
+						     frac*col,frac*(row+1));
 				} 
-				if (walls[xy] == 2 || walls[xy] == 3) {
+				if (walls[xy]==2 || walls[xy] == 3) {
 					StdDraw.line(frac*col,    frac*(row+1),
 						     frac*(col+1),frac*(row+1));
 				}

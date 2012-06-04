@@ -9,6 +9,8 @@
 #ifndef MONITOR_H
 #define MONITOR_H
 
+#include <set>
+#include <list>
 #include "CommonDefs.h"
 #include "PacketHeader.h"
 #include "PacketStore.h"
@@ -28,12 +30,13 @@ public:
 	void	run(int); 		///< run avatar
 private:
 	const static short MON_PORT = 30124;///< port# for connection to GUI
-	const static int NUMITEMS = 9;	///<number of distinct items in a status packet
-	int SIZE;			///< xy extent of virtual world
+	const static int NUMITEMS = 9;	///< # distinct items in status packet
 	const static int GRID = 10000;	///< xy extent of one grid square
-	int viewSize;
-	const static int UPDATE_PERIOD = 50;	///< # ms between status updates
-	const static int MAX_AVATARS = 1000;	///< max # of avatars to monitor
+	const static int MAX_AVATARS = 1000; ///< max # of avatars to monitor
+	const static int MAX_WORLD = 30000; ///< max extent of virtual world
+	const static int MAX_VIEW = 1000; ///< max extent of view
+	const static int UPDATE_PERIOD = 50;    ///< # ms between status updates
+	int worldSize;			///< # of squares in x and y directions
 	
 	ipa_t	extIp;			///< local IP used for remote GUI
 	ipa_t	intIp;			///< local IP used for Forest
@@ -44,25 +47,12 @@ private:
 	int	intSock;		///< internal socket number
 	int	extSock;		///< external listening socket
 	int	connSock;		///< external connection socket
-	int	cornerX;		///< used to remember which groups to subscribe to
+	int	cornerX;		///< lower-left corner of current view
 	int	cornerY;
+	int	viewSize;		///< size of current view
 	comt_t	comt;			///< current comtree number
 
-	// avatar properties
-	struct avatarData {
-	fAdr_t	adr;		///< forest address of avatar
-	int	ts;		///< timestamp of latest update
-	int	x;		///< x coordinate in virtual world
-	int	y;		///< y coordinate in virtual world
-	int	dir;		///< direction avatar is facing in degrees
-	int	speed;		///< speed moving in UNITS/sec
-	int	numVisible;	///< number of visible avatars + # nearby 
-	int	numNear;	///< number of nearby avatars
-	comt_t	comt;		///< comtree that avatar appears in
-	} *avData;		
-
-	int nextAvatar;			///< index of next row in avData table
-	UiHashTbl *watchedAvatars;	///< set of (avatarAddr, row#) pairs
+	set<int> *mySubs;		///< current multicast subscriptions
 
 	PacketStore *ps;		///< pointer to packet store
 
@@ -72,15 +62,19 @@ private:
 	void	connect();		
 	void	disconnect();	
 
-	void 	check4comtree(); 	
-	void	send2gui(uint32_t,int);	
+	void 	check4command(); 	
 
 	int 	receiveReport();
+	void	forwardReport(int,int);
+
 	void	send2router(int);
 
-	void	updateStatus(int,int);
-	void	updateSubscriptions(comt_t,comt_t);
-	void	updateSubscriptions();
+	void	switchComtrees(int);
+	void	updateSubs();
+	void	subscribeAll();
+	void	unsubscribeAll();
+	void	subscribe(list<int>&);
+	void	unsubscribe(list<int>&);
 };
 
 #endif

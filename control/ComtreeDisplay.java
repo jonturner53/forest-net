@@ -138,12 +138,13 @@ public class ComtreeDisplay {
 
 	private static SocketChannel
 	connectToComtCtl(InetSocketAddress sockAdr) {
-		// Open channel to monitor
+		// Open channel to ComtCtl
 		SocketChannel chan;
                 try {
+System.out.println(sockAdr);
                         chan = SocketChannel.open(sockAdr);
                 } catch (Exception e) {
-                        System.out.println("Can't open channel to monitor");
+                        System.out.println("Can't open channel to ComtCtl");
                         System.out.println(e);
                         return null;
                 }
