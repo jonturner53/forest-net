@@ -8,7 +8,7 @@
 
 #include "Monitor.h"
 /** usage:
- *       Monitor extIp intIp rtrIp myAdr rtrAdr gridSize finTime [logfile]
+ *       Monitor extIp intIp rtrIp myAdr rtrAdr worldSize finTime [logfile]
  * 
  *  Monitor is a program that monitors a virtual world, tracking
  *  the motion of the avatars within it. The monitored data is
@@ -32,13 +32,13 @@
  *  IP address used by the Monitor within the Forest overlay. RtrIp
  *  is the route's IP address, myAdr is the Monitor's Forest
  *  address, rtrAdr is the Forest address of the router, 
- *  gridSize is the number of squares in the virtual world's
- *  basic grid (actually, the grid is gridSizeXgridSize) and
+ *  worldSize is the number of squares in the virtual world's
+ *  basic grid (actually, the grid is worldSizeXworldSize) and
  *  finTime is the number of seconds to run before terminating.
  */
 main(int argc, char *argv[]) {
 	ipa_t intIp, extIp, rtrIp; fAdr_t myAdr, rtrAdr;
-	int comt, finTime, gridSize;
+	int comt, finTime, worldSize;
 
 	if (argc !=8 ||
   	    (extIp  = Np4d::ipAddress(argv[1])) == 0 ||
@@ -46,14 +46,14 @@ main(int argc, char *argv[]) {
 	    (rtrIp  = Np4d::ipAddress(argv[3])) == 0 ||
 	    (myAdr  = Forest::forestAdr(argv[4])) == 0 ||
 	    (rtrAdr = Forest::forestAdr(argv[5])) == 0 ||
-	    (sscanf(argv[6],"%d", &gridSize) != 1) ||
+	    (sscanf(argv[6],"%d", &worldSize) != 1) ||
 	     sscanf(argv[7],"%d", &finTime) != 1)
 		fatal("usage: Monitor extIp intIp rtrIpAdr myAdr rtrAdr "
-		      		    "gridSize finTime");
+		      		    "worldSize finTime");
 	if (extIp == Np4d::ipAddress("127.0.0.1")) extIp = Np4d::myIpAddress(); 
 	if (extIp == 0) fatal("can't retrieve default IP address");
 
-	Monitor mon(extIp,intIp,rtrIp,myAdr,rtrAdr,gridSize);
+	Monitor mon(extIp,intIp,rtrIp,myAdr,rtrAdr,worldSize);
 	if (!mon.init()) {
 		fatal("Monitor: initialization failure");
 	}
@@ -63,17 +63,15 @@ main(int argc, char *argv[]) {
 
 // Constructor for Monitor, allocates space and initializes private data
 Monitor::Monitor(ipa_t xipa, ipa_t iipa, ipa_t ripa, fAdr_t ma, fAdr_t ra,
-		 int gs)
+		 int ws)
 		 : extIp(xipa), intIp(iipa), rtrIp(ripa), myAdr(ma), rtrAdr(ra),
-		   SIZE(GRID*gs) {
+		   worldSize(min(ws,MAX_WORLD)) {
 	int nPkts = 10000;
 	ps = new PacketStore(nPkts+1, nPkts+1);
+	mySubs = new set<int>;
 
-	watchedAvatars = new UiHashTbl(MAX_AVATARS);
-	avData = new avatarData[MAX_AVATARS+1];
-	nextAvatar = 1;
-	cornerX = 0;
-	cornerY = 0;
+	cornerX = 0; cornerY = 0;
+	viewSize = min(10,worldSize);
 	comt = 0;
 	connSock = -1;
 }
@@ -82,7 +80,7 @@ Monitor::~Monitor() {
 	cout.flush();
 	if (extSock > 0) close(extSock);
 	if (intSock > 0) close(intSock);
-	delete watchedAvatars; delete ps;
+	delete ps; delete mySubs;
 }
 
 /** Initialize sockets and open log file for writing.
@@ -104,10 +102,7 @@ bool Monitor::init() {
 	extSock = Np4d::streamSocket();
 	if (extSock < 0) return false;
 	bool status;
-	status = Np4d::bind4d(extSock,extIp,MON_PORT);
-	if (!status) {
-		return false;
-	}
+	if (!Np4d::bind4d(extSock,extIp,MON_PORT)) return false;
 	return Np4d::listen4d(extSock) && Np4d::nonblock(extSock);
 }
 
@@ -125,9 +120,9 @@ void Monitor::run(int finishTime) {
 	now = nextTime = Misc::getTime(); 
 
 	while (now <= finishTime) {
-		check4comtree();
+		check4command();
 		while ((p = receiveReport()) != 0) {
-			updateStatus(p,now);
+			forwardReport(p,now);
 			ps->free(p);
 		}
 
@@ -137,7 +132,19 @@ void Monitor::run(int finishTime) {
 		now = Misc::getTime();
 	}
 
+	unsubscribeAll();
 	disconnect(); 		// send final disconnect packet
+}
+
+/** Send packet to Forest router (connect, disconnect, sub_unsub).
+ */
+void Monitor::send2router(int p) {
+	static sockaddr_in sa;
+	int leng = ps->getHeader(p).getLength();
+	ps->pack(p);
+	int rv = Np4d::sendto4d(intSock,(void *) ps->getBuffer(p),leng,
+		    	      	rtrIp,Forest::ROUTER_PORT);
+	if (rv == -1) fatal("Monitor::send2router: failure in sendto");
 }
 
 /** Check for next Avatar report packet and return it if there is one.
@@ -155,13 +162,27 @@ int Monitor::receiveReport() {
         return p;
 }
 
-/** Check for a new comtree number from the GUI and update subscriptions.
- *  If the remote GUI has connected and sent a comtree number,
- *  read the comtree number and store it. If the new comtree is
- *  different from the previous one, unsubscribe from all multicasts
- *  in the old one and subscribe to all multicasts in the new one.
+/** Check for a new command from remote display program.
+ *  Check to see if the remote display has sent a comand and
+ *  respond appropriately. Commands take the form of pairs
+ *  (c,i) where c is a character that identifies a specific
+ *  command, and i is an integer that provides an optional
+ *  parameter value for the command. The current commands
+ *  are defined below.
+ *
+ *  x set x coordinate of lower left corner of current view to paramater value
+ *  y set y coordinate of lower left corner of current view to paramater value
+ *  v set view size to value specified by paramater value
+ *  c switch to comtree identified by parameter value
+ *
+ *  For the aswd commands, there are corresponding ASWD commands that
+ *  shift by a larger amount. Also, there are OP commands that half/double
+ *  the window size.
+ *
+ *  Note that the integer parameter must be sent even when
+ *  the command doesn't use it
  */
-void Monitor::check4comtree() { 
+void Monitor::check4command() { 
 	if (connSock < 0) {
 		connSock = Np4d::accept4d(extSock);
 		if (connSock < 0) return;
@@ -175,143 +196,112 @@ void Monitor::check4comtree() {
 			perror("");
 		}
 	}
-	uint64_t input;
-        int nbytes = read(connSock, (char *) &input, sizeof(uint64_t));
+	char buf[5];
+        int nbytes = read(connSock, buf, 5);
         if (nbytes < 0) {
                 if (errno == EAGAIN) return;
-                fatal("Monitor::check4comtree: error in read call");
-	} else if (nbytes == 0) { // remote gui closed connection
+                fatal("Monitor::check4command: error in read call");
+	} else if (nbytes == 0) { // remote display closed connection
 		close(connSock); connSock = -1;
-		updateSubscriptions(comt, 0);
-		watchedAvatars->clear(); nextAvatar = 1;
+		unsubscribeAll();
 		return;
-        } else if (nbytes < sizeof(uint32_t)) {
-		fatal("Monitor::check4comtree: incomplete comtree number");
+        } else if (nbytes < 5) {
+		fatal("Monitor::check4command: incomplete command");
 	}
-	uint32_t lowerBits = (uint32_t) (input);
-	comt_t newComt = (comt_t) (input >> 32);
-	lowerBits = ntohl(lowerBits);
-	newComt = ntohl(newComt);
-	if(lowerBits != 0) { //not a comtree, but a movement instruction
-		if(lowerBits == 1) cornerX--;
-		else if(lowerBits == 2) cornerY++;
-		else if(lowerBits == 3) cornerX++;
-		else if(lowerBits == 4) cornerY--;
-		else if(lowerBits == 5) viewSize--;
-		else if(lowerBits == 6) viewSize++;
-		else if(lowerBits == 7) viewSize = newComt;
-		else fatal("unrecognized number from remote client");
+	char cmd = buf[0];
+	uint32_t param = ntohl(*((int*) &buf[1]));
+	comt_t newComt = comt;
+	switch (cmd) {
+	case 'x': cornerX = max(0,min(worldSize-viewSize,param)); break;
+	case 'y': cornerY = max(0,min(worldSize-viewSize,param)); break;
+	case 'v': viewSize = param;
+		  if (viewSize < 1) viewSize = 1;
+		  if (viewSize > worldSize) viewSize = worldSize;
+		  if (viewSize > MAX_VIEW) viewSize = MAX_VIEW;
+		  if (viewSize+cornerX > worldSize)
+			viewSize = worldSize-cornerX;
+		  if (viewSize+cornerY > worldSize)
+			viewSize = worldSize-cornerY;
+		  break;
+	case 'c': newComt = param; break;
+	default: fatal("unrecognized command from remote display");
+	}
+	if (cmd != 'c' && cmd != 'C') { updateSubs(); return; }
 
-		if(lowerBits != 7) updateSubscriptions();
-		return;
-	}
 	if (newComt == comt) return;
-	updateSubscriptions(comt, newComt);
-	comt = newComt;
-	watchedAvatars->clear(); 
-	nextAvatar = 1;
+	switchComtrees(newComt);
 
         return;
 }
 
-/** Send packet to Forest router (connect, disconnect, sub_unsub).
- */
-void Monitor::send2router(int p) {
-	static sockaddr_in sa;
-	int leng = ps->getHeader(p).getLength();
-	ps->pack(p);
-	int rv = Np4d::sendto4d(intSock,(void *) ps->getBuffer(p),leng,
-		    	      	rtrIp,Forest::ROUTER_PORT);
-	if (rv == -1) fatal("Monitor::send2router: failure in sendto");
-}
 
-/** Send status report to remote GUI, assuming the comt value is non-zero.
- *  @param now is the current time, used to timestamp the report
- *  @param avNum is the number of the avatar for which we are sending
- *  a report
- */
-void Monitor::send2gui(uint32_t now, int avNum) {
-
-	if (comt == 0 || connSock == -1) return;
-
-	uint32_t buf[9];
-	buf[0] = htonl(now);
-	buf[1] = htonl(avData[avNum].adr);
-	buf[2] = htonl(avData[avNum].x);
-	buf[3] = htonl(avData[avNum].y);
-	buf[4] = htonl(avData[avNum].dir);
-	buf[5] = htonl(avData[avNum].speed);
-	buf[6] = htonl(avData[avNum].numVisible);
-	buf[7] = htonl(avData[avNum].numNear);
-	buf[8] = htonl(avData[avNum].comt);
-
-	int nbytes = 9*sizeof(uint32_t);
-	char* p = (char *) buf;
-	while (nbytes > 0) {
-		int n = write(connSock, (void *) p, nbytes);
-		if (n < 0) return;//fatal("Monitor::send2gui: failure in write");
-		p += n; nbytes -= n;
-	}
-}
-
-/** Return the multicast group number associated with a virtual world positon.
- *  Assumes that SIZE is an integer multiple of GRID
+/** Return the multicast group number associated with a virtual world position.
  *  @param x1 is x coordinate
  *  @param y1 is y coordinate
  *  @return the group number for the grid square containing (x1,y1)
  */
 int Monitor::groupNum(int x1, int y1) {
-	return 1 + (x1/GRID) + (y1/GRID)*(SIZE/GRID);
+	return 1 + (x1/GRID) + (y1/GRID)*worldSize;
 }
-/** If oldcomt != 0, send a packet to unsubscribe from all multicasts
- *  in oldcomt. if newcomt != 0 send a packet to subscribe to all
- *  multicasts in newcomt.
+
+/** Switch from the current comtree to newComt.
+ *  This requires unsubscribing from all current multicasts
+ *  and subscribing to multicasts in new comtree. Currently,
+ *  Monitor is statically configured as a member of all comtrees.
  */
-void Monitor::updateSubscriptions() {	
+void Monitor::switchComtrees(int newComt) {
+	unsubscribeAll(); comt = newComt; subscribeAll();
+}
+
+/** Subscribe to all multicasts for regions in our current view,
+ *  that we're not already subscribed to.
+ */ 
+void Monitor::subscribeAll() {
+	list<int> glist;
+	for (int xi = cornerX; xi < cornerX + viewSize; xi++) {
+		for (int yi = cornerY; yi < cornerY + viewSize; yi++) {
+			int g = groupNum(xi*GRID, yi*GRID);
+			if (mySubs->find(g) == mySubs->end()) {
+				mySubs->insert(g); glist.push_back(g);
+			}
+		}
+	}
+	subscribe(glist);
+}
+
+/** Unsubscribe from all multicasts that we're currently subscribed to.
+ */
+void Monitor::unsubscribeAll() {
+	list<int> glist;
+	set<int>::iterator gp;
+	for (gp = mySubs->begin(); gp != mySubs->end(); gp++)
+		glist.push_back(*gp);
+	unsubscribe(glist);
+	mySubs->clear();
+}
+
+/** Subscribe to a list of multicast groups.
+ *  @param glist is a reference to a list of multicast group numbers.
+ */
+void Monitor::subscribe(list<int>& glist) {
 	packet p = ps->alloc();
 	PacketHeader& h = ps->getHeader(p);
 	uint32_t *pp = ps->getPayload(p);
 
-	// unsubscriptions
-	int nunsub = 0;
-	for (int x = 0; x < SIZE; x += GRID) {
-		for (int y = 0; y < SIZE; y += GRID) {
-			nunsub++;
-			if (nunsub > 350) {
-				pp[0] = 0; pp[1] = htonl(nunsub-1);
-				h.setLength(Forest::OVERHEAD +
-					    4*(2+nunsub));
-				h.setPtype(SUB_UNSUB); h.setFlags(0);
-				h.setComtree(comt);
-				h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
-				send2router(p);
-				nunsub = 1;
-			}
-			pp[nunsub+1] = htonl(-groupNum(x,y));
-		}
-	}
-	pp[0] = 0; pp[1] = htonl(nunsub);
-	h.setLength(Forest::OVERHEAD + 4*(2+nunsub));
-	h.setPtype(SUB_UNSUB); h.setFlags(0);
-	h.setComtree(comt); h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
-	send2router(p);	
-	// subscriptions
 	int nsub = 0;
-	for (int x = GRID*cornerX; x < GRID*(viewSize+cornerX); x += GRID) {
-		for (int y = GRID*cornerY; y < GRID*(viewSize+cornerY); y += GRID) {
-			nsub++;
-			if (nsub > 350) {
-				pp[0] = htonl(nsub-1); pp[nsub] = 0;
-				h.setLength(Forest::OVERHEAD +
-					    4*(2+nsub));
-				h.setPtype(SUB_UNSUB); h.setFlags(0);
-				h.setComtree(comt);
-				h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
-				send2router(p);
-				nsub = 1;
-			}
-			pp[nsub] = htonl(-groupNum(x,y));
+	list<int>::iterator gp;
+	for (gp = glist.begin(); gp != glist.end(); gp++) {
+		int g = *gp; nsub++;
+		if (nsub > 350) {
+			pp[0] = htonl(nsub-1); pp[nsub] = 0;
+			h.setLength(Forest::OVERHEAD + 4*(2+nsub));
+			h.setPtype(SUB_UNSUB); h.setFlags(0);
+			h.setComtree(comt);
+			h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
+			send2router(p);
+			nsub = 1;
 		}
+		pp[nsub] = htonl(-g);
 	}
 	pp[0] = htonl(nsub); pp[nsub+1] = 0;
 
@@ -321,79 +311,85 @@ void Monitor::updateSubscriptions() {
 	send2router(p);
 	ps->free(p);
 }
-/** If oldcomt != 0, send a packet to unsubscribe from all multicasts
- *  in oldcomt. if newcomt != 0 send a packet to subscribe to all
- *  multicasts in newcomt.
+
+/** Unsubscribe from a list of multicast groups.
+ *  @param glist is a reference to a list of multicast group numbers.
  */
-void Monitor::updateSubscriptions(comt_t oldcomt, comt_t newcomt) {
+void Monitor::unsubscribe(list<int>& glist) {
 	packet p = ps->alloc();
 	PacketHeader& h = ps->getHeader(p);
 	uint32_t *pp = ps->getPayload(p);
 
-	if(oldcomt != 0) {
-		// unsubscriptions
-		int nunsub = 0;
-		for (int x = 0; x < SIZE; x += GRID) {
-			for (int y = 0; y < SIZE; y += GRID) {
-				nunsub++;
-				if (nunsub > 350) {
-					pp[0] = 0; pp[1] = htonl(nunsub-1);
-					h.setLength(Forest::OVERHEAD +
-						    4*(2+nunsub));
-					h.setPtype(SUB_UNSUB); h.setFlags(0);
-					h.setComtree(oldcomt);
-					h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
-					send2router(p);
-					nunsub = 1;
-				}
-				pp[nunsub+1] = htonl(-groupNum(x,y));
-			}
+	int nunsub = 0;
+	list<int>::iterator gp;
+	for (gp = glist.begin(); gp != glist.end(); gp++) {
+		int g = *gp; nunsub++;
+		if (nunsub > 350) {
+			pp[0] = 0; pp[1] = htonl(nunsub-1);
+			h.setLength(Forest::OVERHEAD + 4*(2+nunsub));
+			h.setPtype(SUB_UNSUB); h.setFlags(0);
+			h.setComtree(comt);
+			h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
+			send2router(p);
+			nunsub = 1;
 		}
-		pp[0] = 0; pp[1] = htonl(nunsub);
-		h.setLength(Forest::OVERHEAD + 4*(2+nunsub));
-		h.setPtype(SUB_UNSUB); h.setFlags(0);
-		h.setComtree(oldcomt); h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
-		send2router(p);
+		pp[nunsub+1] = htonl(-g);
 	}
-	if(newcomt != 0) {
-		// subscriptions
-		int nsub = 0;
-		for (int x = GRID*cornerX; x < GRID*(viewSize+cornerX); x += GRID) {
-			for (int y = GRID*cornerY; y < GRID*(viewSize+cornerX); y += GRID) {
-				nsub++;
-				if (nsub > 350) {
-					pp[0] = htonl(nsub-1); pp[nsub] = 0;
-					h.setLength(Forest::OVERHEAD +
-						    4*(2+nsub));
-					h.setPtype(SUB_UNSUB); h.setFlags(0);
-					h.setComtree(newcomt);
-					h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
-					send2router(p);
-					nsub = 1;
-				}
-				pp[nsub] = htonl(-groupNum(x,y));
-			}
-		}
-		pp[0] = htonl(nsub); pp[nsub+1] = 0;
-	
-		h.setLength(Forest::OVERHEAD + 4*(2+nsub));
-		h.setPtype(SUB_UNSUB); h.setFlags(0);
-		h.setComtree(newcomt); h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
-		send2router(p);
-		ps->free(p);
-	}
+	pp[0] = 0; pp[1] = htonl(nunsub);
+
+	h.setLength(Forest::OVERHEAD + 4*(2+nunsub));
+	h.setPtype(SUB_UNSUB); h.setFlags(0);
+	h.setComtree(comt); h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
+	send2router(p);
+	ps->free(p);
 }
 
-/** If the given packet is a status report, track the sender.
- *  Add to our set of watchedAvatars if not already there.
- *  sending avatar is visible. If it is visible, but not in our
- *  set of nearby avatars, then add it. If it is not visible
- *  but is in our set of nearby avatars, then delete it.
- *  Note: we assume that the visibility range and avatar speeds
- *  are such that we will get at least one report from a newly
- *  invisible avatar.
+/** Update subscriptions without changing comtrees.
+ *  Unsubscribe to all multicasts that are not in current view,
+ *  then subscribe to all missing multicasts that are in current view.
  */
-void Monitor::updateStatus(int p, int now) {
+void Monitor::updateSubs() {	
+	// identify subscriptions that are not in current view
+	list<int> glist;
+	set<int>::iterator gp;
+	for (gp = mySubs->begin(); gp != mySubs->end(); gp++) {
+		int g = *gp;
+		int xi = (g-1) % worldSize;
+		int yi = (g-1) / worldSize;
+		if (xi >= cornerX && xi < cornerX + viewSize &&
+		    yi >= cornerY && yi < cornerY + viewSize)
+			continue; // keep this subscription
+		glist.push_back(g); 
+	}
+	// remove them from subscription set and unsubscribe
+	list<int>::iterator p;
+	for (p = glist.begin(); p != glist.end(); p++)
+		mySubs->erase(*p);
+	unsubscribe(glist);
+
+	// identify subscriptions that are now in our current view,
+	// add them to subscription set and subscribe
+	glist.clear();
+	for (int xi = cornerX; xi < cornerX + viewSize; xi++) {
+		for (int yi = cornerY; yi < cornerY + viewSize; yi++) {
+			int g = groupNum(xi*GRID, yi*GRID);
+			if (mySubs->find(g) == mySubs->end()) {
+				mySubs->insert(g); glist.push_back(g);
+			}
+		}
+	}
+	subscribe(glist);
+}
+
+/** If the given packet is a status report and there is a remote display
+ *  connected, then forward the status info to the remote display.
+ *  Filter out packets that are not in our current "view".
+ *  @param p is the packet number for a packet from the Forest network
+ *  @param now is the current time
+ */
+void Monitor::forwardReport(int p, int now) {
+	if (comt == 0 || connSock == -1) return;
+
 	PacketHeader& h = ps->getHeader(p);
 	uint32_t *pp = ps->getPayload(p);
 
@@ -403,26 +399,19 @@ void Monitor::updateStatus(int p, int now) {
 		// avatar status reports
 		ps->free(p); return;
 	}
-	uint64_t key = h.getSrcAdr(); key = (key << 32) | h.getSrcAdr();
-	int avNum = watchedAvatars->lookup(key);
-	if (avNum == 0) {
-		watchedAvatars->insert(key, nextAvatar);
-		avNum = nextAvatar++;
+	uint32_t buf[NUMITEMS];
+	for (int i = 0; i < NUMITEMS; i++) buf[i] = pp[i];
+	buf[0] = htonl(now); buf[1] = htonl(h.getSrcAdr());
+	buf[8] = htonl(comt);
+
+	int nbytes = NUMITEMS*sizeof(uint32_t);
+	char* bp = (char *) buf;
+	while (nbytes > 0) {
+		int n = write(connSock, (void *) bp, nbytes);
+		if (n < 0) break;
+		bp += n; nbytes -= n;
 	}
-
-	avData[avNum].adr = h.getSrcAdr();
-	avData[avNum].ts = ntohl(pp[1]);
-	avData[avNum].x = ntohl(pp[2]);
-	avData[avNum].y = ntohl(pp[3]);
-	avData[avNum].dir = ntohl(pp[4]);
-	avData[avNum].speed = ntohl(pp[5]);
-	avData[avNum].numVisible = ntohl(pp[6]);
-	avData[avNum].numNear = ntohl(pp[7]);
-	avData[avNum].comt = comt;
-
-	send2gui(now,avNum);
-
-	return;
+	ps->free(p); return;
 }
 
 /** Send initial connect packet to forest router
@@ -442,9 +431,6 @@ void Monitor::connect() {
 /** Send final disconnect packet to forest router, after unsubscribing.
  */
 void Monitor::disconnect() {
-	updateSubscriptions(comt, 0);
-	comt = 0;
-
 	packet p = ps->alloc();
 	PacketHeader& h = ps->getHeader(p);
 

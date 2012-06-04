@@ -2,7 +2,8 @@ ALGOLIBROOT = ../../algolib-jst
 FLIB = ../lib/lib-forest.a
 LIBS = ${FLIB} ${ALGOLIBROOT}/lib/lib-util.a ${ALGOLIBROOT}/lib/lib-ds.a
 XFILES = Avatar Monitor genWalls
-CLASSFILES = AvatarStatus.class AvatarGraphic.class ShowWorld.class 
+CLASSFILES = AvatarStatus.class AvatarGraphic.class ShowWorld.class \
+	DriveAvatar.class
 CXXFLAGS = -O2 -m64 -I ../include -I ${ALGOLIBROOT}/include
 
 %.o: %.cpp %.h stdinc.h
@@ -10,7 +11,7 @@ CXXFLAGS = -O2 -m64 -I ../include -I ${ALGOLIBROOT}/include
 
 %.class: %.java
 	javac -nowarn -cp ~/bin/java $<
-	mv $@ ~/bin/java/forest/vworld1
+	cp *.class ~/bin/java/forest/vworld1
 
 all : ${XFILES} ${CLASSFILES}
 
