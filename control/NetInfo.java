@@ -1796,11 +1796,22 @@ public class NetInfo {
 		for (int ctx = firstComtIndex(); ctx != 0;
 			 ctx = nextComtIndex(ctx)) {
 			int comt = getComtree(ctx);
+			int root = getComtRoot(ctx);
+			if (comt == 0) {
+				System.err.println("check: comtree " + comt
+					+ " has not specified root");
+				status = false; continue;
+			}
 			// first count nodes and links
 			Set<Integer> nodes = new HashSet<Integer>();
-			int lnkCnt = 0;
+			Iterator<Integer> rmp =
+				comtree[ctx].rtrMap.keySet().iterator();
+			while (rmp.hasNext()) {
+				Integer r = rmp.next(); nodes.add(r);
+			}
 			Iterator<Integer> clp =
 				getComtLinks(ctx).keySet().iterator();
+			int lnkCnt = 0;
 			while (clp.hasNext()) {
 				Integer lnk = clp.next();
 				nodes.add(getLinkL(lnk));
@@ -1813,7 +1824,6 @@ public class NetInfo {
 				status = false; continue;
 			}
 			// check that root and core nodes are in set we've seen
-			int root = getComtRoot(ctx);
 			if (!nodes.contains(root)) {
 				System.err.println("check: specified comtree "
 					+ "root for comtree " + comt + " does "
@@ -2676,6 +2686,8 @@ public class NetInfo {
 					return "root " + part[1] +
 						" is not a router";
 				nuComt.coreSet.add(nuComt.root);
+				ComtRtrInfo cri = new ComtRtrInfo();
+				nuComt.rtrMap.put(nuComt.root,cri);
 			} else if (part[0].equals("core")) {
 				Integer r = nameNodeMap.get(part[1]);
 				if (r == null) 
@@ -2685,6 +2697,8 @@ public class NetInfo {
 					return "core " + part[1]
 					    	+ " is not a router";
 				nuComt.coreSet.add(r);
+				ComtRtrInfo cri = new ComtRtrInfo();
+				nuComt.rtrMap.put(r,cri);
 			} else if (part[0].equals("bitRateDown")) {
 				nuComt.bitRateDown = Integer.parseInt(part[1]);
 			} else if (part[0].equals("bitRateUp")) {

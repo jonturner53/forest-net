@@ -234,6 +234,7 @@ void* run(void* finishTime) {
 		now = Misc::getTimeNs();
 	}
 	disconnect();
+	pthread_exit(NULL);
 }
 
 void handleIncoming(int p) {

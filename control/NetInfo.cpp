@@ -337,8 +337,19 @@ bool NetInfo::check() {
 	// various other requirements
 	for (int ctx = firstComtIndex(); ctx != 0; ctx = nextComtIndex(ctx)) {
 		int comt = getComtree(ctx);
+		int root = getComtRoot(ctx);
+		if (root == 0) {
+			cerr << "NetInfo::check: no root node\n";
+			status = false; continue;
+		}
 		// first count nodes and links
-		set<int> nodes; int lnkCnt = 0;
+		set<int> nodes;
+		map<int,ComtRtrInfo>::iterator rp;
+		for (rp  = comtree[ctx].rtrMap->begin();
+		     rp != comtree[ctx].rtrMap->end(); rp++) {
+			nodes.insert((*rp).first);
+		}
+		int lnkCnt = 0;
 		for (int lnk = firstComtLink(ctx); lnk != 0;
 			 lnk = nextComtLink(lnk,ctx)) {
 			nodes.insert(getLinkL(lnk));
@@ -346,12 +357,12 @@ bool NetInfo::check() {
 			lnkCnt++;
 		}
 		if (lnkCnt != ((int) nodes.size()) - 1) {
+cerr << "lnkCnt=" << lnkCnt << " size=" << nodes.size() << endl;
 			cerr << "NetInfo::check: links in comtree "
 			     << comt << " do not form a tree\n";
 			status = false; continue;
 		}
 		// check that root and core nodes are in the set we've seen
-		int root = getComtRoot(ctx);
 		if (nodes.find(root) == nodes.end()) {
 			cerr << "NetInfo::check: specified comtree root for "
 				" comtree " << comt << " does not appear "
@@ -1466,6 +1477,14 @@ bool NetInfo::read(istream& in) {
 					return false;
 				}
 				cComt.coreSet->insert(cComt.root);
+				if (cComt.rtrMap->find(cComt.root) ==
+				    cComt.rtrMap->end()) {
+					pair<int,ComtRtrInfo> newPair;
+					newPair.first = cComt.root;
+					newPair.second.plnk = 0;
+					newPair.second.lnkCnt = 0;
+					cComt.rtrMap->insert(newPair);
+				}
 			} else if (s.compare("bitRateDown") == 0 &&
 				   Misc::verify(in,'=')) {
 				if (!Misc::readNum(in,cComt.bitRateDown)) {
@@ -1563,6 +1582,14 @@ bool NetInfo::read(istream& in) {
 					return false;
 				}
 				cComt.coreSet->insert(r);
+				if (cComt.rtrMap->find(r) ==
+				    cComt.rtrMap->end()) {
+					pair<int,ComtRtrInfo> newPair;
+					newPair.first = r;
+					newPair.second.plnk = 0;
+					newPair.second.lnkCnt = 0;
+					cComt.rtrMap->insert(newPair);
+				}
 			} else if (s.compare("link") == 0 &&
 				   Misc::verify(in,'=')) {
 				string leftName, rightName;

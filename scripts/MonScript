@@ -1,7 +1,7 @@
 #! /bin/sh
 # Run a Monitor for a forest network
 #
-# usage: MonScript dir xip hip rip hfa rfa gridSize tlim
+# usage: MonScript dir xip hip rip hfa rfa ccfa gridSize tlim
 #
 # dir is the directory in which to run fHost
 # xip is this host's externally visible IP address
@@ -9,6 +9,7 @@
 # rip is the IP address of the host's router
 # hfa is this host's forest address
 # rfa is the forest address of the host's router
+# ccfa is the forest address of the comtree controller
 # gridSize is number of squares in x and y dimensions
 # tlim is the number of seconds to run
 #
@@ -21,4 +22,4 @@
 # script returns immediately.
 #
 cd $1
-Monitor $2 $3 $4 $5 $6 $7 $8 >log/m 2>err/m &
+Monitor $2 $3 $4 $5 $6 $7 $8 $9 >log/m 2>err/m &
