@@ -218,6 +218,11 @@ CpType::CpTypeInfo CpType::typeInfo[] = {
 		(1ull << CLIENT_IP)| (1ull << CLIENT_PORT),
 		(1ull << CLIENT_ADR)| (1ull << RTR_IP)| (1ull << RTR_ADR)},
 
+	{ NEW_CLIENT_PROXY,	103,	"new client proxy",	    "ncp", 
+		(1ull << PEER_IP)| (1ull << PEER_PORT),
+		(1ull << PEER_IP)| (1ull << PEER_PORT),
+		(1ull << RTR_IP)| (1ull << PEER_ADR)},
+
 	{ CLIENT_CONNECT,	101,	"client connected",	   "cc",  
 		(1ull << CLIENT_ADR)| (1ull << RTR_ADR),
 		(1ull << CLIENT_ADR)| (1ull << RTR_ADR),
