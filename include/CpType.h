@@ -45,8 +45,7 @@ enum CpTypeIndex {
 	ADD_ROUTE_LINK, DROP_ROUTE_LINK,
 
 	// packet types used by client manager
-	NEW_CLIENT, CLIENT_CONNECT, CLIENT_DISCONNECT,
-
+	NEW_CLIENT, CLIENT_CONNECT, CLIENT_DISCONNECT,NEW_CLIENT_PROXY,
 	// packet types to boot router from netMgr
 	BOOT_REQUEST, BOOT_COMPLETE, BOOT_ABORT,
 	
