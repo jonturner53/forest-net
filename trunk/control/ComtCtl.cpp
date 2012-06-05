@@ -305,6 +305,7 @@ void* run(void* finTimeSec) {
 		now = Misc::getTimeNs();
 	}
 	disconnect();
+	pthread_exit(NULL);
 }
 
 /** Control packet handler.

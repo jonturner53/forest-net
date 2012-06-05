@@ -37,23 +37,25 @@
  *  finTime is the number of seconds to run before terminating.
  */
 int main(int argc, char *argv[]) {
-	ipa_t intIp, extIp, rtrIp; fAdr_t myAdr, rtrAdr;
-	uint32_t finTime; int worldSize;
+	ipa_t intIp, extIp, rtrIp;
+	fAdr_t myAdr, rtrAdr, comtCtlAdr;
+	int finTime, worldSize;
 
-	if (argc != 8 ||
+	if (argc != 9 ||
   	    (extIp  = Np4d::ipAddress(argv[1])) == 0 ||
   	    (intIp  = Np4d::ipAddress(argv[2])) == 0 ||
 	    (rtrIp  = Np4d::ipAddress(argv[3])) == 0 ||
 	    (myAdr  = Forest::forestAdr(argv[4])) == 0 ||
 	    (rtrAdr = Forest::forestAdr(argv[5])) == 0 ||
-	    (sscanf(argv[6],"%d", &worldSize) != 1) ||
-	     sscanf(argv[7],"%d", &finTime) != 1)
+	    (comtCtlAdr = Forest::forestAdr(argv[6])) == 0 ||
+	    (sscanf(argv[7],"%d", &worldSize) != 1) ||
+	     sscanf(argv[8],"%d", &finTime) != 1)
 		fatal("usage: Monitor extIp intIp rtrIpAdr myAdr rtrAdr "
-		      		    "worldSize finTime");
+		      		    "comtCtlAdr worldSize finTime");
 	if (extIp == Np4d::ipAddress("127.0.0.1")) extIp = Np4d::myIpAddress(); 
 	if (extIp == 0) fatal("can't retrieve default IP address");
 
-	Monitor mon(extIp,intIp,rtrIp,myAdr,rtrAdr,worldSize);
+	Monitor mon(extIp,intIp,rtrIp,myAdr,rtrAdr,comtCtlAdr,worldSize);
 	if (!mon.init()) {
 		fatal("Monitor: initialization failure");
 	}
@@ -62,10 +64,10 @@ int main(int argc, char *argv[]) {
 }
 
 // Constructor for Monitor, allocates space and initializes private data
-Monitor::Monitor(ipa_t xipa, ipa_t iipa, ipa_t ripa, fAdr_t ma, fAdr_t ra,
-		 int ws)
-		 : extIp(xipa), intIp(iipa), rtrIp(ripa), myAdr(ma), rtrAdr(ra),
-		   worldSize(min(ws,MAX_WORLD)) {
+Monitor::Monitor(ipa_t xipa, ipa_t iipa, ipa_t ripa, fAdr_t ma,
+		 fAdr_t ra, fAdr_t cca, int ws)
+		 : extIp(xipa), intIp(iipa), rtrIp(ripa), myAdr(ma),
+		   rtrAdr(ra), comtCtlAdr(cca), worldSize(min(ws,MAX_WORLD)) {
 	int nPkts = 10000;
 	ps = new PacketStore(nPkts+1, nPkts+1);
 	mySubs = new set<int>;
@@ -73,6 +75,7 @@ Monitor::Monitor(ipa_t xipa, ipa_t iipa, ipa_t ripa, fAdr_t ma, fAdr_t ra,
 	cornerX = 0; cornerY = 0;
 	viewSize = min(10,worldSize);
 	comt = 0;
+	switchState = IDLE;
 	connSock = -1;
 }
 
@@ -113,17 +116,35 @@ bool Monitor::init() {
  */
 void Monitor::run(uint32_t finishTime) {
 	int p;
-
 	uint32_t now;    	// free-running microsecond time
 	uint32_t nextTime;	// time of next operational cycle
 	now = nextTime = Misc::getTime(); 
 
+	bool waiting4switch = false;
+int cnt = 0;
+cerr << "entering main loop\n";
 	while (now <= finishTime) {
-		check4command();
+		comt_t newComt = check4command();
+		if (newComt != 0 && newComt != comt) {
+cerr << "got new comt " << newComt << endl;
+			startComtSwitch(newComt,now);
+			waiting4switch = true;
+		}
 		while ((p = receiveReport()) != 0) {
-			forwardReport(p,now);
+			if (!waiting4switch) {
+				forwardReport(p,now);
+				ps->free(p); continue;
+			}
+			// discard non-signalling packets and pass
+			// signalling packets to completeComtSwitch
+			if (ps->getHeader(p).getPtype() == CLIENT_DATA) {
+				ps->free(p); continue;
+			}
+			waiting4switch = completeComtSwitch(p,now);
 			ps->free(p);
 		}
+		// check for timeout
+		waiting4switch = !completeComtSwitch(0,now);
 
 		nextTime += 1000*UPDATE_PERIOD;
 		useconds_t delay = nextTime - Misc::getTime();
@@ -133,6 +154,124 @@ void Monitor::run(uint32_t finishTime) {
 
 	unsubscribeAll();
 	disconnect(); 		// send final disconnect packet
+}
+
+/** Start the process of switching to a new comtree.
+ *  Unsubscribe to the current comtree and leave send signalling
+ *  message to leave the current comtree. 
+ *  @param newComt is the number of the comtree we're switching to
+ *  @param now is the current time
+ */
+void Monitor::startComtSwitch(comt_t newComt, uint32_t now) {
+	nextComt = newComt;
+	if (comt != 0) {
+		unsubscribeAll();
+		send2comtCtl(CLIENT_LEAVE_COMTREE);
+		switchState = LEAVING;
+		switchTimer = now; switchCnt = 1;
+	} else {
+		comt = nextComt;
+		send2comtCtl(CLIENT_JOIN_COMTREE);
+		switchState = JOINING;
+		switchTimer = now; switchCnt = 1;
+	}
+}
+
+/** Attempt to complete the process of switching to a new comtree.
+ *  This involves completing signalling interactions with ComtCtl,
+ *  including re-sending signalling packets when timeouts occur.
+ *  @param p is a packet number, or 0 if the caller just wants to
+ *  check for a timeout
+ *  @param now is the current time
+ *  @return true if the switch has been completed, or if the switch
+ *  has failed (either because the ComtCtl sent a negative response or
+ *  because it never responded after repeated attempts); otherwise,
+ *  return false
+ */
+bool Monitor::completeComtSwitch(packet p, uint32_t now) {
+	if (switchState == IDLE) return true;
+	if (p == 0 && now - switchTimer < SWITCH_TIMEOUT)
+		return false; // nothing to do in this case
+	switch (switchState) {
+	case LEAVING: {
+		if (p == 0) {
+			if (switchCnt > 3) { // give up
+				switchState = IDLE; return true;
+			}
+			// try again
+			send2comtCtl(CLIENT_LEAVE_COMTREE,RETRY);
+			switchTimer = now; switchCnt++;
+			return false;
+		}
+		PacketHeader& h = ps->getHeader(p); 
+		CtlPkt cp;
+		cp.unpack(ps->getPayload(p),h.getLength() - Forest::OVERHEAD);
+		if (cp.getCpType() == CLIENT_LEAVE_COMTREE) {
+			if (cp.getRrType() == POS_REPLY) {
+cerr << "left comtree\n";
+				comt = nextComt;
+				send2comtCtl(CLIENT_JOIN_COMTREE);
+				switchState = JOINING;
+				switchTimer = now; switchCnt = 1;
+				return false;
+			} else if (cp.getRrType() == NEG_REPLY) { // give up
+				switchState = IDLE; return true;
+			} 
+		}
+		return false; // ignore anything else
+	}
+	case JOINING: {
+		if (p == 0) {
+			if (switchCnt > 3) { // give up
+				switchState = IDLE; return true;
+			}
+			// try again
+			send2comtCtl(CLIENT_JOIN_COMTREE,RETRY);
+			switchTimer = now; switchCnt++;
+			return false;
+		}
+		PacketHeader& h = ps->getHeader(p); 
+		CtlPkt cp;
+		cp.unpack(ps->getPayload(p),h.getLength() - Forest::OVERHEAD);
+		if (cp.getCpType() == CLIENT_JOIN_COMTREE) {
+			if (cp.getRrType() == POS_REPLY) {
+cerr << "joined comtree\n";
+				subscribeAll();
+				switchState = IDLE; return true;
+			} else if (cp.getRrType() == NEG_REPLY) { // give up
+				switchState = IDLE; return true;
+			} 
+		}
+		return false; // ignore anything else
+	}
+	default: break;
+	}
+	return false;
+}
+
+/** Send join or leave packet packet to the ComtreeController.
+ *  @param cpx is either CLIENT_JOIN_COMTREE or CLIENT_LEAVE_COMTREE,
+ *  depending on whether we want to join or leave the comtree
+ */
+void Monitor::send2comtCtl(CpTypeIndex cpx, bool retry) {
+        packet p = ps->alloc();
+        if (p == 0)
+		fatal("Monitor::send2comtCtl: no packets left to allocate");
+        CtlPkt cp(cpx,REQUEST,seqNum);;
+	if (!retry) seqNum++;
+        cp.setAttr(COMTREE_NUM,comt);
+        cp.setAttr(CLIENT_IP,intIp);
+        cp.setAttr(CLIENT_PORT,Np4d::getSockPort(intSock));
+        int len = cp.pack(ps->getPayload(p));
+	if (len == 0) 
+		fatal("Monitor::send2comtCtl: control packet packing error");
+        PacketHeader& h = ps->getHeader(p);
+	h.setLength(Forest::OVERHEAD + len);
+        h.setPtype(CLIENT_SIG); h.setFlags(0);
+        h.setComtree(Forest::CLIENT_SIG_COMT);
+	h.setSrcAdr(myAdr); h.setDstAdr(comtCtlAdr);
+        h.pack(ps->getBuffer(p));
+	send2router(p);
 }
 
 /** Send packet to Forest router (connect, disconnect, sub_unsub).
@@ -179,11 +318,14 @@ int Monitor::receiveReport() {
  *
  *  Note that the integer parameter must be sent even when
  *  the command doesn't use it
+ *
+ *  @return the requested comtree number if the 'c' command
+ *  is received; else 0
  */
-void Monitor::check4command() { 
+comt_t Monitor::check4command() { 
 	if (connSock < 0) {
 		connSock = Np4d::accept4d(extSock);
-		if (connSock < 0) return;
+		if (connSock < 0) return 0;
 		if (!Np4d::nonblock(connSock))
 			fatal("can't make connection socket nonblocking");
 		bool status; int ndVal = 1;
@@ -192,23 +334,23 @@ void Monitor::check4command() {
 		if (status != 0) {
 			cerr << "setsockopt for no-delay failed\n";
 			perror("");
+			exit(1);
 		}
 	}
 	char buf[5];
         int nbytes = read(connSock, buf, 5);
         if (nbytes < 0) {
-                if (errno == EAGAIN) return;
+                if (errno == EAGAIN) return 0;
                 fatal("Monitor::check4command: error in read call");
 	} else if (nbytes == 0) { // remote display closed connection
 		close(connSock); connSock = -1;
 		unsubscribeAll();
-		return;
+		return 0;
         } else if (nbytes < 5) {
 		fatal("Monitor::check4command: incomplete command");
 	}
 	char cmd = buf[0];
 	uint32_t param = ntohl(*((int*) &buf[1]));
-	comt_t newComt = comt;
 	switch (cmd) {
 	case 'x': cornerX = max(0,min(worldSize-viewSize,param)); break;
 	case 'y': cornerY = max(0,min(worldSize-viewSize,param)); break;
@@ -221,15 +363,11 @@ void Monitor::check4command() {
 		  if (viewSize+cornerY > worldSize)
 			viewSize = worldSize-cornerY;
 		  break;
-	case 'c': newComt = param; break;
+	case 'c': return param;
 	default: fatal("unrecognized command from remote display");
 	}
-	if (cmd != 'c' && cmd != 'C') { updateSubs(); return; }
-
-	if (newComt == comt) return;
-	switchComtrees(newComt);
-
-        return;
+	updateSubs();
+        return 0;
 }
 
 
@@ -282,6 +420,8 @@ void Monitor::unsubscribeAll() {
  *  @param glist is a reference to a list of multicast group numbers.
  */
 void Monitor::subscribe(list<int>& glist) {
+	if (glist.size() == 0) return;
+
 	packet p = ps->alloc();
 	PacketHeader& h = ps->getHeader(p);
 	uint32_t *pp = ps->getPayload(p);
@@ -314,6 +454,8 @@ void Monitor::subscribe(list<int>& glist) {
  *  @param glist is a reference to a list of multicast group numbers.
  */
 void Monitor::unsubscribe(list<int>& glist) {
+	if (glist.size() == 0) return;
+
 	packet p = ps->alloc();
 	PacketHeader& h = ps->getHeader(p);
 	uint32_t *pp = ps->getPayload(p);
@@ -347,6 +489,7 @@ void Monitor::unsubscribe(list<int>& glist) {
  *  then subscribe to all missing multicasts that are in current view.
  */
 void Monitor::updateSubs() {	
+	if (comt == 0) return;
 	// identify subscriptions that are not in current view
 	list<int> glist;
 	set<int>::iterator gp;
@@ -392,7 +535,7 @@ void Monitor::forwardReport(int p, int now) {
 	uint32_t *pp = ps->getPayload(p);
 
 	if (h.getComtree() != comt || h.getPtype() != CLIENT_DATA ||
-	    ntohl(pp[0]) != (int) Avatar::STATUS_REPORT) {
+	    ntohl(pp[0]) != (uint32_t) Avatar::STATUS_REPORT) {
 		// ignore packets for other comtrees, or that are not
 		// avatar status reports
 		ps->free(p); return;

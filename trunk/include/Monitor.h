@@ -23,7 +23,7 @@
  */
 class Monitor {
 public:
-		Monitor(ipa_t, ipa_t , ipa_t, fAdr_t, fAdr_t, int);
+		Monitor(ipa_t, ipa_t , ipa_t, fAdr_t, fAdr_t, fAdr_t, int);
 		~Monitor();
 
 	bool	init();			///< open and setup socket
@@ -43,18 +43,33 @@ private:
 	ipa_t	rtrIp;			///< IP address of router
 	fAdr_t	myAdr;			///< forest address of host
 	fAdr_t	rtrAdr;			///< forest address of router
+	fAdr_t	comtCtlAdr;		///< address of ComtCtl
 
 	int	intSock;		///< internal socket number
 	int	extSock;		///< external listening socket
 	int	connSock;		///< external connection socket
+
 	int	cornerX;		///< lower-left corner of current view
 	int	cornerY;
 	int	viewSize;		///< size of current view
-	comt_t	comt;			///< current comtree number
+
 
 	set<int> *mySubs;		///< current multicast subscriptions
 
 	PacketStore *ps;		///< pointer to packet store
+
+	// data for managing signalling interactions with ComtCtl
+	const static uint32_t SWITCH_TIMEOUT = 500000; ///< 500 ms timeout
+	const static bool RETRY = true; ///< flag used to signal retry
+	enum STATE {
+		IDLE, JOINING, LEAVING 
+	};				///< state of signaling interaction
+	STATE	switchState;		///< current state
+	uint32_t switchTimer;		///< time last signalling packet sent
+	int	switchCnt;		///< number of attempts so far
+	comt_t	nextComt;		///< comtree we're switching to
+	comt_t	comt;			///< current comtree number
+	int	seqNum;			///< sequence number of control packet
 
 	// private helper methods
 	int	groupNum(int, int);
@@ -62,12 +77,16 @@ private:
 	void	connect();		
 	void	disconnect();	
 
-	void 	check4command(); 	
+	comt_t 	check4command(); 	
 
 	int 	receiveReport();
 	void	forwardReport(int,int);
 
 	void	send2router(int);
+
+	void	startComtSwitch(comt_t, uint32_t);
+	bool	completeComtSwitch(packet, uint32_t);
+	void	send2comtCtl(CpTypeIndex,bool=false);
 
 	void	switchComtrees(int);
 	void	updateSubs();
