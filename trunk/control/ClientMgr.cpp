@@ -250,7 +250,12 @@ void handleIncoming(int p) {
 				pool[t].qp.in.enq(p);
 // might want to print error message in this case
 			} else ps->free(p);
-		} else if(cp.getRrType() == REQUEST &&
+		} 
+		else if(cp.getCpType() == NEW_CLIENT_PROXY){
+			//handle accordingly
+
+		}
+		else if(cp.getRrType() == REQUEST &&
 		    (cp.getCpType() == CLIENT_CONNECT ||
 		     cp.getCpType() == CLIENT_DISCONNECT)) {
 			writeToAcctFile(cp);
