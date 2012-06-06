@@ -181,7 +181,15 @@ bool Avatar::setupWalls(const char *wallsFile) {
 		if (walls == NULL) {
 			worldSize = line.size();
 			y = worldSize-1;
-			walls = new int[worldSize*worldSize];
+			try {
+				walls = new int[worldSize*worldSize];
+			} catch(exception& e) {
+				cerr << "setupWalls: could not allocate space "
+					"for walls array (worldSize="
+				     << worldSize << ")\n" << endl;
+				perror("");
+				exit(1);
+			}
 		} else if ((int) line.size() != worldSize) {
 			cerr << "setupWalls: format error, all lines must have "
 			        "same length\n";
@@ -207,7 +215,15 @@ bool Avatar::setupWalls(const char *wallsFile) {
 
 	// now, compute visibility of squares relative to each other
 	// and store results in visibility sets
-	visSet = new set<int>[worldSize*worldSize+1];
+	try {
+		visSet = new set<int>[worldSize*worldSize+1];
+	} catch(exception& e) {
+		cerr << "setupWalls: could not allocate space "
+			"for visibility sets (worldSize="
+		     << worldSize << ")\n" << endl;
+		perror("");
+		exit(1);
+	}
 	for (int x1 = 0; x1 < worldSize; x1++) {
 	for (int y1 = 0; y1 < worldSize; y1++) {
 		int g1 = 1 + x1 + y1*worldSize;
@@ -219,13 +235,14 @@ bool Avatar::setupWalls(const char *wallsFile) {
 				int y2 = d + y1 - (x2 - x1);
 				if (y2 >= worldSize) continue;
 				int g2 = 1 + x2 + y2*worldSize;
-if (g1 == 1) cerr << "checking " << g2;
 				if (isVis(g1,g2)) {
-if (g1 == 1) cerr << " is visible";
+if (visSet[g1].size() > 200) {
+cerr << "set " << g1 << " excessively large\n";
+exit(1);
+}
 					(visSet[g1]).insert(g2);
 					done = false;
 				}
-if (g1 == 1) cerr << endl;
 			}
 			if (done) break;
 		}
@@ -276,43 +293,10 @@ if (g1 == 1) cerr << endl;
 	// print some visibility statistics for the log
 	int maxVis = 0;; int totVis = 0;
 	for (int g = 1; g <= worldSize*worldSize; g++) {
-if (g == 1) {
-cerr << "visSet[" << g << "]=";
-set<int>::iterator p;
-for (p = visSet[g].begin(); p != visSet[g].end(); p++)
-cerr << *p << " ";
-cerr << endl;
-}
 		int vis = visSet[g].size();
 		maxVis = max(vis,maxVis); totVis += vis;
 	}
 			
-/*
-
-	visibility = new bool*[worldSize*worldSize];
-	for(int i = 0; i < worldSize*worldSize; i++)
-		visibility[i] = new bool[worldSize*worldSize];
-	for(int i = 0; i < worldSize*worldSize; i++) {
-		for(int j = i; j < worldSize*worldSize; j++) {
-			if (i == j) {
-				visibility[i][j] = true;
-			} else {
-				visibility[i][j] = isVis(i,j);
-				visibility[j][i] = visibility[i][j];
-			}
-		}
-	}
-
-	// print some visibility statistics for the log
-	int maxVis; int totVis = 0;
-	for (int h = 0; h < worldSize*worldSize; h++) {
-		int vis = 0;
-		for (int k = 0; k < worldSize*worldSize; k++) {
-			if (k != h && visibility[h][k]) vis++;
-		}
-		maxVis = max(vis,maxVis); totVis += vis;
-	}
-*/
 	cout << "avg visible: " << totVis/(worldSize*worldSize)
 	     << " max visible: " << maxVis << endl;
 	return true;
@@ -334,11 +318,9 @@ void Avatar::run(uint32_t finishTime) {
 	uint32_t nextTime;		// time of next operational cycle
 	uint32_t lastComtSwitch;	// last time a comt switched
 
-	now = nextTime = lastComtSwitch = Misc::getTime();
+	now = nextTime = Misc::getTime();
+	uint32_t comtSwitchTime = now+1;
 	comt = 0;
-	comt_t newComt = randint(firstComt, lastComt);
-	startComtSwitch(newComt,now);
-	uint32_t comtSwitchTime = (uint32_t) randint(10,15);
 
 	bool waiting4switch = false;
 	while (now <= finishTime) {
@@ -357,7 +339,7 @@ void Avatar::run(uint32_t finishTime) {
 				if (ptyp == CLIENT_DATA) {
 					ps->free(p); continue;
 				}
-				waiting4switch = completeComtSwitch(p,now);
+				waiting4switch = !completeComtSwitch(p,now);
 				ps->free(p); continue;
 			}
 			if (ptyp != CLIENT_DATA) { // ignore other packets
@@ -374,29 +356,34 @@ void Avatar::run(uint32_t finishTime) {
 			}
 			ps->free(p);
 		}
+		// check for timeout
+		waiting4switch = !completeComtSwitch(0,now);
+
 		if (!waiting4switch) {
 			updateStatus(now);	// update Avatar status
 			sendStatus(now);	// send status on comtree
 			updateSubs();		// update subscriptions
-			if (connSock >= 0) 	// send "my" status to driver
+			if (connSock >= 0) { 
+				// send "my" status to driver
 				forwardReport(now, 1);
 
-			// process command from driver
-			comt_t newComt = check4command();
-			if (newComt != 0 && newComt != comt) {
-				startComtSwitch(newComt,now);
-				waiting4switch = true;
+				// process command from driver
+				comt_t newComt = check4command();
+				if (newComt != 0 && newComt != comt) {
+					startComtSwitch(newComt,now);
+					waiting4switch = true;
+				}
+			} else if (comt == 0 ||
+				   now-comtSwitchTime < ((unsigned) 1)<<31) {
+				// switch comtrees if not connected to driver
+				lastComtSwitch = now;
+				comt_t newComt = randint(firstComt, lastComt);
+				if (comt != newComt) {
+					startComtSwitch(newComt,now);
+					waiting4switch = true;
+				}
+				comtSwitchTime = now + randint(30,300)*1000000;
 			}
-		} else if (connSock  < 0 && (now-lastComtSwitch) >
-					    (1000000*comtSwitchTime)) {
-			// switch comtrees if not connected to driver
-			lastComtSwitch = now;
-			comt_t newcomt = randint(firstComt, lastComt);
-			if (comt != newcomt) {
-				startComtSwitch(newComt,now);
-				waiting4switch = true;
-			}
-			comtSwitchTime = randint(10,15);
 		}
 
 		// update time and wait for next cycle
@@ -436,10 +423,11 @@ void Avatar::startComtSwitch(comt_t newComt, uint32_t now) {
  *  @param p is a packet number, or 0 if the caller just wants to
  *  check for a timeout
  *  @param now is the current time
- *  @return true if the switch has been completed, or if the switch
- *  has failed (either because the ComtCtl sent a negative response or
- *  because it never responded after repeated attempts); otherwise,
- *  return false
+ *  @return false so long as the switch is in progress; return true
+ *  if the switch completes successfully, or if it fails (either 
+ *  because the ComtCtl sent a negative response or because it
+ *  never responded after repeated attempts); in the latter case,
+ *  set comt to 0
  */
 bool Avatar::completeComtSwitch(packet p, uint32_t now) {
 	if (switchState == IDLE) return true;
@@ -449,7 +437,10 @@ bool Avatar::completeComtSwitch(packet p, uint32_t now) {
 	case LEAVING: {
 		if (p == 0) {
 			if (switchCnt > 3) { // give up
-				switchState = IDLE; return true;
+				cerr << "completeSwitch: failed while "
+					"attempting to leave " << comt
+				     << " (timeout)" << endl;
+				comt = 0; switchState = IDLE; return true;
 			}
 			// try again
 			send2comtCtl(CLIENT_LEAVE_COMTREE,RETRY);
@@ -467,7 +458,10 @@ bool Avatar::completeComtSwitch(packet p, uint32_t now) {
 				switchTimer = now; switchCnt = 1;
 				return false;
 			} else if (cp.getRrType() == NEG_REPLY) { // give up
-				switchState = IDLE; return true;
+				cerr << "completeSwitch: failed while "
+					"attempting to leave " << comt
+				     << " (request rejected)" << endl;
+				comt = 0; switchState = IDLE; return true;
 			} 
 		}
 		return false; // ignore anything else
@@ -475,7 +469,10 @@ bool Avatar::completeComtSwitch(packet p, uint32_t now) {
 	case JOINING: {
 		if (p == 0) {
 			if (switchCnt > 3) { // give up
-				switchState = IDLE; return true;
+				cerr << "completeSwitch: failed while "
+					"attempting to join " << comt
+				     << " (timeout)" << endl;
+				comt = 0; switchState = IDLE; return true;
 			}
 			// try again
 			send2comtCtl(CLIENT_JOIN_COMTREE,RETRY);
@@ -490,7 +487,10 @@ bool Avatar::completeComtSwitch(packet p, uint32_t now) {
 				subscribeAll();
 				switchState = IDLE; return true;
 			} else if (cp.getRrType() == NEG_REPLY) { // give up
-				switchState = IDLE; return true;
+				cerr << "completeSwitch: failed while "
+					"attempting to join " << comt
+				     << " (request rejected)" << endl;
+				comt = 0; switchState = IDLE; return true;
 			} 
 		}
 		return false; // ignore anything else
@@ -505,6 +505,7 @@ bool Avatar::completeComtSwitch(packet p, uint32_t now) {
  *  @param now is the reference time for the status report
  */
 void Avatar::sendStatus(int now) {
+	if (comt == 0) return;
 	packet p = ps->alloc();
 	PacketHeader& h = ps->getHeader(p);
 	h.setLength(4*(5+8)); h.setPtype(CLIENT_DATA); h.setFlags(0);
@@ -531,6 +532,7 @@ void Avatar::sendStatus(int now) {
  *  its payload is unpacked to produce the report to send to the avatar
  */
 void Avatar::forwardReport(uint32_t now, int avType, int p) {
+	if (comt == 0) return;
 	uint32_t buf[10];
 	buf[0] = htonl((uint32_t) now);
 	buf[8] = htonl((uint32_t) comt);
@@ -975,7 +977,7 @@ bool Avatar::linesIntersect(double ax, double ay, double bx, double by,
 }
 
 void Avatar::subscribe(list<int>& glist) {
-	if (glist.size() == 0) return;
+	if (comt == 0 || glist.size() == 0) return;
 	packet p = ps->alloc();
 	PacketHeader& h = ps->getHeader(p);
 	uint32_t *pp = ps->getPayload(p);
@@ -1008,7 +1010,7 @@ void Avatar::subscribe(list<int>& glist) {
  *  @param glist is a reference to a list of multicast group numbers.
  */
 void Avatar::unsubscribe(list<int>& glist) {
-	if (glist.size() == 0) return;
+	if (comt == 0 || glist.size() == 0) return;
 	packet p = ps->alloc();
 	PacketHeader& h = ps->getHeader(p);
 	uint32_t *pp = ps->getPayload(p);

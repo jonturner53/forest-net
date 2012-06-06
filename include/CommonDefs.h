@@ -9,11 +9,6 @@
 #ifndef COMMONDEFS_H
 #define COMMONDEFS_H
 
-#include "stdinc.h"
-#include "Util.h"
-#include "Misc.h"
-#include "Np4d.h"
-
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -28,6 +23,12 @@
 #include <sys/time.h>
 #include <stdlib.h>
 #include <memory.h>
+#include <exception>
+
+#include "stdinc.h"
+#include "Util.h"
+#include "Misc.h"
+#include "Np4d.h"
 
 /** Forest node types.
  *
