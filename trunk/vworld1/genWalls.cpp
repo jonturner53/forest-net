@@ -3,10 +3,10 @@
 /** usage:
  * 	genWalls n pLeft pTop pBoth seed
  *
- * GenWalls produces a random "walls file" for use by ClientAvatar.
+ * GenWalls produces a random "walls file" for use by Avatar.
  * The virtual world has dimensions nxn. PLeft is the probabilty
  * that a given square has a left wall only, pTop is the probability
- * that it has a right wall only, and pBoth is the probability that
+ * that it has a top wall only, and pBoth is the probability that
  * it has both. Seed is used to intialize the random number genrator.
  */
 int main(int argc, char* argv[]) {
