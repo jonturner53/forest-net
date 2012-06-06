@@ -79,6 +79,18 @@ private:
 	set<int> *visSet;		///< visSet[g] contains multicast groups
 					///< for squares visible from g's square
 
+	// data for managing signalling interactions with ComtCtl
+	const static uint32_t SWITCH_TIMEOUT = 500000; ///< 500 ms timeout
+	const static bool RETRY = true; ///< flag used to signal retry
+	enum STATE {
+		IDLE, JOINING, LEAVING 
+	};				///< state of signaling interaction
+	STATE	switchState;		///< current state
+	uint32_t switchTimer;		///< time last signalling packet sent
+	int	switchCnt;		///< number of attempts so far
+	comt_t	nextComt;		///< comtree we're switching to
+	int	seqNum;			///< sequence number of control packet
+
 	// data structures for multicast subscriptions and other avatars
 	set<int> *mySubs;		///< multicast group subscriptions
 	HashSet *visibleAvatars;	///< set of visible avatars
@@ -86,8 +98,6 @@ private:
 					///< (those we receive packets from)
 	int numVisible;			///< number of visible avatars
 	int numNear;			///< number of nearby avatars
-
-	int	seqNum;			///< sequence number for control packets
 
 	PacketStore *ps;		///< pointer to packet store
 
@@ -98,18 +108,22 @@ private:
 	bool	isVis(int, int);
 	bool	linesIntersect( double, double, double, double,
 				double, double, double, double);
+
 	void	updateStatus(uint32_t);
 	void	updateNearby(int);
 	void	updateSubs();	
+	void	sendStatus(int);	
 	
+	void	startComtSwitch(comt_t, uint32_t);
+	bool	completeComtSwitch(packet, uint32_t);
+	void	send2comtCtl(CpTypeIndex,bool=false);
+	comt_t	check4command();	
+	void	forwardReport(uint32_t,int,int=0);	
+
 	void	subscribeAll();		
 	void	unsubscribeAll();		
 	void	subscribe(list<int>&);
 	void	unsubscribe(list<int>&);
-	void	send2comtCtl(CpTypeIndex);
-	void	forwardReport(uint32_t,int,int=0);	
-	void	check4command();	
-	void	sendStatus(int);	
 
 	void	connect();		
 	void	disconnect();		
