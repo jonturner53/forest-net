@@ -76,6 +76,7 @@ Monitor::Monitor(ipa_t xipa, ipa_t iipa, ipa_t ripa, fAdr_t ma,
 	viewSize = min(10,worldSize);
 	comt = 0;
 	switchState = IDLE;
+	seqNum = 0;
 	connSock = -1;
 }
 
@@ -252,8 +253,8 @@ void Monitor::send2comtCtl(CpTypeIndex cpx, bool retry) {
         packet p = ps->alloc();
         if (p == 0)
 		fatal("Monitor::send2comtCtl: no packets left to allocate");
-        CtlPkt cp(cpx,REQUEST,seqNum);;
 	if (!retry) seqNum++;
+        CtlPkt cp(cpx,REQUEST,seqNum);;
         cp.setAttr(COMTREE_NUM,comt);
         cp.setAttr(CLIENT_IP,intIp);
         cp.setAttr(CLIENT_PORT,Np4d::getSockPort(intSock));

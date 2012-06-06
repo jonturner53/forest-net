@@ -132,11 +132,11 @@ public class DriveAvatar {
 			stayInBounds();
 
 			// check for a new comtree and tell Avatar to switch
-			//int newComtree = readComtree();
-			//if (newComtree >= 0 && newComtree != comtree) {
-			//	comtree = newComtree;
-			//	sendCommand('c',comtree);
-			//}
+			int newComtree = readComtree();
+			if (newComtree >= 0 && newComtree != comtree) {
+				comtree = newComtree;
+				sendCommand('c',comtree);
+			}
 		}
 	}
 
@@ -196,9 +196,8 @@ public class DriveAvatar {
 	
 	private static BufferedReader inStream = null;
 	
-	/**
-	 * Attempt to read a new comtree number from System.in.
-	 * Return the comtree number or -1 if no input is available.
+	/** Attempt to read a new comtree number from System.in.
+	 *  Return the comtree number or -1 if no input is available.
 	 */
 	private static int readComtree() {
 		int comtree = 0;
@@ -207,7 +206,6 @@ public class DriveAvatar {
 				inStream = new BufferedReader(
 					   new InputStreamReader(System.in));
 				System.out.print("\ncomtree=");
-				comtree = Integer.parseInt(inStream.readLine());
 			} else if (inStream.ready()) {
 				comtree = Integer.parseInt(inStream.readLine());
 			} else return -1;
