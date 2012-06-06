@@ -121,12 +121,9 @@ void Monitor::run(uint32_t finishTime) {
 	now = nextTime = Misc::getTime(); 
 
 	bool waiting4switch = false;
-int cnt = 0;
-cerr << "entering main loop\n";
 	while (now <= finishTime) {
 		comt_t newComt = check4command();
 		if (newComt != 0 && newComt != comt) {
-cerr << "got new comt " << newComt << endl;
 			startComtSwitch(newComt,now);
 			waiting4switch = true;
 		}
@@ -208,7 +205,6 @@ bool Monitor::completeComtSwitch(packet p, uint32_t now) {
 		cp.unpack(ps->getPayload(p),h.getLength() - Forest::OVERHEAD);
 		if (cp.getCpType() == CLIENT_LEAVE_COMTREE) {
 			if (cp.getRrType() == POS_REPLY) {
-cerr << "left comtree\n";
 				comt = nextComt;
 				send2comtCtl(CLIENT_JOIN_COMTREE);
 				switchState = JOINING;
@@ -235,7 +231,6 @@ cerr << "left comtree\n";
 		cp.unpack(ps->getPayload(p),h.getLength() - Forest::OVERHEAD);
 		if (cp.getCpType() == CLIENT_JOIN_COMTREE) {
 			if (cp.getRrType() == POS_REPLY) {
-cerr << "joined comtree\n";
 				subscribeAll();
 				switchState = IDLE; return true;
 			} else if (cp.getRrType() == NEG_REPLY) { // give up
