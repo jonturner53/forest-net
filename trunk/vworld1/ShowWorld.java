@@ -24,8 +24,8 @@ public class ShowWorld {
 	private static final int MON_PORT = 30124; // port # used by monitor
 	private static final int INTERVAL = 50;	// time between updates (in ms)
 	private static final int GRID = 10000;	// size of one grid space
-	private static int MAX_WORLD = 30000; // max extent of virtual world
-	private static int MAX_VIEW = 1000; // max extent of view
+	private static int MAX_WORLD = 5000; // max extent of virtual world
+	private static int MAX_VIEW = 100; // max extent of view
 	private static int NUM_ITEMS = 9; // # of items in status report
 
 	private static int worldSize;	// # of squares in full map
@@ -441,7 +441,9 @@ public class ShowWorld {
 			}
 		}
 
-		StdDraw.setPenRadius(Math.max(.001,.006*(20/viewSize)));
+		StdDraw.setPenRadius(Math.min(.006,
+				     Math.max(.001,
+					      .006*(4/Math.sqrt(viewSize)))));
 		StdDraw.setPenColor(Color.BLACK);
 		for (int x = cornerX; x < cornerX + viewSize; x++) {
 			for (int y = cornerY; y < cornerY + viewSize; y++) {
