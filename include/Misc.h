@@ -67,15 +67,13 @@ inline int Misc::num(char c) { return int(c - ('a'-1)); }
  *  @param i is the integer whose value is to be appended to *s
  */
 inline void Misc::addNum2string(string& s, int i) {
-        char buf[16];
-        sprintf(buf,"%d",i);
-        s += buf;
+	stringstream ss; ss << i;
+        s += ss.str();
 }
 
 inline void Misc::addNum2string(string& s, uint64_t i) {
-        char buf[32];
-        sprintf(buf,"%lld",i);
-        s += buf;
+	stringstream ss; ss << i;
+        s += ss.str();;
 }
 
 /** Create a string representation of a numeric value.
@@ -88,7 +86,7 @@ inline string& Misc::num2string(int i, string& s) {
 	return s;
 }
 inline string& Misc::num2string(uint64_t i, string& s) {
-        char buf[16]; sprintf(buf,"%lld",i); s = buf;
+	stringstream ss; ss << i; s = ss.str();
 	return s;
 }
 
@@ -102,7 +100,9 @@ inline string& Misc::nstime2string(uint64_t t, string& s) {
 	uint64_t sec = t/1000000000;
 	uint64_t frac = (t/1000)%1000000;
 	
-        char buf[32]; sprintf(buf,"%lld.%06lld",sec,frac); s = buf;
+	stringstream ss;
+	ss << sec << "." << setw(6) << frac;
+	s = ss.str();
 	return s;
 }
 

@@ -122,6 +122,7 @@ void Monitor::run(uint32_t finishTime) {
 	now = nextTime = Misc::getTime(); 
 
 	bool waiting4switch = false;
+int cnt = 0;
 	while (now <= finishTime) {
 		comt_t newComt = check4command();
 		if (newComt != 0 && newComt != comt) {
@@ -129,7 +130,9 @@ void Monitor::run(uint32_t finishTime) {
 			waiting4switch = true;
 		}
 		while ((p = receiveReport()) != 0) {
+if (cnt++ < 25) cerr << "got packet\n";
 			if (!waiting4switch) {
+if (cnt++ < 25) cerr << "sending report\n";
 				forwardReport(p,now);
 				ps->free(p); continue;
 			}
@@ -138,7 +141,8 @@ void Monitor::run(uint32_t finishTime) {
 			if (ps->getHeader(p).getPtype() == CLIENT_DATA) {
 				ps->free(p); continue;
 			}
-			waiting4switch = completeComtSwitch(p,now);
+			waiting4switch = !completeComtSwitch(p,now);
+cerr << "completed join\n";
 			ps->free(p);
 		}
 		// check for timeout
@@ -391,7 +395,9 @@ void Monitor::switchComtrees(int newComt) {
 void Monitor::subscribeAll() {
 	list<int> glist;
 	for (int xi = cornerX; xi < cornerX + viewSize; xi++) {
+	//for (int xi = 0; xi < worldSize; xi++) {
 		for (int yi = cornerY; yi < cornerY + viewSize; yi++) {
+		//for (int yi = 0; yi < worldSize; yi++) {
 			int g = groupNum(xi*GRID, yi*GRID);
 			if (mySubs->find(g) == mySubs->end()) {
 				mySubs->insert(g); glist.push_back(g);
