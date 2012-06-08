@@ -89,9 +89,11 @@ public class DriveAvatar {
 		recentIds = new HashSet<Integer>();
 		idCounter = 0;
 
+System.out.println("getting report\n");
 		comtree = 0;	// first report sets comtree
 		AvatarStatus firstRep;
 		while ((firstRep = getReport()) == null) {}
+System.out.println("got first report comtree=" + comtree + "\n");
 		int avaTime = firstRep.when + 3000; // build in some delay
 		long localTime = System.nanoTime()/1000000;
 		long targetLocalTime = localTime;
