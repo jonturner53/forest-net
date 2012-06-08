@@ -105,7 +105,7 @@ public class ShowWalls {
 		StdDraw.setPenColor(Color.GRAY);
 		double frac = 1.0/viewSize;
 
-		if (viewSize <= 30) {
+		if (viewSize <= 40) {
 			for (int i = 0; i <= viewSize; i++) {
 				StdDraw.line(0,frac*i,1,frac*i);
 				StdDraw.line(frac*i,0,frac*i,1);
