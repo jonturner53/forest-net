@@ -469,12 +469,16 @@ public class DriveAvatar {
 		StdDraw.setPenRadius(.002);
 		StdDraw.setPenColor(Color.GRAY);
 		double frac = 1.0/viewSize;
-		for (int i = 0; i <= viewSize; i++) {
-			StdDraw.line(0,frac*i,1,frac*i);
-			StdDraw.line(frac*i,0,frac*i,1);
+
+		if (viewSize <= 40) {
+			for (int i = 0; i <= viewSize; i++) {
+				StdDraw.line(0,frac*i,1,frac*i);
+				StdDraw.line(frac*i,0,frac*i,1);
+			}
 		}
+
+		StdDraw.setPenRadius(Math.max(.001,.006*(20/viewSize)));
 		StdDraw.setPenColor(Color.BLACK);
-		StdDraw.setPenRadius(.006);
 
 		for (int x = cornerX; x < cornerX + viewSize; x++) {
 			for (int y = cornerY; y < cornerY + viewSize; y++) {

@@ -68,6 +68,7 @@ Avatar::Avatar(ipa_t mipa, comt_t fc, comt_t lc)
 	mySubs = new set<int>();
 	nearAvatars = new HashSet(MAXNEAR);
 	visibleAvatars = new HashSet(MAXNEAR);
+	myVisSet = new set<int>;
 
 	numNear = numVisible = 0;
 	seqNum = 0;
@@ -76,6 +77,7 @@ Avatar::Avatar(ipa_t mipa, comt_t fc, comt_t lc)
 
 Avatar::~Avatar() {
 	delete mySubs; delete nearAvatars; delete ps; delete [] walls;
+	delete myVisSet;
 	if (sock >= 0) close(sock);
 	if (extSock >= 0) close(extSock);
 }
@@ -162,7 +164,6 @@ bool Avatar::login(ipa_t cmIpAdr, string uname, string pword) {
 	     << Forest::fAdr2string(comtCtlAdr,s) << endl;
 	return true;
 }
-
 /** Setup the internal representation of the walls.
  *  @param wallsFile contains the specification of the walls in the
  *  virtual world
@@ -182,7 +183,7 @@ bool Avatar::setupWalls(const char *wallsFile) {
 			worldSize = line.size();
 			y = worldSize-1;
 			try {
-				walls = new int[worldSize*worldSize];
+				walls = new char[worldSize*worldSize];
 			} catch(exception& e) {
 				cerr << "setupWalls: could not allocate space "
 					"for walls array (worldSize="
@@ -212,94 +213,136 @@ bool Avatar::setupWalls(const char *wallsFile) {
 		}
 		if (--y < 0) break;
 	}
-
-	// now, compute visibility of squares relative to each other
-	// and store results in visibility sets
-	try {
-		visSet = new set<int>[worldSize*worldSize+1];
-	} catch(exception& e) {
-		cerr << "setupWalls: could not allocate space "
-			"for visibility sets (worldSize="
-		     << worldSize << ")\n" << endl;
-		perror("");
-		exit(1);
-	}
-	for (int x1 = 0; x1 < worldSize; x1++) {
-	for (int y1 = 0; y1 < worldSize; y1++) {
-		int g1 = 1 + x1 + y1*worldSize;
-		// start with upper right quadrant
-		for (int d = 1; d < worldSize; d++) {
-			// check squares at rectilinear distance d from (x1,y1)
-			bool done = true;
-			for (int x2 = x1; x2 <= min(x1+d,worldSize-1); x2++) {
-				int y2 = d + y1 - (x2 - x1);
-				if (y2 >= worldSize) continue;
-				int g2 = 1 + x2 + y2*worldSize;
-				if (isVis(g1,g2)) {
-if (visSet[g1].size() > 200) {
-cerr << "set " << g1 << " excessively large\n";
-exit(1);
-}
-					(visSet[g1]).insert(g2);
-					done = false;
-				}
-			}
-			if (done) break;
-		}
-		// now process upper left quadrant
-		for (int d = 1; d < worldSize; d++) {
-			bool done = true;
-			for (int x2 = x1; x2 >= max(0,x1-d); x2--) {
-				int y2 = d + y1 - (x1 - x2);
-				if (y2 >= worldSize) continue;
-				int g2 = 1 + x2 + y2*worldSize;
-				if (isVis(g1,g2)) {
-					(visSet[g1]).insert(g2);
-					done = false;
-				}
-			}
-			if (done) break;
-		}
-		// and lower left quadrant
-		for (int d = 1; d < worldSize; d++) {
-			bool done = true;
-			for (int x2 = x1; x2 >= max(0,x1-d); x2--) {
-				int y2 = (x1 - x2) + y1 - d;
-				if (y2 < 0) continue;
-				int g2 = 1 + x2 + y2*worldSize;
-				if (isVis(g1,g2)) {
-					(visSet[g1]).insert(g2);
-					done = false;
-				}
-			}
-			if (done) break;
-		}
-		// and finally, lower right
-		for (int d = 1; d < worldSize; d++) {
-			bool done = true;
-			for (int x2 = x1; x2 <= min(x1+d,worldSize-1); x2++) {
-				int y2 = (x2 - x1) + y1 - d;
-				if (y2 < 0) continue;
-				int g2 = 1 + x2 + y2*worldSize;
-				if (isVis(g1,g2)) {
-					(visSet[g1]).insert(g2);
-					done = false;
-				}
-			}
-			if (done) break;
-		}
-	}}
-
-	// print some visibility statistics for the log
-	int maxVis = 0;; int totVis = 0;
-	for (int g = 1; g <= worldSize*worldSize; g++) {
-		int vis = visSet[g].size();
-		maxVis = max(vis,maxVis); totVis += vis;
-	}
-			
-	cout << "avg visible: " << totVis/(worldSize*worldSize)
-	     << " max visible: " << maxVis << endl;
 	return true;
+}
+
+/** Compute a visbility set for a given square in the virtual world.
+ *  @param g1 is the multicast group number for a square in the virtual world
+ *  @param vSet is a reference to a visibility set in which the
+ *  result is to be returned
+ */
+void Avatar::computeVisSet(int g1, set<int>& vSet) {
+	int x1 = (g1-1)%worldSize; int y1 = (g1-1)/worldSize;
+	vSet.clear();
+
+	bool *visVec = new bool[worldSize];
+	bool *prevVisVec = new bool[worldSize];
+
+	// start with upper right quadrant
+	prevVisVec[0] = true;
+	int dlimit = min(worldSize,MAX_VIS);
+	for (int d = 1; d <= dlimit; d++) {
+		bool done = true;
+		for (int x2 = x1; x2 <= min(x1+d,worldSize-1); x2++) {
+			int y2 = d + y1 - (x2 - x1);
+			if (y2 >= worldSize) continue;
+			int dx = x2-x1;
+			visVec[dx] = false;
+			if ((x1==x2 && !prevVisVec[dx]) ||
+			    (x1!=x2 && y1==y2 && !prevVisVec[dx-1]) ||
+			    (x1!=x2 && y1!=y2 && !prevVisVec[dx-1] &&
+						 !prevVisVec[dx])) {
+				continue;
+			}
+			int g2 = 1 + x2 + y2*worldSize;
+
+			if (isVis(g1,g2)) {
+				visVec[dx] = true;
+				vSet.insert(g2);
+				done = false;
+			}
+		}
+		if (done) break;
+		for (int x2 = x1; x2 <= min(x1+d,worldSize-1); x2++) {
+			int dx = x1-x2;
+			prevVisVec[x2-x1] = visVec[x2-x1];
+		}
+	}
+	// now process upper left quadrant
+	prevVisVec[0] = true;
+	for (int d = 1; d <= dlimit; d++) {
+		bool done = true;
+		for (int x2 = x1; x2 >= max(x1-d,0); x2--) {
+			int dx = x1-x2;
+			int y2 = d + y1 - dx;
+			if (y2 >= worldSize) continue;
+			visVec[dx] = false;
+			if ((x1==x2 && !prevVisVec[dx]) ||
+			    (x1!=x2 && y1==y2 && !prevVisVec[dx-1]) ||
+			    (x1!=x2 && y1!=y2 && !prevVisVec[dx-1] &&
+						 !prevVisVec[dx])) {
+				continue;
+			}
+			int g2 = 1 + x2 + y2*worldSize;
+			if (isVis(g1,g2)) {
+				visVec[dx] = true;
+				vSet.insert(g2);
+				done = false;
+			}
+		}
+		if (done) break;
+		for (int x2 = x1; x2 >= max(x1-d,0); x2--) {
+			int dx = x1-x2;
+			prevVisVec[dx] = visVec[dx];
+		}
+	}
+	// now process lower left quadrant
+	prevVisVec[0] = true;
+	for (int d = 1; d <= dlimit; d++) {
+		bool done = true;
+		for (int x2 = x1; x2 >= max(x1-d,0); x2--) {
+			int dx = x1-x2;
+			int y2 = (y1 - d) + dx;
+			if (y2 < 0) continue;
+			visVec[dx] = false;
+			if ((x1==x2 && !prevVisVec[dx]) ||
+			    (x1!=x2 && y1==y2 && !prevVisVec[dx-1]) ||
+			    (x1!=x2 && y1!=y2 && !prevVisVec[dx-1] &&
+						 !prevVisVec[dx])) {
+				continue;
+			}
+			int g2 = 1 + x2 + y2*worldSize;
+			if (isVis(g1,g2)) {
+				visVec[dx] = true;
+				vSet.insert(g2);
+				done = false;
+			}
+		}
+		if (done) break;
+		for (int x2 = x1; x2 >= max(x1-d,0); x2--) {
+			int dx = x1-x2;
+			prevVisVec[dx] = visVec[dx];
+		}
+	}
+	// finally, process lower right quadrant
+	prevVisVec[0] = true;
+	for (int d = 1; d <= dlimit; d++) {
+		bool done = true;
+		for (int x2 = x1; x2 <= min(x1+d,worldSize-1); x2++) {
+			int dx = x2-x1;
+			int y2 = (y1 - d) + dx;
+			if (y2 < 0) continue;
+			visVec[dx] = false;
+			if ((x1==x2 && !prevVisVec[dx]) ||
+			    (x1!=x2 && y1==y2 && !prevVisVec[dx-1]) ||
+			    (x1!=x2 && y1!=y2 && !prevVisVec[dx-1] &&
+						 !prevVisVec[dx])) {
+				continue;
+			}
+			int g2 = 1 + x2 + y2*worldSize;
+			if (isVis(g1,g2)) {
+				visVec[dx] = true;
+				vSet.insert(g2);
+				done = false;
+			}
+		}
+		if (done) break;
+		for (int x2 = x1; x2 <= min(x1+d,worldSize-1); x2++) {
+			int dx = x2-x1;
+			prevVisVec[dx] = visVec[dx];
+		}
+	}
+	delete [] visVec; delete [] prevVisVec;
 }
 
 /** Main Avatar processing loop.
@@ -748,6 +791,8 @@ void Avatar::updateStatus(uint32_t now) {
 	y = max(y,0); y = min(y,GRID*worldSize-1);
 	int postRegion = groupNum(x,y)-1;
 
+	if (postRegion != prevRegion) updateVisSet();
+
 	//bounce off walls
         if (x == 0)        	direction = -direction;
         else if (x == GRID*worldSize-1)   direction = -direction;
@@ -868,73 +913,87 @@ int Avatar::groupNum(int x1, int y1) {
  *  @param g1 is the group number of the first square
  *  @param g2 is the group number of the second square
  */
+
 bool Avatar::isVis(int g1, int g2) {
-	int region1 = g1-1; int region2 = g2-1;
-	int region1xs[4]; int region1ys[4];
-	int region2xs[4]; int region2ys[4];
+	int sq1 = g1-1; int sq2 = g2-1;
 
-	int row1 = region1/worldSize; int col1 = region1%worldSize;
-	int row2 = region2/worldSize; int col2 = region2%worldSize;
+	int x1 = sq1%worldSize; int y1 = sq1/worldSize;
+	int x2 = sq2%worldSize; int y2 = sq2/worldSize;
 
-	region1xs[0] = region1xs[2] = col1 * GRID + 1;
-	region1ys[0] = region1ys[1] = (row1+1) * GRID - 1;
-	region1xs[1] = region1xs[3] = (col1+1) * GRID - 1;
-	region1ys[2] = region1ys[3] = row1 * GRID + 1;
-	region2xs[0] = region2xs[2] = col2 * GRID + 1;
-	region2ys[0] = region2ys[1] = (row2+1) * GRID - 1;
-	region2xs[1] = region2xs[3] = (col2+1) * GRID - 1;
-	region2ys[2] = region2ys[3] = row2 * GRID + 1;
+	if (x1 > x2) { // swap so x1 <= x2
+		int x = x1; x1 = x2; x2 = x;
+		int y = y1; y1 = y2; y2 = y;
+	}
 
-	int minRow = min(row1,row2); int maxRow = max(row1,row2);
-	int minCol = min(col1,col2); int maxCol = max(col1,col2);
+	if (x1 == x2) {
+		int lo = min(y1, y2); int hi = max(y1, y2);
+		for (int y = lo; y < hi; y++) {
+			if (walls[x1 + y*worldSize] & 2) return false;
+		}
+		return true;
+	} else if (y1 == y2) {
+		for (int x = x1+1; x <= x2; x++) {
+			if (walls[x + y1*worldSize] & 1) return false;
+		}
+		return true;
+	}
+
+	const double eps = .001;
+	double sq1xs[] = {x1+eps,      x1+(1.0-eps),x1+eps,x1+(1.0-eps)};
+	double sq1ys[] = {y1+(1.0-eps),y1+(1.0-eps),y1+eps,y1+eps      };
+	double sq2xs[] = {x2+eps,      x2+(1.0-eps),x2+eps,x2+(1.0-eps)};
+	double sq2ys[] = {y2+(1.0-eps),y2+(1.0-eps),y2+eps,y2+eps      };
+
+	int miny = min(y1,y2); int maxy = max(y1,y2);
+	double slope = (y2-y1)/((double) x2-x1);
 
 	for (int i = 0; i < 4; i++) {
-		for (int j = 0; j < 4; j++) {
-			bool canSee = true;
-			double ax = (double) region1xs[i];
-			double ay = (double) region1ys[i];
-			double bx = (double) region2xs[j];
-			double by = (double) region2ys[j];
-			// line segment ab connects a corner of region1
-			// to a corner of region2
-			for (int i = minRow; i <= maxRow; i++) {
-			for (int j = minCol; j <= maxCol; j++) {
-				double cx = (double) j*GRID;
-				double cy = (double) (i+1)*GRID;
-				// (cx,cy) is top left corner of region (i,j)
-				int k = i*worldSize+j; // k=region index
-				if (walls[k] == 1 || walls[k] == 3) {
-					// region k has a left side wall
-					// check if ab intersects it
-					double dx = cx; double dy = cy-GRID;
-					if (linesIntersect(ax,ay,bx,by,
-							   cx,cy,dx,dy)) {
-						canSee = false; break;
-					} else {
-					}
-				}
-				if (walls[k] == 2 || walls[k] == 3) {
-					// region k has a top wall
-					// check if ab intersects it
-					double dx = cx+GRID; double dy = cy;
-					if (linesIntersect(ax,ay,bx,by,
-							   cx,cy,dx,dy)) {
-						canSee = false; break;
-					} else {
-					}
-				}
-			}
-			if (!canSee) break;
-			}
-			if (canSee) return true;
+	for (int j = 0; j < 4; j++) {
+		bool canSee = true;
+		double ax = sq1xs[i]; double ay = sq1ys[i];
+		double bx = sq2xs[j]; double by = sq2ys[j];
+		// line segment ab connects a corner of sq1 to a corner of sq2
+		for (int x = x1; x <= x2 && canSee; x++) {
+		int lo = miny; int hi = maxy;
+		if (y2 > y1) {
+			lo = (x==x1 ? y1 : (int) ((x-(x1+1))*slope + y1));
+			hi = ((x+1)-x1)*slope + (y1+1);
+			lo = max(lo,y1); hi = min(hi,y2);
+		} else { // y2 < y1
+			lo = ((x+1)-x1)*slope + y1;
+			hi = (x==x1 ? y1-1 : (int) ((x-(x1+1))*slope + (y1+1)));
+			lo = max(lo,y2); hi = min(hi,y1);
 		}
-	}
+		for (int y = lo; y <= hi; y++) {
+			double cx = (double) x;
+			double cy = (double) (y+1);
+			// (cx,cy) is top left corner of square (x,y)
+			int k = x+y*worldSize; // k=square index
+			if (walls[k] & 1) {
+				// square k has a left side wall
+				// check if ab intersects it
+				double dx = cx; double dy = cy-1;
+				if (linesIntersect(ax,ay,bx,by,cx,cy,dx,dy)) {
+					canSee = false; break;
+				}
+			}
+			if (walls[k] & 2) {
+				// square k has a top wall
+				// check if ab intersects it
+				double dx = cx+1; double dy = cy;
+				if (linesIntersect(ax,ay,bx,by,cx,cy,dx,dy)) {
+					canSee = false; break;
+				}
+			}
+		} }
+		if (canSee) return true;
+	} }
 	return false;
 }
 
 bool Avatar::linesIntersect(double ax, double ay, double bx, double by,
-			    double cx ,double cy, double dx, double dy) {
-	double epsilon = .0001; // two lines are considered vertical if
+		    double cx ,double cy, double dx, double dy) {
+	double epsilon = .001;  // two lines are considered vertical if
 				// x values differ by less than epsilon
 	// first handle special case of two vertical lines
 	if (abs(ax-bx) < epsilon && abs(cx-dx) < epsilon) {
@@ -1045,8 +1104,7 @@ void Avatar::unsubscribe(list<int>& glist) {
 void Avatar::subscribeAll() {
 	list<int> glist;
 	set<int>::iterator gp;
-	int g = groupNum(x,y);
-	for (gp = visSet[g].begin(); gp != visSet[g].end(); gp++) {
+	for (gp = myVisSet->begin(); gp != myVisSet->end(); gp++) {
 		if (mySubs->find(*gp) == mySubs->end()) {
 			mySubs->insert(*gp); glist.push_back(*gp);
 		}
@@ -1072,12 +1130,11 @@ void Avatar::unsubscribeAll() {
  */
 void Avatar::updateSubs() {	
 	// identify subscriptions for squares that are not currently visible
-	int myGroup = groupNum(x,y);
 	list<int> glist;
 	set<int>::iterator gp;
 	for (gp = mySubs->begin(); gp != mySubs->end(); gp++) {
 		int g = *gp;
-		if ((visSet[myGroup]).find(g) == (visSet[myGroup]).end())
+		if (myVisSet->find(g) == myVisSet->end())
 			glist.push_back(g); 
 	}
 	// remove them from subscription set and unsubscribe
@@ -1090,7 +1147,7 @@ void Avatar::updateSubs() {
 	// add their multicast groups to subscription set and subscribe
 	glist.clear();
 	set<int>::iterator vp;
-	for (vp = visSet[myGroup].begin(); vp != visSet[myGroup].end(); vp++) {
+	for (vp = myVisSet->begin(); vp != myVisSet->end(); vp++) {
 		int g = *vp;
 		if (mySubs->find(g) == mySubs->end()) {
 			mySubs->insert(g);
@@ -1123,8 +1180,7 @@ void Avatar::updateNearby(int p) {
 	// determine if we can see the Avatar that sent this report
 	int x1 = ntohl(pp[2]); int y1 = ntohl(pp[3]);
 	int g1 = groupNum(x1,y1);
-	int myGroup = groupNum(x,y);
-	if (visSet[myGroup].find(g1) == visSet[myGroup].end()) {
+	if (myVisSet->find(g1) == myVisSet->end()) {
 		visibleAvatars->remove(avId);
 		return;
 	}
@@ -1135,29 +1191,60 @@ void Avatar::updateNearby(int p) {
 	// that are visible from (x,y)
 	bool canSee = true;
 	set<int>::iterator vp;
-	for (vp = visSet[myGroup].begin(); vp != visSet[myGroup].end(); vp++) {
-		int i = (*vp)-1; // i is region index for a visible square
-		if (walls[i] == 1 || walls[i] == 3) {
-			int l2x1 = (i % worldSize) * GRID; 
-			int l2x2 = l2x1;
-			int l2y1 = (i / worldSize) * GRID;
-			int l2y2 = l2y1 + GRID;
-			if(linesIntersect(x1,y1,x,y,
-					  l2x1,l2y1,l2x2,l2y2)) {
+	int minx = min(x,x1)/GRID; int maxx = max(x,x1)/GRID;
+	int miny = min(y,y1)/GRID; int maxy = max(y,y1)/GRID;
+	for (vp = myVisSet->begin(); vp != myVisSet->end(); vp++) {
+		int i = (*vp)-1; // i is index of a visible square
+		int xi = i%worldSize; int yi = i/worldSize;
+		if (xi < minx || xi > maxx || yi < miny || yi > maxy)
+			continue;
+		xi *= GRID; yi *= GRID;
+		int ax = xi; int ay = yi + GRID;
+		if (walls[i] & 2) { // i has top wall
+			if(linesIntersect(x,y,x1,y1,ax,ay,ax+GRID,ay)) {
 				canSee = false; break;
 			}
 		}
-		if (walls[i] == 2 || walls[i] == 3) {
-			int l2x1 = (i % worldSize) * GRID; 
-			int l2x2 = l2x1 + GRID;
-			int l2y1 = (i / worldSize) * GRID + GRID;
-			int l2y2 = l2y1;
-			if(linesIntersect(x1,y1,x,y,
-					  l2x1,l2y1,l2x2,l2y2)) {
+		if (walls[i] & 1) { // i has left wall
+			if(linesIntersect(x,y,x1,y1,ax,ay,ax,ay-GRID)) {
 				canSee = false; break;
 			}
 		}
 	}
 	if (canSee && visibleAvatars->size() < MAXNEAR)
 		visibleAvatars->insert(avId);
+}
+
+/* incremental computation of visibility sets
+ *
+ * Setup a cache of visibility sets
+ * When this avatar moves between squares, update pointer myVisSet to
+ * point to the visibility set for the current square.
+ * If the visibility set for the current square is not in the cache,
+ * add it to the cache, possibly evicting the least-recently used
+ * thing in the cache.
+ * The current visSet goes to the front of the lruList for the cache
+ *
+ * Where does this happen? In updateStatus, I detect if I am in a new square
+ * or not, so this is the place to update myVisSet.
+ *
+ * Do I need a cache? Given current speeds it takes 16, 40 or 100 time
+ * steps to cross a square, so 50 on average. I can do visibility calculation
+ * in <1ms so can have 50 avatars doing an update concurrently before
+ * that swamps the machine and so this allows maybe 2500 avatars on
+ * a machine. Other things will limit it well before this.
+ *
+ * So, perhaps it's best to start just doing visibility calculation
+ * online and defer the cache option. Can always add it later should
+ * it be necessary. With this approach, the only big data structure is
+ * walls array and it's a byte per region, so a million regions is fine.
+ * 
+ * Add a maximum visibility distance as well. In practice, 50 squares
+ * should be ample. Might get by with 10-20, depending on how we scale
+ * things in the world.
+ *
+ */
+
+void Avatar::updateVisSet() {
+	computeVisSet(groupNum(x,y)-1,*myVisSet);
 }

@@ -74,10 +74,11 @@ private:
 	double	speed;			///< speed moving in UNITS/update period
 
 	// data structures defining walls in virtual world
+	const static int MAX_VIS=20;	///< max distance can "see" (in squares)
 	int	worldSize;	   	///< # of grid squares per dimension
-	int*	walls; 			///< array of walls
-	set<int> *visSet;		///< visSet[g] contains multicast groups
-					///< for squares visible from g's square
+	char*	walls; 			///< array of walls
+	set<int> *myVisSet;		///< myVisSet contains multicast groups
+					///< for squares visible from (x,y)
 
 	// data for managing signalling interactions with ComtCtl
 	const static uint32_t SWITCH_TIMEOUT = 500000; ///< 500 ms timeout
@@ -102,9 +103,11 @@ private:
 	PacketStore *ps;		///< pointer to packet store
 
 	// private helper methods 
+	int	groupNum(int, int);
 	bool	login(ipa_t,string,string); 	
 	bool	setupWalls(const char*);
-	int	groupNum(int, int);
+	void	updateVisSet();
+	void	computeVisSet(int, set<int>&);
 	bool	isVis(int, int);
 	bool	linesIntersect( double, double, double, double,
 				double, double, double, double);

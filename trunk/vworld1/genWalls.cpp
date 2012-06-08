@@ -17,7 +17,7 @@ int main(int argc, char* argv[]) {
 	    sscanf(argv[3],"%lf",&pTop) != 1 ||
 	    sscanf(argv[4],"%lf",&pBoth) != 1 ||
 	    sscanf(argv[5],"%d",&seed) != 1)
-		fatal("usage: genWalls n pLeft pTop pBoth");
+		fatal("usage: genWalls n pLeft pTop pBoth seed");
 
 	srand(seed);
 	for (int i = 0; i < n; i++) {
