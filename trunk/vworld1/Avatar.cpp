@@ -371,18 +371,26 @@ void Avatar::run(uint32_t finishTime) {
 		numNear = nearAvatars->size(); nearAvatars->clear();
 		numVisible = visibleAvatars->size(); visibleAvatars->clear();
 
+		// check for a command from driver and process it
+		// if not yet connected, check4command attempts an accept
+		comt_t newComt = check4command();
+		if (newComt != 0 && newComt != comt) {
+			startComtSwitch(newComt,now);
+			waiting4switch = true;
+		}
+
 		now = Misc::getTime();
 		int p;
 		while ((p = receive()) != 0) {
 			PacketHeader& h = ps->getHeader(p);
 			ptyp_t ptyp = h.getPtype();
 			if (waiting4switch) {
-				// discard non-signalling packets and pass
-				// signalling packets to completeComtSwitch
-				if (ptyp == CLIENT_DATA) {
-					ps->free(p); continue;
+				// pass client signalling packets to
+				// completeComtSwitch and discard all others
+				if (ptyp == CLIENT_SIG) {
+					waiting4switch =
+						!completeComtSwitch(p,now);
 				}
-				waiting4switch = !completeComtSwitch(p,now);
 				ps->free(p); continue;
 			}
 			if (ptyp != CLIENT_DATA) { // ignore other packets
@@ -410,12 +418,6 @@ void Avatar::run(uint32_t finishTime) {
 				// send "my" status to driver
 				forwardReport(now, 1);
 
-				// process command from driver
-				comt_t newComt = check4command();
-				if (newComt != 0 && newComt != comt) {
-					startComtSwitch(newComt,now);
-					waiting4switch = true;
-				}
 			} else if (comt == 0 ||
 				   now-comtSwitchTime < ((unsigned) 1)<<31) {
 				// switch comtrees if not connected to driver
