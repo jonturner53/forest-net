@@ -3,7 +3,7 @@ FLIB = ../lib/lib-forest.a
 LIBS = ${FLIB} ${ALGOLIBROOT}/lib/lib-util.a ${ALGOLIBROOT}/lib/lib-ds.a
 XFILES = Avatar Monitor genWalls
 CLASSFILES = AvatarStatus.class AvatarGraphic.class ShowWorld.class \
-	DriveAvatar.class ShowWalls.class
+	DriveAvatar.class ShowWalls.class EMapPanel.class EditMap.class
 CXXFLAGS = -Wall -O2 -m64 -I ../include -I ${ALGOLIBROOT}/include
 
 %.o: %.cpp %.h stdinc.h
@@ -26,7 +26,6 @@ Monitor : Monitor.o ${LIBS}
 genWalls : genWalls.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
 	cp $@ ${HOME}/bin
-
 
 clean :
 	rm -f *.o 
