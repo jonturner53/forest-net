@@ -398,6 +398,7 @@ int Np4d::recvBuf(int sock, char* buf, int buflen) {
 	if (nbytes <= 0) return nbytes;
 	if (nbytes != sizeof(uint32_t)) return -1;
 	if (dataAvail(sock) < ((int) (length + sizeof(uint32_t)))) return -1;
+	length = ntohl(length);
 	length = min(length, buflen);
 	nbytes = recv(sock,(void *) &length, sizeof(uint32_t), 0);
 	nbytes = recv(sock,(void *) buf, length, 0);
@@ -412,14 +413,22 @@ int Np4d::recvBufBlock(int sock, char* buf, int buflen) {
 		if(rem == 0) break;
 	}
 	uint32_t length = *((uint32_t *) lenBuf);
+	length = ntohl(length);
 	length = min(length, buflen);
-	nbytes = recv(sock,(void *) buf, length, 0);
+	rem = length;
+	while(true) {
+		nbytes = recv(sock,(void *) &buf[length-rem], length, 0);
+		if(nbytes < 0) return nbytes;
+		rem -= nbytes;
+		if( rem == 0) break;
+	}
 	return nbytes;
 }
 
 int Np4d::sendBuf(int sock, char* buf, int buflen) {
 	if (spaceAvail(sock) < buflen + (int) sizeof(uint32_t))
 		return -1;
+	buflen = htonl(buflen);
 	int nbytes = send(sock, (void *) &buflen, sizeof(uint32_t), 0);
 	if (nbytes != sizeof(uint32_t))
 		fatal("Np4d::sendBuf: can't send buffer");
