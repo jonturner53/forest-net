@@ -304,11 +304,18 @@ bool Np4d::recvInt(int sock, uint32_t& val) {
 }
 
 bool Np4d::recvIntBlock(int sock, uint32_t& val) {
-	uint32_t temp;
-	int nbytes = recv(sock, (void *) &temp, sizeof(uint32_t), 0);
+	char temp[sizeof(uint32_t)];
+	int nbytes; int rem = sizeof(uint32_t);
+	while(true) {
+		nbytes = recv(sock, (void *) &temp[sizeof(uint32_t)-rem], sizeof(uint32_t), 0);
+		if(nbytes < 0) return nbytes;
+		rem -= nbytes;
+		if(rem == 0) break;
+	}
 	if (nbytes != sizeof(uint32_t)) 
 		fatal("Np4d::recvInt: can't receive integer");
-	val = ntohl(temp);
+	val = *((uint32_t*) temp);
+	val = ntohl(val);
 	return true;
 }
 
