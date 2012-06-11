@@ -450,10 +450,10 @@ void Avatar::run(uint32_t finishTime) {
 void Avatar::startComtSwitch(comt_t newComt, uint32_t now) {
 	nextComt = newComt;
 	if (comt != 0) {
-		unsubscribeAll();
-		send2comtCtl(CLIENT_LEAVE_COMTREE);
-		switchState = LEAVING;
-		switchTimer = now; switchCnt = 1;
+	//	unsubscribeAll();
+	//	send2comtCtl(CLIENT_LEAVE_COMTREE);
+	//	switchState = LEAVING;
+	//	switchTimer = now; switchCnt = 1;
 	} else {
 		comt = nextComt;
 		send2comtCtl(CLIENT_JOIN_COMTREE);
@@ -792,9 +792,116 @@ void Avatar::updateStatus(uint32_t now) {
 	x = max(x,0); x = min(x,GRID*worldSize-1);
 	y = max(y,0); y = min(y,GRID*worldSize-1);
 	int postRegion = groupNum(x,y)-1;
-
 	if (postRegion != prevRegion) updateVisSet();
-
+	int generalDirection = ((int)(direction/90))%4;
+	int regionBelow = groupNum(x,y-10000)-1;
+	//avoid walls
+	//first check for the edges of the map 
+	if (x-(.4*GRID)< 0){
+		//left edge
+		if(generalDirection == 3){
+			direction = direction + 10;// (10*speed/x);
+		}
+		else if(generalDirection == 2){
+			direction = direction -10;//(10*speed/x);
+		}	
+	}
+	if(x+(.4*GRID)> GRID*worldSize){
+		//right edge
+		if(generalDirection == 0){
+			direction = direction - 10;
+		}
+		else if (generalDirection == 1){
+			direction = direction + 10;
+		}
+	}
+	if(y-(.4*GRID)< 0){
+		//bottom
+		if(generalDirection == 1){
+			direction = direction - 10;
+		}
+		else if (generalDirection == 2){
+			direction = direction + 10;
+		}
+	}
+	if(y+(.4*GRID) > GRID*worldSize){
+		//top
+		if(generalDirection == 0){
+			direction = direction + 10;
+		}
+		else if (generalDirection == 3){
+			direction = direction - 10;
+		}
+	}
+	//if you're not near an edge then check to see which walls are in your region and avoid them
+	//if you're in a region with a top and left 
+	if(walls[postRegion] ==3 ){
+		//check to avoid the top
+		if(y%GRID >= (.7*GRID)){
+			if(generalDirection == 0){
+				direction += 20;
+			}
+			else if (generalDirection == 3){
+				direction +=  20;
+			}
+			else if(generalDirection == 2){
+				direction -= 20;
+			}
+		}
+		//check to avoid the left side
+		if(x%GRID <= (.3*GRID)){
+			if(generalDirection == 0){
+				direction = direction + 20;
+			}
+		}
+	}
+	if(walls[postRegion] ==2){
+		//this means theres a wall on the top of this region
+		if(y%GRID >= (.7*GRID)){
+			if(generalDirection == 0){
+				direction += 20;	
+			}
+			else if (generalDirection == 3){
+				direction -= 20;
+			}
+		}
+	}
+	if(walls[postRegion] == 1 || walls[postRegion] == 3){
+		//a wall on the left side
+		if(x%GRID <= (.3*GRID)){
+			if(generalDirection == 2){
+				direction -= 20;
+			}
+			else if (generalDirection == 3){
+				direction += 20;
+			}
+		}
+	}
+	//check for the walls that aren't owned by your region 
+	//aka walls on the bottom or right
+	if(walls[postRegion+1] == 1 || walls[postRegion+1] == 3){
+		//a wall on the right
+		if(x%GRID >= (.7*GRID)){
+			if(generalDirection == 0){
+				direction -= 20;
+			}
+			else if(generalDirection == 1){
+				direction += 20;
+			}
+		}
+	}
+	
+	if(walls[regionBelow] == 2 || walls[regionBelow] == 3){
+		//a wall below
+		if(y%GRID <= (.3*GRID)){
+			if(generalDirection == 1){
+				direction -= 20;
+			}
+			else if(generalDirection == 2){
+				direction +=20;
+			}
+		}
+	}
 	//bounce off walls
         if (x == 0)        	direction = -direction;
         else if (x == GRID*worldSize-1)   direction = -direction;
