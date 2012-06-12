@@ -189,7 +189,7 @@ void* run(void* finTimeSec) {
 	while (finishTime == 0 || now <= finishTime) {
 		nothing2do = true;
 
-		// check for connection requessts from remote display
+		// check for connection requests from remote display
 		int connSock = -1;
 		if ((connSock = Np4d::accept4d(extSock)) > 0) {
 			// let handler know this is socket# for remote host

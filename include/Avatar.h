@@ -48,6 +48,7 @@ private:
 	const static int SLOW  =100;	///< slow avatar speed
 	const static int MEDIUM=250;	///< medium avatar speed
 	const static int FAST  =600;	///< fast avatar speed
+	const static int STOPPED = 0;
 
 	// network parameters 
 	ipa_t	myIpAdr;		///< IP address of interface
