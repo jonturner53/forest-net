@@ -41,7 +41,7 @@ int main(int argc, char ** argv) {
 	    (myIp = Np4d::ipAddress(argv[5])) == 0 ||
 	    (myAdr = Forest::forestAdr(argv[6])) == 0 ||
 	    (sscanf(argv[7],"%d", &finTime)) != 1)
-		fatal("ClientMgr usage: fClientMgr netMgrAdr rtrAdr rtrIp myIp myAdr finTime usersFile");
+		fatal("ClientMgr usage: ClientMgr netMgrAdr rtrAdr ccAdr rtrIp myIp myAdr finTime usersFile acctsFile");
 	char * unamesFile = argv[8];
 	char * acctFile = argv[9];
 	if(!init(netMgrAdr,rtrIp,rtrAdr,CC_Adr,myIp, myAdr, unamesFile,acctFile))

@@ -694,11 +694,13 @@ comt_t Avatar::check4command() {
 	case 'l': direction += 10;
 		  if (direction > 360) direction -= 360;
 		  break;
-	case 'i': if (speed == SLOW) speed = MEDIUM;
-	          else if (speed == MEDIUM) speed = FAST;
+	case 'i': if (speed == STOPPED) speed = SLOW;
+	          else if (speed == SLOW) speed = MEDIUM;
+		  else if (speed == MEDIUM) speed = FAST;
 		  break;
 	case 'k': if (speed == FAST) speed = MEDIUM;
 	          else if (speed == MEDIUM) speed = SLOW;
+		  else if (speed == SLOW) speed = SLOW;
 		  break;
 	case 'c': return param; 
 	}
@@ -795,119 +797,203 @@ void Avatar::updateStatus(uint32_t now) {
 	if (postRegion != prevRegion) updateVisSet();
 	int generalDirection = ((int)(direction/90))%4;
 	int regionBelow = groupNum(x,y-10000)-1;
-	//avoid walls
-	//first check for the edges of the map 
-	if (x-(.4*GRID)< 0){
-		//left edge
-		if(generalDirection == 3){
-			direction = direction + 10;// (10*speed/x);
-		}
-		else if(generalDirection == 2){
-			direction = direction -10;//(10*speed/x);
-		}	
-	}
-	if(x+(.4*GRID)> GRID*worldSize){
-		//right edge
-		if(generalDirection == 0){
-			direction = direction - 10;
-		}
-		else if (generalDirection == 1){
-			direction = direction + 10;
-		}
-	}
-	if(y-(.4*GRID)< 0){
-		//bottom
-		if(generalDirection == 1){
-			direction = direction - 10;
-		}
-		else if (generalDirection == 2){
-			direction = direction + 10;
-		}
-	}
-	if(y+(.4*GRID) > GRID*worldSize){
-		//top
-		if(generalDirection == 0){
-			direction = direction + 10;
-		}
-		else if (generalDirection == 3){
-			direction = direction - 10;
-		}
-	}
-	//if you're not near an edge then check to see which walls are in your region and avoid them
-	//if you're in a region with a top and left 
-	if(walls[postRegion] ==3 ){
-		//check to avoid the top
-		if(y%GRID >= (.7*GRID)){
-			if(generalDirection == 0){
-				direction += 20;
-			}
-			else if (generalDirection == 3){
-				direction +=  20;
-			}
-			else if(generalDirection == 2){
-				direction -= 20;
-			}
-		}
-		//check to avoid the left side
-		if(x%GRID <= (.3*GRID)){
-			if(generalDirection == 0){
-				direction = direction + 20;
-			}
-		}
-	}
-	if(walls[postRegion] ==2){
-		//this means theres a wall on the top of this region
-		if(y%GRID >= (.7*GRID)){
-			if(generalDirection == 0){
-				direction += 20;	
-			}
-			else if (generalDirection == 3){
-				direction -= 20;
-			}
-		}
-	}
-	if(walls[postRegion] == 1 || walls[postRegion] == 3){
-		//a wall on the left side
-		if(x%GRID <= (.3*GRID)){
-			if(generalDirection == 2){
-				direction -= 20;
-			}
-			else if (generalDirection == 3){
-				direction += 20;
-			}
-		}
-	}
-	//check for the walls that aren't owned by your region 
-	//aka walls on the bottom or right
-	if(walls[postRegion+1] == 1 || walls[postRegion+1] == 3){
-		//a wall on the right
-		if(x%GRID >= (.7*GRID)){
-			if(generalDirection == 0){
-				direction -= 20;
-			}
-			else if(generalDirection == 1){
-				direction += 20;
-			}
-		}
-	}
-	
-	if(walls[regionBelow] == 2 || walls[regionBelow] == 3){
-		//a wall below
-		if(y%GRID <= (.3*GRID)){
-			if(generalDirection == 1){
-				direction -= 20;
-			}
-			else if(generalDirection == 2){
-				direction +=20;
-			}
-		}
-	}
-	//bounce off walls
         if (x == 0)        	direction = -direction;
         else if (x == GRID*worldSize-1)   direction = -direction;
         else if (y == 0)        direction = 180 - direction;
         else if (y == GRID*worldSize-1)   direction = 180 - direction;
-        else if (postRegion != prevRegion) {
+	if(connSock >=0){
+		//stop the driver and let them choose where to go next if they hit the wall	
+                if (prevRegion == postRegion + 1 &&
+			(walls[prevRegion]==1 || walls[prevRegion]==3)) {
+			// going east to west and hitting wall
+			speed = STOPPED;
+                        x = (prevRegion%worldSize)*GRID + 1;
+                } else if (prevRegion == postRegion - 1 &&
+			(walls[postRegion]==1 || walls[postRegion]==3)) {
+			// going west to east and hitting wall
+			speed = STOPPED;
+                        x = (postRegion%worldSize)*GRID - 1;
+                } else if (prevRegion == postRegion+worldSize &&
+			(walls[postRegion] == 2 || walls[postRegion] == 3)) {
+			// going north to south and hitting wall
+			speed = STOPPED;
+                        y = (prevRegion/worldSize)*GRID + 1;
+                } else if (prevRegion == postRegion - worldSize &&
+			(walls[prevRegion] == 2 || walls[prevRegion] == 3)) {
+			// going south to north and hitting wall
+			speed = STOPPED;
+                        y = (postRegion/worldSize)*GRID - 1;
+                } else if (prevRegion == postRegion - (worldSize-1)) {
+			// going southeast to northwest
+			if (walls[prevRegion] == 3) {
+				speed = STOPPED;
+				x = (prevRegion%worldSize)*GRID + 1;
+				y = (postRegion/worldSize)*GRID - 1;
+			} else if (walls[prevRegion] == 1) {
+				speed = STOPPED;
+                        	x = (prevRegion%worldSize)*GRID + 1;
+			} else if (walls[prevRegion] == 2 ||
+				   walls[prevRegion-1]&2) {
+				speed = STOPPED;
+                        	y = (postRegion/worldSize)*GRID - 1;
+			} 
+                } else if (prevRegion == postRegion - (worldSize+1)) {
+			// going southwest to northeast
+			if (walls[prevRegion]&2 && walls[prevRegion+1]&1) {
+				speed = STOPPED;
+				x = (postRegion%worldSize)*GRID - 1;
+				y = (postRegion/worldSize)*GRID - 1;
+			} else if (walls[prevRegion]&2) {
+				speed = STOPPED;
+                        	y = (postRegion/worldSize)*GRID - 1;
+			} else if (walls[prevRegion+1]&1 ||
+				   walls[postRegion]&1) {
+				speed = STOPPED;
+                        	x = (postRegion%worldSize)*GRID - 1;
+			} 
+                } else if (prevRegion == postRegion - (worldSize-1)) {
+			// going northeast to southwest
+			if (walls[prevRegion]&1 &&
+			    walls[postRegion+1]&2) {
+				speed = STOPPED;
+				if (direction < 0) direction += 360;
+				x = (prevRegion%worldSize)*GRID + 1;
+				y = (prevRegion/worldSize)*GRID + 1;
+			} else if (walls[prevRegion]&1) {
+				speed = STOPPED;
+                        	x = (prevRegion%worldSize)*GRID + 1;
+			} else if (walls[postRegion+1]&2 ||
+				   walls[postRegion]&2) {
+				speed = STOPPED;
+                        	y = (prevRegion/worldSize)*GRID + 1;
+			} 
+                } else if (prevRegion == postRegion - (worldSize+1)) {
+			// going northwest to southeast
+			if (walls[postRegion-1]&2 &&
+			    walls[prevRegion+1]&1) {
+				speed = STOPPED;
+				x = (postRegion%worldSize)*GRID - 1;
+				y = (prevRegion/worldSize)*GRID + 1;
+			} else if (walls[postRegion-1]&2) {
+				speed = STOPPED;
+                        	y = (prevRegion/worldSize)*GRID + 1;
+			} else if (walls[prevRegion+1]&1 ||
+				   walls[postRegion]&1) {
+				speed = STOPPED;
+                        	x = (postRegion%worldSize)*GRID - 1;
+			} 
+		}
+	}
+        else if (connSock < 0) {
+		//avoid walls
+		//first check for the edges of the map 
+		if (x-(.4*GRID)< 0){
+			//left edge
+			if(generalDirection == 3){
+				direction = direction + 10;// (10*speed/x);
+			}
+			else if(generalDirection == 2){
+				direction = direction -10;//(10*speed/x);
+			}	
+		}
+		if(x+(.4*GRID)> GRID*worldSize){
+			//right edge
+			if(generalDirection == 0){
+				direction = direction - 10;
+			}
+			else if (generalDirection == 1){
+				direction = direction + 10;
+			}
+		}
+		if(y-(.4*GRID)< 0){
+			//bottom
+			if(generalDirection == 1){
+				direction = direction - 10;
+			}
+			else if (generalDirection == 2){
+				direction = direction + 10;
+			}
+		}
+		if(y+(.4*GRID) > GRID*worldSize){
+			//top
+			if(generalDirection == 0){
+				direction = direction + 10;
+			}
+			else if (generalDirection == 3){
+				direction = direction - 10;
+			}
+		}
+		//if you're not near an edge then check to see which walls are in your region and avoid them
+		//if you're in a region with a top and left 
+		if(walls[postRegion] ==3 ){
+			//check to avoid the top
+			if(y%GRID >= (.7*GRID)){
+				if(generalDirection == 0){
+					direction += 20;
+				}
+				else if (generalDirection == 3){
+					direction +=  20;
+				}
+				else if(generalDirection == 2){
+					direction -= 20;
+				}
+			}
+			//check to avoid the left side
+			if(x%GRID <= (.3*GRID)){
+				if(generalDirection == 0){
+					direction = direction + 20;
+				}
+			}
+		}
+		if(walls[postRegion] ==2){
+			//this means theres a wall on the top of this region
+			if(y%GRID >= (.7*GRID)){
+				if(generalDirection == 0){
+					direction += 20;	
+				}
+				else if (generalDirection == 3){
+					direction -= 20;
+				}
+			}
+		}
+		if(walls[postRegion] == 1 || walls[postRegion] == 3){
+			//a wall on the left side
+			if(x%GRID <= (.3*GRID)){
+				if(generalDirection == 2){
+					direction -= 20;
+				}
+				else if (generalDirection == 3){
+					direction += 20;
+				}
+			}
+		}
+		//check for the walls that aren't owned by your region 
+		//aka walls on the bottom or right
+		if(walls[postRegion+1] == 1 || walls[postRegion+1] == 3){
+			//a wall on the right
+			if(x%GRID >= (.7*GRID)){
+				if(generalDirection == 0){
+					direction -= 20;
+				}
+				else if(generalDirection == 1){
+					direction += 20;
+				}
+			}
+		}
+		
+		if(walls[regionBelow] == 2 || walls[regionBelow] == 3){
+			//a wall below
+			if(y%GRID <= (.3*GRID)){
+				if(generalDirection == 1){
+					direction -= 20;
+				}
+				else if(generalDirection == 2){
+					direction +=20;
+				}
+			}
+		}
+		
+		//bounce off walls
                 if (prevRegion == postRegion + 1 &&
 			(walls[prevRegion]==1 || walls[prevRegion]==3)) {
 			// going east to west and hitting wall
@@ -988,7 +1074,6 @@ void Avatar::updateStatus(uint32_t now) {
                         	x = (postRegion%worldSize)*GRID - 1;
 			} 
 		}
-        } else if (connSock < 0) {
 		// no controller connected, so just make random
 		// changes to direction and speed
 		direction += deltaDir;
@@ -1005,7 +1090,9 @@ void Avatar::updateStatus(uint32_t now) {
 			else if (r < 0.05) 		    speed = SLOW;
 			else 				    speed = FAST;
 		}
-	}
+
+	} 
+	
 	if (direction < 0) direction += 360;
 }
 
