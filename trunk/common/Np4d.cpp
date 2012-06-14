@@ -406,8 +406,8 @@ int Np4d::recvBuf(int sock, char* buf, int buflen) {
 	if (nbytes != sizeof(uint32_t)) return -1;
 	length = ntohl(length);
 	if (dataAvail(sock) < ((int) (length + sizeof(uint32_t)))) return -1;
-	length = min(length, buflen);
 	nbytes = recv(sock,(void *) &length, sizeof(uint32_t), 0);
+	length = min(ntohl(length), buflen);
 	nbytes = recv(sock,(void *) buf, length, 0);
 	return nbytes;
 }
