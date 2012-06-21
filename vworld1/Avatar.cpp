@@ -114,7 +114,6 @@ bool Avatar::init(ipa_t cmIpAdr, string& uname, string& pword,
 	// login and setup walls 
 	if (!login(cmIpAdr, uname, pword)) return false;
 	if (!setupWalls(wallsFile)) return false;
-
 	// initialize avatar to a random position
 	srand(myAdr);
 	x = randint(0,GRID*worldSize-1); y = randint(0,GRID*worldSize-1);
@@ -143,10 +142,9 @@ bool Avatar::login(ipa_t cmIpAdr, string uname, string pword) {
 	}
 	// send login string to Client Manager
 	stringstream ss;
-	ss << uname << " " << pword << " " << Np4d::getSockPort(sock);
+	ss << uname << " " << pword << " " << Np4d::getSockPort(sock) << " noproxy";
 	Np4d::sendBufBlock(cmSock,(char *) ss.str().c_str(),
 			   ss.str().size()+1);
-
 	//receive rtrAdr, myAdr, rtrIp, comtCtlAdr
 	Np4d::recvIntBlock(cmSock,(uint32_t&) rtrAdr);
 	if (rtrAdr == -1) {

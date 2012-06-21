@@ -1,7 +1,7 @@
 ALGOLIBROOT = ../../algolib-jst
 FLIB = ../lib/lib-forest.a
 LIBS = ${FLIB} ${ALGOLIBROOT}/lib/lib-util.a ${ALGOLIBROOT}/lib/lib-ds.a
-XFILES = Avatar Monitor genWalls
+XFILES = Avatar Monitor genWalls cliProxy
 CLASSFILES = AvatarStatus.class AvatarGraphic.class ShowWorld.class \
 	DriveAvatar.class ShowWalls.class 
 CXXFLAGS = -Wall -O2 -m64 -I ../include -I ${ALGOLIBROOT}/include
@@ -24,6 +24,9 @@ Monitor : Monitor.o ${LIBS}
 	cp $@ ${HOME}/bin
 
 genWalls : genWalls.o ${LIBS}
+	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
+	cp $@ ${HOME}/bin
+cliProxy : ClientProxy.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
 	cp $@ ${HOME}/bin
 
