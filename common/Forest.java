@@ -7,7 +7,7 @@
  */
 
 package forest.common;
-
+import java.nio.ByteBuffer;
 /** Miscellaneous utility functions.
  *  This class defines various constants and common functions useful
  *  within a Forest router and Forest hosts.
@@ -35,6 +35,13 @@ public class Forest {
 
 		NodeTyp(int value) { this.value = value; };
 		public int val() { return value; }
+		
+		public static NodeTyp getIndexByCode(int code) {
+			for(NodeTyp nt : NodeTyp.values()) {
+				if(nt.val() == code) return nt;
+			}
+			return null;
+		}
 	}
 	
 	/** Forest packet types.
@@ -65,8 +72,13 @@ public class Forest {
 
 		PktTyp(int value) { this.value = value; };
 		public int val() { return value; }
+		public static PktTyp getIndexByCode(int value) {
+			for(PktTyp p : PktTyp.values())
+				if(p.val() == value) return p;
+			return null;
+		}
 	}
-
+	
 	public static final byte FOREST_VERSION = 1; ///< forest proto version
         public static final int HDR_LENG = 20;       ///< header len in bytes
         public static final int OVERHEAD = 24;       ///< total overhead
@@ -88,13 +100,29 @@ public class Forest {
         public static final int CLIENT_SIG_COMT = 2; ///< comtree signaling
         public static final int NET_SIG_COMT = 100;  ///< internal signaling
 
-	public class PktBuffer {
+	public static class PktBuffer {
 		private int[] buf;
 		public PktBuffer() { buf = new int[BUF_SIZ/4]; }
 		public int get(int i) { return buf[i]; }
 		public void set(int i, int v) { buf[i] = v; }
+		public void put2BytBuf(ByteBuffer bb, int length) {
+			bb.clear();
+			bb.putInt(length);
+			for(int i = 0; i < length/4; i++) {
+				bb.putInt(buf[i]);
+			}
+		}
+		public byte[] toByteArray(int length) {
+			byte[] arr = new byte[length];
+			for(int i = 0; i < length; i+=4) {
+				arr[i] = (byte) (buf[i] >> 24);
+				arr[i+1] = (byte) (buf[i] >> 16);
+				arr[i+2] = (byte) (buf[i] >> 8);
+				arr[i+3] = (byte) (buf[i]);
+			}
+			return arr;
+		}
 	}
-	
 	/** Determine if given Forest address is a valid unicast address.
 	 *  @param adr is a Forest address
 	 *  @return true if it is a valid unicast address (is greater than
@@ -160,7 +188,36 @@ public class Forest {
 		if (fAdr < 0) return "" + fAdr;
 		return "" + zipCode(fAdr) + "." + localAdr(fAdr);
 	}
+	/** Create a String representation of an IP address.
+	*  @param ip is an ip address
+	*  @return a String that represents ip
+	*/
+	public static String ip2string(int ip) {
+		//if(ip < 0) return "" + ip;
+		return ((ip >> 24) & 0xff) + "." +
+			((ip >> 16) & 0xff) + "." +
+			((ip >> 8) & 0xff) + "." + 
+			(ip & 0xff);
+	}
 	
+	public static int ipAddress(String str) {
+		String[] k = str.split("\\.");
+		int x = ((Integer.parseInt(k[0]) & 0xff) << 24) |
+			((Integer.parseInt(k[1]) & 0xff) << 16) |
+			((Integer.parseInt(k[2]) & 0xff) << 8 ) |
+			(Integer.parseInt(k[3]) & 0xff);
+		return x;
+	}
+
+	public static byte[] ip2byteArr(int ip) {
+		byte[] b = new byte[4];
+		if(ip < 0) return b;
+		b[0] = (byte) ((ip >> 24) & 0xff);
+		b[1] = (byte) ((ip >> 16) & 0xff);
+		b[2] = (byte) ((ip >> 8) & 0xff);
+		b[3] = (byte) (ip & 0xff);
+		return b;
+	}
 	/** Compute link packet length for a given forest packet length.
 	 *
 	 *  @param x is the number of bytes in the Forest packet
