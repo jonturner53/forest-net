@@ -33,7 +33,7 @@ int main(int argc, char ** argv) {
 	uint32_t finTime = 0;
 	ipa_t rtrIp, myIp; fAdr_t rtrAdr, myAdr, CC_Adr, netMgrAdr;
 	rtrIp = myIp = 0; rtrAdr = myAdr = CC_Adr = netMgrAdr = 0;
-	if(argc != 10 ||
+	if(argc != 11 ||
 	    (netMgrAdr = Forest::forestAdr(argv[1])) == 0 ||
 	    (rtrAdr = Forest::forestAdr(argv[2])) == 0 ||
 	    (CC_Adr = Forest::forestAdr(argv[3])) == 0 ||
@@ -41,11 +41,12 @@ int main(int argc, char ** argv) {
 	    (myIp = Np4d::ipAddress(argv[5])) == 0 ||
 	    (myAdr = Forest::forestAdr(argv[6])) == 0 ||
 	    (sscanf(argv[7],"%d", &finTime)) != 1)
-		fatal("ClientMgr usage: ClientMgr netMgrAdr rtrAdr ccAdr rtrIp myIp myAdr finTime usersFile acctsFile");
-	char * unamesFile = argv[8];
-	char * acctFile = argv[9];
-	if(!init(netMgrAdr,rtrIp,rtrAdr,CC_Adr,myIp, myAdr, unamesFile,acctFile))
+		fatal("ClientMgr usage: fClientMgr netMgrAdr rtrAdr rtrIp myIp myAdr finTime usersFile prefixFile");
+	if(!init(netMgrAdr,rtrIp,rtrAdr,CC_Adr,myIp, myAdr, argv[8], argv[9]))
 		fatal("init: Failed to initialize ClientMgr");
+	if(!readPrefixInfo(argv[10]))
+		fatal("readPrefixFile: Failed to read prefixes");
+	
 	pthread_t run_thread;
 	if(pthread_create(&run_thread,NULL,run,(void *) &finTime) != 0) {
 		fatal("can't create run thread\n");
@@ -68,25 +69,30 @@ int main(int argc, char ** argv) {
 bool init(fAdr_t nma, ipa_t ri, fAdr_t ra, fAdr_t cca, ipa_t mi, fAdr_t ma, char * filename, char * acctFile) {
 	netMgrAdr = nma; rtrIp = ri; rtrAdr = ra;
 	CC_Adr = cca; myIp = mi; myAdr = ma; unamesFile = filename; 
-	sock = extSock = avaSock = -1;
+	sock = extSockInt = extSockExt = avaSock = -1;
 	unames = new map<string,string>;
 	readUsernames();
 	int nPkts = 10000;
 	ps = new PacketStoreTs(nPkts+1);
 	acctFileStream.open(acctFile);
 	clients = new map<uint32_t,clientStruct>;
-	seqNum = 0; 
+	seqNum = 0;
+	proxyIndex = 0;
+	proxyQueues = new map<fAdr_t,Queue*>; 
 	pool = new ThreadPool[TPSIZE+1];
 	threads = new UiSetPair(TPSIZE);
 	tMap = new IdMap(TPSIZE);
 	//setup sockets
-	extSock = Np4d::streamSocket();
+	extSockInt = Np4d::streamSocket();
+	extSockExt = Np4d::streamSocket();
 	sock = Np4d::datagramSocket();
 	if(sock < 0) return false;
-	if(extSock < 0) return false;
-	bool status = Np4d::bind4d(extSock,myIp,LISTEN_PORT);
+	if(extSockInt < 0) return false;
+	if(extSockExt < 0) return false;
+	bool status = Np4d::bind4d(extSockInt,myIp,LISTEN_PORT) &&
+		      Np4d::bind4d(extSockExt,Np4d::myIpAddress(),LISTEN_PORT);
 	if(!status) return false;
-	status = Np4d::bind4d(sock,myIp,0);
+	status = Np4d::bind4d(sock,myIp,LISTEN_PORT);
 	if(!status) return false;
 	connect();
 	usleep(1000000); //sleep for one second
@@ -100,8 +106,10 @@ bool init(fAdr_t nma, ipa_t ri, fAdr_t ra, fAdr_t cca, ipa_t mi, fAdr_t ma, char
 		    (void *) &pool[t]) != 0)
 			fatal("init: can't create thread pool");
         }
-	return Np4d::listen4d(extSock)
-		&& Np4d::nonblock(extSock)
+	return Np4d::listen4d(extSockInt)
+		&& Np4d::nonblock(extSockInt)
+		&& Np4d::listen4d(extSockExt)
+		&& Np4d::nonblock(extSockExt)
 		&& Np4d::nonblock(sock);
 }
 
@@ -164,6 +172,58 @@ void send(int p) {
 	ps->free(p);
 }
 
+/** Finds the router address of the router based on IP prefix
+ *  @param cliIp is the ip of the client proxy
+ *  @param rtrAdr is the address of the router associated with this IP prefix
+ *  @return true if there was an IP prefix found, false otherwise
+ */
+bool findCliRtr(ipa_t cliIp, fAdr_t& rtrAdr, ipa_t& rtrIp) {
+	string cip;
+	Np4d::ip2string(cliIp,cip);
+	for(unsigned int i = 0; i < (unsigned int) numPrefixes; ++i) {
+		string ip = prefixes[i].prefix;
+		unsigned int j = 0;
+		while (j < ip.size() && j < cip.size()) {
+			if (cip[j] != ip[j]) break;
+			if (ip[j] == '*' ||
+			    j+1 == ip.size() && j+1 == cip.size()) {
+				rtrAdr = prefixes[i].rtrAdr;
+				rtrIp  = prefixes[i].rtrIp;
+				return true;
+			}
+			j++;
+		}
+	}
+	return false;
+}
+
+/** Reads the prefix file
+ *  @param filename is the name of the prefix file
+ *  @return true on success, false otherwise
+ */
+bool readPrefixInfo(char filename[]) {
+	ifstream ifs; ifs.open(filename);
+	if(ifs.fail()) return false;
+	Misc::skipBlank(ifs);
+	int i = 0;
+	while(!ifs.eof()) {
+		string pfix, rtrIpStr; fAdr_t rtrAdr; ipa_t rtrIp;
+		ifs >> pfix;
+		if(!Forest::readForestAdr(ifs,rtrAdr))
+			break;
+		ifs >> rtrIpStr;
+		rtrIp = Np4d::ipAddress(rtrIpStr.c_str());
+		prefixes[i].prefix = pfix;
+		prefixes[i].rtrAdr = rtrAdr;
+		prefixes[i].rtrIp  = rtrIp;
+		Misc::skipBlank(ifs);
+		i++;
+	}
+	numPrefixes = i;
+	cout << "read address info for " << numPrefixes << " prefixes" << endl;
+	return true;
+}
+
 /** run repeatedly tries to initialize any new avatars until the time runs out
  *@param finTime is the length of time that this should run
  *
@@ -175,7 +235,8 @@ void* run(void* finishTime) {
 	while (now <= finTime) {
 		bool nothing2do = true;
 		ipa_t avIp; ipp_t port;
-		int avaSock = Np4d::accept4d(extSock,avIp,port);
+		int avaSock = Np4d::accept4d(extSockExt,avIp,port);
+		if(avaSock <= 0) avaSock = Np4d::accept4d(extSockInt,avIp,port);
 		if(avaSock > 0) {
 			nothing2do = false;
 			int t = threads->firstOut();
@@ -187,10 +248,37 @@ void* run(void* finishTime) {
 			pool[t].qp.in.enq(1); //TCP connection set up
 		}
 		//first receieve packets and send to threads
-		int p = recvFromForest();
-		if (p != 0) {
+		string proxyString;
+		int p = recvFromForest(proxyString);
+		if (p > 0) {
 			nothing2do = false;
 			handleIncoming(p);	
+		} else if(p < 0) {
+			//message from proxy
+			istringstream iss(proxyString);
+			string ipStr;
+			ipp_t proxUdp, proxTcp;
+			iss >> ipStr >> proxUdp >> proxTcp;
+			ipa_t proxIp = Np4d::ipAddress(ipStr.c_str());
+			ipa_t rtrIp; fAdr_t rtrAdr;
+			if(!findCliRtr(proxIp,rtrAdr,rtrIp)) {
+				rtrAdr = prefixes[0].rtrAdr;
+				rtrIp  = prefixes[0].rtrIp;
+			}
+			proxies[proxyIndex].pip = proxIp;
+			proxies[proxyIndex].udpPort = proxUdp;
+			proxies[proxyIndex].tcpPort = proxTcp;
+			if(proxyQueues->find(rtrAdr)==proxyQueues->end()) {
+				(*proxyQueues)[rtrAdr] = new Queue(10);
+			}
+			Queue* q = (proxyQueues->find(rtrAdr))->second;
+			q->enq(proxyIndex++);
+			//send back, but not as ctl pkt
+			string rtrIpStr; Np4d::ip2string(rtrIp,rtrIpStr);
+			string rtrAdrStr; Forest::fAdr2string(rtrAdr,rtrAdrStr);
+			string buf = rtrIpStr + " " + rtrAdrStr;
+			//send that buf
+			Np4d::sendto4d(sock,(void*)buf.c_str(),buf.size()+1,proxIp,proxUdp);
 		} else {
 			ps->free(p);
 		}
@@ -252,10 +340,6 @@ void handleIncoming(int p) {
 // might want to print error message in this case
 			} else ps->free(p);
 		} 
-		else if(cp.getCpType() == NEW_CLIENT_PROXY){
-			//handle accordingly
-
-		}
 		else if(cp.getRrType() == REQUEST &&
 		    (cp.getCpType() == CLIENT_CONNECT ||
 		     cp.getCpType() == CLIENT_DISCONNECT)) {
@@ -270,7 +354,7 @@ void handleIncoming(int p) {
 			int len = cp2.pack(ps->getPayload(p1));
 			h1.setLength(Forest::OVERHEAD + len);
 			h1.setPtype(NET_SIG);
-			h.pack(ps->getBuffer(p1));
+			h1.pack(ps->getBuffer(p1));
 			send(p1);
 		/*} else if(cp.getRrType() == NEG_REPLY &&
 			    h.getSrcAdr()==netMgrAdr) {
@@ -313,13 +397,22 @@ void* handler(void * tp) {
 		uint32_t port;
 	        Np4d::recvBufBlock(avaSock,buf,100);
 		istringstream iss(buf);
-		string uname, pword, portStr;
-		iss >> uname >> pword >> portStr;
-		sscanf(portStr.c_str(),"%d",&port);
-
+		string uname, pword, proxy;
+		iss >> uname >> pword >> port >> proxy;
+		bool needProxy = (proxy=="proxy");
 		CtlPkt cp2(NEW_CLIENT,REQUEST,seqNum);
-		cp2.setAttr(CLIENT_IP,aip);
-		cp2.setAttr(CLIENT_PORT,(ipp_t)port);
+		fAdr_t rtrAdr; ipa_t rtrIp;
+		if(!findCliRtr(aip,rtrAdr,rtrIp)) {
+			rtrAdr = prefixes[0].rtrAdr;
+			rtrIp = prefixes[0].rtrIp;
+		}
+		proxyStruct pro;
+		if(needProxy) {
+			int proxyIndex = ((proxyQueues->find(rtrAdr))->second)->deq();
+			pro = proxies[proxyIndex];
+		}
+		cp2.setAttr(CLIENT_IP,(needProxy ? pro.pip : aip));
+		cp2.setAttr(CLIENT_PORT,(needProxy ? pro.udpPort : (ipp_t)port));
 		int reply = sendCtlPkt(cp2,Forest::NET_SIG_COMT,
 					netMgrAdr,inQ,outQ);
 		if (reply == NORESPONSE) {
@@ -345,8 +438,15 @@ void* handler(void * tp) {
 			//send via TCP
 			Np4d::sendInt(avaSock,rtrAdr);
 			Np4d::sendInt(avaSock,cliAdr);
-			Np4d::sendInt(avaSock,rtrIp);
-			Np4d::sendInt(avaSock,CC_Adr);
+			if(needProxy) {
+				Np4d::sendInt(avaSock,pro.pip);
+				Np4d::sendInt(avaSock,pro.tcpPort);
+				Np4d::sendInt(avaSock,pro.udpPort);
+				Np4d::sendInt(avaSock,CC_Adr);
+			} else {
+				Np4d::sendInt(avaSock,rtrIp);
+				Np4d::sendInt(avaSock,CC_Adr);
+			}
 		} else if(cp3.getCpType() == NEW_CLIENT &&
 		    	  cp3.getRrType() == NEG_REPLY) { //send -1 to client
 			cerr << "Client could not connect:" << cp3.getErrMsg()
@@ -395,12 +495,17 @@ void disconnect() {
  *
  *@return 0 if nothing is received, a packet otherwise
  */
-int recvFromForest() {
+int recvFromForest(string& proxyString) {
         int p = ps->alloc();
         if (p == 0) return 0;
         buffer_t& b = ps->getBuffer(p);
         int nbytes = Np4d::recv4d(sock,&b[0],1500);
         if (nbytes < 0) { ps->free(p); return 0; }
+	if(b[0] == 0) {//not a forest pkt, but a proxy pkt
+		proxyString = (string)((char *) (&b[1]));
+		ps->free(p);
+		return -1;
+	}
         ps->unpack(p);
         PacketHeader& h = ps->getHeader(p);
         CtlPkt cp;
