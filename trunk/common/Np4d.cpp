@@ -447,7 +447,8 @@ int Np4d::sendBuf(int sock, char* buf, int buflen) {
 }
 
 int Np4d::sendBufBlock(int sock, char* buf, int buflen) {
-	int nbytes = send(sock, (void *) &buflen, sizeof(uint32_t), 0);
+	int length = htonl(buflen);
+	int nbytes = send(sock, (void *) &length, sizeof(uint32_t), 0);
 	if (nbytes != sizeof(uint32_t))
 		fatal("Np4d::sendBuf: can't send buffer");
 	nbytes = send(sock, (void *) buf, buflen, 0);
