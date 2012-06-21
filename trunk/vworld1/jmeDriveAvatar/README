@@ -1,0 +1,1 @@
+These three files must be compiled with the jMonkey Engine.  In order to do this, they require some assets that come with the IDE.  In order to get these assets, once creating a project, copy the Oto.mesh.xml model from the jme3-test-data jar, or simply change your project properties to include the jme3-test-data library. Will update this README more later.
