@@ -25,10 +25,19 @@ static const int NORESPONSE = (1 << 31);
 
 PacketStoreTs *ps;	///< pointer to packet store
 int sock;		///< Forest socket
-int extSock;		///< Listen for avatars socket
+int extSockInt;		///< Listen for avatars on internal ip
+int extSockExt;		///< Listen for avatars on external ip
 int avaSock;		///< Avatar connection socket
 uint64_t seqNum;
 map<string,string>* unames; ///< map of known usernames to pwords
+
+int numPrefixes;
+struct prefixInfo {
+	string prefix;
+	fAdr_t rtrAdr;
+	ipa_t rtrIp;
+};
+prefixInfo prefixes[1000];
 struct clientStruct {
 	fAdr_t fa;//forest address
 	fAdr_t ra;//router forest address
@@ -38,6 +47,15 @@ struct clientStruct {
 	int sock;//socket number
 	ipa_t aip;//avatar IP
 };
+int proxyIndex;
+map<fAdr_t,Queue*>* proxyQueues;
+struct proxyStruct {
+	ipa_t pip; //proxy ip
+	ipp_t udpPort;//proxy port
+	ipp_t tcpPort;//tcp listen port
+};
+
+proxyStruct proxies[1000];
 struct QueuePair {
 	Queue in; Queue out;
 };
@@ -58,6 +76,9 @@ map<uint32_t,clientStruct>* clients; ///< map from IP to clients with info
 char * unamesFile;	///< filename of usernames file
 ofstream acctFileStream; ///< stream to write accounting to file
 void writeToAcctFile(CtlPkt); ///< write contents of ctlpkt to accounting file
+bool readPrefixInfo(char*); ///< read prefix info from prefix file
+bool findCliRtr(ipa_t,fAdr_t&,ipa_t&); ///< gives rtrAdr and rtrIp from prefix
+
 void* handler(void *);
 void handleIncoming(int); //deal with incoming packets by sending to appropriate threads
 void* acceptAvatars(void *);
@@ -65,7 +86,7 @@ int sendAndWait(int,CtlPkt&,Queue&,Queue&);
 int sendCtlPkt(CtlPkt&,comt_t,fAdr_t,Queue&,Queue&);
 void send(int);		///< send packet to forest router
 void requestAvaInfo(ipa_t,ipp_t);///< send ctlpkt asking for client info
-int recvFromForest();	///< receive packet from Forest
+int recvFromForest(string&);	///< receive packet from Forest
 void connect();		///< connect to forest network
 void disconnect();	///< disconnect from forest network
 void readUsernames();	///< read filenames and store
