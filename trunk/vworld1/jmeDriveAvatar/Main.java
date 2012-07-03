@@ -99,15 +99,26 @@ public class Main extends SimpleApplication
         setUpWalls();
         login();
         //use the plain 512x512 floor I made in assets
-        sceneModel = assetManager.loadModel("Scenes/newScene.j3o");
-        sceneModel.setLocalScale(2f);
+        Box b = new Box(Vector3f.ZERO, 512f, 1.0f, 512f);
+        Geometry g = new Geometry("Box", b);
+        g.setLocalTranslation(0,-.5f,0);
+        Material mat = new Material(assetManager, "Common/MatDefs/Misc/Unshaded.j3md");
+        mat.setColor("Color", new ColorRGBA(175f/255, 194f/255, 170f/255, 1f));
+        
+        g.setMaterial(mat);
+        rootNode.attachChild(g);
+        RigidBodyControl wallControl = new RigidBodyControl(0);
+        g.addControl(wallControl);
+        bulletAppState.getPhysicsSpace().add(wallControl);
+        //sceneModel = assetManager.loadModel("Scenes/newScene.j3o");
+        //sceneModel.setLocalScale(2f);
 
         // We set up collision detection for the scene by creating a
         // compound collision shape and a static RigidBodyControl with mass zero.
-        CollisionShape sceneShape =
-                CollisionShapeFactory.createMeshShape((Node) sceneModel);
-        landscape = new RigidBodyControl(sceneShape, 0);
-        sceneModel.addControl(landscape);
+        //CollisionShape sceneShape =
+              //  CollisionShapeFactory.createMeshShape((Node) sceneModel);
+        //landscape = new RigidBodyControl(sceneShape, 0);
+        //sceneModel.addControl(landscape);
 
         // We set up collision detection for the camera
         // Some of this is probably unnecessary
@@ -122,8 +133,8 @@ public class Main extends SimpleApplication
 
         // We attach the scene and the player to the rootNode and the physics space,
         // to make them appear in the game world.
-        rootNode.attachChild(sceneModel);
-        bulletAppState.getPhysicsSpace().add(landscape);
+        //rootNode.attachChild(sceneModel);
+        //bulletAppState.getPhysicsSpace().add(landscape);
         bulletAppState.getPhysicsSpace().add(player);
         //wait to ssh to port
         if (needCliProxy) {
@@ -245,8 +256,28 @@ public class Main extends SimpleApplication
 
     private void setUpWalls() {
         try {
+            
+        Material[] mats = {new Material(assetManager, "Common/MatDefs/Misc/Unshaded.j3md"),
+        new Material(assetManager, "Common/MatDefs/Misc/Unshaded.j3md"),
+        new Material(assetManager, "Common/MatDefs/Misc/Unshaded.j3md"),
+        new Material(assetManager, "Common/MatDefs/Misc/Unshaded.j3md"),
+        new Material(assetManager, "Common/MatDefs/Misc/Unshaded.j3md")};
+        
+        //Dark Grey
+        mats[0].setColor("Color", new ColorRGBA(64f/255, 63f/255, 51f/255, 1f));
+        //Medium Grey
+        mats[1].setColor("Color", new ColorRGBA(110f/255, 117f/255, 95f/255, 1f));
+        //Light Grey
+        mats[2].setColor("Color", new ColorRGBA(175f/255, 194f/255, 170f/255, 1f));
+        //Skin Color
+        mats[3].setColor("Color", new ColorRGBA(255f/255, 222f/255, 161f/255, 1f));
+        //Reddish-Orange
+        mats[4].setColor("Color", new ColorRGBA(229f/255, 76f/255, 16f/255, 1f));
+
+            
+            float wallWidth = 1.0f;
             float wallHeight = 15f;
-            float wallWidth = 256f / 15f;
+            float wallLength = 256f / worldSize;
             Node walls = new Node();
             Scanner in = new Scanner(new File(mapfile));
             int y = 0;
@@ -254,8 +285,6 @@ public class Main extends SimpleApplication
             Box b;
             Material mat = new Material(assetManager, "Common/MatDefs/Misc/Unshaded.j3md");
             mat.setTexture("ColorMap", assetManager.loadTexture("Textures/BrickWall.jpg"));
-            Material mat2 = new Material(assetManager, "Common/MatDefs/Misc/Unshaded.j3md");
-            mat2.setColor("Color", ColorRGBA.Red);
             RigidBodyControl wallControl;
             while (in.hasNextLine()) {
                 String s = in.nextLine();
@@ -263,44 +292,44 @@ public class Main extends SimpleApplication
 
                     char c = s.charAt(i);
                     int x = i;
-                    float tx = x * 2 * wallWidth - 256f;//transformed x
-                    float ty = y * 2 * wallWidth - 256f; //transformed y
+                    float tx = x * 2 * wallLength - 256f;//transformed x
+                    float ty = y * 2 * wallLength - 256f; //transformed y
 
                     switch (c) {
                         case '+':
-                            b = new Box(Vector3f.ZERO, wallWidth, wallHeight, .25f);
+                            b = new Box(Vector3f.ZERO, wallLength, wallHeight, wallWidth);
                             g = new Geometry("Box", b);
                             g.setLocalTranslation((tx + b.xExtent), b.yExtent, ty);
-                            g.setMaterial(mat);
+                            g.setMaterial(mats[Math.abs((int)(tx*ty%5))]);
                             walls.attachChild(g);
                             wallControl = new RigidBodyControl(0);
                             g.addControl(wallControl);
                             bulletAppState.getPhysicsSpace().add(wallControl);
 
-                            b = new Box(Vector3f.ZERO, .25f, wallHeight, wallWidth);
+                            b = new Box(Vector3f.ZERO, wallWidth, wallHeight, wallLength);
                             g = new Geometry("Box", b);
                             g.setLocalTranslation(tx, b.yExtent, (ty + b.zExtent));
-                            g.setMaterial(mat);
+                            g.setMaterial(mats[Math.abs((int)(tx*ty%5))]);
                             walls.attachChild(g);
                             wallControl = new RigidBodyControl(0);
                             g.addControl(wallControl);
                             bulletAppState.getPhysicsSpace().add(wallControl);
                             break;
                         case '-':
-                            b = new Box(Vector3f.ZERO, wallWidth, wallHeight, .25f);
+                            b = new Box(Vector3f.ZERO, wallLength, wallHeight, wallWidth);
                             g = new Geometry("Box", b);
                             g.setLocalTranslation((tx + b.xExtent), b.yExtent, ty);
-                            g.setMaterial(mat);
+                            g.setMaterial(mats[Math.abs((int)(tx*ty%5))]);
                             walls.attachChild(g);
                             wallControl = new RigidBodyControl(0);
                             g.addControl(wallControl);
                             bulletAppState.getPhysicsSpace().add(wallControl);
                             break;
                         case '|':
-                            b = new Box(Vector3f.ZERO, .25f, wallHeight, wallWidth);
+                            b = new Box(Vector3f.ZERO, wallWidth, wallHeight, wallLength);
                             g = new Geometry("Box", b);
                             g.setLocalTranslation(tx, b.yExtent, (ty + b.zExtent));
-                            g.setMaterial(mat);
+                            g.setMaterial(mats[Math.abs((int)(tx*ty%5))]);
                             walls.attachChild(g);
                             wallControl = new RigidBodyControl(0);
                             g.addControl(wallControl);
@@ -313,7 +342,7 @@ public class Main extends SimpleApplication
                 y++;
             }
             //NOW DO EDGE walls
-            b = new Box(Vector3f.ZERO, 1f, wallHeight, 256);
+            b = new Box(Vector3f.ZERO, wallWidth, wallHeight, 256);
             g = new Geometry("Box", b);
             g.setLocalTranslation(-256, b.yExtent, 0);
             g.setMaterial(mat);
@@ -322,7 +351,7 @@ public class Main extends SimpleApplication
             g.addControl(wallControl);
             bulletAppState.getPhysicsSpace().add(wallControl);
 
-            b = new Box(Vector3f.ZERO, 1f, wallHeight, 256);
+            b = new Box(Vector3f.ZERO, wallWidth, wallHeight, 256);
             g = new Geometry("Box", b);
             g.setLocalTranslation(256, b.yExtent, 0);
             g.setMaterial(mat);
@@ -331,7 +360,7 @@ public class Main extends SimpleApplication
             g.addControl(wallControl);
             bulletAppState.getPhysicsSpace().add(wallControl);
 
-            b = new Box(Vector3f.ZERO, 256, wallHeight, 1f);
+            b = new Box(Vector3f.ZERO, 256, wallHeight, wallWidth);
             g = new Geometry("Box", b);
             g.setLocalTranslation(0, b.yExtent, -256);
             g.setMaterial(mat);
@@ -340,7 +369,7 @@ public class Main extends SimpleApplication
             g.addControl(wallControl);
             bulletAppState.getPhysicsSpace().add(wallControl);
 
-            b = new Box(Vector3f.ZERO, 256, wallHeight, 1f);
+            b = new Box(Vector3f.ZERO, 256, wallHeight, wallWidth);
             g = new Geometry("Box", b);
             g.setLocalTranslation(0, b.yExtent, 256);
             g.setMaterial(mat);
