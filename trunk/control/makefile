@@ -4,9 +4,9 @@ FLIB = ../lib/lib-forest.a
 LIBS = ${FLIB} ${ALGOLIBROOT}/lib/lib-ds.a ${ALGOLIBROOT}/lib/lib-util.a
 CXXFLAGS = -Wall -O2 -m64 -I ../include -I ${ALGOLIBROOT}/include
 
-LIBFILES = NetInfo.o
+LIBFILES = NetInfo.o ComtInfo.o
 XFILES = NetMgr CliMgr ComtCtl Console BuildRtables
-CLASSFILES = NetInfo.class TestNetInfo.class ComtreeDisplay.class
+CLASSFILES = NetInfo.class ComtreeDisplay.class
 
 %.o: %.cpp %.h stdinc.h
 	${CXX} ${CXXFLAGS} -c $<

@@ -1,6 +1,12 @@
 package forest.control;
 
-/** @file ComtreeDisplay.java */
+/** @file ComtreeDisplay.java
+ *
+ *  @author Jon Turner
+ *  @date 2012
+ *  This is open source software licensed under the Apache 2.0 license.
+ *  See http://www.apache.org/licenses/LICENSE-2.0 for details.
+ */
 
 import java.util.*;
 import java.io.*;

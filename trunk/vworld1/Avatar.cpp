@@ -252,7 +252,6 @@ void Avatar::computeVisSet(int g1, set<int>& vSet) {
 		}
 		if (done) break;
 		for (int x2 = x1; x2 <= min(x1+d,worldSize-1); x2++) {
-			int dx = x1-x2;
 			prevVisVec[x2-x1] = visVec[x2-x1];
 		}
 	}

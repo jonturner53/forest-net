@@ -574,11 +574,6 @@ void RouterCore::run(uint64_t finishTime) {
 			pktLog->log(p,h.getInLink(),false,now);
 			int ctx = ctt->getComtIndex(h.getComtree());
 			if (!pktCheck(p,ctx)) {
-if (!booting) {
-cerr << "pkt check rejected packet received after booting\n";
-string s;
-cerr << h.toString(ps->getBuffer(p),s);
-}
 				ps->free(p);
 			} else if (booting) {
 				handleCtlPkt(p);
