@@ -14,6 +14,7 @@
 #include "PacketHeader.h"
 #include "PacketStoreTs.h"
 #include "NetInfo.h"
+#include "ComtInfo.h"
 #include "UiSetPair.h"
 #include "IdMap.h"
 #include "Queue.h"
@@ -41,6 +42,7 @@ int	connSock;		///< external connection socket
 PacketStoreTs *ps;		///< pointer to packet store
 
 NetInfo *net;			///< global view of net topology
+ComtInfo *comtrees;		///< pre-configured comtrees
 
 // Information relating client addresses and router addresses
 // This is a temporary expedient and will be replaced later

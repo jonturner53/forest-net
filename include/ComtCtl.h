@@ -14,6 +14,7 @@
 #include "PacketHeader.h"
 #include "PacketStoreTs.h"
 #include "NetInfo.h"
+#include "ComtInfo.h"
 #include "UiSetPair.h"
 #include "IdMap.h"
 #include "Heap.h"
@@ -37,6 +38,7 @@ int	extSock;		///< external listening socket
 PacketStoreTs *ps;		///< pointer to packet store
 
 NetInfo *net;			///< global view of net topology
+ComtInfo *comtrees;		///< definition of all comtrees
 
 int	maxComtree;		///< max# of comtrees
 int 	firstComt, lastComt;	///< defines range of comtrees controlled
@@ -97,13 +99,19 @@ bool 	handleAddComtReq(int,CtlPkt&, Queue&, Queue&);
 bool 	handleDropComtReq(int,CtlPkt&, Queue&, Queue&);
 bool 	handleJoinComtReq(int,CtlPkt&, Queue&, Queue&);
 bool 	handleLeaveComtReq(int,CtlPkt&, Queue&, Queue&);
-// helper funnctions for adding removing paths to comtrees
-int	findPath(int, int, list<int>&);
-bool	reservePath(int, int, list<int>&);
-void	releasePath(int, int);
-bool	addPath(int, int, list<int>&, Queue&, Queue&);
-bool	dropPath(int,int,Queue&,Queue&);
-void	updatePath(int,int,list<int>&,Queue&,Queue&);
+// helper funnctions for coniguring routers to add/remove paths to comtrees
+bool	setupPath(int, list<LinkMod>&, Queue&, Queue&);
+bool	teardownPath(int, list<LinkMod>&, Queue&, Queue&);
+bool	setupComtNode(int, int, Queue&, Queue&);
+bool	teardownComtNode(int, int, Queue&, Queue&);
+bool	setupComtLink(int, int, int, Queue&, Queue&);
+int	setupClientLink(int, ipa_t, ipp_t, int, Queue&, Queue&);
+bool	teardownClientLink(int, ipa_t, ipp_t, int, Queue&, Queue&);
+bool	setupComtAttrs(int, int, Queue&, Queue&);
+bool	setComtLinkRates(int, int, int, Queue&, Queue&);
+bool	setComtLeafRates(int, fAdr_t, Queue&, Queue&);
+bool	modComtRates(int, list<LinkMod>&, bool, Queue&, Queue&);
+
 // helper functions for sending control packets from threads
 int	sendCtlPkt(CtlPkt&, fAdr_t, Queue&, Queue&);
 int 	sendAndWait(int,CtlPkt&,Queue&,Queue&);

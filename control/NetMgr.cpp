@@ -15,7 +15,8 @@
  *  NetMgr. The first is the IP address that a remote UI can
  *  use to connect to the NetMgr. If this is specified as 127.0.0.1
  *  the NetMgr listens on the default IP address. The second is the
- *  topology file (aka NetInfo file) that describes the network.
+ *  topology file (aka NetInfo file) that describes the network
+ *  plus any pre-configured comtrees that may be required.
  *  ClientInfo is a file containing address information relating
  *  clients and routers. finTime is the number of seconds to run.
  *  If zero, the NetMgr runs forever.
@@ -67,9 +68,10 @@ bool init(const char *topoFile) {
 	int maxNode = 100000; int maxLink = 10000;
 	int maxRtr = 5000; int maxCtl = 200;
 	int maxComtree = 10000;
-	net = new NetInfo(maxNode, maxLink, maxRtr, maxCtl, maxComtree);
+	net = new NetInfo(maxNode, maxLink, maxRtr, maxCtl);
+	comtrees = new ComtInfo(maxComtree,*net);
 	ifstream fs; fs.open(topoFile);
-	if (fs.fail() || !net->read(fs)) {
+	if (fs.fail() || !net->read(fs) || !comtrees->read(fs)) {
 		cerr << "NetMgr::init: could not read topology file, or error "
 		      	"in topology file\n";
 		return false;
@@ -87,7 +89,7 @@ bool init(const char *topoFile) {
 			myAdr = net->getNodeAdr(c);
 			int lnk = net->firstLinkAt(c);
 			int rtr = net->getPeer(c,lnk);
-			int llnk = net->getLocLink(lnk,rtr);
+			int llnk = net->getLLnum(lnk,rtr);
 			int iface = net->getIface(llnk,rtr);
 			if (iface == 0) {
 				cerr << "NetMgr:init: can't find ip address "
@@ -601,9 +603,6 @@ bool handleBootRequest(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 	for (rtr = net->firstRouter(); rtr != 0; rtr = net->nextRouter(rtr)) {
 		if (net->getNodeAdr(rtr) == rtrAdr) break;
 	}
-{ string s;
-cerr << "got boot request from " << rtr << " " << Forest::fAdr2string(rtrAdr,s) << endl;
-}
 	if (rtr == 0) {
 		errReply(p,cp,outQ,"boot request from unknown router "
 				   "rejected\n");
@@ -614,8 +613,9 @@ cerr << "got boot request from " << rtr << " " << Forest::fAdr2string(rtrAdr,s) 
 	// first send reply, acknowledging request and supplying
 	// leaf address range
 	CtlPkt repCp(BOOT_REQUEST,POS_REPLY,cp.getSeqNum());
-        repCp.setAttr(FIRST_LEAF_ADR,net->getFirstLeafAdr(rtr));
-        repCp.setAttr(LAST_LEAF_ADR,net->getLastLeafAdr(rtr));
+	pair<fAdr_t,fAdr_t> leafRange; net->getLeafRange(rtr,leafRange);
+        repCp.setAttr(FIRST_LEAF_ADR,leafRange.first);
+        repCp.setAttr(LAST_LEAF_ADR,leafRange.second);
 	sendCtlPkt(repCp,rtrAdr,rtrIp,rtrPort,inQ,outQ);
 
 	// add/configure interfaces
@@ -625,8 +625,9 @@ cerr << "got boot request from " << rtr << " " << Forest::fAdr2string(rtrAdr,s) 
 		CtlPkt reqCp(ADD_IFACE,REQUEST,0);
 		reqCp.setAttr(IFACE_NUM,i);
 		reqCp.setAttr(LOCAL_IP,net->getIfIpAdr(rtr,i));
-		reqCp.setAttr(MAX_BIT_RATE,net->getIfBitRate(rtr,i));
-		reqCp.setAttr(MAX_PKT_RATE,net->getIfPktRate(rtr,i));
+		RateSpec rs; net->getIfRates(rtr,i,rs);
+		reqCp.setAttr(MAX_BIT_RATE,rs.bitRateDown);
+		reqCp.setAttr(MAX_PKT_RATE,rs.pktRateDown);
 		int reply = sendCtlPkt(reqCp,rtrAdr,rtrIp,rtrPort,inQ,outQ);
 		if (reply == NORESPONSE) {
 			cerr << "handleBootRequest: no reply from router to "
@@ -656,10 +657,10 @@ cerr << "got boot request from " << rtr << " " << Forest::fAdr2string(rtrAdr,s) 
 	// followed by a modify link to set attributes
 	for (int lnk = net->firstLinkAt(rtr); lnk != 0;
 		 lnk = net->nextLinkAt(rtr,lnk)) {
-		int llnk = net->getLocLink(lnk,rtr);
+		int llnk = net->getLLnum(lnk,rtr);
 		int iface = net->getIface(llnk,rtr);
 		int peer = net->getPeer(rtr,lnk);
-		int plnk = net->getLocLink(lnk,peer);
+		int plnk = net->getLLnum(lnk,peer);
 		ipa_t peerIp; ipp_t peerPort;
 		if (net->getNodeType(peer) == ROUTER) {
 			int i = net->getIface(plnk,peer);
@@ -702,8 +703,15 @@ cerr << "got boot request from " << rtr << " " << Forest::fAdr2string(rtrAdr,s) 
 		// now, send modify link message, to set data rates
 		reqCp.reset(MOD_LINK,REQUEST,0);
 		reqCp.setAttr(LINK_NUM,llnk);
-		reqCp.setAttr(BIT_RATE,net->getLinkBitRate(lnk));
-		reqCp.setAttr(PKT_RATE,net->getLinkPktRate(lnk));
+		RateSpec rs; net->getLinkRates(lnk,rs);
+		if (rtr == net->getLeft(lnk)) {
+			reqCp.setAttr(BIT_RATE,rs.bitRateUp);
+			reqCp.setAttr(PKT_RATE,rs.pktRateUp);
+		} else {
+			reqCp.setAttr(BIT_RATE,rs.bitRateDown);
+			reqCp.setAttr(PKT_RATE,rs.pktRateDown);
+		}
+
 		reply = sendCtlPkt(reqCp,rtrAdr,rtrIp,rtrPort,inQ,outQ);
 		if (reply == NORESPONSE) {
 			cerr << "handleBootRequest: no reply from router "
@@ -731,11 +739,11 @@ cerr << "got boot request from " << rtr << " " << Forest::fAdr2string(rtrAdr,s) 
 	// add/configure comtrees
 	// for each comtree, add it to the router, do a modify comtree
 	// and a series of add comtree link ops, followed by modify comtree link
-	for (int ctx = net->firstComtIndex(); ctx != 0;
-		 ctx = net->nextComtIndex(ctx)) {
-		if (!net->isComtNode(ctx,rtr)) continue;
+	for (int ctx = comtrees->firstComtIndex(); ctx != 0;
+		 ctx = comtrees->nextComtIndex(ctx)) {
+		if (!comtrees->isComtNode(ctx,rtrAdr)) continue;
 		
-		comt_t comt = net->getComtree(ctx);
+		comt_t comt = comtrees->getComtree(ctx);
 
 		// first step is to add comtree at router
 		CtlPkt reqCp(ADD_COMTREE,REQUEST,0);
@@ -764,20 +772,18 @@ cerr << "got boot request from " << rtr << " " << Forest::fAdr2string(rtrAdr,s) 
 		}
 		ps->free(reply);
 
-		int plnk = net->getComtPlink(ctx,rtr);
+		int plnk = comtrees->getPlink(ctx,rtrAdr);
 		int parent = net->getPeer(rtr,plnk);
 		// next, add links to the comtree and set their data rates
-		for (int lnk = net->firstComtLink(ctx); lnk != 0;
-			 lnk = net->nextComtLink(lnk,ctx)) {
-			if (net->getLinkL(lnk) != rtr &&
-			    net->getLinkR(lnk) != rtr)
-				continue;
+		for (int lnk = net->firstLinkAt(rtr); lnk != 0;
+			 lnk = net->nextLinkAt(rtr,lnk)) {
+			if (!comtrees->isComtLink(ctx,lnk)) continue;
 
 			// get information about this link
-			int llnk = net->getLocLink(lnk,rtr);
+			int llnk = net->getLLnum(lnk,rtr);
 			int peer = net->getPeer(rtr,lnk);
-			ntyp_t peerType = net->getNodeType(peer);
-			bool peerCoreFlag = net->isComtCoreNode(ctx,peer);
+			fAdr_t peerAdr = net->getNodeAdr(peer);
+			bool peerCoreFlag = comtrees->isCoreNode(ctx,peerAdr);
 
 			// first, add comtree link
 			CtlPkt reqCp(ADD_COMTREE_LINK,REQUEST,0);
@@ -813,31 +819,23 @@ cerr << "got boot request from " << rtr << " " << Forest::fAdr2string(rtrAdr,s) 
 			}
 			ps->free(reply);
 
-			// then, set the data rates for the comtree link
-			int brIn, brOut, prIn, prOut;
-			if (peer == parent) {
-				brIn  = net->getComtBrDown(ctx);
-				brOut = net->getComtBrUp(ctx);
-				prIn  = net->getComtPrDown(ctx);
-				prOut = net->getComtPrUp(ctx);
-			} else if (peerType == ROUTER) {
-				brIn  = net->getComtBrUp(ctx);
-				brOut = net->getComtBrDown(ctx);
-				prIn  = net->getComtPrUp(ctx);
-				prOut = net->getComtPrDown(ctx);
-			} else {
-				brIn  = net->getComtLeafBrUp(ctx);
-				brOut = net->getComtLeafBrDown(ctx);
-				prIn  = net->getComtLeafPrUp(ctx);
-				prOut = net->getComtLeafPrDown(ctx);
-			}
 			reqCp.reset(MOD_COMTREE_LINK,REQUEST,0);
 			reqCp.setAttr(COMTREE_NUM,comt);
 			reqCp.setAttr(LINK_NUM,llnk);
-			reqCp.setAttr(BIT_RATE_IN,brIn);
-			reqCp.setAttr(BIT_RATE_OUT,brOut);
-			reqCp.setAttr(PKT_RATE_IN,prIn);
-			reqCp.setAttr(PKT_RATE_OUT,prOut);
+			RateSpec rs;
+			if (peer == parent) {
+				comtrees->getLinkRates(ctx,rtrAdr,rs);
+				reqCp.setAttr(BIT_RATE_IN,rs.bitRateDown);
+				reqCp.setAttr(BIT_RATE_OUT,rs.bitRateUp);
+				reqCp.setAttr(PKT_RATE_IN,rs.pktRateDown);
+				reqCp.setAttr(PKT_RATE_OUT,rs.pktRateUp);
+			} else {
+				comtrees->getLinkRates(ctx,peerAdr,rs);
+				reqCp.setAttr(BIT_RATE_IN,rs.bitRateUp);
+				reqCp.setAttr(BIT_RATE_OUT,rs.bitRateDown);
+				reqCp.setAttr(PKT_RATE_IN,rs.pktRateUp);
+				reqCp.setAttr(PKT_RATE_OUT,rs.pktRateDown);
+			}
 			reply = sendCtlPkt(reqCp,rtrAdr,rtrIp,rtrPort,inQ,outQ);
 			if (reply == NORESPONSE) {
 				cerr << "handleBootRequest: no reply from "
@@ -870,8 +868,8 @@ cerr << "got boot request from " << rtr << " " << Forest::fAdr2string(rtrAdr,s) 
 		// finally, we need to modify overall comtree attributes
 		reqCp.reset(MOD_COMTREE,REQUEST,0);
 		reqCp.setAttr(COMTREE_NUM,comt);
-		reqCp.setAttr(CORE_FLAG,net->isComtCoreNode(ctx,rtr));
-		reqCp.setAttr(PARENT_LINK,net->getLocLink(plnk,rtr));
+		reqCp.setAttr(CORE_FLAG,comtrees->isCoreNode(ctx,rtrAdr));
+		reqCp.setAttr(PARENT_LINK,net->getLLnum(plnk,rtr));
 		reply = sendCtlPkt(reqCp,rtrAdr,rtrIp,rtrPort,inQ,outQ);
 		if (reply == NORESPONSE) {
 			cerr << "handleBootRequest: no reply from router "
@@ -1057,7 +1055,7 @@ bool findCliRtr(ipa_t cliIp, fAdr_t& rtrAdr) {
 		while (j < ip.size() && j < cip.size()) {
 			if (cip[j] != ip[j]) break;
 			if (ip[j] == '*' ||
-			    j+1 == ip.size() && j+1 == cip.size()) {
+			    (j+1 == ip.size() && j+1 == cip.size())) {
 				rtrAdr = prefixes[i].rtrAdr;
 				return true;
 			}

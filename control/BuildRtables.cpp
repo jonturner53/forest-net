@@ -12,6 +12,7 @@
 #include "stdinc.h"
 #include "CommonDefs.h"
 #include "NetInfo.h"
+#include "ComtInfo.h"
 #include "IfaceTable.h"
 #include "QuManager.h"
 #include "LinkTable.h"
@@ -29,17 +30,18 @@
 
 bool buildIfaceTable(int, const NetInfo&, IfaceTable&);
 bool buildLinkTable(int, const NetInfo&, LinkTable&);
-bool buildComtTable(int, const NetInfo&, ComtreeTable&);
+bool buildComtTable(int, const NetInfo&, const ComtInfo&, ComtreeTable&);
 
 int main() {
 	int maxNode = 100000; int maxLink = 10000;
 	int maxRtr = 5000; int maxCtl = 200;
 	int maxComtree = 10000;
 
-        NetInfo net(maxNode, maxLink, maxRtr, maxCtl, maxComtree);
+        NetInfo net(maxNode, maxLink, maxRtr, maxCtl);
+        ComtInfo comtrees(maxComtree,net);
 
-	if (!net.read(cin)) {
-		cerr << "buildTables: cannot read network information\n";
+	if (!net.read(cin) || !comtrees.read(cin)) {
+		cerr << "buildTables: cannot read input\n";
 		exit(1);
 	}
 
@@ -80,7 +82,7 @@ int main() {
 		// build and write comtree table for r
 		ComtreeTable *comtTbl = new ComtreeTable(10*Forest::MAXLNK,
 					20*Forest::MAXLNK,lnkTbl);
-		if (!buildComtTable(r, net, *comtTbl)) {
+		if (!buildComtTable(r, net, comtrees, *comtTbl)) {
 			cerr << "buildTables: could not build comtree table "
 			     << "for router " << r << endl;
 			exit(1);
@@ -100,10 +102,9 @@ int main() {
 bool buildIfaceTable(int r, const NetInfo& net, IfaceTable& ift) {
 	for (int i = 1; i <= net.getNumIf(r); i++) {
 		if (!net.validIf(r,i)) continue;
+		RateSpec rs; net.getIfRates(r,i,rs);
 		ift.addEntry(i,	net.getIfIpAdr(r,i),
-			     	net.getIfBitRate(r,i),
-				net.getIfPktRate(r,i)
-			    );
+				rs.bitRateDown, rs.pktRateDown);
 	}
 	return true;
 }
@@ -115,22 +116,25 @@ bool buildLinkTable(int r, const NetInfo& net, LinkTable& lt) {
 
 		// find the interface that "owns" this link
 		int iface = 0;
-		int llnk = net.getLocLink(lnk,r);
+		int llnk = net.getLLnum(lnk,r);
 		for (int i = 1; i <= net.getNumIf(r); i++) {
 			if (!net.validIf(r,i)) continue;
-			if (llnk >= net.getIfFirstLink(r,i) &&
-			    llnk <= net.getIfLastLink(r,i)) {
+			pair<int,int> leafRange; net.getIfLinks(r,i,leafRange);
+			if (llnk >= leafRange.first &&
+			    llnk <= leafRange.second) {
 				iface = i; break;
 			}
 		}
 		// find peer and interface for link at peer
 		int peer = net.getPeer(r,lnk);
 		int peerIface = 0;
-		int plnk = net.getLocLink(lnk,peer);
+		int plnk = net.getLLnum(lnk,peer);
 		for (int i = 1; i <= net.getNumIf(peer); i++) {
 			if (!net.validIf(peer,i)) continue;
-			if (plnk >= net.getIfFirstLink(peer,i) &&
-			    plnk <= net.getIfLastLink(peer,i)) {
+			pair<int,int> leafRange;
+			net.getIfLinks(peer,i,leafRange);
+			if (plnk >= leafRange.first &&
+			    plnk <= leafRange.second) {
 				peerIface = i; break;
 			}
 		}
@@ -143,8 +147,9 @@ bool buildLinkTable(int r, const NetInfo& net, LinkTable& lt) {
 		lt.setIface(llnk,iface);
 		lt.setPeerType(llnk,net.getNodeType(peer));
 		lt.setPeerAdr(llnk,net.getNodeAdr(peer));
-		lt.setBitRate(llnk,net.getLinkBitRate(lnk));
-		lt.setPktRate(llnk,net.getLinkPktRate(lnk));
+		RateSpec rs; net.getLinkRates(lnk,rs);
+		lt.setBitRate(llnk,rs.bitRateDown);
+		lt.setPktRate(llnk,rs.pktRateDown);
 	}
 
 	return true;
@@ -158,9 +163,9 @@ bool buildLinkTable(int r, const NetInfo& net, LinkTable& lt) {
  *  @return the link number of the link connecting r to its parent,
  *  or 0 if r is the root, or -1 on an error
  */
-
-int findParentLink(int r, int ctx, const NetInfo& net) {
-	int ctRoot = net.getComtRoot(ctx);
+int findParentLink(int r, int ctx, const NetInfo& net,
+				   const ComtInfo& comtrees) {
+	int ctRoot = comtrees.getRoot(ctx);
 	if (r == ctRoot) return 0;
 
 	queue<int> pending; pending.push(ctRoot);
@@ -172,7 +177,7 @@ int findParentLink(int r, int ctx, const NetInfo& net) {
 		vertex u = pending.front(); pending.pop();
 		for (edge e = net.firstLinkAt(u); e != 0;
 		 	  e = net.nextLinkAt(u,e)) {
-			if (!net.isComtLink(ctx,e) || e == plink[u]) continue;
+			if (!comtrees.isComtLink(ctx,e) || e == plink[u]) continue;
 			vertex v = net.getPeer(u,e);
 			if (plink[v] != 0) {
 				cerr << "findParentLink: found cycle in "
@@ -184,54 +189,51 @@ int findParentLink(int r, int ctx, const NetInfo& net) {
 		}
 	}
 	cerr << "findParentLink: could not find target node " << r 
-	     << " in comtree "  << net.getComtree(ctx) << endl;
+	     << " in comtree "  << comtrees.getComtree(ctx) << endl;
 	return -1;
 }
 
-bool buildComtTable(int r, const NetInfo& net, ComtreeTable& comtTbl) {
+bool buildComtTable(int r, const NetInfo& net, const ComtInfo& comtrees,
+			   ComtreeTable& comtTbl) {
 
 	// find the subset of comtrees involving this router
-	set<int> comtrees;
-	for (int ctx = net.firstComtIndex(); ctx != 0;
-	         ctx = net.nextComtIndex(ctx)) {
-
-		for (int lnk = net.firstComtLink(ctx); lnk != 0;
-		         lnk = net.nextComtLink(lnk, ctx)) {
-			
-			if (r == net.getLinkL(lnk) || r == net.getLinkR(lnk)) {
-				comtrees.insert(ctx); break;
-			}
-		}
+	set<int> comtreeSet;
+	for (int ctx = comtrees.firstComtIndex(); ctx != 0;
+	         ctx = comtrees.nextComtIndex(ctx)) {
+		fAdr_t radr = net.getNodeAdr(r);
+		if (comtrees.isComtRtr(ctx,radr))
+			comtreeSet.insert(ctx);
 	}
 
 	set<int>::iterator p;
-	for (p = comtrees.begin(); p != comtrees.end(); p++) {
+	for (p = comtreeSet.begin(); p != comtreeSet.end(); p++) {
 		int ctx = *p;
-		int ctte = comtTbl.addEntry(net.getComtree(ctx));
+		int ctte = comtTbl.addEntry(comtrees.getComtree(ctx));
 		if (ctte == 0) {
 			cerr << "buildComtTable: detected inconsistency "
 			     << "while building comtree table for router "
-			     << r << " comtree " << net.getComtree(ctx)
+			     << r << " comtree " << comtrees.getComtree(ctx)
 			     << endl;
 			return false;
 		}
 
-		comtTbl.setCoreFlag(ctte,net.isComtCoreNode(ctx,r));
+		comtTbl.setCoreFlag(ctte,comtrees.isCoreNode(ctx,r));
 
 		// add all comtree links incident to r and to the table entry
 		for (int lnk = net.firstLinkAt(r); lnk != 0;
 			 lnk = net.nextLinkAt(r,lnk)) {
-			if (!net.isComtLink(ctx,lnk)) continue;
-			int llnk = net.getLocLink(lnk,r);
+			if (!comtrees.isComtLink(ctx,lnk)) continue;
+			int llnk = net.getLLnum(lnk,r);
 			int peer = net.getPeer(r,lnk);
 			comtTbl.addLink(ctte,llnk,net.isRouter(peer),
-					net.isComtCoreNode(ctx,peer));
+					comtrees.isCoreNode(ctx,peer));
 		}
 
 		// find parent link by doing a tree-traversal from root
-		int plink = findParentLink(r,ctx,net);
-		if (plink < 0) return false;
-		comtTbl.setPlink(ctte,net.getLocLink(plink,r));
+		//int plink = findParentLink(r,ctx,net,comtrees);
+		//if (plink < 0) return false;
+		int plink = comtrees.getPlink(ctx,r);
+		comtTbl.setPlink(ctte,net.getLLnum(plink,r));
 	} 
 	return true;
 }
