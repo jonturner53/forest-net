@@ -5,7 +5,7 @@ LIBS = ${FLIB} ${ALGOLIBROOT}/lib/lib-util.a ${ALGOLIBROOT}/lib/lib-ds.a
 LIBFILES = CommonDefs.o CpAttr.o CpType.o CtlPkt.o PacketHeader.o \
 	   PacketLog.o PacketStore.o  PacketStoreTs.o \
 	   Queue.o Np4d.o Heap.o HeapSet.o Misc.o
-CLASSFILES = Forest.class CpAttr.class CpTyp.class PktHeader.class CtlPkt.class
+CLASSFILES = Forest.class CpAttr.class CpTyp.class CtlPkt.class PktHeader.class
 CXXFLAGS = -Wall -O2 -m64 -I ../include -I ${ALGOLIBROOT}/include
 
 %.o: %.cpp %.h stdinc.h

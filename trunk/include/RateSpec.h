@@ -83,7 +83,7 @@ public:
 	};
 
 	/** Create a string representation of the rate spec. */
-	string& toString(string& s) {
+	string& toString(string& s) const {
 		stringstream ss;
 		ss << "(" << this->bitRateUp << "," << this->bitRateDown
 		   << "," << this->pktRateUp << "," << this->pktRateDown << ")";

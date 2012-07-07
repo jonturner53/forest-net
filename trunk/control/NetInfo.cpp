@@ -28,6 +28,7 @@ NetInfo::NetInfo(int maxNode1, int maxLink1, int maxRtr1, int maxCtl1)
 	nameNodeMap = new map<string,int>;
 	adrNodeMap = new map<fAdr_t,int>;
 	controllers = new set<int>();
+	defaultLinkRates.set(50,500,25,50); // default for access link rates
 
 	link = new LinkInfo[maxLink+1];
 	locLnk2lnk = new HashMap(2*min(maxLink,maxRtr*(maxRtr-1)/2)+1);
@@ -281,6 +282,16 @@ bool NetInfo::read(istream& in) {
 			setAvailRates(lnk, cLink.rates);
 			setLinkLength(lnk, cLink.length);
 			linkNum++;
+		} else if (s == "defaultLinkRates") {
+			if (!readRateSpec(in,defaultLinkRates)) {
+				cerr << "NetInfo::read: can't read default "
+				    	"rates for links\n";
+				return false;
+			}
+		} else {
+			cerr << "NetInfo::read: unrecognized keyword (" << s
+			     << ")\n";
+			return false;
 		}
 	}
 	return check();
@@ -536,13 +547,17 @@ bool NetInfo::readLink(istream& in, LinkDesc& link, string& errMsg) {
 		errMsg = "could not read link length";
 		return false;
 	}
-	if (!Util::verify(in,',',20) || !readRateSpec(in,rs)) {
-		errMsg = "could not read rate specification";
-		return false;
-	}
-	if (!Util::verify(in,')',20)) {
-		errMsg = "syntax error, expected right paren";
-		return false;
+	if (Util::verify(in,')',20)) { // omitted rate spec
+		rs = defaultLinkRates;
+	} else {
+		if (!Util::verify(in,',',20) || !readRateSpec(in,rs)) {
+			errMsg = "could not read rate specification";
+			return false;
+		}
+		if (!Util::verify(in,')',20)) {
+			errMsg = "syntax error, expected right paren";
+			return false;
+		}
 	}
 	link.nameL = nameL; link.numL = numL;
 	link.nameR = nameR; link.numR = numR;
@@ -942,6 +957,9 @@ string& NetInfo::toString(string& s) const {
 	for (int lnk = firstLink(); lnk != 0; lnk = nextLink(lnk)) {
 		s += "link" + linkProps2string(lnk,s1) + "\n";
 	}
+
+	// and finally, the default link rates
+	s += "defaultLinkRates" + (defaultLinkRates.toString(s1)) + "\n";
 
 	s += ";\n"; return s;
 }
