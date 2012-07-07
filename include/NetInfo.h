@@ -120,6 +120,7 @@ public:
 	int	getPeer(int,int) const;
 	bool	getLinkRates(int,RateSpec&) const;
 	bool	getAvailRates(int,RateSpec&) const;
+	void	getDefLeafRates(RateSpec&) const;
 	int	getLinkLength(int) const;
 	int	getLinkNum(int,int) const;
 	int	getLLnum(int,int) const;
@@ -206,6 +207,8 @@ private:
 	RateSpec availRates;	///< unused capacity
 	};
 	LinkInfo *link;
+
+	RateSpec defaultLinkRates;	///< default link rates
 
 	// helper methods for reading a NetInfo file
 	bool	readRouter(istream&, RtrNodeInfo&, IfInfo*, string&);
@@ -754,6 +757,13 @@ inline bool NetInfo::getAvailRates(int lnk, RateSpec& rs) const {
 	if (!validLink(lnk)) return false;
 	rs = link[lnk].availRates;
 	return true;
+}
+
+/** Get the default rates for leaf nodes in a Forest network.
+ *  @param rs is a reference to a RateSpec
+ */
+inline void NetInfo::getDefLeafRates(RateSpec& rs) const {
+	rs = defaultLinkRates;
 }
 
 /** Get the length of a link in the Forest network.

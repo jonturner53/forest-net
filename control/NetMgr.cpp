@@ -495,11 +495,12 @@ bool handleNewClient(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 	ipa_t clientRtrIp = repCp.getAttr(RTR_IP);
 	ps->free(reply);
 
-	// now set rates on new link - for now, 500 Kb/s and 250 p/s
+	// now set rates on new link
 	reqCp.reset(MOD_LINK,REQUEST,0);
 	reqCp.setAttr(LINK_NUM,clientLink);
-	reqCp.setAttr(BIT_RATE,500); // default value of 500 Kb/s
-	reqCp.setAttr(PKT_RATE,250); // 250 p/s
+	RateSpec rs; net->getDefLeafRates(rs);
+	reqCp.setAttr(BIT_RATE,rs.bitRateDown);
+	reqCp.setAttr(PKT_RATE,rs.pktRateDown); 
 	reply = sendCtlPkt(reqCp,rtrAdr,inQ,outQ);
 	if (reply == NORESPONSE) {
 		errReply(p,cp,outQ,"no reply from router to modify link");
