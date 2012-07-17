@@ -6,7 +6,7 @@ CXXFLAGS = -Wall -O2 -m64 -I ../include -I ${ALGOLIBROOT}/include
 
 LIBFILES = NetInfo.o ComtInfo.o
 XFILES = NetMgr CliMgr ComtCtl Console BuildRtables
-CLASSFILES = NetInfo.class ComtreeDisplay.class
+CLASSFILES = NetInfo.class ComtInfo.class ComtreeDisplay.class
 
 %.o: %.cpp %.h stdinc.h
 	${CXX} ${CXXFLAGS} -c $<
