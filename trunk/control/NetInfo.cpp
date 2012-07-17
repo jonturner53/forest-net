@@ -28,7 +28,7 @@ NetInfo::NetInfo(int maxNode1, int maxLink1, int maxRtr1, int maxCtl1)
 	nameNodeMap = new map<string,int>;
 	adrNodeMap = new map<fAdr_t,int>;
 	controllers = new set<int>();
-	defaultLinkRates.set(50,500,25,50); // default for access link rates
+	defaultLinkRates.set(50,500,25,250); // default for access link rates
 
 	link = new LinkInfo[maxLink+1];
 	locLnk2lnk = new HashMap(2*min(maxLink,maxRtr*(maxRtr-1)/2)+1);

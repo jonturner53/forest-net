@@ -1054,12 +1054,12 @@ bool findCliRtr(ipa_t cliIp, fAdr_t& rtrAdr) {
 		string ip = prefixes[i].prefix;
 		unsigned int j = 0;
 		while (j < ip.size() && j < cip.size()) {
-			if (cip[j] != ip[j]) break;
 			if (ip[j] == '*' ||
 			    (j+1 == ip.size() && j+1 == cip.size())) {
 				rtrAdr = prefixes[i].rtrAdr;
 				return true;
 			}
+			if (cip[j] != ip[j]) break;
 			j++;
 		}
 	}

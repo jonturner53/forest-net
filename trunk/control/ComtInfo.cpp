@@ -430,8 +430,8 @@ bool ComtInfo::check() {
 		// of routers within the comtree are contiguous
 		queue<int> pending; pending.push(root);
 		map<fAdr_t,int> plink; plink[root] = 0;
-		map<fAdr_t,int> pzip;
-		pzip[Forest::zipCode(rootAdr)] = 0;
+		set<fAdr_t> zipSet;
+		zipSet.insert(Forest::zipCode(rootAdr));
 		unsigned int nodeCount = 0;
 		while (!pending.empty()) {
 			int u = pending.front(); pending.pop();
@@ -470,7 +470,7 @@ bool ComtInfo::check() {
 				// now check that if v has a different zip code
 				// than u, that we haven't already seen this zip
 				if (vzip != uzip) {
-					if (pzip.find(v) != pzip.end()) {
+					if (zipSet.find(vzip) != zipSet.end()) {
 						cerr << "ComtInfo::check: zip "
 							"code " << vzip <<
 							" is non-contiguous in "
@@ -478,7 +478,7 @@ bool ComtInfo::check() {
 						     << "\n";
 						status = false;
 					} else {
-						pzip[v] = u;
+						zipSet.insert(vzip);
 					}
 				}
 			}
@@ -512,12 +512,6 @@ bool ComtInfo::setAllComtRates() {
  */
 bool ComtInfo::setComtRates(int ctx) {
 	if (!validComtIndex(ctx)) return false;
-	fAdr_t root = getRoot(ctx);
-	map<fAdr_t,ComtRtrInfo>::iterator rp;
-	rp = comtree[ctx].rtrMap->find(root);
-	if (rp == comtree[ctx].rtrMap->end()) return false;
-	RateSpec rs;
-	rs = rp->second.subtreeRates; 
 	if (getConfigMode(ctx)) setAutoConfigRates(ctx);
 	if (!checkComtRates(ctx)) {
 		cerr << "network lacks capacity for comtree "
@@ -790,8 +784,8 @@ bool ComtInfo::computeMods(int ctx, list<LinkMod>& modList) {
 /** Compute the change required in the RateSpecs for links in an
  *  auto-configured comtree and verify that needed capacity is available.
  *  @param ctx is the comtree index of the comtree
- *  @param rtr is the vertex at the root of the current subtree;
- *  should be the root in the top level recursive call
+ *  @param radr is the Forest address of the root of the current subtree;
+ *  should be the comtree root in the top level recursive call
  *  @param modList is a list of edges in the comtree and RateSpecs
  *  representing the change in rates required at each link in the list;
  *  returned RateSpecs may have negative values; list should be empty 
@@ -799,19 +793,20 @@ bool ComtInfo::computeMods(int ctx, list<LinkMod>& modList) {
  *  @return true if all links in comtree have sufficient available
  *  capacity to accommodate the changes
  */
-bool ComtInfo::computeMods(int ctx, fAdr_t rtr, RateSpec& rootRates,
+bool ComtInfo::computeMods(int ctx, fAdr_t radr, RateSpec& rootRates,
 			     list<LinkMod>& modList) {
-	if (!net->isRouter(rtr)) return true;
+	int rnum = net->getNodeNum(radr);
+	if (!net->isRouter(rnum)) return true;
 	map<fAdr_t,ComtRtrInfo>::iterator rp;
-	rp = comtree[ctx].rtrMap->find(rtr);
+	rp = comtree[ctx].rtrMap->find(radr);
 	int plnk = rp->second.plnk;
 	if (plnk != 0 && !isFrozen(ctx,plnk)) {
 		// determine the required rates on link to parent
 		LinkMod nuMod;
-		nuMod.child = net->getNodeNum(rtr); nuMod.lnk = plnk;
+		nuMod.child = rnum; nuMod.lnk = plnk;
 		RateSpec& srates = rp->second.subtreeRates;
 		RateSpec trates = rootRates; trates.subtract(srates);
-		if (isCoreNode(ctx,rtr)) {
+		if (isCoreNode(ctx,radr)) {
 			nuMod.rs.set(srates.bitRateUp,trates.bitRateUp,
 					srates.pktRateUp,trates.pktRateUp);
 		} else {		
@@ -823,7 +818,7 @@ bool ComtInfo::computeMods(int ctx, fAdr_t rtr, RateSpec& rootRates,
 		nuMod.rs.subtract(rp->second.plnkRates);
 		if (nuMod.rs.isZero()) return true; // no change needed
 		RateSpec availRates; net->getAvailRates(plnk,availRates);
-		if (rtr != net->getLeft(plnk)) availRates.flip();
+		if (rnum != net->getLeft(plnk)) availRates.flip();
 		if (!nuMod.rs.leq(availRates)) return false;
 		modList.push_back(nuMod);
 	}
@@ -833,7 +828,7 @@ bool ComtInfo::computeMods(int ctx, fAdr_t rtr, RateSpec& rootRates,
 	// fix it is to add child and sibling pointers; later, maybe
 	for (rp  = comtree[ctx].rtrMap->begin();
 	     rp != comtree[ctx].rtrMap->end(); rp++) {
-		if (rtr != getParent(ctx,rp->first)) continue;
+		if (radr != getParent(ctx,rp->first)) continue;
 		if (!computeMods(ctx,rp->first,rootRates,modList))
 			return false;
 	}

@@ -21,18 +21,28 @@ public class NetInfo {
 	private int maxNode;	///< max node number in netTopo graph
 	private int maxLink;	///< max link number in netTopo graph
 	private int maxLeaf;	///< max number of leafs
-	private int maxComtree;	///< maximum number of comtrees
+
+	/** Utility class used by input methods */
+	public class LinkEndpoint {
+	public String name; public int num;
+	LinkEndpoint() { name = null; num = 0; }
+	LinkEndpoint(String nam, int n) { name = nam; num = n; }
+	}
+	/** Another utility class used by input methods */
+	public class LinkDesc {
+	String	nameL, nameR;	///< names of link endpoints
+	int	numL, numR;	///< local link numbers for routers
+	int	length;		///< length of link
+	RateSpec rates;		///< up means allowed rate from left endpoint
+		public LinkDesc() {
+			nameL = nameR = null; numL = numR = length = 0;
+			rates = new RateSpec(0); 
+		}
+	};
 
 	/** NetTopo is a weighted graph defining the network topology.
 	 *  Weights represent link costs */
 	private Wgraph netTopo;
-
-	public class RateSpec {            ///< used in lnkMap of ComtreeInfo
-        public int bitRateUp;      ///< upstream bit rate on comtree link
-        public int bitRateDown;    ///< downstream bit rate on comtree link
-        public int pktRateUp;      ///< upstream packet rate on comtree link
-        public int pktRateDown;    ///< downstream packet rate on comtree link
-	}
 
 	public class ComtRtrInfo {   ///< used in rtrMap of ComtreeInfo
         public int plnk;           ///< link to parent in comtree
@@ -44,12 +54,11 @@ public class NetInfo {
 
 	private class IfInfo {
 	int	ipAdr;		///< ip address of forest interface
-	int	bitRate;	///< max bit rate for interface (Kb/s)
-	int	pktRate;	///< max pkt rate (packets/s)
+	RateSpec rates;		///< rates for interface
 	int	firstLink;	///< number of first link assigned to interface
 	int	lastLink;	///< number of last link assigned to interface
 		public IfInfo() {
-			ipAdr = 0; bitRate = 0; pktRate = 0;
+			ipAdr = 0; rates = new RateSpec(0);
 			firstLink = 0; lastLink = 0;
 		}
 	}
@@ -108,47 +117,16 @@ public class NetInfo {
 	class LinkInfo {
 	int	leftLnum;	///< local link number used by "left endpoint"
 	int	rightLnum;	///< local link number used by "right endpoint"
-	int	bitRate;	///< max bit rate for link
-	int	pktRate;	///< max packet rate for link
-	int	availBitRateL;	///< available bit rate from left endpoint
-	int	availPktRateL;	///< available packet rate from left endpoint
-	int	availBitRateR;	///< available bit rate from right endpoint
-	int	availPktRateR;	///< available packet rate from right endpoint
+	RateSpec rates;		///< use "up" to denote rates from "left"
+	RateSpec availRates;	///< unused capacity
 		public LinkInfo() {
 			leftLnum = 0; rightLnum = 0;
-			bitRate = 0; pktRate = 0;
-			availBitRateL = 0; availPktRateL = 0;
-			availBitRateR = 0; availPktRateR = 0;
+			rates = new RateSpec(0); availRates = new RateSpec(0);
 		}
 	};
 	private LinkInfo[] link;
 
-	public class ComtreeInfo {
-	int	comtreeNum;	///< number of comtree
-	int	root;		///< root node of comtree
-	int	ownerAdr;	///< address of client that created comtree
-	int	bitRateDown;	///< downstream bit rate for backbone links
-	int	bitRateUp;	///< upstream bit rate for backbone links
-	int	pktRateDown;	///< downstream packet rate for backbone links
-	int	pktRateUp;	///< upstream packet rate for backbone links
-	int	leafBitRateDown;///< downstream bit rate for leaf links
-	int	leafBitRateUp;	///< upstream bit rate for leaf links
-	int	leafPktRateDown;///< downstream packet rate for leaf links
-	int	leafPktRateUp;	///< upstream packet rate for leaf links
-	Set<Integer> coreSet;	///< set of core nodes in comtree
-	Map<Integer,RateSpec> lnkMap; ///< map for links in comtree
-	Map<Integer,ComtRtrInfo> rtrMap; ///< map for nodes in comtree
-		public ComtreeInfo() {
-			comtreeNum = 0; root = 0; ownerAdr = 0;
-			bitRateDown = 0; bitRateUp = 0;
-			pktRateDown = 0; pktRateUp = 0;
-			leafBitRateDown = 0; leafBitRateUp = 0;
-			leafPktRateDown = 0; leafPktRateUp = 0;
-			coreSet = null; lnkMap = null; rtrMap = null;
-		}
-	};
-	private ComtreeInfo[] comtree;	///< array of comtrees
-	private IdMap comtreeMap;	///< maps comtree #s to indices in array
+	RateSpec defaultLinkRates;
 
 	/** Constructor for NetInfo, allocates space, initializes private data.
 	 *  @param maxNode1 is the max # of nodes in this NetInfo object
@@ -156,11 +134,9 @@ public class NetInfo {
 	 *  @param maxRtr1 is the max # of routers in this NetInfo object
 	 *  @param maxComtree1 is the max # of comtrees in this NetInfo object
 	 */
-	public NetInfo(int maxNode, int maxLink, int maxRtr, int maxComtree) {
-
+	public NetInfo(int maxNode, int maxLink, int maxRtr) {
 		this.maxNode = maxNode; this.maxLink = maxLink;
 		this.maxRtr = maxRtr;
-		this.maxComtree = maxComtree;
 
 		maxLeaf = maxNode-maxRtr;
 		netTopo = new Wgraph(maxNode, maxLink);
@@ -172,14 +148,13 @@ public class NetInfo {
 		leaves = new UiSetPair(maxLeaf);
 		nameNodeMap = new HashMap<String,Integer>();
 		adrNodeMap  = new HashMap<Integer,Integer>();
-		controllers = new HashSet<Integer>();
+		controllers = new java.util.HashSet<Integer>();
 	
 		link = new LinkInfo[maxLink+1];
 		locLnk2lnk = new UiHashTbl(2*Math.min(maxLink,
 					   maxRtr*(maxRtr-1)/2)+1);
-	
-		comtree = new ComtreeInfo[maxComtree+1];
-		comtreeMap = new IdMap(maxComtree);
+
+		defaultLinkRates = new RateSpec(50,500,25,250);
 	}
 
 	// Methods for working with nodes ///////////////////////////////
@@ -280,32 +255,10 @@ public class NetInfo {
 	public boolean setNodeAdr(int n, int adr) {
 		if (isLeaf(n)) leaf[n-maxRtr].fAdr = adr;
 		else if (isRouter(n)) rtr[n].fAdr = adr;
-		else return false;
-		adrNodeMap.put(n,adr);
-		return true;
-	}
-	
-	/** Set the latitude of a node.
-	 *  @param n is the node number for the node
-	 *  @param lat is its new latitude
-	 *  @return true if the operation succeeds, else false
-	 */
-	public boolean setNodeLat(int n, double lat) {
-		if (isLeaf(n)) leaf[n-maxRtr].latitude = (int) (lat*1000000);
-		else if (isRouter(n)) rtr[n].latitude  = (int) (lat*1000000);
-		else return false;
-		return true;
-	}
-	
-	/** Set the longitude of a node.
-	 *  @param n is the node number for the node
-	 *  @param lat is its new longtitude
-	 *  @return true if the operation succeeds, else false
-	 */
-	public boolean setNodeLong(int n, double longg) {
-		if (isLeaf(n)) leaf[n-maxRtr].longitude = (int) (longg*1000000);
-		else if (isRouter(n)) rtr[n].longitude  = (int) (longg*1000000);
-		else return false;
+		else { 
+			return false;
+		}
+		adrNodeMap.put(adr,n);
 		return true;
 	}
 	
@@ -339,7 +292,7 @@ public class NetInfo {
 		int nxt = leaves.nextIn(n-maxRtr);
 		return (nxt != 0 ? maxRtr + nxt : 0);
 	}
-	
+
 	/** Set the node type of a leaf node.
 	 *  @param n is the node number of the leaf
 	 *  @param typ is its new node type
@@ -406,27 +359,17 @@ public class NetInfo {
 	 *  @return the largest router number for this network
 	 */
 	public int getNumRouters() { return routers.getNumIn(); }
-	
-	/** Get the first address in a router's range of client addresses.
-	 *  Each router is assigned a range of Forest addresses for its clients.
-	 *  This method gets the first address in the range.
-	 *  @param r is the node number of a router
-	 *  @return the first client address for r or 0 if r is not
-	 *  a valid router
+
+	/** Get the range of leaf addresses for a router.
+	 *  @param r is the node number of the router
+	 *  @param adr is the forest address that defines the start of the range
+	 *  @return true if the operation succeeds, else false
 	 */
-	public int getFirstLeafAdr(int r) {
-		return (isRouter(r) ? rtr[r].firstLeafAdr : 0);
-	}
-	
-	/** Get the last address in a router's range of client addresses.
-	 *  Each router is assigned a range of Forest addresses for its clients.
-	 *  This method gets the last address in the range.
-	 *  @param r is the node number of a router
-	 *  @return the last client address for r or 0 if r is not
-	 *  a valid router
-	 */
-	public int getLastLeafAdr(int r) {
-		return (isRouter(r) ? rtr[r].lastLeafAdr : 0);
+	public boolean getLeafRange(int r, Pair<Integer,Integer> range) {
+		if (!isRouter(r)) return false;
+		range.first  = rtr[r].firstLeafAdr;
+		range.second = rtr[r].lastLeafAdr;
+		return true;
 	}
 	
 	/** Get the number of interfaces defined for a router.
@@ -454,33 +397,24 @@ public class NetInfo {
 		return (isLeaf(n) ? leaf[n-maxRtr].fAdr :
 			(isRouter(n) ? rtr[n].fAdr : 0));
 	}
-	
-	/** Get the latitude of a node in the Forest network.
-	 *  Each node has a location which is represented using latitude
-	 *  and longitude. Latitudes are returned as double precision values
-	 *  in units of degrees.
+
+	/** Get the location of a node in the Forest network.
 	 *  @param n is a node number
-	 *  @return the latitude defined for n
+	 *  @param loc is a reference to a pair of doubles in which the latitude
+	 *  and longitude are returned
+	 *  @return true on success, false on failure
 	 */
-	public double getNodeLat(int n) {
-		double x = (isLeaf(n) ? leaf[n-maxRtr].latitude :
-			    (isRouter(n) ? rtr[n].latitude : UNDEF_LAT));
-		return x/1000000;
+	public boolean getNodeLocation(int n, Pair<Double,Double> loc) {
+		if (isLeaf(n)) {
+			loc.first  = leaf[n-maxRtr].latitude/1000000.0;
+			loc.second = leaf[n-maxRtr].longitude/1000000.0;
+		} else if (isRouter(n)) {
+			loc.first  = rtr[n].latitude/1000000.0;
+			loc.second = rtr[n].longitude/1000000.0;
+		} else return false;
+		return true;
 	}
-	
-	/** Get the longitude of a node in the Forest network.
-	 *  Each node has a location which is represented using latitude
-	 *  and longitude. Latitudes are returned as double precision values
-	 *  in units of degrees.
-	 *  @param n is a node number
-	 *  @return the longitude defined for n
-	 */
-	public double getNodeLong(int n) {
-		double x = (isLeaf(n) ? leaf[n-maxRtr].longitude :
-			    (isRouter(n) ? rtr[n].longitude : UNDEF_LONG));
-		return x/1000000;
-	}
-	
+
 	/** Get the IP address of a specified router interface.
 	 *  @param r is the node number of a router in the network
 	 *  @param iface is an interface number for r
@@ -490,121 +424,92 @@ public class NetInfo {
 	public int getIfIpAdr(int n, int iface) {
 		return (validIf(n,iface) ? rtr[n].iface[iface].ipAdr : 0);
 	}
-	
-	/** Get the first link in range of links assigned to a given interface.
-	 *  Each router interface is assigned a consecutive range of link #s.
-	 *  @param r is the node number of a router in the network
-	 *  @param iface is an interface number for r
-	 *  @return the first link # in the assigned range for this interface,
-	 *  or 0 if the interface number is invalid.
-	 */
-	public int getIfFirstLink(int r, int iface) {
-		return (validIf(r,iface) ? rtr[r].iface[iface].firstLink : 0);
-	}
-	
-	/** Get the last link in the range assigned to a given interface.
-	 *  Each router interface is assigned a consecutive range of link #s.
-	 *  @param r is the node number of a router in the network
-	 *  @param iface is an interface number for r
-	 *  @return the last link # in the assigned range for this interface,
-	 *  or 0 if the interface # is invalid.
-	 */
-	public int getIfLastLink(int r, int iface) {
-		return (validIf(r,iface) ? rtr[r].iface[iface].lastLink : 0);
-	}
-	
-	/** Get the bit rate for a specified router interface.
-	 *  @param r is the node number of a router in the network
-	 *  @param iface is an interface number for r
-	 *  @return the bit rate (in kb/s) assigned to this interface,
-	 *  or 0 if the interface number is invalid.
-	 */
-	public int getIfBitRate(int r, int iface) {
-		return (validIf(r,iface) ? rtr[r].iface[iface].bitRate : 0);
-	}
-	
-	/** Get the packet rate for a specified router interface.
-	 *  @param r is the node number of a router in the network
-	 *  @param iface is an interface number for r
-	 *  @return the packet rate (in p/s) assigned to this interface,
-	 *  or 0 if the interface number is invalid.
-	 */
-	public int getIfPktRate(int r, int iface) {
-		return (validIf(r,iface) ? rtr[r].iface[iface].pktRate : 0);
-	}
 
-	/** Set first address in a router's range of assignable leaf addresses.
+	/** Get the RateSpec for a router interface.
+	 *  @param r is the node number of a router in the network
+	 *  @param iface is an interface number for r
+	 *  @param rs is a reference to a RateSpec in which result is returned
+	 *  @return true on success, else false
+	 */
+	public boolean getIfRates(int r, int iface, RateSpec rs) {
+		if (!validIf(r,iface)) return false;
+		rs.copyFrom(rtr[r].iface[iface].rates);
+		return true;
+	}
+	
+	/** Get the range of link numbers assigned to an interface.
+	 *  Each router interface is assigned a consecutive range of link
+	 *  numbers.
+	 *  @param r is the node number of a router in the network
+	 *  @param iface is an interface number for r
+	 *  @return true on success, else false
+	 */
+	public boolean getIfLinks(int r, int iface,
+				  Pair<Integer,Integer> links) {
+		if (!validIf(r,iface)) return false;
+		links.first  = rtr[r].iface[iface].firstLink;
+		links.second = rtr[r].iface[iface].lastLink;
+		return true;
+	}
+	
+	/** Set the range of assignable client addresses for this router.
 	 *  @param r is the node number of the router
 	 *  @param adr is the forest address that defines the start of the range
 	 *  @return true if the operation succeeds, else false
 	 */
-	public boolean setFirstLeafAdr(int r, int adr) {
-		if (isRouter(r)) rtr[r].firstLeafAdr = adr;
-		else return false;
+	public boolean setLeafRange(int r, Pair<Integer,Integer> range) {
+		if (!isRouter(r)) return false;
+		rtr[r].firstLeafAdr  = range.first;
+		rtr[r].lastLeafAdr = range.second;
 		return true;
 	}
-	
-	/** Set last address in a router's range of assignable client addresses.
-	 *  @param r is the node number of the router
-	 *  @param adr is the forest address that defines the end of the range
-	 *  @return true if the operation succeeds, else false
+
+	/** Set the location of a node in the Forest network.
+	 *  @param n is a node number
+	 *  @param loc is a reference to a pair of doubles which defines the new
+	 *  latitude and longitude
+	 *  @return true on success, false on failure
 	 */
-	public boolean setLastLeafAdr(int r, int adr) {
-		if (isRouter(r)) rtr[r].lastLeafAdr = adr;
-		else return false;
+	public boolean setNodeLocation(int n, Pair<Double,Double> loc) {
+		if (isLeaf(n)) {
+			leaf[n-maxRtr].latitude  = (int) (1000000.0*loc.first);
+			leaf[n-maxRtr].longitude = (int) (1000000.0*loc.second);
+		} else if (isRouter(n)) {
+			rtr[n].latitude  = (int) (1000000.0*loc.first);
+			rtr[n].longitude = (int) (1000000.0*loc.second);
+		} else return false;
 		return true;
 	}
 	
-	/** Set the bit rate of a router interface.
-	 *  @param r is the node number of the router
-	 *  @param iface is the interface number
-	 *  @param br is the new bit rate for the interface
-	 *  @return true if the operation succeeds, else false
+	/** Set the RateSpec for a router interface.
+	 *  @param r is the node number of a router in the network
+	 *  @param iface is an interface number for r
+	 *  @param rs is a reference to a RateSpec
+	 *  @return true on success, else false
 	 */
-	public boolean setIfBitRate(int r, int iface, int br) {
-		if (validIf(r,iface)) rtr[r].iface[iface].bitRate = br;
-		else return false;
+	public boolean setIfRates(int r, int iface, RateSpec rs) {
+		if (!validIf(r,iface)) return false;
+		rtr[r].iface[iface].rates.copyFrom(rs);
 		return true;
 	}
 	
-	/** Set the packet rate of a router interface.
-	 *  @param r is the node number of the router
-	 *  @param iface is the interface number
-	 *  @param pr is the new packet rate for the interface
-	 *  @return true if the operation succeeds, else false
-	 */
-	public boolean setIfPktRate(int r, int iface, int pr) {
-		if (validIf(r,iface)) rtr[r].iface[iface].pktRate = pr;
-		else return false;
-		return true;
-	}
-	
-	/** Set first link in the range of links defined for a router interface.
-	 *  Each router interface is assigned a consecutive range of link #s.
+	/** Set the range of links defined for a router interface.
+	 *  Each router interface is assigned a consecutive range of link
+	 *  numbers
 	 *  @param r is the node number of the router
 	 *  @param iface is the interface number
-	 *  @param lnk is the first link in the range of link numbers
+	 *  @param links is a reference to a pair of link numbers that
+	 *  define range
 	 *  @return true if the operation succeeds, else false
 	 */
-	public boolean setIfFirstLink(int r, int iface, int lnk) {
-		if (validIf(r,iface)) rtr[r].iface[iface].firstLink = lnk;
-		else return false;
+	public boolean setIfLinks(int r, int iface,
+				  Pair<Integer,Integer> links) {
+		if (!validIf(r,iface)) return false;
+		rtr[r].iface[iface].firstLink  = links.first;
+		rtr[r].iface[iface].lastLink = links.second;
 		return true;
 	}
-	
-	/** Set last link in the range of links defined for a router interface.
-	 *  Each router interface is assigned a consecutive range of link #s.
-	 *  @param r is the node number of the router
-	 *  @param iface is the interface number
-	 *  @param lnk is the last link in the range of link numbers
-	 *  @return true if the operation succeeds, else false
-	 */
-	public boolean setIfLastLink(int r, int iface, int lnk) {
-		if (validIf(r,iface)) rtr[r].iface[iface].lastLink = lnk;
-		else return false;
-		return true;
-	}
-	
+
 	/** Set the IP address of a router interface.
 	 *  @param r is the node number of a router
 	 *  @param iface is the interface number
@@ -672,7 +577,7 @@ public class NetInfo {
 	 *  @return the node number of the left endpoint of lnk, or 0 if lnk
 	 *  is not a valid link number.
 	 */
-	public int getLinkL(int lnk) {
+	public int getLeft(int lnk) {
 		return (validLink(lnk) ? netTopo.left(lnk) : 0);
 	}
 	
@@ -683,7 +588,7 @@ public class NetInfo {
 	 *  @return the node number of the right endpoint of lnk, or 0 if lnk
 	 *  is not a valid link number.
 	 */
-	public int getLinkR(int lnk) {
+	public int getRight(int lnk) {
 		return (validLink(lnk) ? netTopo.right(lnk) : 0);
 	}
 	
@@ -704,10 +609,10 @@ public class NetInfo {
 	 *  @return the local link number used by r or 0 if r is not a router
 	 *  or is not incident to lnk
 	 */
-	public int getLocLink(int lnk, int r) {
+	public int getLLnum(int lnk, int r) {
 		return (!(validLink(lnk) && isRouter(r)) ? 0 :
-			(r == netTopo.left(lnk) ? getLocLinkL(lnk) :
-			(r == netTopo.right(lnk) ? getLocLinkR(lnk) : 0)));
+			(r == netTopo.left(lnk) ? getLeftLLnum(lnk) :
+			(r == netTopo.right(lnk) ? getRightLLnum(lnk) : 0)));
 	}
 	
 	/** Get the local link number used by the left endpoint of a link.
@@ -716,8 +621,8 @@ public class NetInfo {
 	 *  @return the local link number used by the left endpoint, or 0 if
 	 *  the link number is invalid or the left endpoint is not a router.
 	 */
-	public int getLocLinkL(int lnk) {
-		int r = getLinkL(lnk);
+	public int getLeftLLnum(int lnk) {
+		int r = getLeft(lnk);
 		return (isRouter(r) ? link[lnk].leftLnum : 0);
 	}
 	
@@ -727,52 +632,38 @@ public class NetInfo {
 	 *  @return the local link number used by the right endpoint, or 0 if
 	 *  the link number is invalid or the left endpoint is not a router.
 	 */
-	public int getLocLinkR(int lnk) {
-		int r = getLinkR(lnk);
+	public int getRightLLnum(int lnk) {
+		int r = getRight(lnk);
 		return (isRouter(r) ? link[lnk].rightLnum : 0);
 	}
 	
-	/** Get the bit rate of a link in the Forest network.
+	/** Get the RateSpec of a link in the Forest network.
 	 *  @param lnk is a link number
-	 *  @return the bit rate assigned to lnk or 0 if lnk is not a valid
-	 *  link number
+	 *  @param rs is a reference to a RateSpec in which result is returned
+	 *  @return true on success, false on failure
 	 */
-	public int getLinkBitRate(int lnk) {
-		return (validLink(lnk) ? link[lnk].bitRate : 0);
+	public boolean getLinkRates(int lnk, RateSpec rs) {
+		if (!validLink(lnk)) return false;
+		rs.copyFrom(link[lnk].rates);
+		return true;
 	}
 	
-	/** Get the packet rate of a link in the Forest network.
+	/** Get the available rates of a link in the Forest network.
 	 *  @param lnk is a link number
-	 *  @return the packet rate assigned to lnk or 0 if lnk is not a valid
-	 *  link number
+	 *  @param rs is a reference to a RateSpec in which result is returned
+	 *  @return true on success, false on failure
 	 */
-	public int getLinkPktRate(int lnk) {
-		return (validLink(lnk) ? link[lnk].pktRate : 0);
+	public boolean getAvailRates(int lnk, RateSpec rs) {
+		if (!validLink(lnk)) return false;
+		rs.copyFrom(link[lnk].availRates);
+		return true;
 	}
 	
-	/** Get the available bit rate of a link in the Forest network.
-	 *  @param lnk is a link number
-	 *  @param n is the node number of one of lnk's endpoints
-	 *  @return the bit rate assigned to lnk or 0 if lnk is not a valid
-	 *  link number
+	/** Get the default rates for leaf nodes in a Forest network.
+	 *  @param rs is a reference to a RateSpec
 	 */
-	public int getAvailBitRate(int lnk, int n) {
-		if (!validLink(lnk)) return 0;
-		     if (n == getLinkL(lnk)) return link[lnk].availBitRateL;
-		else if (n == getLinkR(lnk)) return link[lnk].availBitRateR;
-		else return 0;
-	}
-	
-	/** Get the available packet rate of a link in the Forest network.
-	 *  @param lnk is a link number
-	 *  @param n is the node number for one of lnk's endpoints
-	 *  @return the available packet rate leaving node n on lnk
-	 */
-	public int getAvailPktRate(int lnk, int n) {
-		if (!validLink(lnk)) return 0;
-		     if (n == getLinkL(lnk)) return link[lnk].availPktRateL;
-		else if (n == getLinkR(lnk)) return link[lnk].availPktRateR;
-		else return 0;
+	public void getDefLeafRates(RateSpec rs) {
+		rs.copyFrom(defaultLinkRates);
 	}
 	
 	/** Get the length of a link in the Forest network.
@@ -800,7 +691,8 @@ public class NetInfo {
 	 *  or 0 if r is not a router, or it has no such link
 	 */
 	public int getLinkNum(int r, int llnk) {
-		return (isRouter(r) ? locLnk2lnk.lookup(ll2l_key(r,llnk))/2 :0);
+		return (isRouter(r) ? locLnk2lnk.lookup(ll2l_key(r,llnk))/2 :
+					(llnk == 0 ? getLinkNum(r) : 0));
 	}
 
 	/** Set the local link number used by the left endpoint of a link.
@@ -809,7 +701,7 @@ public class NetInfo {
 	 *  @param loc is local link # to be used by the left endpoint of lnk
 	 *  @return true on success, else false
 	 */
-	public boolean setLocLinkL(int lnk, int loc) {
+	public boolean setLeftLLnum(int lnk, int loc) {
 		if (validLink(lnk)) link[lnk].leftLnum = loc;
 		else return false;
 		return true;
@@ -821,84 +713,49 @@ public class NetInfo {
 	 *  @param loc is local link # to be used by the right endpoint of lnk
 	 *  @return true on success, else false
 	 */
-	public boolean setLocLinkR(int lnk, int loc) {
+	public boolean setRightLLnum(int lnk, int loc) {
 		if (validLink(lnk)) link[lnk].rightLnum = loc;
 		else return false;
 		return true;
 	}
 	
-	/** Set the bit rate of a link.
-	 *  @param lnk is a "global" link number
-	 *  @param br is the new bit rate
-	 *  @return true on success, else false
+	/** Set the RateSpec for a link.
+	 *  @param lnk is a link number
+	 *  @param rs is the new RateSpec for the link
+	 *  @return true on success, false on failure
 	 */
-	public boolean setLinkBitRate(int lnk, int br) {
+	public boolean setLinkRates(int lnk, RateSpec rs) {
 		if (!validLink(lnk)) return false;
-		int dbr = br - link[lnk].bitRate;
-		link[lnk].availBitRateL += dbr;
-		link[lnk].availBitRateR += dbr;
-		link[lnk].bitRate = br;
+		link[lnk].rates.set(
+			Math.min(Forest.MAXBITRATE,
+				Math.max(Forest.MINBITRATE,rs.bitRateUp)),
+			Math.min(Forest.MAXBITRATE,
+				Math.max(Forest.MINBITRATE,rs.bitRateDown)),
+			Math.min(Forest.MAXPKTRATE,
+				Math.max(Forest.MINPKTRATE,rs.pktRateUp)),
+			Math.min(Forest.MAXPKTRATE,
+				Math.max(Forest.MINPKTRATE,rs.pktRateDown))
+		);
 		return true;
 	}
 	
-	/** Set the packet rate of a link.
-	 *  @param lnk is a "global" link number
-	 *  @param pr is the new packet rate
-	 *  @return true on success, else false
+	/** Allocate capacity on a link, reducing available capacity.
+	 *  @param lnk is a link number
+	 *  @param rs is a RateSpec
 	 */
-	public boolean setLinkPktRate(int lnk, int pr) {
+	public boolean setAvailRates(int lnk, RateSpec rs) {
 		if (!validLink(lnk)) return false;
-		int dpr = pr - link[lnk].pktRate;
-		link[lnk].availPktRateL += dpr;
-		link[lnk].availPktRateR += dpr;
-		link[lnk].pktRate = pr;
-		return true;
-	}
-	
-	/** Add to the available bit rate for a link.
-	 *  @param lnk is a "global" link number
-	 *  @param n is the node number for one of lnk's endpoints; the method
-	 *  adds to the bit rate leaving n
-	 *  @param br is the amount to add to the available bit rate
-	 *  leaving node n
-	 *  @return true on success, else false
-	 */
-	public boolean addAvailBitRate(int lnk, int n, int br) {
-		if (!validLink(lnk)) return false;
-		if (n == getLinkL(lnk)) {
-			if (br + link[lnk].availBitRateL < 0) return false;
-			link[lnk].availBitRateL += br;
-			link[lnk].availBitRateL = Math.min(
-				link[lnk].availBitRateL,link[lnk].bitRate);
-		} else if (n == getLinkR(lnk)) {
-			if (br + link[lnk].availBitRateR < 0) return false;
-			link[lnk].availBitRateR += br;
-			link[lnk].availBitRateR = Math.min(
-				link[lnk].availBitRateR,link[lnk].bitRate);
-		} else return false;
-		return true;
-	}
-	
-	/** Add to the available packet rate for a link.
-	 *  @param lnk is a "global" link number
-	 *  @param n is the node number for one of lnk's endpoints
-	 *  @param pr is the amount to add to the available packet rate
-	 *  leaving node n
-	 *  @return true on success, else false
-	 */
-	public boolean addAvailPktRate(int lnk, int n, int pr) {
-		if (!validLink(lnk)) return false;
-		if (n == getLinkL(lnk)) {
-			if (pr + link[lnk].availPktRateL < 0) return false;
-			link[lnk].availPktRateL += pr;
-			link[lnk].availPktRateL = Math.min(
-				link[lnk].availPktRateL,link[lnk].pktRate);
-		} else if (n == getLinkR(lnk)) {
-			if (pr + link[lnk].availPktRateR < 0) return false;
-			link[lnk].availPktRateR += pr;
-			link[lnk].availPktRateR = Math.min(
-				link[lnk].availPktRateR,link[lnk].pktRate);
-		} else return false;
+		link[lnk].availRates = rs;
+		link[lnk].availRates.set(
+			Math.min(link[lnk].rates.bitRateUp,  
+				Math.max(0,rs.bitRateUp)),
+			Math.min(link[lnk].rates.bitRateDown,
+				Math.max(0,rs.bitRateDown)),
+			Math.min(link[lnk].rates.pktRateUp,  
+				Math.max(0,rs.pktRateUp)),
+			Math.min(link[lnk].rates.pktRateDown,
+				Math.max(0,rs.pktRateDown))
+		);
 		return true;
 	}
 	
@@ -913,91 +770,6 @@ public class NetInfo {
 		return true;
 	}
 	
-	// Methods for working with comtrees ////////////////////////////////
-	// Note that methods that take a comtree index as an argument
-	// assume that the comtree index is valid. This was a conscious
-	// decision to allow the use of NetInfo in contexts where a program
-	// needs to define per-comtree locks. Any operation that uses or
-	// changes comtreeMap must be protected by a "global" lock.
-	// This includes the validComtIndex() method, so if we checked
-	// the comtree index in methods that just affect one comtree,
-	// client programs would need to acquire a global lock for any
-	// of these operations. Hence, we don't check and we trust the client
-	// program to never pass an invalid comtree index.
-	// Of course, locks are only required in multi-threaded programs.
-	
-	/** Check to see if a given comtree number is valid.
-	 *  @param comt is an integer comtree number
-	 *  @return true if comt corresponds to a comtree in the network,
-	 *  else false
-	 */
-	public boolean validComtree(int comt) {
-		return comtreeMap.validKey(comt);
-	}
-	
-	/** Check to see if a given comtree index is valid.
-	 *  NetInfo uses integer indices in a restricted range to access
-	 *  comtree information efficiently. Users get the comtree index
-	 *  for a given comtree number using the getComtIndex() method.
-	 *  @param ctx is an integer comtree index
-	 *  @return true if n corresponds to a comtree in the network,
-	 *  else false
-	 */
-	public boolean validComtIndex(int ctx) {
-		return comtreeMap.validId(ctx);
-	}
-	
-	/** Determine if a router is a core node in a specified comtree.
-	 *  @param ctx is a valid comtree index
-	 *  @param r is the node number of a router
-	 *  @return true if r is a core node in the comtree with index i,
-	 *  else false
-	 */
-	public boolean isComtCoreNode(int ctx, int r) {
-		return comtree[ctx].coreSet.contains(r);
-	}
-	
-	/** Determine if a node belongs to a comtree or not.
-	 *  @param ctx is the comtree index of the comtree of interest
-	 *  @param n is number of the node that we want to check for membership
-	 *  in the comtree
-	 *  @return true if n is a node in the comtree, else false
-	 */
-	public boolean isComtNode(int ctx, int n) {
-		int lnk = firstLinkAt(n);
-	        return (isLeaf(n) ? 
-			comtree[ctx].lnkMap.get(lnk) != null
-			: comtree[ctx].rtrMap.get(n) != null);
-	}
-	
-	/** Determine if a link is in a specified comtree.
-	 *  @param ctx is a valid comtree index
-	 *  @param lnk is a link number
-	 *  @return true if lnk is a link in the comtree with index i,
-	 *  else false
-	 */
-	public boolean isComtLink(int ctx, int lnk) {
-		return comtree[ctx].lnkMap.get(lnk) != null;
-	}
-	
-	/** Get the first valid comtree index.
-	 *  Used for iterating through all the comtrees.
-	 *  @return the index of the first comtree, or 0 if no comtrees defined
-	 */
-	public int firstComtIndex() {
-		return comtreeMap.firstId();
-	}
-	
-	/** Get the next valid comtree index.
-	 *  Used for iterating through all the comtrees.
-	 *  @param ctx is a comtree index
-	 *  @return the index of the next comtree after, or 0 if there is no
-	 *  next index
-	 */
-	public int nextComtIndex(int ctx) {
-		return comtreeMap.nextId(ctx);
-	}
-
 	/** Get the set of nodes that are controllers.
 	 *  This method is provided to enable a client program to iterate
 	 *  over the set of controllers. The client should not modify the core
@@ -1010,487 +782,6 @@ public class NetInfo {
 		return controllers;
 	}
 
-	/** Get the set of core nodes for a given comtree.
-	 *  This method is provided to enable a client program to iterate
-	 *  over the set of core nodes. The client should not modify the core
-	 *  set directly, as this can make the NetInfo object inconsistent.
-	 *  @param ctx is a valid comtree index
-	 *  @return the node number of the first core node in the comtree,
-	 *  or 0 if the comtree index is invalid or no core nodes have
-	 *  been defined
-	 */
-	public Set<Integer> getCoreSet(int ctx) {
-		return comtree[ctx].coreSet;
-	}
-	
-	/** Get the comtree link map for a given comtree.
-	 *  This method is provided to allow a client to iterate over the
-	 *  links in a comtree. It should not be used to modify the set of
-	 *  links, as this can make the NetInfo object inconsistent.
-	 *  @param ctx is a valid comtree index
-	 *  @return the link # of the first link that belongs to the comtree,
-	 *  or 0 if the comtree index is invalid or contains no links
-	 */
-	public Map<Integer,RateSpec> getComtLinks(int ctx) {
-		return comtree[ctx].lnkMap;
-	}
-	
-	/** Get the comtree index for a given comtree number.
-	 *  @param comt is a comtree number
-	 *  @param return the index used to efficiently access stored
-	 *  information for the comtree.
-	 */
-	public int getComtIndex(int comt) {
-		return comtreeMap.getId(comt);
-	}
-	
-	/** Get the comtree number for the comtree with a given index.
-	 *  @param ctx is a valid comtree index
-	 *  @param return the comtree number that is mapped to index c
-	 *  or 0 if c is not a valid index
-	 */
-	public int getComtree(int ctx) {
-		return comtree[ctx].comtreeNum;
-	}
-	
-	/** Get the comtree root for the comtree with a given index.
-	 *  @param ctx is a valid comtree index
-	 *  @param return the specified root node for the comtree
-	 *  or 0 if c is not a valid index
-	 */
-	public int getComtRoot(int ctx) {
-		return comtree[ctx].root;
-	}
-	
-	/** Get the owner of a comtree with specified index.
-	 *  @param ctx is a valid comtree index
-	 *  @param return the forest address of the client that originally
-	 *  created the comtree, or 0 if c is not a valid index
-	 */
-	public int getComtOwner(int ctx) {
-		return comtree[ctx].ownerAdr;
-	}
-	
-	/** Get the link to a parent of a given node in the comtree.
-	 *  @param ctx is a valid comtree index 
-	 *  @param n is # of the node that whose parent link is to be returned
-	 *  @return the (global) link # of the link to n's parent, or 0 if n
-	 *  has no parent, or -1 if n is not a node the comtree
-	 **/
-	public int getComtPlink(int ctx, int n) {
-		if (!isComtNode(ctx,n)) return -1;
-		if (isLeaf(n)) return firstLinkAt(n);
-		ComtRtrInfo rtr = comtree[ctx].rtrMap.get(n);
-		return (rtr != null ? rtr.plnk : -1);
-	}
-	
-	/** Get the number of links in a comtree that are incident to a node.
-	 *  @param ctx is a valid comtree index 
-	 *  @param n is the number of a node in the comtree
-	 *  @return the number of links in the comtree incident to n
-	 *  or -1 if n is not a node in the comtree
-	 **/
-	public int getComtLnkCnt(int ctx, int n) {
-		if (!isComtNode(ctx,n)) return -1;
-		if (isLeaf(n)) return 1;
-		ComtRtrInfo rtr = comtree[ctx].rtrMap.get(n);
-		return (rtr != null ? rtr.lnkCnt : -1);
-	}
-	
-	/** Get the downstream bit rate for a comtree link.
-	 *  @param ctx is a valid comtree index
-	 *  @param lnk is an optional link number for a link in the comtree
-	 *  @param if the lnk argument is provided and non-zero, return the
-	 *  downstream bit rate on lnk, otherwise return the default downstream
-	 *  backbone link rate
-	 */
-	public int getComtBrDown(int ctx, int lnk) {
-		if (lnk == 0) return comtree[ctx].bitRateDown;
-		RateSpec rs = comtree[ctx].lnkMap.get(lnk);
-		return (rs != null ? rs.bitRateDown : 0);
-	}
-	public int getComtBrDown(int ctx) { return getComtBrDown(ctx,0); }
-	
-	/** Get the upstream bit rate for a comtree link.
-	 *  @param ctx is a comtree index
-	 *  @param lnk is an optional link number for a link in the comtree
-	 *  @param if the lnk argument is provided and non-zero, return the
-	 *  upstream bit rate on lnk, otherwise return the default upstream
-	 *  backbone link rate
-	 */
-	public int getComtBrUp(int ctx, int lnk) {
-		if (lnk == 0) return comtree[ctx].bitRateUp;
-		RateSpec rs = comtree[ctx].lnkMap.get(lnk);
-		return (rs != null ? rs.bitRateUp : 0);
-	}
-	public int getComtBrUp(int ctx) { return getComtBrUp(ctx,0); }
-	
-	/** Get the downstream backbone packet rate for a comtree link.
-	 *  @param ctx is a valid comtree index
-	 *  @param lnk is an optional link number for a link in the comtree
-	 *  @param if the lnk argument is provided and non-zero, return the
-	 *  downstream packet rate on lnk, otherwise return default downstream
-	 *  backbone link rate
-	 */
-	public int getComtPrDown(int ctx, int lnk) {
-		if (lnk == 0) return comtree[ctx].pktRateDown;
-		RateSpec rs = comtree[ctx].lnkMap.get(lnk);
-		return (rs != null ? rs.pktRateDown : 0);
-	}
-	public int getComtPrDown(int ctx) { return getComtPrDown(ctx,0); }
-	
-	/** Get the upstream backbone packet rate for a comtree link.
-	 *  @param ctx is a comtree index
-	 *  @param lnk is an optional link # for a backbone link in the comtree
-	 *  @param if the lnk argument is provided and non-zero, return the
-	 *  upstream packet rate on lnk, otherwise return the default upstream
-	 *  backbone link rate
-	 */
-	public int getComtPrUp(int ctx, int lnk) {
-		if (lnk == 0) return comtree[ctx].pktRateUp;
-		RateSpec rs = comtree[ctx].lnkMap.get(lnk);
-		return (rs != null ? rs.pktRateUp : 0);
-	}
-	public int getComtPrUp(int ctx) { return getComtPrUp(ctx,0); }
-	
-	/** Get the default downstream access bit rate for a comtree.
-	 *  @param ctx is a valid comtree index
-	 *  @param return the default downstream bit rate for access links in
-	 *  the comtree
-	 */
-	public int getComtLeafBrDown(int ctx) {
-		return comtree[ctx].leafBitRateDown;
-	}
-	
-	/** Get the default upstream access bit rate for a comtree.
-	 *  @param ctx is a valid comtree index
-	 *  @param return the default upstream bit rate for access links in
-	 *  the comtree
-	 */
-	public int getComtLeafBrUp(int ctx) {
-		return comtree[ctx].leafBitRateUp;
-	}
-	
-	/** Get the default downstream access packet rate for a comtree.
-	 *  @param ctx is a valid comtree index
-	 *  @param return the default downstream packet rate for access links in
-	 *  the comtree
-	 */
-	public int getComtLeafPrDown(int ctx) {
-		return comtree[ctx].leafPktRateDown;
-	}
-	
-	/** Get the default upstream access packet rate for a comtree.
-	 *  @param ctx is a comtree index
-	 *  @param return the default upstream packet rate for access links in
-	 *  the comtree
-	 */
-	public int getComtLeafPrUp(int ctx) {
-		return comtree[ctx].leafPktRateUp;
-	}
-	
-	/** Add a new comtree.
-	 *  Defines a new comtree, with attributes left undefined.
-	 *  @param nuComt is a ComtreeInfo object for the new comtree
-	 *  @return true on success, false on failure
-	 */
-	public boolean addComtree(ComtreeInfo nuComt) {
-		int ctx = comtreeMap.addPair(nuComt.comtreeNum);
-		if (ctx == 0) return false;
-		comtree[ctx] = nuComt;
-		return true;
-	}
-	
-	/** Update a comtree.
-	 *  Replaces the comtree information for an existing comtree.
-	 *  @param nuComt is a ComtreeInfo object
-	 *  @return true on success, false on failure
-	 */
-	public boolean updateComtree(ComtreeInfo nuComt) {
-		int ctx = comtreeMap.getId(nuComt.comtreeNum);
-		if (ctx == 0) return false;
-		comtree[ctx] = nuComt;
-		return true;
-	}
-	
-	/** Remove a comtree.
-	 *  Defines a new comtree, with attributes left undefined.
-	 *  @param comt is the comtree number for the new comtree.
-	 *  @return true on success, false on failure
-	 */
-	public boolean removeComtree(int ctx) {
-		if (!validComtIndex(ctx)) return false;
-		comtreeMap.dropPair(comtree[ctx].comtreeNum);
-		comtree[ctx].comtreeNum = 0;
-		comtree[ctx].coreSet = null;
-		comtree[ctx].lnkMap = null;
-		comtree[ctx].rtrMap = null;
-		return true;
-	}
-	
-	/** Add a new router to a comtree.
-	 *  If the specified node is a leaf, we do nothing and return false,
-	 *  as leaf nodes are not explictly represented in the data class
-	 *  for comtrees.
-	 *  @param ctx is the comtree index
-	 *  @param r is the node number of the router
-	 *  @return true on success, false on failure
-	 */
-	public boolean addComtNode(int ctx, int r) {
-		if (!isRouter(r)) return false;
-		if (comtree[ctx].rtrMap.get(r) == null) {
-			ComtRtrInfo rtr = new ComtRtrInfo();
-			rtr.lnkCnt = 0; rtr.plnk = 0;
-			comtree[ctx].rtrMap.put(r,rtr);
-		}
-		return true;
-	}
-	
-	/** Add a new router to a ComtreeInfo object.
-	 *  If the specified node is a leaf, we do nothing and return false,
-	 *  as leaf nodes are not explictly represented in the data class
-	 *  for comtrees.
-	 *  @param cti is a ComtreeInfo object
-	 *  @param r is the node number of the router
-	 *  @return true on success, false on failure
-	 */
-	public boolean addComtNode(ComtreeInfo cti, int r) {
-		if (!isRouter(r)) return false;
-		if (cti.rtrMap.get(r) == null) {
-			ComtRtrInfo rtr = new ComtRtrInfo();
-			rtr.lnkCnt = 0; rtr.plnk = 0;
-			cti.rtrMap.put(r,rtr);
-		}
-		return true;
-	}
-	
-	/** Remove a router from a comtree.
-	 *  This method will fail if the stored link count for this router
-	 *  in the comtree is non-zero.
-	 *  @param ctx is the comtree index
-	 *  @param r is the node number of the router
-	 *  @return true on success, false on failure
-	 */
-	public boolean removeComtNode(int ctx, int r) {
-		ComtRtrInfo rtr = comtree[ctx].rtrMap.get(r);
-		if (rtr == null) return true;
-		if (rtr.lnkCnt != 0) return false;
-		comtree[ctx].rtrMap.remove(r);
-		comtree[ctx].coreSet.remove(r);
-		return true;
-	}
-	
-	/** Add a new core node to a comtree.
-	 *  The new node is required to be a router and if it is
-	 *  not already in the comtree, it is added.
-	 *  @param ctx is the comtree index
-	 *  @param r is the node number of the router
-	 *  @return true on success, false on failure
-	 */
-	public boolean addComtCoreNode(int ctx, int r) {
-		if (!isRouter(r)) return false;
-		if (!isComtNode(ctx,r)) addComtNode(ctx,r);
-		comtree[ctx].coreSet.add(r);
-		return true;
-	}
-	
-	/** Remove a core node from a comtree.
-	 *  @param ctx is the comtree index
-	 *  @param r is the node number of the core node
-	 *  @return true on success, false on failure
-	 */
-	public boolean removeComtCoreNode(int ctx, int n) {
-		comtree[ctx].coreSet.remove(n);
-		return true;
-	}
-	
-	/** Set the link count for a router in a comtree.
-	 *  This method is provided to allow link counts to be used to
-	 *  track the presence of leaf nodes that may not be represented
-	 *  explicitly in the comtree. The client program must take care
-	 *  to maintain these counts appropriately.
-	 *  @param ctx is a valid comtree index
-	 *  @param r is a router in the comtree
-	 *  @param cnt is the new value for the link count
-	 *  @return true on success, false on failure
-	 */
-	public boolean setComtLnkCnt(int ctx, int r, int cnt) {
-		if (isLeaf(r)) return true;
-		ComtRtrInfo rtr = comtree[ctx].rtrMap.get(r);
-		if (rtr == null) return false;
-		rtr.lnkCnt = cnt;
-		return true;
-	}
-	
-	/** Increment the link count for a router in a comtree.
-	 *  This method is provided to allow link counts to be used to
-	 *  track the presence of leaf nodes that may not be represented
-	 *  explicitly in the comtree. The client program must take care
-	 *  to maintain these counts appropriately.
-	 *  @param ctx is a valid comtree index
-	 *  @param r is a router in the comtree
-	 *  @return true on success, false on failure
-	 */
-	public boolean incComtLnkCnt(int ctx, int r) {
-		if (isLeaf(r)) return true;
-		ComtRtrInfo rtr = comtree[ctx].rtrMap.get(r);
-		if (rtr == null) return false;
-		rtr.lnkCnt += 1;
-		return true;
-	}
-	
-	/** Decrement the link count for a router in the comtree.
-	 *  This method is provided to allow link counts to be used to
-	 *  track the presence of leaf nodes that may not be represented
-	 *  explicitly in the comtree. The client program must take care
-	 *  to maintain these counts appropriately.
-	 *  @param ctx is a valid comtree index
-	 *  @param r is a router in the comtree
-	 *  @return true on success, false on failure
-	 */
-	public boolean decComtLnkCnt(int ctx, int r) {
-		if (isLeaf(r)) return true;
-		ComtRtrInfo rtr = comtree[ctx].rtrMap.get(r);
-		if (rtr == null) return false;
-		rtr.lnkCnt += 1;
-		return true;
-	}
-	
-	/** Set the root node of a comtree.
-	 *  @param ctx is the index of the comtree
-	 *  @param r is the router that is to be the comtree root
-	 *  @return true on success, false on failure
-	 */
-	public boolean setComtRoot(int ctx, int r) {
-		if (!isRouter(r)) return false;
-		comtree[ctx].root = r;
-		return true;
-	}
-	
-	/** Set the owner of a comtree.
-	 *  @param ctx is the index of the comtree
-	 *  @param owner is the forest address of the new comtree owner
-	 *  @return true on success, false on failure
-	 */
-	public boolean setComtOwner(int ctx, int owner) {
-		if (!Forest.validUcastAdr(owner)) return false;
-		comtree[ctx].ownerAdr = owner;
-		return true;
-	}
-	
-	/** Set the parent link of a node in the comtree.
-	 *  @param ctx is a valid comtree index
-	 *  @param n is a node in the comtree
-	 *  @return true on success, false on failure
-	 */
-	public boolean setComtPlink(int ctx, int n, int plnk) {
-		if (isLeaf(n)) return true; // for leaf, plnk defined implicitly
-		ComtRtrInfo rtr= comtree[ctx].rtrMap.get(n);
-		if (rtr == null) return false;
-		rtr.plnk = plnk;
-		return true;
-	}
-	
-	/** Set the downstream bit rate for the backbone links of a comtree.
-	 *  @param ctx is the index of the comtree
-	 *  @param lnk is an optional link # for a backbone link in the comtree
-	 *  @param if the lnk argument is provided and non-zero, set the
-	 *  downstream bit rate on lnk, otherwise set the default
-	 *  downstream backbone link rate
-	 */
-	public boolean setComtBrDown(int ctx, int br, int lnk) {
-		if (lnk == 0) { comtree[ctx].bitRateDown = br; return true; }
-		RateSpec rs = comtree[ctx].lnkMap.get(lnk);
-		if (rs == null) return false;
-		rs.bitRateDown = br;
-		return true;
-	}
-	
-	/** Set the upstream bit rate for the backbone links of a comtree.
-	 *  @param ctx is the index of the comtree
-	 *  @param lnk is an optional link # for a backbone link in the comtree
-	 *  @param if the lnk argument is provided and non-zero, set the
-	 *  upstream bit rate on lnk, otherwise set the default
-	 *  upstream backbone link rate
-	 */
-	public boolean setComtBrUp(int ctx, int br, int lnk) {
-		if (lnk == 0) { comtree[ctx].bitRateUp = br; return true; }
-		RateSpec rs = comtree[ctx].lnkMap.get(lnk);
-		if (rs == null) return false;
-		rs.bitRateUp = br;
-		return true;
-	}
-	
-	/** Set the downstream packet rate for the backbone links of a comtree.
-	 *  @param ctx is the index of the comtree
-	 *  @param lnk is a link number for a backbone link in the comtree
-	 *  @param if the lnk argument is non-zero, set the
-	 *  downstream packet rate on lnk, otherwise set the default
-	 *  downstream backbone link rate
-	 */
-	public boolean setComtPrDown(int ctx, int pr, int lnk) {
-		if (lnk == 0) { comtree[ctx].pktRateDown = pr; return true; }
-		RateSpec rs = comtree[ctx].lnkMap.get(lnk);
-		if (rs == null) return false;
-		rs.pktRateDown = pr;
-		return true;
-	}
-	
-	/** Set the upstream packet rate for the backbone links of a comtree.
-	 *  @param ctx is the index of the comtree
-	 *  @param lnk is a link # for a backbone link in the comtree
-	 *  @param if the lnk argument is non-zero, set the
-	 *  upstream packet rate on lnk, otherwise set the default
-	 *  upstream backbone link rate
-	 */
-	public boolean setComtPrUp(int ctx, int pr, int lnk) {
-		if (lnk == 0) { comtree[ctx].pktRateUp = pr; return true; }
-		RateSpec rs = comtree[ctx].lnkMap.get(lnk);
-		if (rs == null) return false;
-		rs.pktRateUp = pr;
-		return true;
-	}
-	
-	/** Set default downstream bit rate for the access links of a comtree.
-	 *  @param ctx is the index of the comtree
-	 *  @param br is the new default downstream bit rate for access links
-	 *  @return true on success, false on failure
-	 */
-	public boolean setComtLeafBrDown(int ctx, int br) {
-		comtree[ctx].leafBitRateDown = br;
-		return true;
-	}
-	
-	/** Set the default upstream bit rate for the access links of a comtree.
-	 *  @param ctx is the index of the comtree
-	 *  @param br is the new default upstream bit rate for access links
-	 *  @return true on success, false on failure
-	 */
-	public boolean setComtLeafBrUp(int ctx, int br) {
-		comtree[ctx].leafBitRateUp = br;
-		return true;
-	}
-	
-	/** Set default downstream packet rate for access links of a comtree.
-	 *  @param ctx is the index of the comtree
-	 *  @param br is the new default downstream packet rate for access links
-	 *  @return true on success, false on failure
-	 */
-	public boolean setComtLeafPrDown(int ctx, int pr) {
-		comtree[ctx].leafPktRateDown = pr;
-		return true;
-	}
-	
-	/** Set default upstream packet rate for the access links of a comtree.
-	 *  @param ctx is the index of the comtree
-	 *  @param br is the new default upstream packet rate for access links
-	 *  @return true on success, false on failure
-	 */
-	public boolean setComtLeafPrUp(int ctx, int pr) {
-		comtree[ctx].leafPktRateUp = pr;
-		return true;
-	}
-	
 	/** Helper method defines keys for internal locLnk2lnk hash table.
 	 *  @param r is the node number of a router
 	 *  @param llnk is a local link number at r
@@ -1500,514 +791,6 @@ public class NetInfo {
 		return (((long) r) << 32) | (((long) llnk) & 0xffffffff);
 	}
 	
-	/** Add a new link to a comtree.
-	 *  @param ctx is the comtree index
-	 *  @param lnk is the link number of the link to be added
-	 *  @param parent is the parent endpoint of lnk
-	 *  @return true on success, false on failure
-	 */
-	public boolean addComtLink(int ctx, int lnk, int parent) {
-		if (!validLink(lnk)) return false;
-		RateSpec rs = new RateSpec();
-		rs.bitRateUp = rs.bitRateDown = 0;
-		rs.pktRateUp = rs.pktRateDown = 0;
-		comtree[ctx].lnkMap.put(lnk,rs);
-	
-		int child = getPeer(parent,lnk);
-		addComtNode(ctx,child); addComtNode(ctx,parent);
-		ComtRtrInfo rtr = comtree[ctx].rtrMap.get(child);
-		rtr.plnk = lnk; rtr.lnkCnt += 1;
-		rtr = comtree[ctx].rtrMap.get(parent);
-		rtr.lnkCnt += 1;
-	
-		return true;
-	}
-	
-	/** Remove a link from a comtree.
-	 *  @param ctx is the comtree index
-	 *  @param lnk is the link number of the link to be removed
-	 *  @return true on success, false on failure
-	 */
-	boolean removeComtLink(int ctx, int lnk) {
-		if (!validLink(lnk)) return false;
-		RateSpec rs = comtree[ctx].lnkMap.get(lnk);
-		if (rs == null) return true;
-		comtree[ctx].lnkMap.remove(lnk);
-	
-		int left = getLinkL(lnk); int right = getLinkR(lnk);
-		ComtRtrInfo cr = comtree[ctx].rtrMap.get(left);
-		if (cr != null) {
-			cr.lnkCnt -= 1;
-			if (cr.lnkCnt <= 0 && left != getComtRoot(ctx))
-				removeComtNode(ctx,left);
-		}
-		cr = comtree[ctx].rtrMap.get(right);
-		if (cr != null) {
-			cr.lnkCnt -= 1;
-			if (cr.lnkCnt <= 0 && right != getComtRoot(ctx))
-				removeComtNode(ctx,right);
-		}
-		return true;
-	}
-	
-	/** Perform a series of consistency checks.
-	 *  Print error message for each detected problem.
-	 *  @return true if all checks passed, else false
-	 */
-	public boolean check() {
-		boolean status = true;
-	
-		// make sure there is at least one router
-		if (getNumRouters() == 0 || firstRouter() == 0) {
-			System.err.println("check: no routers in network, "
-					    + "terminating");
-			return false;
-		}
-		// make sure that no two links at a router have the
-		// the same local link number
-		for (int r = firstRouter(); r != 0; r = nextRouter(r)) {
-			for (int l1 = firstLinkAt(r); l1 != 0;
-				 l1 = nextLinkAt(r,l1)) {
-				for (int l2 = nextLinkAt(r,l1); l2 != 0;
-					 l2 = nextLinkAt(r,l2)) {
-					if (getLocLink(l1,r)
-					     == getLocLink(l2,r)) {
-						System.err.println("check: "
-						 + "detected two links with "
-						 + "same local link number: "
-						 + link2string(l1) + " and "
-						 + link2string(l2));
-						status = false;
-					}
-				}
-			}
-		}
-	
-		// make sure that routers are all connected, by doing
-		// a breadth-first search from firstRouter()
-		Set<Integer> seen = new HashSet<Integer>();
-		seen.add(firstRouter());
-		LinkedList<Integer> pending = new LinkedList<Integer>();
-		pending.add(firstRouter());
-		Integer u;
-		while ((u = pending.peekFirst()) != null) {
-			pending.removeFirst();
-			for (int lnk = firstLinkAt(u); lnk != 0;
-				 lnk = nextLinkAt(u,lnk)) {	
-				int v = getPeer(u,lnk);
-				if (getNodeType(v) != Forest.NodeTyp.ROUTER)
-					continue;
-				if (seen.contains(v)) continue;
-				seen.add(v);
-				pending.addLast(v);
-			}
-		}
-		if (seen.size() != getNumRouters()) {
-			System.err.println("check: network is not connected");
-			status = false;
-		}
-	
-		// check that no two nodes have the same address
-		for (int n1 = firstNode(); n1 != 0; n1 = nextNode(n1)) {
-			for (int n2 = nextNode(n1); n2!= 0; n2 = nextNode(n2)) {
-				if (getNodeAdr(n1) == getNodeAdr(n2)) {
-					System.err.println("check: detected two"
-						+ " nodes " + getNodeName(n1)
-						+ " and " + getNodeName(n2) 
-						+ " with the same forest "
-						+ "address");
-				status = false;
-				}
-			}
-		}
-	
-		// check that the leaf address range for a router
-		// is compatible with the router's address
-		for (int r = firstRouter(); r != 0; r = nextRouter(r)) {
-			int rzip = Forest.zipCode(getNodeAdr(r));
-			int flzip = Forest.zipCode(getFirstLeafAdr(r));
-			int llzip = Forest.zipCode(getLastLeafAdr(r));
-			if (rzip != flzip || rzip != llzip) {
-				System.err.println( "netInfo.check: detected "
-					+ "router " + r + "with incompatible "
-					+ "address and leaf address "
-					+ "range");
-				status = false;
-			}
-			if (getFirstLeafAdr(r) > getLastLeafAdr(r)) {
-				System.err.println( "netInfo.check: detected "						+ "router " + r + " with empty leaf "
-					+ "address range");
-				status = false;
-			}
-		}
-	
-		// make sure that no two routers have overlapping leaf
-		// address ranges
-		for (int r1 = firstRouter(); r1 != 0; r1 = nextRouter(r1)) {
-			int fla1 = getFirstLeafAdr(r1);
-			int lla1 = getLastLeafAdr(r1);
-			for (int r2 = nextRouter(r1); r2 != 0;
-				 r2 = nextRouter(r2)) {
-				int fla2 = getFirstLeafAdr(r2);
-				int lla2 = getLastLeafAdr(r2);
-				if (fla2 <= lla1 && lla2 >= fla1) {
-					System.err.println( "netInfo.check: "
-						+ "detected two routers " + r1
-						+ " and " + r2 + " with "
-						+ "overlapping address ranges");
-					status = false;
-				}
-			}
-		}
-	
-		// check that all leaf nodes have a single link that connects
-		// to a router and that their address is in their router's range
-		for (int v = firstLeaf(); v != 0; v = nextLeaf(v)) {
-			int lnk = firstLinkAt(v);
-			if (lnk == 0) {
-				System.err.println( "check: detected a leaf "
-					+ " node " + getNodeName(v)
-					+ " with no links");
-				status = false; continue;
-			}
-			if (nextLinkAt(v,lnk) != 0) {
-				System.err.println( "check: detected a leaf "
-					+ "node " + getNodeName(v)
-					+ " with more than one link");
-				status = false; continue;
-			}
-			if (getNodeType(getPeer(v,lnk)) !=	
-						Forest.NodeTyp.ROUTER) {
-				System.err.println( "check: detected a leaf "
-					+ "node " + getNodeName(v)
-					+ " with link to non-router");
-				status = false; continue;
-			}
-			int rtr = getPeer(v,lnk);
-			int adr = getNodeAdr(v);
-			if (adr < getFirstLeafAdr(rtr) ||
-			    adr > getLastLeafAdr(rtr)) {
-				System.err.println( "check: detected a leaf "
-					+ "node " + getNodeName(v) 
-					+ " with an address outside the leaf "
-					+ "address range of its router");
-				status = false; continue;
-			}
-		}
-	
-		// check that link rates are within bounds
-		for (int lnk = firstLink(); lnk != 0; lnk = nextLink(lnk)) {
-			int br = getLinkBitRate(lnk);
-			if (br < Forest.MINBITRATE ||
-			    br > Forest.MAXBITRATE) {
-				System.err.println( "check: detected a link "
-				     	+ link2string(lnk) + " with bit rate "
-					+ "outside the allowed range");
-				status = false;
-			}
-			int pr = getLinkPktRate(lnk);
-			if (pr < Forest.MINPKTRATE ||
-			    pr > Forest.MAXPKTRATE) {
-				System.err.println( "check: detected a link "
-				     	+ link2string(lnk) + " with packet "
-					+ "rate outside the allowed range");
-				status = false;
-			}
-		}
-	
-		// check that routers' local link numbers fall within range of
-		// some valid interface
-		for (int r = firstRouter(); r != 0; r = nextRouter(r)) {
-			for (int lnk = firstLinkAt(r); lnk != 0;
-				 lnk = nextLinkAt(r,lnk)) {
-				int llnk = getLocLink(lnk,r);
-				if (getIface(llnk,r) == 0) {
-					System.err.println( "check: link "
-						+ llnk + " at router " 
-						+ getNodeName(r) + " is not "
-						+ "in the range assigned "
-						+ "to any valid interface");
-					status = false;
-				}
-			}
-		}
-	
-		// check that router interface rates are within bounds
-		for (int r = firstRouter(); r != 0; r = nextRouter(r)) {
-			for (int i = 1; i <= getNumIf(r); i++) {
-				if (!validIf(r,i)) continue;
-				int br = getIfBitRate(r,i);
-				if (br < Forest.MINBITRATE ||
-				    br >Forest.MAXBITRATE) {
-					System.err.println( "check: interface "
-						+ i + "at router " + r
-						+ " has bit rate outside the "
-						+ "allowed range");
-					status = false;
-				}
-				int pr = getIfPktRate(r,i);
-				if (pr < Forest.MINPKTRATE ||
-				    pr >Forest.MAXPKTRATE) {
-					System.err.println("check: interface "
-						+ i + "at router " + r
-						+ " has packet rate outside "
-						+ "the allowed range");
-					status = false;
-				}
-			}
-		}
-	
-		// verify that link rates at any router don't add up to more
-		// than the interface rates
-		for (int r = firstRouter(); r != 0; r = nextRouter(r)) {
-			int[] ifbr = new int[getNumIf(r)+1];
-			int[] ifpr = new int[getNumIf(r)+1];
-			for (int i = 0; i <= getNumIf(r); i++) {
-				ifbr[i] = 0; ifpr[i] = 0;
-			}
-			for (int lnk = firstLinkAt(r); lnk != 0;
-				 lnk = nextLinkAt(r,lnk)) {
-				int llnk = getLocLink(lnk,r);
-				int iface = getIface(llnk,r);
-				ifbr[iface] += getLinkBitRate(lnk);
-				ifpr[iface] += getLinkPktRate(lnk);
-			}
-			for (int i = 0; i <= getNumIf(r); i++) {
-				if (!validIf(r,i)) continue;
-				if (ifbr[i] > getIfBitRate(r,i)) {
-					System.err.println("check: links at "
-						+ "interface " + i + " of "
-						+ "router " + r + " have total "
-						+ "bit rate that exceeds "
-						+ "interface bit rate");
-				}
-				if (ifpr[i] > getIfPktRate(r,i)) {
-					System.err.println("check: links at "
-						+ "interface " + i  + " of "
-						+ "router " + r + " have total "
-						+ "packet rate that exceeds "
-						+ "interface packet rate");
-				}
-			}
-		}
-	
-		// check that comtrees are in fact trees and that they satisfy
-		// various other requirements
-		for (int ctx = firstComtIndex(); ctx != 0;
-			 ctx = nextComtIndex(ctx)) {
-			int comt = getComtree(ctx);
-			int root = getComtRoot(ctx);
-			if (comt == 0) {
-				System.err.println("check: comtree " + comt
-					+ " has not specified root");
-				status = false; continue;
-			}
-			// first count nodes and links
-			Set<Integer> nodes = new HashSet<Integer>();
-			Iterator<Integer> rmp =
-				comtree[ctx].rtrMap.keySet().iterator();
-			while (rmp.hasNext()) {
-				Integer r = rmp.next(); nodes.add(r);
-			}
-			Iterator<Integer> clp =
-				getComtLinks(ctx).keySet().iterator();
-			int lnkCnt = 0;
-			while (clp.hasNext()) {
-				Integer lnk = clp.next();
-				nodes.add(getLinkL(lnk));
-				nodes.add(getLinkR(lnk));
-				lnkCnt++;
-			}
-			if (lnkCnt != nodes.size() - 1) {
-				System.err.println( "check: links in comtree "
-				     + comt + " do not form a tree");
-				status = false; continue;
-			}
-			// check that root and core nodes are in set we've seen
-			if (!nodes.contains(root)) {
-				System.err.println("check: specified comtree "
-					+ "root for comtree " + comt + " does "
-					+ "not appear in any comtree link");
-				status = false; continue;
-			}
-			boolean seenRoot = false;
-			Iterator<Integer> csp = getCoreSet(ctx).iterator();
-			while (csp.hasNext()) {
-				Integer r = csp.next();
-				if (r == root) seenRoot = true;
-				if (!nodes.contains(r)) {
-					System.err.println("check: core node "
-					     	+ getNodeName(r) + " for "
-						+ "comtree " + comt + " does "
-						+ "not appear in any comtree "
-						+ "link");
-					status = false;
-				}
-			}
-			if (!seenRoot) {
-				System.err.println("check: root node does not "
-					+ "appear among the core nodes for "
-					+ "comtree " + comt);
-				status = false;
-			}
-	
-			// now, check that the comtree topology is really a tree
-			// by doing a breadth-first search from the root;
-			// while we're at it, make sure the parent of every
-			// core node is a core node and that the zip codes
-			// of routers within the comtree are contiguous
-			pending.clear(); pending.addLast(root);
-			Map<Integer,Integer> plink;
-			plink = new HashMap<Integer,Integer>();
-			plink.put(root,0);
-			Map<Integer,Integer> pzip;
-			pzip = new HashMap<Integer,Integer>();
-			pzip.put(Forest.zipCode(getNodeAdr(root)),0);
-			while ((u = pending.peekFirst()) != null) {
-				pending.removeFirst();
-				boolean foundCycle = false;
-				int uzip = Forest.zipCode(getNodeAdr(u));
-				for (int lnk = firstLinkAt(u); lnk != 0;
-					 lnk = nextLinkAt(u,lnk)) {
-					if (!isComtLink(ctx,lnk)) continue;
-					if (lnk == plink.get(u)) continue;
-					int v = getPeer(u,lnk);
-					int vzip =Forest.zipCode(getNodeAdr(v));
-					if (plink.get(v) != null) {
-						System.err.println("check: "
-							+ "comtree " + comt
-							+ " contains a cycle");
-						foundCycle = true;
-						break;
-					}
-					plink.put(v,lnk);
-					pending.addLast(v);
-					// now check that if v is in core,
-					// so is u
-					if (isComtCoreNode(ctx,v) &&
-					    !isComtCoreNode(ctx,u)) {
-						System.err.println( "check: "
-							+ "comtree " + comt 
-							+ " contains a core "
-							+ "node "
-						     	+ getNodeName(v)
-							+ " whose parent is "
-							+ "not a core node");
-						status = false;
-					}
-					// now check that if v has a different
-					// zip code than u, that we haven't 
-					// already seen this zip
-					if (vzip != uzip) {
-						if (pzip.get(v) != null) {
-							System.err.println(
-							      "check: zip code "
-								+ vzip + " is "
-								+ "non-contigu"
-								+ "ous in "
-							      	+ "comtree "
-								+ comt);
-							status = false;
-						} else {
-							pzip.put(v,u);
-						}
-					}
-				}
-				if (foundCycle) { status = false; break; }
-			}
-		}
-		return status;
-	}
-	
-	/** Initialize auxiliary data class for fast access to comtree 
-	 *  information. Set comtree link rates to default values and 
-	 *  check that total comtree rates don't exceed link rates.
-	 *  Also set the plnk and lnkCnt fields in the rtrMap for each comtree;
-	 *  note that we assume that the lnkCnt fields have been initialized
-	 *  to zero.
-	 */
-	public boolean setComtLnkNodeInfo() {
-		boolean status = true;
-		for (int ctx = firstComtIndex(); ctx != 0;
-			 ctx = nextComtIndex(ctx)) {
-			// do breadth-first search over the comtree links
-			int comt = getComtree(ctx); int root = getComtRoot(ctx);
-			LinkedList<Integer> pending = new LinkedList<Integer>();
-			pending.addLast(root);
-			Map<Integer,Integer> plink =
-				new HashMap<Integer,Integer>();
-			setComtPlink(ctx,root,0);
-			plink.put(root,0);
-			Integer u;
-			while ((u = pending.peekFirst()) != null) {
-				pending.removeFirst();
-				for (int lnk = firstLinkAt(u); lnk != 0;
-					 lnk = nextLinkAt(u,lnk)) {
-					if (!isComtLink(ctx,lnk)) continue;
-					incComtLnkCnt(ctx,u);
-					if (lnk == plink.get(u)) continue;
-					int v = getPeer(u,lnk);
-					setComtPlink(ctx,v,lnk);
-					plink.put(v,lnk);
-					pending.addLast(v);
-					if (!setLinkRates(ctx,lnk,v)) {
-						System.err.println(
-						    "setComtLnkNodeInfo: could "
-						    + "not set comtree link "
-						    + "rates as specified for "
-						    + "comtree " + comt
-						    + " lnk " + lnk);
-						status = false;
-					}
-				}
-			}
-			plink.clear();
-		}
-		return status;
-	}
-	
-	/** Set the rates on a specific comtree link and adjust available rates.
-	 *  @param ctx is a valid comtree index
-	 *  @param lnk is a link in the comtree
-	 *  @param child is the "child endpoint" of lnk, in the comtree
-	 *  @return true on success, false on failure;
-	 */
-	public boolean setLinkRates(int ctx, int lnk, int child) {
-		// first set the rates on the comtree links
-		if (isLeaf(child)) {
-			if (!setComtBrDown(ctx,getComtLeafBrDown(ctx),lnk) ||
-			    !setComtBrUp(ctx,getComtLeafBrUp(ctx),lnk) ||
-			    !setComtPrDown(ctx,getComtLeafPrDown(ctx),lnk) ||
-			    !setComtPrUp(ctx,getComtLeafPrUp(ctx),lnk))
-				return false;
-		} else {
-			if (!setComtBrDown(ctx,getComtBrDown(ctx),lnk) ||
-			    !setComtBrUp(ctx,getComtBrUp(ctx),lnk) ||
-			    !setComtPrDown(ctx,getComtPrDown(ctx),lnk) ||
-			    !setComtPrUp(ctx,getComtPrUp(ctx),lnk))
-				return false;
-		}
-		// next, adjust the available rates on the network links
-		int brl, prl, brr, prr;
-		if (child == getLinkL(lnk)) {
-			brl = getComtBrUp(ctx,lnk);  
-			prl = getComtPrUp(ctx,lnk);
-			brr = getComtBrDown(ctx,lnk);
-			prr = getComtPrDown(ctx,lnk);
-		} else {
-			brl = getComtBrDown(ctx,lnk);
-			prl = getComtPrDown(ctx,lnk);
-			brr = getComtBrUp(ctx,lnk);  
-			prr = getComtPrUp(ctx,lnk);
-		}
-		int left = getLinkL(lnk); int right = getLinkR(lnk);
-		if (!addAvailBitRate(lnk,left, -brl)) return false;
-		if (!addAvailPktRate(lnk,left, -prl)) return false;
-		if (!addAvailBitRate(lnk,right,-brr)) return false;
-		if (!addAvailPktRate(lnk,right,-prr)) return false;
-		return true;
-	}
-	
 	/** Get the interface associated with a given local link number.
 	 *  @param llnk is a local link number
 	 *  @param rtr is a router
@@ -2015,46 +798,88 @@ public class NetInfo {
 	 */
 	public int getIface(int llnk, int rtr) {
 		for (int i = 1; i <= getNumIf(rtr); i++) {
-			if (validIf(rtr,i) && llnk >= getIfFirstLink(rtr,i)
-					   && llnk <= getIfLastLink(rtr,i))
+			if (!validIf(rtr,i)) continue;
+			Pair<Integer,Integer> links = new
+				Pair<Integer,Integer>(  new Integer(0),
+							new Integer(0));
+			getIfLinks(rtr,i,links);
+			if (llnk >= links.first && llnk <= links.second)
 				return i;
 		}
 		return 0;
 	}
-	
+
 	/** Add a new router to the NetInfo object.
-	 *  @param nuRtr is an appropriately initialized RtrNodeInfo object.
+	 *  A new router object is allocated and assigned a name.
+	 *  @param name is the name of the new router
 	 *  @return the node number of the new router, or 0 if there
-	 *  are no more available router numbers, or if nuRtr's name is
+	 *  are no more available router numbers, or the given name is
 	 *  already used by some other node.
 	 */
-	public int addRouter(RtrNodeInfo nuRtr) {
+	public int addRouter(String name) {
 		int r = routers.firstOut();
 		if (r == 0) return 0;
-		if (nameNodeMap.get(nuRtr.name) != null) return 0;
+		if (nameNodeMap.get(name) != null) return 0;
 		routers.swap(r);
-		nameNodeMap.put(nuRtr.name,r);
-		rtr[r] = nuRtr;
+	
+		rtr[r] = new RtrNodeInfo();
+		rtr[r].name = new String(name);
+		nameNodeMap.put(name,r);
+		rtr[r].nType = Forest.NodeTyp.ROUTER;
+		rtr[r].fAdr = -1;
+	
+		Pair<Double,Double> loc;
+		loc = new Pair<Double,Double>(	new Double(UNDEF_LAT),
+						new Double(UNDEF_LONG));
+		setNodeLocation(r,loc);
+		Pair<Integer,Integer> range = new Pair<Integer,Integer>(-1,-1);
+		setLeafRange(r,range);
+		rtr[r].numIf = 0; rtr[r].iface = null;
 		return r;
 	}
 	
+	/** Add interfaces to a router.
+	 *  Currently this operation can only be done once for a router,
+	 *  typically during its initial initiialization.
+	 *  @param r is the node number of the router
+	 *  @param numIf is the number of interfaces that are to allocated
+	 *  to the router
+	 *  @return true on success, 0 on failure (the operation fails if
+	 *  r is not a valid router number or if interfaces have already
+	 *  been allocated to r)
+	 */
+	boolean addInterfaces(int r, int numIf) {
+		if (!isRouter(r) || getNumIf(r) != 0) return false;
+		rtr[r].iface = new IfInfo[numIf+1];
+		rtr[r].numIf = numIf;
+		return true;
+	}
+	
 	/** Add a leaf node to a Forest network
-	 *  @param nuLeaf is an appropriately initialized LeafNodeInfo object
-	 *  which is to be added to the NetInfo object
+	 *  @param name is the name of the new leaf
+	 *  @param nTyp is the desired node type (CLIENT or CONTROLLER)
 	 *  @return the node number for the new leaf or 0 on failure
 	 *  (the method fails if there are no available leaf records to
 	 *  allocate to this leaf, or if the requested name is in use)
 	 */
-	public int addLeaf(LeafNodeInfo nuLeaf) {
+	int addLeaf(String name, Forest.NodeTyp nTyp) {
 		int ln = leaves.firstOut();
 		if (ln == 0) return 0;
-		if (nameNodeMap.get(nuLeaf.name) != null) return 0;
+		if (nameNodeMap.get(name) != null) return 0;
 		leaves.swap(ln);
+	
+		leaf[ln] = new LeafNodeInfo();
 		int nodeNum = ln + maxRtr;
-		leaf[ln] = nuLeaf;
-		nameNodeMap.put(nuLeaf.name,nodeNum);
-		if (nuLeaf.nType == Forest.NodeTyp.CONTROLLER)
-			controllers.add(ln);
+		leaf[ln].name = name;
+		nameNodeMap.put(name,nodeNum);
+		if (nTyp == Forest.NodeTyp.CONTROLLER) controllers.add(ln);
+		leaf[ln].fAdr = -1;
+	
+		setLeafType(nodeNum,nTyp); setLeafIpAdr(nodeNum,0); 
+		Pair<Double,Double> loc;
+		loc = new Pair<Double,Double>(
+			new Double(UNDEF_LAT), new Double(UNDEF_LONG));
+		setNodeLocation(nodeNum,loc);
 		return nodeNum;
 	}
 	
@@ -2073,966 +898,927 @@ public class NetInfo {
 		int lnk = netTopo.join(u,v);
 		netTopo.setWeight(lnk,0);
 		if (lnk == 0) return 0;
+		link[lnk] = new LinkInfo();
 		if (getNodeType(u) == Forest.NodeTyp.ROUTER) {
 			if (!locLnk2lnk.insert(ll2l_key(u,uln),2*lnk)) {
 				netTopo.remove(lnk); return 0;
 			}
-			setLocLinkL(lnk,uln);
+			setLeftLLnum(lnk,uln);
 		}
 		if (getNodeType(v) == Forest.NodeTyp.ROUTER) {
 			if (!locLnk2lnk.insert(ll2l_key(v,vln),2*lnk+1)) {
 				locLnk2lnk.remove(ll2l_key(u,uln));
 				netTopo.remove(lnk); return 0;
 			}
-			setLocLinkR(lnk,vln);
+			setRightLLnum(lnk,vln);
 		}
-		link[lnk].bitRate = Forest.MINBITRATE;
-		link[lnk].pktRate = Forest.MINPKTRATE;
-		link[lnk].availBitRateL = Forest.MINBITRATE;
-		link[lnk].availBitRateR = Forest.MINBITRATE;
-		link[lnk].availPktRateL = Forest.MINPKTRATE;
-		link[lnk].availPktRateR = Forest.MINPKTRATE;
+		RateSpec rs = new RateSpec(Forest.MINBITRATE,Forest.MINBITRATE,
+			    		   Forest.MINPKTRATE,Forest.MINPKTRATE);
+		setLinkRates(lnk,rs);
 		return lnk;
 	}
 	
-	public int addLink(int u, int v, int lnkLen, LinkInfo nuLnk) {
-		int lnk = netTopo.join(u,v);
-		netTopo.setWeight(lnk,lnkLen);
-		if (lnk == 0) return 0;
-		int uln = nuLnk.leftLnum;
-		if (getNodeType(u) == Forest.NodeTyp.ROUTER) {
-			if (!locLnk2lnk.insert(ll2l_key(u,uln),2*lnk)) {
-				netTopo.remove(lnk); return 0;
-			}
-		}
-		int vln = nuLnk.rightLnum;
-		if (getNodeType(v) == Forest.NodeTyp.ROUTER) {
-			if (!locLnk2lnk.insert(ll2l_key(v,vln),2*lnk+1)) {
-				locLnk2lnk.remove(ll2l_key(u,uln));
-				netTopo.remove(lnk); return 0;
-			}
-		}
-		link[lnk] = nuLnk;
-
-		return lnk;
-	}
-	
-	/* Example of NetInfo input file format.
+	/** Reads a network topology file and initializes the NetInfo data
+	 *  structure.
+	 *
+	 *  Example of NetInfo file format.
 	 *  
-	 *  Routers # starts section that defines routers
-	 *  
+	 *  <code>
 	 *  # define salt router
-	 *  name=salt type=router ipAdr=2.3.4.5 fAdr=1.1000
-	 *  location=(40,-50) leafAdrRange=(1.1-1.200)
+	 *  router(salt,1.1000,(40,-50),(1.1-1.200),
+	 *      # num,  ipAdr,    links, rate spec
+	 *      [ 1,  193.168.3.4, 1,    (50000,30000,25000,15000) ],
+	 *      [ 2,  193.168.3.5, 2-30, (50000,30000,25000,15000) ]
+	 *  )
 	 *  
-	 *  interfaces # router interfaces
-	 *  # ifaceNum ifaceIp      ifaceLinks  bitRate  pktRate
-	 *       1     193.168.3.4     1	50000    25000 ;
-	 *       2     193.168.3.5     2-30	40000    20000 ;
-	 *  end
-	 *  ;
+	 *  leaf(netMgr,controller,192.168.1.3,2.900,(40,-50))
 	 *  
-	 *  # define kans router
-	 *  name=kans type=router ipAdr=6.3.4.5 fAdr=2.1000
-	 *  location=(40,-40) leafAdrRange=(2.1-2.200)
-	 *  
-	 *  interfaces
-	 *  # ifaceNum ifaceIp      ifaceLinks  bitRate  pktRate
-	 *       1     193.168.5.6  1	   50000    25000 ;
-	 *       2     193.168.5.7  2-30	40000    20000 ;
-	 *  end
-	 *  ;
-	 *  ;
-	 *  
-	 *  LeafNodes # starts section defining other leaf nodes
-	 *  
-	 *  name=netMgr type=controller ipAdr=192.168.8.2 fAdr=2.900
-	 *  location=(42,-50);
-	 *  name=comtCtl type=controller ipAdr=192.168.7.5 fAdr=1.902
-	 *  location=(42,-40);
-	 *  ;
-	 *  
-	 *  Links # starts section that defines links
-	 *  
-	 *  # name.link#:name.link# packetRate bitRate
-	 *  link=(salt.1,kans.1) bitRate=20000 pktRate=40000 ;
-	 *  link=(netMgr,kans.2) bitRate=3000 pktRate=5000 ;
-	 *  link=(comtCtl,salt.2) bitRate=3000 pktRate=5000 ;
-	 *  ;
-	 *  
-	 *  Comtrees # starts section that defines comtrees
-	 *  
-	 *  comtree=1001 root=salt core=kans # may have >1 core=x assignments
-	 *  bitRateUp=5000 bitRateDown=10000 pktRateUp=3000 pktRateDown=6000
-	 *  leafBitRateUp=100 leafBitRateDown=200
-	 *  leafPktRateUp=50 leafPktRateDown=200
-	 *  link=(salt.1,kans.1) link=(netMgr,kans.2) 	
-	 *  ;
-	 *  
-	 *  comtree=1002 root=kans core=salt 
-	 *  bitRateUp=5000 bitRateDown=10000 pktRateUp=3000 pktRateDown=6000
-	 *  leafBitRateUp=100 leafBitRateDown=200
-	 *  leafPktRateUp=50 leafPktRateDown=200
-	 *  link=(salt.1,kans.1) link=(comtCtl,salt.2) 	
-	 *  ;
-	 *  ; # end of comtrees section
-	 */
-
-	// Exceptions for use with read.
-	// These exceptions are all caught locally.
-	// Using them as a way to reduce code repetion.
-	private class TopParseError extends RuntimeException {
-		public TopParseError() { super(""); }
-		public TopParseError(String auxMsg) {
-			super("(" + auxMsg + ")");
-		}
-	}
-	private class RouterParseError extends RuntimeException {
-		public RouterParseError() { super(""); }
-		public RouterParseError(int rtr, String auxMsg) {
-			super(" " + rtr + "-th router (" + auxMsg + ")");
-		}
-	}
-	private class IfaceParseError extends RuntimeException {
-		public IfaceParseError() { super(""); }
-		public IfaceParseError(int rtr, String auxMsg) {
-			super(" " + rtr + "-th router (" + auxMsg + ")");
-		}
-	}
-	private class LeafParseError extends RuntimeException {
-		public LeafParseError() { super(""); }
-		public LeafParseError(int node, String auxMsg) {
-			super(" " + node + "-th leaf node (" + auxMsg + ")");
-		}
-	}
-	private class LinkParseError extends RuntimeException {
-		public LinkParseError() { super(""); }
-		public LinkParseError(int lnk, String auxMsg) {
-			super(" " + lnk + "-th link (" + auxMsg + ")");
-		}
-	}
-	private class ComtreeParseError extends RuntimeException {
-		public ComtreeParseError() { super(""); }
-		public ComtreeParseError(int comt, String auxMsg) {
-			super(" " + comt + "-th comtree (" + auxMsg + ")");
-		}
-	}
-	/** Parse contexts are used in read method to keep track of where we
-	 *  are in the parsed file. Based upon the context, look for specific 
-	 *  items in the input stream. For example, TOP context is the initial
-   	 *  context, and in the TOP context, we expect to see one of
-	 *  keyworks, Routers, LeafNodes, Links or Comtrees.
-	 *  The associated description for each defined constant
-	 *  is used in error messages
-	 */
-	private enum ParseContexts {
-		TOP("in top level context"),
-		ROUTER_SEC("in router section"),
-		ROUTER_CTXT("in router section"),
-		IFACES("in interface table"),
-		IFACES_ENTRY("in interface table entry"),
-		LEAF_SEC("in leaf node definition"),
-		LEAF("in leaf node definition"),
-		LINK_SEC("in link definition"),
-		LINK("in link definition"),
-		COMTREE_SEC("in comtree definition"),
-		COMTREE_CTXT("in comtree definition");
-		String desc;
-		ParseContexts(String desc) {
-			this.desc = desc;
-		}
-	};
-	
-	/** Reads a network topology file and initializes the NetInfo object.
-	 *  @param in is an open input stream from which the topology file will
-	 *  be read
+	 *  link(netMgr,salt.2,1000,(3000,3000,5000,5000))
+	 *  ; # semicolon to terminate
+	 *  </code>
+	 *
+	 *  @param in is an open input stream from which topology file is read
 	 *  @return true if the operation is successful, false if it fails
-	 *  (failures are typically accompanied by error messages on cerr)
+	 *  (failures are typically accompanied by error messages on err)
 	 */
-	public boolean read(InputStream in) {
-		int rtrNum = 1;		// rtrNum = i for i-th router in file
-		int ifNum = 1;		// interface number for current iface
-		int leafNum = 1;	// leafNum = i for i-th leaf in file 
-		int lnkNum = 1;		// lnkNum = i for i-th link in file
-		int comtNum = 1;	// comtNum = i for i-th comtree in file
-
-		String errMsg = "";
+	public boolean read(PushbackReader in) {
+		// objects to hold descriptions to current input item
+		RtrNodeInfo cRtr = new RtrNodeInfo();
+		LeafNodeInfo cLeaf = new LeafNodeInfo();
+		LinkDesc cLink = new LinkDesc();
+		IfInfo [] iface = new IfInfo[Forest.MAXINTF+1];
+		for (int i = 0; i <= Forest.MAXINTF; i++)
+			iface[i] = new IfInfo();
 	
-		ParseContexts context = ParseContexts.TOP;
-		Scanner s = new Scanner(in);
-		
-		boolean status = false; // indicates abnormal terination
-		while (s.hasNext()) {
-			// skip over comments
-			while (s.hasNext("#.*")) s.nextLine();
-			if (!s.hasNext()) { status = true; break; }
-			if (s.hasNext(";")) { // end of section
-				if (context == ParseContexts.TOP) {
-					status = true; break;
-				}
-				context = ParseContexts.TOP;
-				s.next(); continue; 
+		int rtrNum = 1;		// rtrNum = i for i-th router in file
+		int leafNum = 1;	// leafNum = i for i-th leaf in file 
+		int linkNum = 1;	// linkNum = i for i-th link in file
+
+		String s, errMsg;
+		while (true) {
+			if (!Util.skipBlank(in) || Util.verify(in,';')) break;
+			s = Util.readWord(in);
+			if (s == null) {
+				System.err.println("read: syntax error: "
+					+ "expected (;) or keyword "
+					+ "(router,leaf,link)");
+				return false;
 			}
-			// try block extends over entire switch statement
-			try { switch (context) {
-			case TOP:
-				String secName = s.next();
-				if (secName.equals("Routers"))
-					context = ParseContexts.ROUTER_SEC;
-				else if (secName.equals("LeafNodes"))
-					context = ParseContexts.LEAF_SEC;
-				else if (secName.equals("Links"))
-					context = ParseContexts.LINK_SEC;
-				else if (secName.equals("Comtrees"))
-					context = ParseContexts.COMTREE_SEC;
-				else {
-					throw new TopParseError(
-					    "invalid section name: " + secName);
+			if (s.equals("router")) {
+				errMsg = readRouter(in, cRtr, iface);
+				if (errMsg != null) {
+					System.err.println("read: error when "
+					    + "attempting to read " + rtrNum
+					    + "-th router (" + errMsg + ")");
+					return false;
 				}
-				break;
-			case ROUTER_SEC:
-				if (rtrNum > maxRtr)
-					throw new RouterParseError(rtrNum,
-							"too many routers");
-				errMsg = readRouter(s);
-				if (errMsg.length() != 0) {
-					throw new
-					RouterParseError(rtrNum,errMsg);
+				int r = addRouter(cRtr.name);
+				if (r == 0) {
+					System.err.println("read: cannot add "
+					    + "router " + cRtr.name);
+					return false;
 				}
-				rtrNum++; break;
-			case LEAF_SEC:
-				if (leafNum > maxLeaf)
-					throw new LeafParseError(leafNum,
-							"too many leaf nodes");
-				errMsg = readLeaf(s);
-				if (errMsg.length() != 0) {
-					throw new
-					LeafParseError(leafNum,errMsg);
+				setNodeAdr(r,cRtr.fAdr);
+				Pair<Double,Double> loc;
+				loc = new Pair<Double,Double>(
+					new Double(cRtr.latitude/1000000.0),
+					new Double(cRtr.longitude/1000000.0));
+				setNodeLocation(r,loc);
+				Pair<Integer,Integer> range =
+					new Pair<Integer,Integer>(
+						  cRtr.firstLeafAdr,
+						  cRtr.lastLeafAdr);
+				setLeafRange(r,range);
+				addInterfaces(r,cRtr.numIf);
+				for (int i = 1; i <= getNumIf(r); i++)
+					rtr[r].iface[i] = iface[i];
+				rtrNum++;
+			} else if (s.equals("leaf")) {
+				errMsg = readLeaf(in, cLeaf);
+				if (errMsg != null) {
+					System.err.println("read: error when "
+						+ "attempting to read "
+						+ leafNum + "-th leaf ("
+						+ errMsg + ")");
+					return false;
 				}
-				leafNum++; break;
-			case LINK_SEC:
-				if (lnkNum > maxLink)
-					throw new LinkParseError(lnkNum,
-							"too many links");
-				errMsg = readLink(s);
-				if (errMsg.length() != 0) {
-					throw new
-					LinkParseError(lnkNum,errMsg);
+				int nodeNum = addLeaf(cLeaf.name,cLeaf.nType);
+				if (nodeNum == 0) {
+					System.err.println("read: cannot add "
+					    + "leaf " + cLeaf.name);
+					return false;
 				}
-				lnkNum++; break;
-			case COMTREE_SEC:
-				if (comtNum > maxComtree)
-					throw new ComtreeParseError(comtNum,
-							"too many comtrees");
-				errMsg = readComt(s);
-				if (errMsg.length() != 0) {
-					throw new
-					ComtreeParseError(comtNum,errMsg);
+				setLeafType(nodeNum,cLeaf.nType);
+				setLeafIpAdr(nodeNum,cLeaf.ipAdr);
+				setNodeAdr(nodeNum,cLeaf.fAdr);
+				Pair<Double,Double> loc;
+				loc = new Pair<Double,Double>(
+					new Double(cRtr.latitude/1000000.0),
+					new Double(cRtr.longitude/1000000.0));
+				setNodeLocation(nodeNum,loc);
+				leafNum++;
+			} else if (s.equals("link")) {
+				errMsg = readLink(in, cLink);
+				if (errMsg != null) {
+					System.err.println("read: error when "
+						+ "attempting to read "
+						+ linkNum + "-th link ("
+						+ errMsg + ")");
+					return false;
 				}
-				comtNum++; break;
-			default: Util.fatal("read: undefined context");
-			}} catch(Exception e) {
-				System.err.println("NetInfo.read: error when "
-				    + "parsing input " + context.desc
-				    + "\n" + e);
+				// add new link and set attributes
+				Integer u = nameNodeMap.get(cLink.nameL);
+				if (u == null) {
+					System.err.println("read: error when "
+						+ "attempting to read "
+						+ linkNum + "-th link ("
+					     	+ cLink.nameL
+						+ " invalid node name)");
+					return false;
+				}
+				Integer v = nameNodeMap.get(cLink.nameR);
+				if (v == null) {
+					System.err.println("read: error when "
+						+ "attempting to read "
+						+ linkNum + "-th link ("
+					     	+ cLink.nameR
+						+ " invalid node name)");
+					return false;
+				}
+				int lnk = addLink(u.intValue(),v.intValue(),
+						  cLink.numL,cLink.numR);
+				if (lnk == 0) {
+					System.err.println("read: can't add "
+					    + "link (" + cLink.nameL + "."
+					    + cLink.numL + "," + cLink.nameR
+					    + "." + cLink.numR + ")");
+					return false;
+				}
+				setLinkRates(lnk, cLink.rates);
+				setAvailRates(lnk, cLink.rates);
+				setLinkLength(lnk, cLink.length);
+				linkNum++;
+			} else if (s.equals("defaultLinkRates")) {
+				if (!readRateSpec(in,defaultLinkRates)) {
+					System.err.println("read: can't read "
+						+ "default rates for links");
+					return false;
+				}
+			} else {
+				System.err.println("read: unrecognized "
+					+ "keyword (" + s + ")");
 				return false;
 			}
 		}
-		return status && context == ParseContexts.TOP &&
-				 check() && setComtLnkNodeInfo();
-	}
-
-	public String readRouter(Scanner s) {
-		RtrNodeInfo nuRtr = new RtrNodeInfo();
-		String inWord = null;
-		String[] part;
-		while (true) {
-			// skip comments
-			while (s.hasNext("#.*")) s.nextLine();
-			if (s.hasNext(";")) { // end of router def'n
-				s.next();
-				if (nuRtr.name.equals(""))
-					return "missing router name";
-				if (nuRtr.nType == Forest.NodeTyp.UNDEF_NODE)
-					return "missing node type for " +
-						nuRtr.name;
-				if (!Forest.validUcastAdr(nuRtr.fAdr)) 
-					return "missing forest address for " +
-						nuRtr.name;
-				if (nuRtr.latitude == UNDEF_LAT)
-					return "missing latitude for " +
-						nuRtr.name;
-				if (nuRtr.longitude == UNDEF_LONG)
-					return "missing longitude for " +
-						nuRtr.name;
-				if (!Forest.validUcastAdr(nuRtr.firstLeafAdr) ||
-				    !Forest.validUcastAdr(nuRtr.lastLeafAdr) ||
-				     Forest.zipCode(nuRtr.fAdr)
-				      != Forest.zipCode(nuRtr.firstLeafAdr) ||
-				     Forest.zipCode(nuRtr.fAdr)
-				      != Forest.zipCode(nuRtr.lastLeafAdr) ||
-				    nuRtr.firstLeafAdr > nuRtr.lastLeafAdr)
-					return "no valid client address " +
-					    	"range for " + nuRtr.name;
-				if (nuRtr.numIf == 0)
-					return "no interfaces defined for " +
-						nuRtr.name;
-				// add new router, initialize attributes
-				int r = addRouter(nuRtr);
-				if (r == 0) return "cannot add " + nuRtr.name;
-				return "";
-			}
-			
-			if (!s.hasNext()) return "incomplete router spec";
-			inWord = s.next();
-			part = inWord.split("=",2);
-			if (part[0].equals("name")) {
-				nuRtr.name = part[1];
-			} else if (part[0].equals("type")) {
-				nuRtr.nType = Forest.string2nodeTyp(part[1]);
-			} else if (part[0].equals("fAdr")) {
-				nuRtr.fAdr = Forest.forestAdr(part[1]);
-			} else if (part[0].equals("location")) {
-				part = part[1].split("[(,)]",4);
-				if (part.length != 4)
-					return "invalid token: " + inWord;
-				nuRtr.latitude  = (int) (1000000
-				    * Double.parseDouble(part[1]));
-				nuRtr.longitude  = (int) (1000000
-				    * Double.parseDouble(part[2]));
-
-			} else if (part[0].equals("leafAdrRange")) {
-				part = part[1].split("[(-.)]",6);
-				if (part.length != 6)
-				   	return "invalid token: " + inWord;
-				int zip = Integer.parseInt(part[1]);
-				int loc = Integer.parseInt(part[2]);
-				nuRtr.firstLeafAdr = Forest.forestAdr(zip,loc);
-				zip = Integer.parseInt(part[3]);
-				loc = Integer.parseInt(part[4]);
-				nuRtr.lastLeafAdr = Forest.forestAdr(zip,loc);
-			} else if (part[0].equals("interfaces")) {
-				String errMsg = readIfaces(s,nuRtr);
-				if (errMsg.length() != 0) return errMsg;
-			} else {
-				return "invalid token: " + inWord;
-			}
-		}
-	}
-
-	public String readIfaces(Scanner s, RtrNodeInfo nuRtr) {
-		String inWord = null;
-		String[] part;
-		IfInfo[] iface = new IfInfo[Forest.MAXINTF+1];
-		for (int i = 1; i <= Forest.MAXINTF; i++) iface[i] = null;
-		int maxIfNum = 0;
-		while (true) {
-			// skip comments
-			while (s.hasNext("#.*")) s.nextLine();
-
-			// first check for end keyword
-			if (s.hasNext("end")) {
-				s.next();
-				nuRtr.numIf = maxIfNum;
-				nuRtr.iface = new IfInfo[nuRtr.numIf+1];
-				for (int i = 1; i <= nuRtr.numIf; i++)
-					nuRtr.iface[i] = iface[i];
-				return "";
-			}
-			if (!s.hasNextInt()) return "missing interface number";
-			int ifNum = s.nextInt();
-			if (ifNum < 1 || ifNum > Forest.MAXINTF)
-				return "interface num is out of range";
-			if (iface[ifNum] != null)
-				return "repeating iface number " + ifNum;
-			iface[ifNum] = new IfInfo();
-			maxIfNum = Math.max(maxIfNum, ifNum);
-
-			// now read ip address
-			if (!s.hasNext()) return "missing IP address";
-			inWord = s.next();
-			int ipa = Util.string2ipAdr(inWord);
-			if (ipa == 0) return "bad token: " + inWord;
-			iface[ifNum].ipAdr = ipa;
-
-			// now read the link number (or range)
-			if (!s.hasNext()) return "missing link number range";
-			inWord = s.next();
-			part = inWord.split("-",2);
-			iface[ifNum].firstLink = Integer.parseInt(part[0]);
-			iface[ifNum].lastLink = iface[ifNum].firstLink;
-			if (part.length == 2) 
-				iface[ifNum].lastLink =
-				    	Integer.parseInt(part[1]);
-			if (!s.hasNext()) return "missing bit rate";
-			iface[ifNum].bitRate = s.nextInt();
-			if (!s.hasNext()) return "missing packet rate";
-			iface[ifNum].pktRate = s.nextInt();
-			if (s.hasNext(";")) s.next();
-			else return "missing semicolon";
-		}
-	}
-
-	public String readLeaf(Scanner s) {
-		LeafNodeInfo nuLeaf = new LeafNodeInfo();
-		String inWord = null;
-		String[] part;
-
-		while (true) {
-			// skip comments
-			while (s.hasNext("#.*")) s.nextLine();
-			if (s.hasNext(";")) {
-				s.next();
-				if (nuLeaf.name.equals(""))
-					return "missing node name";
-				if (nuLeaf.nType == Forest.NodeTyp.UNDEF_NODE)
-					return "missing node type for leaf"
-						+ " node " + nuLeaf.name;
-				if (nuLeaf.ipAdr == 0)
-					return "missing IP address for leaf "
-						+ "node " + nuLeaf.name;
-				if (!Forest.validUcastAdr(nuLeaf.fAdr))
-					return "missing forest address for"
-					    	+ " leaf node " + nuLeaf.name;
-				if (nuLeaf.latitude == UNDEF_LAT) 
-					return "missing latitude for leaf node "
-					    	+ nuLeaf.name;
-				if (nuLeaf.longitude == UNDEF_LONG)
-					return "missing longitude for leaf"
-					    	+ " node " + nuLeaf.name;
-				// add new leaf, initialize attributes
-				int nodeNum = addLeaf(nuLeaf);
-				if (nodeNum == 0)
-					return "cannot add leaf " + nuLeaf.name;
-				return "";
-			}
-			if (!s.hasNext("[a-zA-Z_]+=.*")) {
-				return "invalid token: " + s.next();
-			}
-			inWord = s.next();
-			part = inWord.split("=",2);
-			if (part[0].equals("name")) {
-				nuLeaf.name = part[1];
-			} else if (part[0].equals("type")) {
-				nuLeaf.nType = Forest.string2nodeTyp(part[1]);
-				if (nuLeaf.nType == Forest.NodeTyp.UNDEF_NODE)
-					return "bad type: " + part[1];
-			} else if (part[0].equals("ipAdr")) {
-				int ipa = Util.string2ipAdr(part[1]);
-				if (ipa == 0) return "bad token: " + inWord;
-				nuLeaf.ipAdr = ipa;
-			} else if (part[0].equals("fAdr")) {
-				int fAdr = Forest.forestAdr(part[1]);
-				if (fAdr == 0) return "bad token: " + inWord;
-				nuLeaf.fAdr = fAdr;
-			} else if (part[0].equals("location")) {
-				part = part[1].split("[(,)]",4);
-				if (part.length != 4)
-					return "invalid token: " + inWord;
-				nuLeaf.latitude  = (int) (1000000
-				    * Double.parseDouble(part[1]));
-				nuLeaf.longitude  = (int) (1000000
-				    * Double.parseDouble(part[2]));
-			} else {
-				return "invalid token: " + inWord;
-			}
-		}
-	}
-
-	public String readLink(Scanner s) {
-		LinkInfo nuLnk = new LinkInfo();
-		String inWord = null;
-		String[] part;
-		String leftName = null; String rightName = null;
-		int linkLength = -1;
-
-		while (true) {
-			// skip comments
-			while (s.hasNext("#.*")) s.nextLine();
-			if (s.hasNext(";")) { // end of link definition
-				s.next();
-				if (leftName == "") 
-					return "missing left endpoint";
-				if (rightName == "") 
-					return "missing right endpoint";
-				if (nuLnk.bitRate == 0)
-					return "missing bit rate";
-				if (nuLnk.pktRate == 0)
-					return "missing packet rate";
-				if (linkLength == -1)
-					return "missing length";
-				
-				// add new link and set attributes
-				int u = nameNodeMap.get(leftName);
-				int v = nameNodeMap.get(rightName);
-				int lnk = addLink(u,v,linkLength,nuLnk);
-				if (lnk == 0) 
-					return "can't add link (" + leftName
-						+ "." + nuLnk.leftLnum + ","
-					        + rightName + "."
-					        + nuLnk.rightLnum +")";
-				return "";
-			}
-			if (!s.hasNext("[a-zA-Z_]+=.*"))
-				return "invalid token: " + s.next();
-			inWord = s.next();
-			part = inWord.split("=",2);
-			if (part[0].equals("link")) {
-				part = part[1].split("[(.,)]",6);
-				if (part.length < 5) {
-					return "invalid token: " + inWord;
-				}
-				leftName = part[1];
-				int left = nameNodeMap.get(leftName);
-				if (left == 0)
-					return "unrecognized node name in "
-					    	+ inWord;
-				int rpos = 2;
-				if (getNodeType(left) ==Forest.NodeTyp.ROUTER) {
-					nuLnk.leftLnum =
-					    Integer.parseInt(part[2]);
-					rpos = 3;
-				}
-				rightName = part[rpos];
-				int right = nameNodeMap.get(rightName);
-				if (right == 0)
-					return "unrecognized node name in "
-					    	+ inWord;
-				if (getNodeType(right)==Forest.NodeTyp.ROUTER)
-					nuLnk.rightLnum =
-					     Integer.parseInt(part[rpos+1]);
-			} else if (part[0].equals("bitRate")) {
-				nuLnk.bitRate = Integer.parseInt(part[1]);
-				nuLnk.availBitRateL = nuLnk.bitRate;
-				nuLnk.availBitRateR = nuLnk.bitRate;
-			} else if (part[0].equals("pktRate")) {
-				nuLnk.pktRate = Integer.parseInt(part[1]);
-				nuLnk.availPktRateL = nuLnk.pktRate;
-				nuLnk.availPktRateR = nuLnk.pktRate;
-			} else if (part[0].equals("length")) {
-				linkLength = Integer.parseInt(part[1]);
-			} else {
-				return "invalid token: " + inWord;
-			}
-		}
-	}
-
-	public String readComt(Scanner s) {
-		ComtreeInfo nuComt = new ComtreeInfo();
-		nuComt.coreSet = new HashSet<Integer>();
-		nuComt.lnkMap = new HashMap<Integer,RateSpec>();
-		nuComt.rtrMap = new HashMap<Integer,ComtRtrInfo>();
-
-		String inWord;
-		String[] part;
-		while (true) {
-			// skip comments
-			while (s.hasNext("#.*")) s.nextLine();
-			if (s.hasNext(";")) { // end of comtree definition
-				s.next();
-				if (nuComt.root == 0)
-					return "missing root";
-				if (nuComt.comtreeNum == 0)
-					return "missing comtree number";
-				if (nuComt.bitRateDown == 0)
-					return "missing bitRateDown for " +
-						"comtree " + nuComt.comtreeNum;
-				if (nuComt.bitRateUp == 0) 
-					return "missing bitRateUp for comtree "
-					    	+ nuComt.comtreeNum;
-				if (nuComt.pktRateDown == 0)
-					return "missing pktRateDown for " +
-						"comtree " + nuComt.comtreeNum;
-				if (nuComt.pktRateUp == 0)
-					return "missing pktRateUp for comtree "
-					    	+ nuComt.comtreeNum;
-				if (nuComt.leafBitRateDown == 0)
-					return "missing leafBitRateDown for " +
-					    	"comtree " + nuComt.comtreeNum;
-				if (nuComt.leafBitRateUp == 0) 
-					return "missing leafBitRateUp for " +
-					    	"comtree " + nuComt.comtreeNum;
-				if (nuComt.leafPktRateDown == 0)
-					return "missing leafPktRateDown for " +
-					    	"comtree " + nuComt.comtreeNum;
-				if (nuComt.leafPktRateUp == 0) {
-					return "missing leafPktRateUp for " +
-					    	"comtree " + nuComt.comtreeNum;
-				}
-				if (!addComtree(nuComt))
-					return "cannot add comtree " +
-						nuComt.comtreeNum;
-				return "";
-			}
-			// parse next chunk of comtree definition
-			if (!s.hasNext("[a-zA-Z_]+=.*")) 
-				return "invalid token: " + s.next();
-			inWord = s.next();
-			part = inWord.split("=",2);
-			if (part[0].equals("comtree")) {
-				nuComt.comtreeNum = Integer.parseInt(part[1]);
-			} else if (part[0].equals("owner")) {
-				int owner = getNodeNum(part[1]);
-				if (owner == 0) 
-					return "invalid token: " + inWord;
-				nuComt.ownerAdr = getNodeAdr(owner);
-			} else if (part[0].equals("root")) {
-				Integer root = nameNodeMap.get(part[1]);
-				if (root == null)
-					return "root " + part[1] +
-						" is not a valid node";
-				nuComt.root = root;
-				if (!isRouter(nuComt.root))
-					return "root " + part[1] +
-						" is not a router";
-				nuComt.coreSet.add(nuComt.root);
-				ComtRtrInfo cri = new ComtRtrInfo();
-				nuComt.rtrMap.put(nuComt.root,cri);
-			} else if (part[0].equals("core")) {
-				Integer r = nameNodeMap.get(part[1]);
-				if (r == null) 
-					return "core " + part[1]
-						+ " is not a valid node";
-				if (!isRouter(r))
-					return "core " + part[1]
-					    	+ " is not a router";
-				nuComt.coreSet.add(r);
-				ComtRtrInfo cri = new ComtRtrInfo();
-				nuComt.rtrMap.put(r,cri);
-			} else if (part[0].equals("bitRateDown")) {
-				nuComt.bitRateDown = Integer.parseInt(part[1]);
-			} else if (part[0].equals("bitRateUp")) {
-				nuComt.bitRateUp = Integer.parseInt(part[1]);
-			} else if (part[0].equals("pktRateDown")) {
-				nuComt.pktRateDown = Integer.parseInt(part[1]);
-			} else if (part[0].equals("pktRateUp")) {
-				nuComt.pktRateUp = Integer.parseInt(part[1]);
-			} else if (part[0].equals("leafBitRateDown")) {
-				nuComt.leafBitRateDown =
-					Integer.parseInt(part[1]);
-			} else if (part[0].equals("leafBitRateUp")) {
-				nuComt.leafBitRateUp =
-					Integer.parseInt(part[1]);
-			} else if (part[0].equals("leafPktRateDown")) {
-				nuComt.leafPktRateDown =
-					Integer.parseInt(part[1]);
-			} else if (part[0].equals("leafPktRateUp")) {
-				nuComt.leafPktRateUp =
-					Integer.parseInt(part[1]);
-			} else if (part[0].equals("link")) {
-				int lnk = parseLink(part[1]);
-				if (lnk <= 0) 
-					return "cannot parse link " + part[1];
-				RateSpec rs = new RateSpec();
-				rs.bitRateUp = 0; rs.bitRateDown = 0;
-				rs.pktRateUp = 0; rs.pktRateDown = 0;
-				nuComt.lnkMap.put(lnk,rs);
-				int left = netTopo.left(lnk);
-				if (getNodeType(left) ==Forest.NodeTyp.ROUTER) {
-					ComtRtrInfo cri = new ComtRtrInfo();
-					nuComt.rtrMap.put(left,cri);
-				}
-				int right = netTopo.right(lnk);
-				if (getNodeType(right)==Forest.NodeTyp.ROUTER) {
-					ComtRtrInfo cri = new ComtRtrInfo();
-					nuComt.rtrMap.put(right,cri);
-				}
-			} else {
-				return "invalid token " + inWord;
-			}
-		}
-	}
-
-	/** Read comtree status information from an input stream.
-	 */
-	public ComtreeInfo readComtStatus(InputStream in) {
-		ComtreeInfo nuComt = new ComtreeInfo();
-		nuComt.coreSet = new HashSet<Integer>();
-		nuComt.lnkMap = new HashMap<Integer,RateSpec>();
-		nuComt.rtrMap = new HashMap<Integer,ComtRtrInfo>();
-
-		Scanner s = new Scanner(in);
-		String inWord;
-		String[] part;
-		while (true) {
-			// skip comments
-			while (s.hasNext("#.*")) {
-				System.out.println(s.nextLine());
-			}
-			if (s.hasNext(";")) { // end of comtree definition
-				s.next(); break;
-			}
-			// parse next chunk of comtree definition
-			if (!s.hasNext("[a-zA-Z_]+=.*")) {
-				nuComt.comtreeNum = 0; return nuComt;
-			}
-			inWord = s.next();
-			part = inWord.split("=",2);
-			if (part[0].equals("comtree")) {
-				nuComt.comtreeNum = Integer.parseInt(part[1]);
-			} else if (part[0].equals("owner")) {
-				int owner = getNodeNum(part[1]);
-				if (owner == 0) break;
-				nuComt.ownerAdr = getNodeAdr(owner);
-			} else if (part[0].equals("root")) {
-				Integer root = nameNodeMap.get(part[1]);
-				if (root == null) break;
-				nuComt.root = root;
-				if (!isRouter(nuComt.root)) break;
-				nuComt.coreSet.add(nuComt.root);
-			} else if (part[0].equals("core")) {
-				Integer r = nameNodeMap.get(part[1]);
-				if (r == null) break;
-				if (!isRouter(r)) break;
-				nuComt.coreSet.add(r);
-			} else if (part[0].equals("bitRateDown")) {
-				nuComt.bitRateDown = Integer.parseInt(part[1]);
-			} else if (part[0].equals("bitRateUp")) {
-				nuComt.bitRateUp = Integer.parseInt(part[1]);
-			} else if (part[0].equals("pktRateDown")) {
-				nuComt.pktRateDown = Integer.parseInt(part[1]);
-			} else if (part[0].equals("pktRateUp")) {
-				nuComt.pktRateUp = Integer.parseInt(part[1]);
-			} else if (part[0].equals("leafBitRateDown")) {
-				nuComt.leafBitRateDown =
-					Integer.parseInt(part[1]);
-			} else if (part[0].equals("leafBitRateUp")) {
-				nuComt.leafBitRateUp =
-					Integer.parseInt(part[1]);
-			} else if (part[0].equals("leafPktRateDown")) {
-				nuComt.leafPktRateDown =
-					Integer.parseInt(part[1]);
-			} else if (part[0].equals("leafPktRateUp")) {
-				nuComt.leafPktRateUp =
-					Integer.parseInt(part[1]);
-			} else if (part[0].equals("link")) {
-				int lnk = parseLink(part[1]);
-				if (lnk <= 0) break;
-				RateSpec rs = new RateSpec();
-				rs.bitRateUp = 0; rs.bitRateDown = 0;
-				rs.pktRateUp = 0; rs.pktRateDown = 0;
-				nuComt.lnkMap.put(lnk,rs);
-				int left = netTopo.left(lnk);
-				if (getNodeType(left) ==Forest.NodeTyp.ROUTER) {
-					ComtRtrInfo cri = new ComtRtrInfo();
-					nuComt.rtrMap.put(left,cri);
-				}
-				int right = netTopo.right(lnk);
-				if (getNodeType(right)==Forest.NodeTyp.ROUTER) {
-					ComtRtrInfo cri = new ComtRtrInfo();
-					nuComt.rtrMap.put(right,cri);
-				}
-			} else if (part[0].equals("node")) {
-				part = part[1].split("[(,]",4);
-				if (part.length < 4) break;
-				String nodeName = part[1];
-				Integer node = nameNodeMap.get(nodeName);
-				if (node == null) break;
-				int lnkCnt = Integer.parseInt(part[2]);
-				int plnk;
-				if (part[3].charAt(0) == '-') plnk = 0;
-				else plnk = parseLink(part[3]);
-				if (plnk < 0) break;
-				if (getNodeType(node) != Forest.NodeTyp.ROUTER)
-					break;
-				addComtNode(nuComt,node);
-				ComtRtrInfo cri = new ComtRtrInfo();
-				cri.plnk = plnk; cri.lnkCnt = lnkCnt;
-				nuComt.rtrMap.put(node,cri);
-			} else {
-				nuComt.comtreeNum = 0; break;
-			}
-		}
-		if (nuComt.root == 0 || nuComt.comtreeNum == 0 ||
-		    nuComt.bitRateDown == 0 || nuComt.bitRateUp == 0 ||
-		    nuComt.pktRateDown == 0 || nuComt.pktRateUp == 0 ||
-		    nuComt.leafBitRateDown == 0 || nuComt.leafBitRateUp == 0 ||
-		    nuComt.leafPktRateDown == 0 || nuComt.leafPktRateUp == 0) {
-			nuComt.comtreeNum = 0;
-		}
-		return nuComt;
-	}
-
-	/** Extract a link from a given string.
-	 *  @param s is a string that represents a link
-	 *  @return the link number of the link represented by s;
-	 *  if the link is not already part of the network, add it;
-	 *  return -1 on failure
-	 */
-	public int parseLink(String s) {
-		if (s.equals("-")) return 0;
-		String[] part;
-		part = s.split("[(.,)]",6);
-		if (part.length < 3) return -1;
-		String leftName = part[1];
-		Integer left = nameNodeMap.get(leftName);
-		if (left == null) return -1;
-		int rpos = 2;
-		int leftLnum = 0;
-		if (getNodeType(left) == Forest.NodeTyp.ROUTER) {
-			leftLnum = Integer.parseInt(part[2]);
-			rpos = 3;
-		}
-		if (part.length < rpos) return -1;
-		String rightName = part[rpos];
-		Integer right = nameNodeMap.get(rightName);
-		if (right == null) return -1;
-		int rightLnum = 0;
-		if (getNodeType(right) == Forest.NodeTyp.ROUTER) {
-			if (part.length < rpos+1) return -1;
-			rightLnum = Integer.parseInt(part[rpos+1]);
-		}
-		int ll = (isLeaf(left) ? getLinkNum(left)
-				: getLinkNum(left,leftLnum));
-		int lr = (isLeaf(right) ? getLinkNum(right)
-				: getLinkNum(right,rightLnum));
-		if (ll != 0) return (ll == lr ? ll : -1);
-		ll = addLink(left,right,leftLnum,rightLnum);
-		return ll;	
+		return check();
 	}
 	
+	/** Read a router description from an input stream.
+	 *  Expects the next nonblank input character to be the opening
+	 *  parentheis of the router description.
+	 *  @param in is an open input stream
+	 *  @param rtr is a reference to a RtrNodeInfo struct used to
+	 *  return the result
+	 *  @param ifaces points to an array of IfInfo structs used to
+	 *  return the interface definitions
+	 *  @param errMsg is a reference to a string used for returning an error
+	 *  message
+	 *  @return a null reference on success and a reference to an
+	 *  error message on failure
+	 */
+	String readRouter(PushbackReader in,RtrNodeInfo rtr,IfInfo [] ifaces) {
+		String name; 
+		Pair<Double,Double> loc = new
+			Pair<Double,Double>(new Double(0), new Double(0));
+		Pair<Integer,Integer> adrRange = new
+			Pair<Integer,Integer>(new Integer(0),new Integer(0));
+		
+		if (!Util.verify(in,'(') ||
+		    (name = Util.readWord(in)) == null ||
+		    !Util.verify(in,',')) {
+			return "could not read router name";
+		}
+		Util.MutableInt fadr = new Util.MutableInt();
+		if (!Forest.readForestAdr(in,fadr) || !Util.verify(in,',')) {
+			return "could not read Forest address for router "
+				+ name;
+		}
+		if (!readLocation(in,loc) || !Util.verify(in,',')) {
+			return "could not read location for router " + name;
+		}
+		if (!readAdrRange(in,adrRange) || !Util.verify(in,',')) {
+			return "could not read address range for router "
+				+ name;
+		}
+		Util.skipBlank(in);
+		Util.MutableInt ifn = new Util.MutableInt();
+		String errMsg = readIface(in,ifaces,ifn);
+		if (errMsg != null) return errMsg;
+		int maxif = ifn.val;
+		while (Util.verify(in,',')) {
+			Util.skipBlank(in);
+			errMsg = readIface(in,ifaces,ifn);
+			if (errMsg != null) return errMsg;
+			maxif = Math.max(ifn.val,maxif);
+		}
+		Util.skipBlank(in);
+		if (!Util.verify(in,')'))
+			return "syntax error, expected right paren";
+	
+		rtr.name = name; rtr.fAdr = fadr.val;
+		rtr.latitude = (int) (1000000*loc.first);
+		rtr.longitude = (int) (1000000*loc.second);
+		rtr.firstLeafAdr = adrRange.first;
+		rtr.lastLeafAdr = adrRange.second;
+		rtr.numIf = maxif;
+		return null;
+	}
+	
+	/** Read a (latitude,longitude) pair.
+	 *  @param in is an open input stream
+	 *  @param loc is a reference to a pair of doubles in which result
+	 *  is returned
+	 *  @return true on success, false on failure
+	 */
+	boolean readLocation(PushbackReader in, Pair<Double,Double> loc) {
+		Util.MutableDouble x = new Util.MutableDouble();
+		if (!Util.verify(in,'(') || !Util.readDouble(in,x))
+			return false;
+		loc.first = x.val;
+		if (!Util.verify(in,',') || !Util.readDouble(in,x))
+			return false;
+		loc.second = x.val;
+		if (!Util.verify(in,')')) return false;
+		return true;
+	}
+	
+	/** Read an address range pair. 
+	 *  @param in is an open input stream
+	 *  @param range is a reference to a pair of Forest addresses in which
+	 *  result is returned
+	 *  @return true on success, false on failure
+	 */
+	boolean readAdrRange(PushbackReader in, Pair<Integer,Integer> range) {
+		Util.MutableInt x = new Util.MutableInt();
+		if (!Util.verify(in,'(') || !Forest.readForestAdr(in,x))
+			return false;
+		range.first = x.val;
+		if (!Util.verify(in,'-') || !Forest.readForestAdr(in,x))
+			return false;
+		range.second = x.val;
+		return Util.verify(in,')');
+	}
+	
+	/** Read a rate specification.
+	 *  @param in is an open input stream
+	 *  @param rs is a reference to a RateSpec in which result is returned
+	 *  @return true on success, false on failure
+	 */
+	boolean readRateSpec(PushbackReader in, RateSpec rs) {
+		Util.MutableInt bru = new Util.MutableInt();
+		Util.MutableInt brd = new Util.MutableInt();
+		Util.MutableInt pru = new Util.MutableInt();
+		Util.MutableInt prd = new Util.MutableInt();
+		if (!Util.verify(in,'(') || !Util.readNum(in,bru) ||
+		    !Util.verify(in,',') || !Util.readNum(in,brd) ||
+		    !Util.verify(in,',') || !Util.readNum(in,pru) ||
+		    !Util.verify(in,',') || !Util.readNum(in,prd) ||
+		    !Util.verify(in,')'))
+			return false;
+		rs.set(bru.val,brd.val,pru.val,prd.val);
+		return true;
+	}
+	
+	/** Read a router interface description from an input stream.
+	 *  @param in is an open input stream
+	 *  @param ifaces is an array of IfInfo structs used to return
+	 *  the interface definition; this interface is written at the position
+	 *  specified by its interface number
+	 *  @param ifn is a MutableInt object which is equal to the
+	 *  interface number following a successful return
+	 *  @return a null reference on success and a reference to an
+	 *  error message on failure
+	 */
+	public String readIface(PushbackReader in, IfInfo [] ifaces,
+						   Util.MutableInt ifn) {
+		int ip; int firstLink, lastLink;
+		RateSpec rs = new RateSpec(0);
+	
+		if (!Util.verify(in,'[')) {
+			return "syntax error: expected left bracket";
+		}
+		if (!Util.readNum(in,ifn)) {
+			return "could not read interface number";
+		}
+		if (ifn.val < 1 || ifn.val > Forest.MAXINTF) {
+			return "interface number " + ifn.val
+				+ " exceeds allowed range";
+		}
+		if (!Util.verify(in,',') || (ip = Util.readIpAdr(in)) == 0) {
+			return "could not read ip address for interface "
+				+ ifn.val;
+		}
+		if (!Util.verify(in,',')) {
+			return "syntax error in iface " + ifn.val
+				+ ", expected comma";
+		}
+		Util.MutableInt x = new Util.MutableInt();
+		if (!Util.readNum(in,x)) {
+			return "could not read link range for iface " + ifn.val;
+		}
+		firstLink = x.val;
+		lastLink = firstLink;
+		if (Util.verify(in,'-')) {
+			if (!Util.readNum(in,x)) {
+				return "could not read link range for iface "
+					+ ifn.val;
+			}
+			lastLink = x.val;
+		}
+		if (!Util.verify(in,',')) {
+			return "syntax error in iface " + ifn.val
+				+ ", expected comma";
+		}
+		if (!readRateSpec(in,rs)) {
+			return "could not read ip address for interface "
+				+ ifn.val;
+		}
+		if (!Util.verify(in,']')) {
+			return "syntax error in iface " + ifn.val
+			   	+ ", expected right bracket";
+		}
+		ifaces[ifn.val].ipAdr = ip;
+		ifaces[ifn.val].firstLink = firstLink;
+		ifaces[ifn.val].lastLink = lastLink;
+		ifaces[ifn.val].rates.copyFrom(rs);
+		return null;
+	}
+	
+	/** Read a leaf node description from an input stream.
+	 *  Expects the next nonblank input character to be the opening
+	 *  parentheis of the leaf node description.
+	 *  @param in is a PushbackReader for an open input stream
+	 *  @param leaf is a reference to a LeafNodeInfo struct used to
+	 *  return result
+	 *  @return a null reference on success, and a reference to an
+	 *  error message on failure
+	 */
+	public String readLeaf(PushbackReader in, LeafNodeInfo leaf) {
+		String name; int ip;
+		Forest.NodeTyp ntyp = Forest.NodeTyp.UNDEF_NODE;
+		Pair<Double,Double> loc = new
+			Pair<Double,Double>(new Double(0),new Double(0)); 
+		
+		if (!Util.verify(in,'(') ||
+		    (name = Util.readWord(in)) == null ||
+		    !Util.verify(in,',')) {
+			return "could not read leaf node name";
+		}
+		String typstr;
+		if ((typstr = Util.readWord(in)) == null ||
+		    (ntyp = Forest.string2nodeTyp(typstr)) ==
+			    Forest.NodeTyp.UNDEF_NODE ||
+		    !Util.verify(in,',')) {
+			return "could not read leaf type";
+		}
+		if ((ip = Util.readIpAdr(in)) == 0 ||
+		    !Util.verify(in,',')) {
+			return "could not read IP address for leaf " + name;
+		}
+		Util.MutableInt fadr = new Util.MutableInt();
+		if (!Forest.readForestAdr(in,fadr) || !Util.verify(in,',')) {
+			return "could not read Forest address for leaf " + name;
+		}
+		if (!readLocation(in,loc) || !Util.verify(in,')')) {
+			return "could not read location for leaf node " + name;
+		}
+		leaf.name = name; leaf.nType = ntyp; leaf.ipAdr = ip;
+		leaf.fAdr = fadr.val;
+		leaf.latitude = (int) (1000000*loc.first);
+		leaf.longitude = (int) (1000000*loc.second);
+		return null;
+	}
+	
+	/** Read a link description from an input stream.
+	 *  Expects the next nonblank input character to be the opening
+	 *  parentheis of the link description.
+	 *  @param in is an open input stream
+	 *  @param link is a reference to a LinkDesc struct used to
+	 *  return the result
+	 *  @param errMsg is a reference to a string used for returning an error
+	 *  message
+	 *  @return a null object reference on success, and an error message
+	 *  on failure
+	 */
+	public String readLink(PushbackReader in, LinkDesc link) {
+		LinkEndpoint ep1;
+		if (!Util.verify(in,'(') ||
+		    (ep1 = readLinkEndpoint(in)) == null ||
+		    !Util.verify(in,',')) {
+			return "could not first link endpoint";
+		}
+		LinkEndpoint ep2;
+		if ((ep2 = readLinkEndpoint(in)) == null ||
+		    !Util.verify(in,',')) {
+			return "could not read second link endpoint";
+		}
+		Util.MutableInt length = new Util.MutableInt();
+		if (!Util.readNum(in,length)) {
+			return "could not read link length";
+		}
+		RateSpec rs = new RateSpec(0);
+		if (Util.verify(in,')')) { // omitted rate spec
+			rs = defaultLinkRates;
+		} else {
+			if (!Util.verify(in,',') || !readRateSpec(in,rs)) {
+				return "could not read rate specification";
+			}
+			if (!Util.verify(in,')')) {
+				return "syntax error, expected right paren";
+			}
+		}
+		link.nameL = ep1.name; link.numL = ep1.num;
+		link.nameR = ep2.name; link.numR = ep2.num;
+		link.length = length.val;
+		link.rates.copyFrom(rs);
+		return null;
+	}
+
+	/** Read a link endpoint.
+	 *  @param in is a PushbackReader for an open input stream
+	 *  @return a reference to a LinkEndpoint object on success,
+	 *  null on failure
+	 */
+	public LinkEndpoint readLinkEndpoint(PushbackReader in) {
+		String name = Util.readWord(in);
+		if (name == null) return null;
+		Util.MutableInt num = new Util.MutableInt();
+		if (Util.verify(in,'.')) {
+			if (!Util.readNum(in,num)) return null;
+		}
+		return new LinkEndpoint(name,num.val);	
+	}
+	
+	/** Perform a series of consistency checks.
+	 *  Print error message for each detected problem.
+	 *  @return true if all checks passed, else false
+	 */
+	boolean check() {
+		boolean status = true;
+	
+		// make sure there is at least one router
+		if (getNumRouters() == 0 || firstRouter() == 0) {
+			System.err.println("check: no routers in network, "
+				+ "terminating");
+			return false;
+		}
+		// make sure that local link numbers
+		// the same local link number
+		if (!checkLocalLinks()) status = false;
+	
+		// make sure that routers are all connected, by doing
+		// a breadth-first search from firstRouter()
+		if (!checkBackBone()) status = false;
+	
+		// check that node addresses are consistent
+		if (!checkAddresses()) status = false;
+	
+		// check that the leaf address ranges are consistent
+		if (!checkLeafRange()) status = false;
+	
+		// check that all leaf nodes are consistent.
+		if (!checkLeafNodes()) status = false;
+	
+		// check that link rates are within bounds
+		if (!checkLinkRates()) status = false;
+	
+		// check that router interface rates are within bounds
+		if (!checkRtrRates()) status = false;
+	
+		return status;
+	}
+	
+	/** Check that the local link numbers at all routers are consistent.
+	 *  Write message to stderr for every error detected.
+	 *  @return true if all local link numbers are consistent, else false
+	 */
+	boolean checkLocalLinks() {
+		boolean status = true;
+		for (int rtr = firstRouter(); rtr != 0; rtr = nextRouter(rtr)) {
+			for (int l1 = firstLinkAt(rtr); l1 != 0;
+				 l1 = nextLinkAt(rtr,l1)) {
+				for (int l2 = nextLinkAt(rtr,l1); l2 != 0;
+					 l2 = nextLinkAt(rtr,l2)) {
+					if (getLLnum(l1,rtr) ==
+					    getLLnum(l2,rtr)) {
+						System.err.println(
+						    "checkLocalLinks: "
+						    + "detected two links at "
+						    + "router " + rtr
+						    + " with same local link "
+						    + "number: "
+						    + link2string(l1) + " and "
+						    + link2string(l2));
+						status = false;
+					}
+				}
+				// check that local link numbers fall within the
+				// range of some valid interface
+				int llnk = getLLnum(l1,rtr);
+				if (getIface(llnk,rtr) == 0) {
+					System.err.println("checkLocalLinks: "
+					    + "link " + llnk + " at "
+					    + getNodeName(rtr) + " is not "
+					    + "in the range assigned "
+					    + "to any valid interface");
+					status = false;
+				}
+			}
+		}
+		return status;
+	}
+	
+	/** Check that the routers are all connected.
+	 *  Write message to stderr for every error detected.
+	 *  @return true if the routers form a connected network, else false
+	 */
+	boolean checkBackBone() {
+		Set<Integer> seen = new java.util.HashSet<Integer>();
+		seen.add(firstRouter());
+		Queue<Integer> pending = new LinkedList<Integer>();
+		pending.add(firstRouter());
+		while (!pending.isEmpty()) {
+			int u = pending.remove(); 
+			for (int lnk = firstLinkAt(u); lnk != 0;
+				 lnk = nextLinkAt(u,lnk)) {	
+				int v = getPeer(u,lnk);
+				if (getNodeType(v) != Forest.NodeTyp.ROUTER)
+					continue;
+				if (seen.contains(v)) continue;
+				seen.add(v);
+				pending.add(v);
+			}
+		}
+		if ((int) seen.size() == getNumRouters()) return true;
+		System.err.println("checkBackbone: network is not connected");
+		return false;
+	}
+	
+	/** Check that no two nodes have the same Forest address.
+	 *  Write message to stderr for every error detected.
+	 *  @return true if all addresses are unique, else false
+	 */
+	boolean checkAddresses() {
+		boolean status = true;
+		for (int n1 = firstNode(); n1 != 0; n1 = nextNode(n1)) {
+			for (int n2 = nextNode(n1); n2!=0; n2 = nextNode(n2)) {
+				if (getNodeAdr(n1) == getNodeAdr(n2)) {
+					System.err.println("check: detected "
+					    + "two nodes " + getNodeName(n1)
+					    + " and " + getNodeName(n2)
+					    + " with the same forest address");
+					status = false;
+				}
+			}
+		}
+		return status;
+	}
+	
+	/** Check leaf address ranges of all routers.
+	 *  Write message to stderr for every error detected.
+	 *  @return true if each router's leaf address range is consistent with
+	 *  its address (must all lie in its zip code) and no two routers have
+	 *  overlapping leaf address ranges, otherwise return false
+	 */
+	public boolean checkLeafRange() {
+		boolean status = true;
+		// check that the leaf address range for a router
+		// is compatible with the router's address
+		for (int r = firstRouter(); r != 0; r = nextRouter(r)) {
+			int rzip = Forest.zipCode(getNodeAdr(r));
+			Pair<Integer,Integer> range =
+				new Pair<Integer,Integer>(0,0);
+			getLeafRange(r,range);
+			int flzip = Forest.zipCode(range.first);
+			int llzip = Forest.zipCode(range.second);
+			if (rzip != flzip || rzip != llzip) {
+				System.err.println("netInfo.checkLeafRange: "
+				    + "detected router " + r + "with "
+				    + "incompatible address and leaf address "
+				    + "range");
+				status = false;
+			}
+			if (range.first > range.second) {
+				System.err.println("netInfo.check: detected "
+				    + "router " + r + "with empty leaf "
+				    + "address range");
+				status = false;
+			}
+		}
+	
+		// make sure that no two routers have overlapping leaf
+		// address ranges
+		for (int r1 = firstRouter(); r1 != 0; r1 = nextRouter(r1)) {
+			Pair<Integer,Integer> range1 =
+				new Pair<Integer,Integer>(0,0);
+			getLeafRange(r1,range1);
+			for (int r2 = nextRouter(r1); r2 != 0;
+				 r2 = nextRouter(r2)) {
+				Pair<Integer,Integer> range2 =
+					new Pair<Integer,Integer>(0,0);
+				getLeafRange(r2,range2);
+				if (range1.first > range2.first) continue;
+				if (range2.first <= range1.second) {
+					System.err.println(
+					    "netInfo.checkLeafRange: detected "
+					    + "two routers " + r1 + " and "
+					    + r2 + " with overlapping "
+					    + "address ranges");
+					status = false;
+				}
+			}
+		}
+		return status;
+	}
+	
+	/** Check consistency of leaf nodes.
+	 *  Write message to stderr for every error detected.
+	 *  @return true if leaf nodes all pass consistency checks, else false
+	 */
+	public boolean checkLeafNodes() {
+		boolean status = true;
+		for (int u = firstLeaf(); u != 0; u = nextLeaf(u)) {
+			int lnk = firstLinkAt(u);
+			if (lnk == 0) {
+				System.err.println("checkLeafNodes: detected "
+				    + "a leaf node " + getNodeName(u)
+				    + " with no links");
+				status = false; continue;
+			}
+			if (nextLinkAt(u,lnk) != 0) {
+				System.err.println("checkLeafNodes: detected "
+				    + "a leaf node " + getNodeName(u)
+				    + " with more than one link");
+				status = false; continue;
+			}
+			if (getNodeType(getPeer(u,lnk)) !=
+			    Forest.NodeTyp.ROUTER) {
+				System.err.println("checkLeafNodes: detected "
+				    + "a leaf node " + getNodeName(u)
+				    + " with link to non-router");
+				status = false; continue;
+			}
+			int rtr = getPeer(u,lnk);
+			int adr = getNodeAdr(u);
+			Pair<Integer,Integer> range = new
+				Pair<Integer,Integer>(	new Integer(0),
+							new Integer(0));
+			getLeafRange(rtr,range);
+			if (adr < range.first || adr > range.second) {
+				System.err.println("checkLeafNodes: detected "
+				    + "a leaf node " + getNodeName(u)
+				    + " with an address outside the leaf "
+				    + "address range of its router");
+				status = false; continue;
+			}
+		}
+		return status;
+	}
+	
+	/** Check that link rates are consistent with Forest requirements.
+	 *  @return true if all link rates are consistent, else false
+	 */
+	public boolean checkLinkRates() {
+		boolean status = true;
+		for (int lnk = firstLink(); lnk != 0; lnk = nextLink(lnk)) {
+			RateSpec rs = new RateSpec(0); getLinkRates(lnk,rs);
+			if (rs.bitRateUp < Forest.MINBITRATE ||
+			    rs.bitRateUp > Forest.MAXBITRATE ||
+			    rs.bitRateDown < Forest.MINBITRATE ||
+			    rs.bitRateDown > Forest.MAXBITRATE) {
+				System.err.println("check: detected a link "
+				     + link2string(lnk) + " with bit rate "
+				     + "outside the allowed range");
+				status = false;
+			}
+			if (rs.pktRateUp < Forest.MINPKTRATE ||
+			    rs.pktRateUp > Forest.MAXPKTRATE ||
+			    rs.pktRateDown < Forest.MINPKTRATE ||
+			    rs.pktRateDown > Forest.MAXPKTRATE) {
+				System.err.println("check: detected a link "
+				     + link2string(lnk) + " with packet rate "
+				     + "outside the allowed range");
+				status = false;
+			}
+		}
+		return status;
+	}
+	
+	/** Check interface and link rates at all routers for consistency.
+	 *  Write an error message to stderr for each error detected
+	 *  @return true if all check pass, else false
+	 */
+	public boolean checkRtrRates() {
+		boolean status =true;
+		for (int r = firstRouter(); r != 0; r = nextRouter(r)) {
+			// check all interfaces at r
+			for (int i = 1; i <= getNumIf(r); i++) {
+				if (!validIf(r,i)) continue;
+				RateSpec rs = new RateSpec(0);
+				getIfRates(r,i,rs);
+				if (rs.bitRateUp < Forest.MINBITRATE ||
+				    rs.bitRateUp >Forest.MAXBITRATE ||
+				    rs.bitRateDown < Forest.MINBITRATE ||
+				    rs.bitRateDown >Forest.MAXBITRATE) {
+					System.err.println("checkRtrRates: "
+					    + "interface " + i + "at router "
+					    + r + " has bit rate outside the "
+					    + "allowed range");
+					status = false;
+				}
+				if (rs.pktRateUp < Forest.MINPKTRATE ||
+				    rs.pktRateUp >Forest.MAXPKTRATE ||
+				    rs.pktRateDown < Forest.MINPKTRATE ||
+				    rs.pktRateDown >Forest.MAXPKTRATE) {
+					System.err.println("checkRtrRates: "
+					    + "interface " + i + "at router "
+					    + r + " has packet rate outside "
+					    + "the allowed range");
+					status = false;
+				}
+			}
+			// check that the link rates at each interface do not
+			// exceed interface rate
+			RateSpec [] ifrates = new RateSpec[getNumIf(r)+1];
+			for (int i = 0; i <= getNumIf(r); i++) {
+				ifrates[i] = new RateSpec(0);
+			}
+			for (int lnk = firstLinkAt(r); lnk != 0;
+				 lnk = nextLinkAt(r,lnk)) {
+				int llnk = getLLnum(lnk,r);
+				int iface = getIface(llnk,r);
+				RateSpec rs = new RateSpec(0);
+				getLinkRates(lnk,rs);
+				if (r == getLeft(lnk)) rs.flip();
+				ifrates[iface].add(rs);
+			}
+			for (int i = 0; i <= getNumIf(r); i++) {
+				if (!validIf(r,i)) continue;
+				RateSpec ifrs = new RateSpec(0);
+				getIfRates(r,i,ifrs);
+				if (!ifrates[i].leq(ifrs)) {
+					System.err.println("check: links at "
+					    + "interface " + i + " of router "
+					    + getNodeName(r)
+					    + " exceed its capacity");
+				}
+			}
+		}
+		return status;
+	}
+	
+	/** Create a String representation of a link.
+	 *  @param lnk is a link number
+	 *  @return the string representing the link
+	 */
 	public String link2string(int lnk) {
 		String s = "";
-		if (lnk == 0) { s = "-"; return s; }
-		int left = getLinkL(lnk); int right = getLinkR(lnk);
-		s = "(" + getNodeName(left);
-		if (getNodeType(left) == Forest.NodeTyp.ROUTER)  {
-			s += "." + getLocLinkL(lnk);
-		}
+		if (lnk == 0) { s += "-"; return s; }
+		int left = getLeft(lnk); int right = getRight(lnk);
+		s += "(" + getNodeName(left);
+		if (getNodeType(left) == Forest.NodeTyp.ROUTER) 
+			s += "." + getLeftLLnum(lnk);
 		s += "," + getNodeName(right);
-		if (getNodeType(right) == Forest.NodeTyp.ROUTER)  {
-			s += "." + getLocLinkR(lnk);
-		}
+		if (getNodeType(right) == Forest.NodeTyp.ROUTER)
+			s += "." + getRightLLnum(lnk);
 		s += ")";
 		return s;
 	}
 	
-	/** Write the contents of a NetInfo object to an output stream.
-	 *  The object is written out in a form that allows it to be read in 
-	 *  again using the read method. Thus programs that modify the interal 
-	 *  representation can save the result to an output file from which 
-	 *  it can later restore the original configuration. Note that on
-	 *  re-reading, node numbers and link numbers may change, but 
-	 *  semantically, the new version will be equivalent to the old one.
-	 *  @param out is an open output stream
+	/** Create a string representation of a link and its properties.
+	 *  @param link is a link number
+	 *  @return the string representing the link and its properties
+	 */
+	public String linkProps2string(int lnk) {
+		String s = "";
+		if (lnk == 0) { s += "-"; return s; }
+		int left = getLeft(lnk); int right = getRight(lnk);
+		s += "(" + getNodeName(left);
+		if (getNodeType(left) == Forest.NodeTyp.ROUTER)
+			s += "." + getLeftLLnum(lnk);
+		s += "," + getNodeName(right);
+		if (getNodeType(right) == Forest.NodeTyp.ROUTER)
+			s += "." + getRightLLnum(lnk);
+		s += "," + getLinkLength(lnk) + ",";
+		RateSpec rs = new RateSpec(0);
+		getLinkRates(lnk,rs); s += rs.toString() + ")";
+		return s;
+	}
+	
+	/** Create a string representation of a link and its current state.
+	 *  @param link is a link number
+	 *  @return the string representing the link and its state
+	 */
+	public String linkState2string(int lnk) {
+		String s = "";
+		if (lnk == 0) { s += "-"; return s; }
+		int left = getLeft(lnk); int right = getRight(lnk);
+		s += "(" + getNodeName(left);
+		if (getNodeType(left) == Forest.NodeTyp.ROUTER) 
+			s += "." + getLeftLLnum(lnk);
+		s += "," + getNodeName(right);
+		if (getNodeType(right) == Forest.NodeTyp.ROUTER) 
+			s += "." + getRightLLnum(lnk);
+		s += "," + getLinkLength(lnk) + ",";
+		RateSpec rs = new RateSpec(0);
+		getLinkRates(lnk,rs); s += rs.toString();
+		getAvailRates(lnk,rs); s += "," + rs.toString() + ")";
+		return s;
+	}
+	
+	/** Create a string representation of the NetInfo object.
+	 *  @return the string representing the object
 	 */
 	public String toString() {
-		String s;
-		// Start with the "Routers" section
-		s = "Routers\n";
+		// First write the routers section
+		String s = "";
 		for (int r = firstRouter(); r != 0; r = nextRouter(r)) {
 			s += rtr2string(r);
 		}
-		s += ";\n";
 	
-		// Next write the LeafNodes, starting with the controllers
-		s += "LeafNodes\n";
-
-		Iterator<Integer> cp = getControllers().iterator();
-		while (cp.hasNext()) {
-			Integer c = cp.next(); s += leaf2string(c);
+		// Next write the leaf nodes, starting with the controllers
+		for (int c : controllers) {
+			s += leaf2string(c);
 		}
 		for (int n = firstLeaf(); n != 0; n = nextLeaf(n)) {
 			if (getNodeType(n) != Forest.NodeTyp.CONTROLLER)
 				s += leaf2string(n);
 		}
-		s += ";\n";
+		s += '\n';
 	
-		// Now, write the Links
-		s += "Links\n"; 
+		// Now, write the links
 		for (int lnk = firstLink(); lnk != 0; lnk = nextLink(lnk)) {
-			s += netlink2string(lnk);
+			s += "link" + linkProps2string(lnk) + "\n";
 		}
-		s += ";\n"; 
 	
-		// And finally, the Comtrees
-		s += "Comtrees\n"; 
-		for (int ctx = firstComtIndex(); ctx != 0;
-			 ctx = nextComtIndex(ctx)) {
-			s += comt2string(ctx);
-		}
-		s += ";\n"; 
-		return s;
+		// and finally, the default link rates
+		s += "defaultLinkRates" + (defaultLinkRates.toString()) + "\n";
+	
+		s += ";\n"; return s;
 	}
 	
+	/** Create a string representation of a router.
+	 *  @param rtr is a node number for a router
+	 *  @return a string representing the router
+	 */
 	public String rtr2string(int rtr) {
-		String s;
-		s = "name=" + getNodeName(rtr) + " "
-		    + "type=" + Forest.nodeTyp2string(getNodeType(rtr))
-		    + " fAdr=" + Forest.fAdr2string(getNodeAdr(rtr));
-		s += " leafAdrRange=("
-		    + Forest.fAdr2string(getFirstLeafAdr(rtr)) + "-"
-		    + Forest.fAdr2string(getLastLeafAdr(rtr)) + ")";
-		s += "\n\tlocation=(" + getNodeLat(rtr) + ","
-		    		     + getNodeLong(rtr) + ")";
-		s += "\ninterfaces\n"
-		    + "# iface#   ipAdr  linkRange  bitRate  pktRate\n";
+		String s = "";
+		s += "router(" + getNodeName(rtr) + ", ";
+		s += Forest.fAdr2string(getNodeAdr(rtr)) + ", ";
+		Pair<Double,Double> loc = new
+			Pair<Double,Double>(new Double(0), new Double(0));
+		getNodeLocation(rtr,loc);
+		s += "(" + loc.first + "," + loc.second + "), ";
+		Pair<Integer,Integer> range = new
+			Pair<Integer,Integer>(new Integer(0), new Integer(0));
+		getLeafRange(rtr,range);
+		s += "(" + Forest.fAdr2string(range.first);
+		s += "-" + Forest.fAdr2string(range.second) + "),\n";
 		for (int i = 1; i <= getNumIf(rtr); i++) {
 			if (!validIf(rtr,i)) continue;
-			s += "   " + i + "  "
-			    + Util.ipAdr2string(getIfIpAdr(rtr,i)); 
-			if (getIfFirstLink(rtr,i) == getIfLastLink(rtr,i)) 
-				s += " " + getIfFirstLink(rtr,i) + " ";
-			else
-				s += " " + getIfFirstLink(rtr,i) + "-"
-				    + getIfLastLink(rtr,i) + "  ";
-			s += getIfBitRate(rtr,i) + "  "
-			    + getIfPktRate(rtr,i) + " ;\n";
+			s += "\t[ " + i + ",  "
+			   + Util.ipAdr2string(getIfIpAdr(rtr,i)) + ", "; 
+			Pair<Integer,Integer> links =
+				new Pair<Integer,Integer>(0,0);
+			getIfLinks(rtr,i,links);
+			if (links.first == links.second) {
+				s += links.first + ", ";
+			} else {
+				s += links.first + "-" + links.second + ", ";
+			}
+			RateSpec rs = new RateSpec(0);
+			getIfRates(rtr,i,rs);
+			s += rs.toString() + " ]\n";
 		}
-		s += "end\n;\n";
+		s += ")\n";
 		return s;
 	}
 	
+	/** Create a string representation of a leaf node.
+	 *  @param leaf is a node number for a leaf node
+	 *  @return a string representing the leaf
+	 */
 	public String leaf2string(int leaf) {
-		String s;
-		s = "name=" + getNodeName(leaf) + " "
-		    + "type=" + Forest.nodeTyp2string(getNodeType(leaf))
-		    + " ipAdr=" + Util.ipAdr2string(getLeafIpAdr(leaf)) 
-		    + " fAdr=" + Forest.fAdr2string(getNodeAdr(leaf));
-		s += "\n\tlocation=(" + getNodeLat(leaf) + ","
-		    		     + getNodeLong(leaf) + ") ;\n";
-		return s;
-	}
-	
-	public String netlink2string(int lnk) {
-		String s;
-		s = "link=" + link2string(lnk)
-		    + " bitRate=" + getLinkBitRate(lnk)
-		    + " pktRate=" + getLinkPktRate(lnk)
-		    + " length=" + getLinkLength(lnk) + " ;\n"; 
-		return s;
-	}
-	
-	public String comt2string(int ctx) {
-		if (!validComtIndex(ctx)) return "-";
-		String s;
-		s = "comtree=" + getComtree(ctx)
-		    + " root=" + getNodeName(getComtRoot(ctx))
-		    + "\nbitRateDown=" + getComtBrDown(ctx)
-		    + " bitRateUp=" + getComtBrUp(ctx)
-		    + " pktRateDown=" + getComtPrDown(ctx)
-		    + " pktRateUp=" + getComtPrUp(ctx)
-		    + "\nleafBitRateDown=" + getComtLeafBrDown(ctx)
-		    + " leafBitRateUp=" + getComtLeafBrUp(ctx)
-		    + " leafPktRateDown=" + getComtLeafPrDown(ctx)
-		    + " leafPktRateUp=" + getComtLeafPrUp(ctx); 
-	
-		// iterate through core nodes and print
-		s += "\n"; 
-		Iterator<Integer> csp = getCoreSet(ctx).iterator();
-		while (csp.hasNext()) {
-			Integer c = csp.next();
-			if (c != getComtRoot(ctx)) 
-				s += "core=" + getNodeName(c) + " ";
-		}
-		s += "\n"; 
-		// iterate through links and print
-		Iterator<Integer> clp = getComtLinks(ctx).keySet().iterator();
-		while (clp.hasNext()) {
-			Integer lnk = clp.next();
-			s += "link=" + link2string(lnk) + " ";
-		}
-		s += "\n;\n"; 
+		String s = "";
+		s += "leaf(" + getNodeName(leaf) + ", ";
+		s += Forest.nodeTyp2string(getNodeType(leaf)) + ", ";
+		s += Util.ipAdr2string(getLeafIpAdr(leaf)) + ", "; 
+		s += Forest.fAdr2string(getNodeAdr(leaf)) + ", ";
+		Pair<Double,Double>loc =
+			new Pair<Double,Double>(new Double(0),new Double(0));
+		getNodeLocation(leaf,loc);
+		s += "(" + loc.first + "," + loc.second + ")";
+		s += ")\n";
 		return s;
 	}
 }
