@@ -40,8 +40,10 @@ int main(int argc, char ** argv) {
 	    (rtrIp = Np4d::ipAddress(argv[4])) == 0 ||
 	    (myIp = Np4d::ipAddress(argv[5])) == 0 ||
 	    (myAdr = Forest::forestAdr(argv[6])) == 0 ||
-	    (sscanf(argv[7],"%d", &finTime)) != 1)
-		fatal("ClientMgr usage: fClientMgr netMgrAdr rtrAdr rtrIp myIp myAdr finTime usersFile prefixFile");
+	    (sscanf(argv[7],"%d", &finTime)) != 1) {
+		fatal("ClientMgr usage: ClientMgr netMgrAdr rtrAdr comtCtlAdr "
+		      "rtrIp myIp myAdr finTime usersFile acctFile prefixFile");
+	}
 	if(!init(netMgrAdr,rtrIp,rtrAdr,CC_Adr,myIp, myAdr, argv[8], argv[9]))
 		fatal("init: Failed to initialize ClientMgr");
 	if(!readPrefixInfo(argv[10]))
@@ -180,20 +182,25 @@ void send(int p) {
 bool findCliRtr(ipa_t cliIp, fAdr_t& rtrAdr, ipa_t& rtrIp) {
 	string cip;
 	Np4d::ip2string(cliIp,cip);
+cerr << "findCliRtr cip=" << cip << endl;
 	for(unsigned int i = 0; i < (unsigned int) numPrefixes; ++i) {
 		string ip = prefixes[i].prefix;
+cerr << prefixes[i].prefix << endl;
 		unsigned int j = 0;
 		while (j < ip.size() && j < cip.size()) {
-			if (cip[j] != ip[j]) break;
+			if (ip[j] != '*' && cip[j] != ip[j]) break;
 			if (ip[j] == '*' ||
 			    j+1 == ip.size() && j+1 == cip.size()) {
 				rtrAdr = prefixes[i].rtrAdr;
 				rtrIp  = prefixes[i].rtrIp;
+string s;
+cerr << "returning true " << Forest::fAdr2string(rtrAdr,s) << "\n";
 				return true;
 			}
 			j++;
 		}
 	}
+cerr << "findCliRtr returns false\n";
 	return false;
 }
 
