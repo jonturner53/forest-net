@@ -1,4 +1,4 @@
-/** @file NetInfo.h
+/** @file RateSpec.h
  *
  *  @author Jon Turner
  *  @date 2011
@@ -31,6 +31,11 @@ public:
 		set(bru,brd,pru,prd);
 	}
 
+	/** Constructor that sets all rate fields to specified values. */
+	RateSpec(RateSpec& rs) {
+		(*this) = rs;
+	}
+
 	/** Set all rate fields to a single value. */
 	void set(int r) {
 		bitRateUp = bitRateDown = pktRateUp = pktRateDown = r;
@@ -42,8 +47,7 @@ public:
 		pktRateUp = pru; pktRateDown = prd;
 	}
 
-	/** Determine if all fields are zero.
-	 */
+	/** Determine if all fields are zero.  */
 	bool isZero() {
 		return 	bitRateUp == 0 && bitRateDown == 0 &&
 			pktRateUp == 0 && pktRateDown == 0;
@@ -72,6 +76,14 @@ public:
 	void negate() {
 		bitRateUp = -bitRateUp; bitRateDown = -bitRateDown;
 		pktRateUp = -pktRateUp; pktRateDown = -pktRateDown;
+	}
+
+	/** Scale the fields in this RateSpec by a constant. */
+	void scale(double f) {
+		bitRateUp =   (int) (f*bitRateUp);
+		bitRateDown = (int) (f*bitRateDown);
+		pktRateUp =   (int) (f*pktRateUp);
+		pktRateDown = (int) (f*pktRateDown);
 	}
 
 	/** Compare another RateSpec to this one. */

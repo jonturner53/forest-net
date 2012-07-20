@@ -47,40 +47,29 @@ public class ComtreeDisplay {
 	private static InetSocketAddress ccSockAdr; ///< address for ComtCtl
 	private static SocketChannel ccChan = null; ///< for ComtCtl connection
 
-	private static int currentComtree; ///< comtree to be displayed
+	private static int ccomt; ///< comtree to be displayed
 	private static boolean linkDetail; ///< when true, show link details
 
-	private static NetInfo net;	///< contains net toppology and
-					///< comtree info
+	private static NetInfo net;	///< contains net toppology
+	private static ComtInfo comtrees; ///< info about comtrees
+	private static java.util.HashSet<Integer> comtSet;
+					///< current set of comtrees
 	
 	/** Main method processes arguments, connects to ComtCtl and
 	 *  responds to received commands.
 	 */
 	public static void main(String[] args){
+		net = new NetInfo(maxNode, maxLink, maxRtr);
+		comtrees = new ComtInfo(maxComtree,net);
+
 		// process arguments and setup channel to ComtreeCtl
 		InetSocketAddress ccSockAdr = processArgs(args);
 		if (ccSockAdr == null)
 			Util.fatal("can't build socket address");
 		SocketChannel ccChan = connectToComtCtl(ccSockAdr);
-		if (ccChan == null)
-			Util.fatal("can't connect to ComtCtl");
+		if (ccChan == null) Util.fatal("can't connect to ComtCtl");
 
-		net = new NetInfo(maxNode, maxLink, maxRtr, maxComtree);
-		InputStream in = null;
-		try {
-			in = ccChan.socket().getInputStream();
-			if (!net.read(in))
-				Util.fatal("can't read network topology\n");
-		} catch(Exception e) {
-			Util.fatal("can't read network topology\n" + e);
-		}
-
-		Scanner ccIn = null;
-		try { ccIn = new Scanner(ccChan);
-		} catch (Exception e) {
-			Util.fatal("can't create scanner for ComtCtl channel "
-				   + e);
-		}
+		// setup output stream to ComtCtl
 		OutputStream out = null;
 		try {
 			out = ccChan.socket().getOutputStream();
@@ -88,38 +77,70 @@ public class ComtreeDisplay {
 			Util.fatal("can't open output stream to ComtCtl " + e);
 		}
 
-		// initial display
+		// setup input stream and get network topology
+		InputStream in = null;
+		PushbackReader inRdr = null;
+		String s = "getNet\ngetComtSet\n";
+		try {
+			out.write(s.getBytes());
+			in = ccChan.socket().getInputStream();
+			inRdr = new PushbackReader(new InputStreamReader(in));
+			if (!net.read(inRdr))
+				Util.fatal("can't read network topology\n");
+			readComtSet(inRdr);
+		} catch(Exception e) {
+			Util.fatal("can't read network topology/comtrees\n"	
+				   + e);
+		}
+
+		// initial display (no comtrees yet)
 		linkDetail = false;
 		setupDisplay();
-		int ctx = net.firstComtIndex();
-		if (ctx == 0) Util.fatal("Network contains no comtrees");
-		currentComtree = net.getComtree(ctx);
-		updateDisplay();
-		// start main loop
+
+		// main loop
+		ccomt = 0;
 		while (true) {
 			String lineBuf = readKeyboardIn();
 			if (lineBuf.length() > 0) processKeyboardIn(lineBuf);
-			if (currentComtree == 0) break;
-			// send currentComtree to ComtCtl
-			Integer CurComt = currentComtree;
-			String s = CurComt.toString() + "\n";
+			if (!comtSet.contains(ccomt)) continue;
+			// send ccomt to ComtCtl
+			s = "getComtSet\n" + "getComtree " + ccomt + "\n";
 			try {
 				out.write(s.getBytes());
 			} catch(Exception e) {
 				Util.fatal("can't write to ComtCtl " + e);
 			}
-			// now read updated status and update comtree
-			NetInfo.ComtreeInfo modComt;
-			modComt = net.readComtStatus(in);
-			if (modComt.comtreeNum != currentComtree) {
+			// now read updated list and comtree status
+			readComtSet(inRdr);
+			if (ccomt != comtrees.readComtStatus(inRdr)) {
 				Util.fatal("received comtree info does not "
 					   + "match request");
 			}
-			if (net.validComtree(currentComtree)) 
-				net.updateComtree(modComt);
-			else 
-				net.addComtree(modComt);
 			updateDisplay();
+		}
+	}
+
+	/** Read a response to a getComtSet request.
+	 *  The response consists of the string "comtSet" followed by a
+	 *  list of comtree numbers, separated by commas and surrounded
+	 *  by parentheses.
+	 */
+	public static void readComtSet(PushbackReader in) {
+		String word = Util.readWord(in);
+		if (word == null || !word.equals("comtSet")) 
+			Util.fatal("readComtSet: unexpected response " + word);
+		if (!Util.verify(in,'(')) 
+			Util.fatal("readComtSet: expected left paren");
+		comtSet.clear();
+		Util.MutableInt cnum = new Util.MutableInt();
+		while (true) {
+			if (!Util.readNum(in,cnum))
+				Util.fatal("readComtSet: could not read "
+					   + "expected comtree number");
+			comtSet.add(cnum.val);
+			if (Util.verify(in,')')) return;
+			if (!Util.verify(in,','))
+				Util.fatal("readComtSet: expected comma");
 		}
 	}
 
@@ -147,7 +168,6 @@ public class ComtreeDisplay {
 		// Open channel to ComtCtl
 		SocketChannel chan;
                 try {
-System.out.println(sockAdr);
                         chan = SocketChannel.open(sockAdr);
                 } catch (Exception e) {
                         System.out.println("Can't open channel to ComtCtl");
@@ -183,7 +203,7 @@ System.out.println(sockAdr);
 	private static boolean processKeyboardIn(String lineBuf) {
 		Scanner line = new Scanner(lineBuf);
 		if (line.hasNextInt()) {
-			currentComtree = line.nextInt();
+			ccomt = line.nextInt();
 		} else if (line.hasNext("linkDetail")) {
 			linkDetail = true;
 		} else if (line.hasNext("noLinkDetail")) {
@@ -204,8 +224,8 @@ System.out.println(sockAdr);
 	}
 
 	private static void updateDisplay() {
-                Color c = new Color(210,230,255);
-		StdDraw.clear(c);
+                Color bgColor = new Color(210,230,255);
+		StdDraw.clear(bgColor);
 		double lmargin = .05;	// left margin
 		double rmargin = .85;	// right margin
 		double tmargin = .95;	// top margin
@@ -217,13 +237,13 @@ System.out.println(sockAdr);
 		double x, y, delta;
 		x = rmargin + .12; delta = .03; y = tmargin;
 		StdDraw.setPenColor(Color.RED);
-		StdDraw.text(x, y, "" + currentComtree);
+		StdDraw.text(x, y, "" + ccomt);
 		y -= 2*delta;
 		StdDraw.setPenColor(Color.BLACK);
-		for (int ctx = net.firstComtIndex(); ctx != 0 && y > bmargin;
-			 ctx = net.nextComtIndex(ctx)) {
-			if (net.getComtree(ctx) == currentComtree) continue;
-			StdDraw.text(x, y, "" + net.getComtree(ctx));
+		for (int c : comtSet) {
+			if (y <= bmargin) break;
+			if (c == ccomt) continue;
+			StdDraw.text(x, y, "" + c);
 			y -= delta;
 		}
 		StdDraw.setPenColor(Color.BLACK);
@@ -232,12 +252,14 @@ System.out.println(sockAdr);
 		// expressed in degrees
 		double minLat  =   90; double maxLat  =  -90;
 		double minLong =  180; double maxLong = -180;
+		Pair<Double,Double> loc = new Pair<Double,Double>(
+					new Double(0), new Double(0));
 		for (int node = net.firstNode(); node != 0;
 			 node = net.nextNode(node)) {
-			minLat  = Math.min(minLat,  net.getNodeLat(node));
-			maxLat  = Math.max(maxLat,  net.getNodeLat(node));
-			minLong = Math.min(minLong, net.getNodeLong(node));
-			maxLong = Math.max(maxLong, net.getNodeLong(node));
+			minLat  = Math.min(minLat,  loc.first);
+			maxLat  = Math.max(maxLat,  loc.first);
+			minLong = Math.min(minLong, loc.second);
+			maxLong = Math.max(maxLong, loc.second);
 		}
 		double xdelta  = maxLong - minLong;
 		double ydelta  = maxLat  - minLat;
@@ -247,72 +269,69 @@ System.out.println(sockAdr);
 		double yscale  = (tmargin-bmargin)/(maxLat-minLat);
 		double scale   = Math.min(xscale,yscale);
 
-		int ctx = net.getComtIndex(currentComtree);
+		int ctx = comtrees.getComtIndex(ccomt);
 		double nodeRadius = .05;
 		// draw all the links
 		for (int lnk = net.firstLink(); lnk != 0;
 			 lnk = net.nextLink(lnk)) {
-			int left = net.getLinkL(lnk);
-			int right = net.getLinkR(lnk);
-			double lx = xorigin +
-				     (net.getNodeLong(left) - xcenter)*scale;
-			double ly = yorigin +
-				     (net.getNodeLat(left) - ycenter)*scale;
-			double rx = xorigin +
-				     (net.getNodeLong(right) - xcenter)*scale;
-			double ry = yorigin +
-				     (net.getNodeLat(right) - ycenter)*scale;
+			int left = net.getLeft(lnk);
+			int right = net.getRight(lnk);
+			net.getNodeLocation(left,loc);
+			double lx = xorigin + (loc.second - xcenter)*scale;
+			double ly = yorigin + (loc.first - ycenter)*scale;
+			net.getNodeLocation(right,loc);
+			double rx = xorigin + (loc.second - xcenter)*scale;
+			double ry = yorigin + (loc.first - ycenter)*scale;
+
 			StdDraw.setPenColor(Color.BLACK);
 			StdDraw.setPenRadius(PEN_RADIUS);
-			if (net.isComtLink(ctx,lnk))
+			if (comtrees.isComtLink(ctx,lnk))
 				StdDraw.setPenRadius(5*PEN_RADIUS);
 			StdDraw.line(lx,ly,rx,ry);
 			StdDraw.setPenRadius(PEN_RADIUS);
-			if (net.isComtLink(ctx,lnk) && linkDetail) {
+			if (comtrees.isComtLink(ctx,lnk) && linkDetail) {
 				x = (lx+rx)/2; y = (ly+ry)/2;
 				StdDraw.setPenColor(Color.WHITE);
 				StdDraw.filledSquare(x, y, 1.5*nodeRadius);
 				StdDraw.setPenColor(Color.BLACK);
 				StdDraw.setPenRadius(PEN_RADIUS);
 				StdDraw.square(x, y, 1.5*nodeRadius);
-				int bru, pru, brd, prd;
-				if (net.isLeaf(left) || net.isLeaf(right)) {
-					bru = net.getComtLeafBrUp(ctx);
-					pru = net.getComtLeafPrUp(ctx);
-					brd = net.getComtLeafBrDown(ctx);
-					prd = net.getComtLeafPrDown(ctx);
-				} else {
-					bru = net.getComtBrUp(ctx);
-					pru = net.getComtPrUp(ctx);
-					brd = net.getComtBrDown(ctx);
-					prd = net.getComtPrDown(ctx);
-				}
-				StdDraw.text(x, y+.8*nodeRadius, "brU=" + bru);
-				StdDraw.text(x, y+.3*nodeRadius, "prU=" + pru);
-				StdDraw.text(x, y-.3*nodeRadius, "brD=" + brd);
-				StdDraw.text(x, y-.8*nodeRadius, "prD=" + prd);
+				RateSpec rs = new RateSpec(0);
+				int childAdr = comtrees.getChild(ctx,lnk);
+				comtrees.getLinkRates(ctx,childAdr,rs);
+				StdDraw.text(x, y+.8*nodeRadius,
+						"brU=" + rs.bitRateUp);
+				StdDraw.text(x, y+.3*nodeRadius,
+						"brD=" + rs.bitRateDown);
+				StdDraw.text(x, y-.3*nodeRadius,
+						"prU=" + rs.pktRateUp);
+				StdDraw.text(x, y-.8*nodeRadius,
+						"prD=" + rs.pktRateDown);
 			}
 		}
 
 		// draw all the nodes in the net
 		for (int node = net.firstNode(); node != 0;
 			 node = net.nextNode(node)) {
-			x = xorigin + (net.getNodeLong(node) - xcenter)*scale;
-			y = yorigin + (net.getNodeLat(node) - ycenter)*scale;
+			net.getNodeLocation(node,loc);
+			x = xorigin + (loc.second - xcenter)*scale;
+			y = yorigin + (loc.first - ycenter)*scale;
 
 			int lnkCnt = 0;
 			Color nodeColor = Color.LIGHT_GRAY;
-			if (net.isComtNode(ctx,node)) {
-				lnkCnt = net.getComtLnkCnt(ctx,node);
+			int nodeAdr = net.getNodeAdr(node);
+			if (comtrees.isComtNode(ctx,nodeAdr)) {
+				if (net.isRouter(node))
+					lnkCnt=comtrees.getLinkCnt(ctx,nodeAdr);
 				nodeColor = Color.WHITE;
-				if (node == net.getComtRoot(ctx))
+				if (node == comtrees.getRoot(ctx))
 					nodeColor = Color.YELLOW;
 			}
 			StdDraw.setPenColor(nodeColor);
-			if (net.getNodeType(node) == Forest.NodeTyp.ROUTER) {
+			if (net.isRouter(node)) {
 				StdDraw.filledCircle(x, y, nodeRadius);
 				StdDraw.setPenColor(Color.BLACK);
-				if (net.isComtCoreNode(ctx,node))
+				if (comtrees.isCoreNode(ctx,node))
 					StdDraw.setPenRadius(3*PEN_RADIUS);
 				StdDraw.circle(x, y, nodeRadius);
 				StdDraw.setPenRadius(PEN_RADIUS);

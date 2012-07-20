@@ -19,7 +19,9 @@ public:
 	int child;		///< node number for rtr at "lower-end" of lnk
 	RateSpec rs;		///< rate spec for link
 	LinkMod() { lnk = 0; child = 0; rs.set(0); }
-	LinkMod(int l, int c, RateSpec rs1) {
+	LinkMod(int l, int c, RateSpec& rs1) { set(l,c,rs1); }
+	LinkMod(const LinkMod& lm) { (*this) = lm; }
+	void set(int l, int c, RateSpec& rs1) {
 		lnk = l; child = c; rs = rs1;
 	}
 };
@@ -104,6 +106,7 @@ public:
 	string& link2string(int,int,string&) const;
 	string& leafLink2string(int,fAdr_t,string&) const;
 	string& comt2string(int,string&) const;
+	string& comtStatus2string(int,string&) const;
 	string& toString(string&) const;
 
 private:
@@ -119,12 +122,14 @@ private:
 	RateSpec plnkRates;	// rates for link
 	ComtRtrInfo() { plnk = lnkCnt = 0; frozen = false;
 			 subtreeRates.set(0); plnkRates.set(0); };		
+	ComtRtrInfo(const ComtRtrInfo& cr) { (*this) = cr; }
 	};
 	struct ComtLeafInfo {
 	fAdr_t	parent;		// forest address of parent of this leaf
 	int	llnk;		// local link number of parent link at parent
 	RateSpec plnkRates;	// rates for leaf and link to parent
 	ComtLeafInfo() { parent = llnk = 0; plnkRates.set(0); };		
+	ComtLeafInfo(const ComtLeafInfo& cl) { (*this) = cl; }
 	};
 
 	struct ComtreeInfo {

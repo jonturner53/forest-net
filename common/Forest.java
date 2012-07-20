@@ -7,7 +7,10 @@
  */
 
 package forest.common;
+import algoLib.misc.*;
+import java.io.*;
 import java.nio.ByteBuffer;
+
 /** Miscellaneous utility functions.
  *  This class defines various constants and common functions useful
  *  within a Forest router and Forest hosts.
@@ -242,5 +245,29 @@ public class Forest {
 		if (s.equals("router"))     return NodeTyp.ROUTER;
 		if (s.equals("controller")) return NodeTyp.CONTROLLER;
 					    return NodeTyp.UNDEF_NODE;
+	}
+
+	// If next thing on the current line is a forest address,
+	// return it in fa and return true. Otherwise, return false.
+	// A negative value on the input stream in interpreted as
+	// a multicast address. Otherwise, we expect a unicast
+	// address in dotted decimal format. We require that
+	// either the zip code part is >0 or both parts are
+	// equal to zero. We allow 0.0 for null addresses and
+	// x.0 for unicast routes to foreign zip codes.
+	// The address is returned in host byte order.
+	public static boolean readForestAdr(PushbackReader in,
+					    Util.MutableInt fa) {
+		Util.MutableInt b1 = new Util.MutableInt();
+		Util.MutableInt b2 = new Util.MutableInt();
+		
+		if (!Util.readNum(in,b1)) return false;
+		if (b1.val < 0) { fa.val = b1.val; return true; }
+		if (!Util.verify(in,'.') || !Util.readNum(in,b2))
+			return false;
+		if (b1.val == 0 && b2.val != 0) return false;
+		if (b1.val > 0xffff || b2.val > 0xffff) return false;
+		fa.val = Forest.forestAdr(b1.val,b2.val);
+		return true;
 	}
 }

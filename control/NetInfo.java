@@ -61,6 +61,10 @@ public class NetInfo {
 			ipAdr = 0; rates = new RateSpec(0);
 			firstLink = 0; lastLink = 0;
 		}
+		public void copyFrom(IfInfo iface) {
+			ipAdr = iface.ipAdr; rates.copyFrom(iface.rates);
+			firstLink = iface.firstLink; lastLink = iface.lastLink;
+		}
 	}
 
 	private static final int UNDEF_LAT = 91;	// invalid latitude
@@ -726,36 +730,17 @@ public class NetInfo {
 	 */
 	public boolean setLinkRates(int lnk, RateSpec rs) {
 		if (!validLink(lnk)) return false;
-		link[lnk].rates.set(
-			Math.min(Forest.MAXBITRATE,
-				Math.max(Forest.MINBITRATE,rs.bitRateUp)),
-			Math.min(Forest.MAXBITRATE,
-				Math.max(Forest.MINBITRATE,rs.bitRateDown)),
-			Math.min(Forest.MAXPKTRATE,
-				Math.max(Forest.MINPKTRATE,rs.pktRateUp)),
-			Math.min(Forest.MAXPKTRATE,
-				Math.max(Forest.MINPKTRATE,rs.pktRateDown))
-		);
+		link[lnk].rates.copyFrom(rs);
 		return true;
 	}
 	
-	/** Allocate capacity on a link, reducing available capacity.
+	/** Set avaiable capacity of a link.
 	 *  @param lnk is a link number
 	 *  @param rs is a RateSpec
 	 */
 	public boolean setAvailRates(int lnk, RateSpec rs) {
 		if (!validLink(lnk)) return false;
-		link[lnk].availRates = rs;
-		link[lnk].availRates.set(
-			Math.min(link[lnk].rates.bitRateUp,  
-				Math.max(0,rs.bitRateUp)),
-			Math.min(link[lnk].rates.bitRateDown,
-				Math.max(0,rs.bitRateDown)),
-			Math.min(link[lnk].rates.pktRateUp,  
-				Math.max(0,rs.pktRateUp)),
-			Math.min(link[lnk].rates.pktRateDown,
-				Math.max(0,rs.pktRateDown))
-		);
+		link[lnk].availRates.copyFrom(rs);
 		return true;
 	}
 	
@@ -851,6 +836,8 @@ public class NetInfo {
 	boolean addInterfaces(int r, int numIf) {
 		if (!isRouter(r) || getNumIf(r) != 0) return false;
 		rtr[r].iface = new IfInfo[numIf+1];
+		for (int i = 1; i <= numIf; i++)
+			rtr[r].iface[i] = new IfInfo();
 		rtr[r].numIf = numIf;
 		return true;
 	}
@@ -872,7 +859,7 @@ public class NetInfo {
 		int nodeNum = ln + maxRtr;
 		leaf[ln].name = name;
 		nameNodeMap.put(name,nodeNum);
-		if (nTyp == Forest.NodeTyp.CONTROLLER) controllers.add(ln);
+		if (nTyp == Forest.NodeTyp.CONTROLLER) controllers.add(nodeNum);
 		leaf[ln].fAdr = -1;
 	
 		setLeafType(nodeNum,nTyp); setLeafIpAdr(nodeNum,0); 
@@ -990,8 +977,9 @@ public class NetInfo {
 						  cRtr.lastLeafAdr);
 				setLeafRange(r,range);
 				addInterfaces(r,cRtr.numIf);
-				for (int i = 1; i <= getNumIf(r); i++)
-					rtr[r].iface[i] = iface[i];
+				for (int i = 1; i <= getNumIf(r); i++) {
+					rtr[r].iface[i].copyFrom(iface[i]);
+				}
 				rtrNum++;
 			} else if (s.equals("leaf")) {
 				errMsg = readLeaf(in, cLeaf);
@@ -1055,6 +1043,7 @@ public class NetInfo {
 					return false;
 				}
 				setLinkRates(lnk, cLink.rates);
+				cLink.rates.scale(.9);
 				setAvailRates(lnk, cLink.rates);
 				setLinkLength(lnk, cLink.length);
 				linkNum++;
