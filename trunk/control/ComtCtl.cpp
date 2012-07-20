@@ -381,30 +381,26 @@ void* handler(void *qp) {
  */
 bool handleComtreeDisplay(int sock, Queue& inQ, Queue& outQ) {
 	// start by sending network topology info to ComtreeDisplay
-	pthread_mutex_lock(&allComtLock);
-	string netString; net->toString(netString);
-	pthread_mutex_unlock(&allComtLock);
-	if (Np4d::sendString(sock,netString) < 0) {
-		cerr << "handleComtreeDisplay: unable to send "
-			"network topology to display\n";
-		return false;
-	}
 	while (true) {
-		// wait for a comtree status request
-		// these take the form of a digit string with at most
-		// 10 characters followed by a newline
-		char buf[20]; char *p = buf; int nleft = 20;
+		// wait for a request from comtreeDisplay
+		// these take three forms
+		//
+		//	getNet
+		// 	getComtSet
+		//	getComtree 1234
+		//
+		// each appears on a line by itself; the first
+		// requests the network topology, the second, a list
+		// of comtrees, and the third the comtree status for
+		// the specified comtree
+
+		const int BLEN = 100;
+		char buf[BLEN+1]; int i = 0;
 		// read characters into buffer until a newline;
 		// expect remote display to send single comtree status request
 		// and wait for reply before sending another
 		while (true) {
-			if (nleft <= 0) {
-				cerr << "handleComtreeDisplay: unable "
-					"to receive comtree number "
-					"from remote display\n";
-				return false;
-			}
-			int nbytes = read(sock,p,nleft);
+			int nbytes = read(sock,&buf[i],BLEN-i);
 			if (nbytes < 0) {
 /* not sure why this is not working, but comment out for now
 				if (errno != EINTR) {
@@ -420,12 +416,61 @@ cerr << "error errno=" << errno << "\n";
 			} else if (nbytes == 0) {
 				close(sock); return true;
 			}
-			char *q = p + nbytes;
-			while (p < q && *p != '\n') p++;
-			if (p < q) { *p = EOS; break; }
-			nleft -= nbytes;
+			int limit = i + nbytes;
+			while (i < limit && buf[i] != '\n') i++;
+			if (i == BLEN || buf[i] == '\n') {
+				buf[i] = EOS; break;
+			}
 		}
-		uint32_t comt;
+		stringstream ss(string(buf,i));
+		string word; ss >> word;
+		uint32_t comt = 0;
+		if (word.compare("getNet") == 0) {
+			string netString; net->toString(netString);
+			if (Np4d::sendString(sock,netString) < 0) {
+				cerr << "handleComtreeDisplay: unable to send "
+					"network topology to display\n";
+				return false;
+			}
+		} else if (word.compare("getComtSet") == 0) {
+			pthread_mutex_lock(&allComtLock);
+			stringstream comtSet;
+			for (int ctx = comtrees->firstComtIndex(); ctx != 0;
+				 ctx = comtrees->nextComtIndex(ctx)) {
+				comtSet << comtrees->getComtree(ctx) << " ";
+			}
+			pthread_mutex_unlock(&allComtLock);
+			string s = comtSet.str();
+			if (Np4d::sendString(sock,s) < 0) {
+				cerr << "handleComtreeDisplay: unable to send "
+					"comtree set to display\n";
+				return false;
+			}
+		} else if (word.compare("getComtree") == 0) {
+			ss >> comt;
+			string s;
+			pthread_mutex_lock(&allComtLock);
+			int ctx = comtrees->getComtIndex(comt);
+			if (ctx == 0) {
+				// send back error message
+				pthread_mutex_unlock(&allComtLock);
+				s = "invalid comtree request\n";
+			} else {
+				pthread_mutex_lock(&comtLock[ctx]);
+				pthread_mutex_unlock(&allComtLock);
+				comtrees->comtStatus2string(ctx,s);
+				pthread_mutex_unlock(&comtLock[ctx]);
+			}
+			if (Np4d::sendString(sock,s) < 0) {
+				cerr << "handleComtreeDisplay: unable to send "
+					"comtree status update to display\n";
+				return false;
+			}
+		} else {
+			cerr << "handleComtreeDisplay: unrecognized request "
+			     << word << " from comtreeDisplay";
+			return false;
+		}
 		if (sscanf(buf,"%d",&comt) != 1) {
 			cerr << "handleComtreeDisplay: unable "
 				"to receive comtree number "
@@ -887,7 +932,8 @@ bool handleLeaveComtReq(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 	teardownClientLink(ctx,cliIp,cliPort,cliRtr,inQ,outQ);
 
 	// reduce subtree rates in response to dropped client
-	RateSpec rs = comtrees->getLinkRates(ctx,cliAdr,rs); rs.negate();
+	RateSpec rs;
+	comtrees->getLinkRates(ctx,cliAdr,rs); rs.negate();
 	comtrees->adjustSubtreeRates(ctx,cliRtrAdr,rs);
 
 	// for autoConfig case, modify backbone rates

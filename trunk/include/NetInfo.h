@@ -304,10 +304,6 @@ inline string& NetInfo::getNodeName(int n, string& s) const {
 	if (isLeaf(n)) s = leaf[n-maxRtr].name;
 	else if (isRouter(n)) s = rtr[n].name;
 	else s = "";
-/*
-	s = (isLeaf(n) ? leaf[n-maxRtr].name : 
-	     (isRouter(n) ? rtr[n].name : ""));
-*/
 	return s;
 }
 
@@ -598,7 +594,7 @@ inline bool NetInfo::setIfRates(int r, int iface, RateSpec& rs) {
 	return true;
 }
 
-/** Set the first link in the range of links defined for a router interface.
+/** Set the range of links defined for a router interface.
  *  Each router interface is assigned a consecutive range of link numbers
  *  @param r is the node number of the router
  *  @param iface is the interface number
@@ -818,28 +814,17 @@ inline bool NetInfo::setRightLLnum(int lnk, int loc) {
  */
 inline bool NetInfo::setLinkRates(int lnk, RateSpec& rs) {
 	if (!validLink(lnk)) return false;
-	link[lnk].rates.set(
-		min(Forest::MAXBITRATE,max(Forest::MINBITRATE,rs.bitRateUp)),
-		min(Forest::MAXBITRATE,max(Forest::MINBITRATE,rs.bitRateDown)),
-		min(Forest::MAXPKTRATE,max(Forest::MINPKTRATE,rs.pktRateUp)),
-		min(Forest::MAXPKTRATE,max(Forest::MINPKTRATE,rs.pktRateDown))
-	);
+	link[lnk].rates = rs;
 	return true;
 }
 
-/** Allocate capacity on a link, reducing available capacity.
+/** Set the available capacity of a link.
  *  @param lnk is a link number
  *  @param rs is a RateSpec
  */
 inline bool NetInfo::setAvailRates(int lnk, RateSpec& rs) {
 	if (!validLink(lnk)) return false;
 	link[lnk].availRates = rs;
-	link[lnk].availRates.set(
-		min(link[lnk].rates.bitRateUp,  max(0,rs.bitRateUp)),
-		min(link[lnk].rates.bitRateDown,max(0,rs.bitRateDown)),
-		min(link[lnk].rates.pktRateUp,  max(0,rs.pktRateUp)),
-		min(link[lnk].rates.pktRateDown,max(0,rs.pktRateDown))
-	);
 	return true;
 }
 
@@ -853,7 +838,6 @@ inline bool NetInfo::setLinkLength(int lnk, int len) {
 	else return false;
 	return true;
 }
-
 
 /** Helper method used to define keys for internal locLnk2lnk HashMap.
  *  @param r is the node number of a router

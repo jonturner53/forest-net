@@ -279,6 +279,7 @@ bool NetInfo::read(istream& in) {
 				return false;
 			}
 			setLinkRates(lnk, cLink.rates);
+			cLink.rates.scale(.9);
 			setAvailRates(lnk, cLink.rates);
 			setLinkLength(lnk, cLink.length);
 			linkNum++;
