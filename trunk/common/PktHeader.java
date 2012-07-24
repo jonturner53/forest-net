@@ -2,6 +2,7 @@ package forest.common;
 
 public class PktHeader {
 	public PktHeader() { setVersion(Forest.FOREST_VERSION); }
+	public PktHeader(Forest.PktBuffer b) { setVersion(Forest.FOREST_VERSION); unpack(b); }
 	private int ver;	// version num field
 	private int lng;	// length field
 	private Forest.PktTyp typ;	// packet type field
@@ -56,6 +57,7 @@ public class PktHeader {
 		s += " dadr=" + Forest.fAdr2string(getDstAdr());
 		int x;
 		for(int i = 0; i < Math.min(8,(getLength()-Forest.HDR_LENG)/4); i++) {
+			if(i == 0 && p.get(Forest.HDR_LENG/4) == 2) s += "[sound packet]";
 			x = p.get((Forest.HDR_LENG/4)+i);
 			s += " " + x;
 		}
