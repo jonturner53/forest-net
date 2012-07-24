@@ -118,10 +118,10 @@ public class Forest {
 		public byte[] toByteArray(int length) {
 			byte[] arr = new byte[length];
 			for(int i = 0; i < length; i+=4) {
-				arr[i] = (byte) (buf[i] >> 24);
-				arr[i+1] = (byte) (buf[i] >> 16);
-				arr[i+2] = (byte) (buf[i] >> 8);
-				arr[i+3] = (byte) (buf[i]);
+				arr[i] = (byte) ((buf[i/4] >> 24) & 0xff);
+				arr[i+1] = (byte) ((buf[i/4] >> 16) & 0xff);
+				arr[i+2] = (byte) ((buf[i/4] >> 8) & 0xff);
+				arr[i+3] = (byte) ((buf[i/4]) & 0xff);
 			}
 			return arr;
 		}
