@@ -1439,5 +1439,5 @@ void Avatar::updateNearby(int p) {
  */
 
 void Avatar::updateVisSet() {
-	computeVisSet(groupNum(x,y)-1,*myVisSet);
+	computeVisSet(groupNum(x,y),*myVisSet);
 }
