@@ -414,7 +414,7 @@ public class ShowWorld {
 			if (inStream == null) {
 				inStream = new BufferedReader(
 					   new InputStreamReader(System.in));
-				System.out.print("\ncomtree=");
+				System.out.print("\nShowWorld: ");
 				comtree = Integer.parseInt(inStream.readLine());
 			} else if (inStream.ready()) {
 				comtree = Integer.parseInt(inStream.readLine());
@@ -423,7 +423,7 @@ public class ShowWorld {
 			System.out.println("input error: type comtree number\n"
 					    + e);
 		}
-		System.out.print("\ncomtree=");
+		System.out.print("\nShowWorld: ");
 		return comtree;
 	}
 
