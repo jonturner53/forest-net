@@ -379,8 +379,12 @@ void* handler(void *qp) {
  *  @return true if the interaction proceeds normally, followed
  *  by a normal close; return false if an error occurs
  */
+
+static int cnt = 0;
 bool handleComtreeDisplay(int sock, Queue& inQ, Queue& outQ) {
-	// start by sending network topology info to ComtreeDisplay
+	const int BLEN = 100;
+	char buf[BLEN+1]; int i;
+	string savs = "";
 	while (true) {
 		// wait for a request from comtreeDisplay
 		// these take three forms
@@ -394,13 +398,12 @@ bool handleComtreeDisplay(int sock, Queue& inQ, Queue& outQ) {
 		// of comtrees, and the third the comtree status for
 		// the specified comtree
 
-		const int BLEN = 100;
-		char buf[BLEN+1]; int i = 0;
 		// read characters into buffer until a newline;
 		// expect remote display to send single comtree status request
 		// and wait for reply before sending another
+		i = 0;
 		while (true) {
-			int nbytes = read(sock,&buf[i],BLEN-i);
+			int nbytes = recv(sock,&buf[i],BLEN-i,0);
 			if (nbytes < 0) {
 /* not sure why this is not working, but comment out for now
 				if (errno != EINTR) {
@@ -435,10 +438,14 @@ cerr << "error errno=" << errno << "\n";
 		} else if (word.compare("getComtSet") == 0) {
 			pthread_mutex_lock(&allComtLock);
 			stringstream comtSet;
+			comtSet << "comtSet(";
 			for (int ctx = comtrees->firstComtIndex(); ctx != 0;
 				 ctx = comtrees->nextComtIndex(ctx)) {
-				comtSet << comtrees->getComtree(ctx) << " ";
+				comtSet << comtrees->getComtree(ctx);
+				if (comtrees->nextComtIndex(ctx) != 0)
+					comtSet << ",";
 			}
+			comtSet << ")\n";
 			pthread_mutex_unlock(&allComtLock);
 			string s = comtSet.str();
 			if (Np4d::sendString(sock,s) < 0) {
@@ -461,6 +468,11 @@ cerr << "error errno=" << errno << "\n";
 				comtrees->comtStatus2string(ctx,s);
 				pthread_mutex_unlock(&comtLock[ctx]);
 			}
+if (s != savs) {
+string s1;
+cerr << s << endl; // comtrees->comt2string(ctx,s1) << endl;
+savs = s;
+}
 			if (Np4d::sendString(sock,s) < 0) {
 				cerr << "handleComtreeDisplay: unable to send "
 					"comtree status update to display\n";
@@ -469,31 +481,6 @@ cerr << "error errno=" << errno << "\n";
 		} else {
 			cerr << "handleComtreeDisplay: unrecognized request "
 			     << word << " from comtreeDisplay";
-			return false;
-		}
-		if (sscanf(buf,"%d",&comt) != 1) {
-			cerr << "handleComtreeDisplay: unable "
-				"to receive comtree number "
-				"from remote display\n";
-			return false;
-		}
-		// send requested status
-		string s;
-		pthread_mutex_lock(&allComtLock);
-		int ctx = comtrees->getComtIndex(comt);
-		if (ctx == 0) {
-			// send back blank comtree status string
-			pthread_mutex_unlock(&allComtLock);
-			s = ";\n";
-		} else {
-			pthread_mutex_lock(&comtLock[ctx]);
-			pthread_mutex_unlock(&allComtLock);
-			comtrees->comt2string(ctx,s);
-			pthread_mutex_unlock(&comtLock[ctx]);
-		}
-		if (Np4d::sendString(sock,s) < 0) {
-			cerr << "handleComtreeDisplay: unable to send "
-				"comtree status update to display\n";
 			return false;
 		}
 	}
@@ -788,6 +775,22 @@ bool handleJoinComtReq(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 	}
 	pthread_mutex_lock(&comtLock[ctx]);
 
+if (cliAdr == Forest::forestAdr(3,13)) {
+string s1;
+cerr << "joining comtree " << comt << " at r" << cliRtr << " cliAdr=" << Forest::fAdr2string(cliAdr,s1) << "\n";
+cerr << comtrees->comtStatus2string(ctx,s1);
+cerr << comtrees->comt2string(ctx,s1);
+}
+
+	if (comtrees->isComtLeaf(ctx,cliAdr)) {
+		// if client already in comtree, this is probably a
+		// second attempt, caused by a lost acknowledgment
+		pthread_mutex_unlock(&comtLock[ctx]);
+		CtlPkt repCp(cp.getCpType(),POS_REPLY, cp.getSeqNum());
+		sendCtlPkt(repCp,cliAdr,inQ,outQ);
+		return true;
+	}
+
 	list<LinkMod> path; // for new path added to comtree
 	list<LinkMod> modList; // for link modifications in rest of comtree
 	RateSpec bbDefRates, leafDefRates;
@@ -803,18 +806,30 @@ bool handleJoinComtReq(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 			pthread_mutex_unlock(&rateLock);
 			pthread_mutex_unlock(&comtLock[ctx]);
 			errReply(p,cp,outQ,"cannot find path to comtree");
+
+if (cliAdr == Forest::forestAdr(3,13)) {
+cerr << "failed no path" << endl;
+}
 			return true;
 		}
 		comtrees->addPath(ctx,path);
+		comtrees->adjustSubtreeRates(ctx,cliRtrAdr,leafDefRates);
 		if (autoConfig) {
 			if (comtrees->computeMods(ctx,modList)) {
 				comtrees->provision(ctx,modList);
 			} else {
+				leafDefRates.negate();
+				comtrees->adjustSubtreeRates(
+					ctx,cliRtrAdr,leafDefRates);
+				leafDefRates.negate();
 				comtrees->removePath(ctx,path);
 				pthread_mutex_unlock(&rateLock);
 				pthread_mutex_unlock(&comtLock[ctx]);
 				errReply(p,cp,outQ,"cannot add required "
 					 "capacity to comtree backbone");
+if (cliAdr == Forest::forestAdr(3,13)) {
+cerr << "failed no backbone capacity" << endl;
+}
 				return true;
 			}
 		}
@@ -828,16 +843,24 @@ bool handleJoinComtReq(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 			teardownPath(ctx,path,inQ,outQ);
 			pthread_mutex_lock(&rateLock);
 			if (autoConfig) comtrees->unprovision(ctx,modList);
+			leafDefRates.negate();
+			comtrees->adjustSubtreeRates(
+				ctx,cliRtrAdr,leafDefRates);
+			leafDefRates.negate();
 			comtrees->removePath(ctx,path);
 			pthread_mutex_unlock(&rateLock);
 		} else if (autoConfig &&
 			   !modComtRates(ctx,modList,false,inQ,outQ)) {
 			pthread_mutex_lock(&rateLock);
-			comtrees->unprovision(ctx,modList);
+				comtrees->unprovision(ctx,modList);
 			pthread_mutex_unlock(&rateLock);
 			modComtRates(ctx,modList,true,inQ,outQ);
 			pthread_mutex_lock(&rateLock);
-			comtrees->removePath(ctx,path);
+				leafDefRates.negate();
+				comtrees->adjustSubtreeRates(
+					ctx,cliRtrAdr,leafDefRates);
+				leafDefRates.negate();
+				comtrees->removePath(ctx,path);
 			pthread_mutex_unlock(&rateLock);
 			teardownPath(ctx,path,inQ,outQ);
 		} else { // all routers successfully configured
@@ -852,23 +875,43 @@ bool handleJoinComtReq(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 	int llnk = setupClientLink(ctx,cliIp,cliPort,cliRtr,inQ,outQ);
 	comtrees->addNode(ctx,cliAdr);
 	comtrees->setParent(ctx,cliAdr,cliRtrAdr,llnk);
+	comtrees->setLinkRates(ctx,cliAdr,leafDefRates);
+
+
+if (cliAdr == Forest::forestAdr(3,13)) {
+cerr << "setting up client" << endl;
+}
 	if (llnk == 0 || !setComtLeafRates(ctx,cliAdr,inQ,outQ)) {
 		// tear it all down and fail
 		comtrees->removeNode(ctx,cliAdr);
 		pthread_mutex_lock(&rateLock);
-		comtrees->unprovision(ctx,modList);
+			comtrees->unprovision(ctx,modList);
 		pthread_mutex_unlock(&rateLock);
 		modComtRates(ctx,modList,true,inQ,outQ);
 		pthread_mutex_lock(&rateLock);
-		comtrees->removePath(ctx,path);
+			leafDefRates.negate();
+			comtrees->adjustSubtreeRates(
+				ctx,cliRtrAdr,leafDefRates);
+			comtrees->removePath(ctx,path);
+			leafDefRates.negate();
 		pthread_mutex_unlock(&rateLock);
 		pthread_mutex_unlock(&comtLock[ctx]);
 		teardownPath(ctx,path,inQ,outQ);
 		errReply(p,cp,outQ,"cannot configure leaf node");
+if (cliAdr == Forest::forestAdr(3,13)) {
+cerr << "can't configure client" << endl;
+}
 		return true;
 	}
 
 	pthread_mutex_unlock(&comtLock[ctx]);
+
+if (cliAdr == Forest::forestAdr(3,13)) {
+string s1;
+cerr << "done joining comtree " << comt << " at " << cliRtr << " cliAdr=" << Forest::fAdr2string(cliAdr,s1) << "\n";
+cerr << comtrees->comtStatus2string(ctx,s1);
+cerr << comtrees->comt2string(ctx,s1);
+}
 
 	// finally, send positive reply to client and return
 	CtlPkt repCp(cp.getCpType(),POS_REPLY, cp.getSeqNum());
@@ -923,24 +966,37 @@ bool handleLeaveComtReq(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 	}
 	pthread_mutex_lock(&comtLock[ctx]);
 
-	if (!comtrees->isComtNode(ctx,cliRtrAdr)) {
+if (cliAdr == Forest::forestAdr(3,13)) {
+string s1;
+cerr << "leaving comtree " << comt << " at r" << cliRtr << " cliAdr=" << Forest::fAdr2string(cliAdr,s1) << "\n";
+cerr << comtrees->comtStatus2string(ctx,s1);
+cerr << comtrees->comt2string(ctx,s1);
+}
+
+	if (!comtrees->isComtLeaf(ctx,cliAdr)) {
+		// if client is not in comtree, this is probably a
+		// second attempt, caused by a lost acknowledgment
 		pthread_mutex_unlock(&comtLock[ctx]);
-		errReply(p,cp,outQ,"invalid comtree for this client");
+		CtlPkt repCp(cp.getCpType(),POS_REPLY, cp.getSeqNum());
+		sendCtlPkt(repCp,cliAdr,inQ,outQ);
 		return true;
 	}
 
 	teardownClientLink(ctx,cliIp,cliPort,cliRtr,inQ,outQ);
 
 	// reduce subtree rates in response to dropped client
+	// then remove client from comtrees
 	RateSpec rs;
 	comtrees->getLinkRates(ctx,cliAdr,rs); rs.negate();
 	comtrees->adjustSubtreeRates(ctx,cliRtrAdr,rs);
+	comtrees->removeNode(ctx,cliAdr);
 
 	// for autoConfig case, modify backbone rates
 	if (comtrees->getConfigMode(ctx)) {
 		list<LinkMod> modList;
-		// note, computeMods returns negative rates,
-		// so provisioning these rates effectively reduces allocation
+		// note, since we've adjusted subtree rates, computeMods
+		// returns negative rates, so provisioning these rates
+		// effectively reduces allocation
 		pthread_mutex_lock(&rateLock);
 			comtrees->computeMods(ctx,modList);
 			comtrees->provision(ctx,modList);
@@ -968,6 +1024,12 @@ bool handleLeaveComtReq(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 		comtrees->removePath(ctx,path);
 	pthread_mutex_unlock(&rateLock);
 	teardownPath(ctx,path,inQ,outQ);
+if (cliAdr == Forest::forestAdr(3,13)) {
+string s1;
+cerr << "done leaving comtree " << comt << " at r" << cliRtr << " cliAdr=" << Forest::fAdr2string(cliAdr,s1) << "\n";
+cerr << comtrees->comtStatus2string(ctx,s1);
+cerr << comtrees->comt2string(ctx,s1);
+}
 	pthread_mutex_unlock(&comtLock[ctx]);
 	
 	// send positive reply and return
@@ -1168,7 +1230,10 @@ bool teardownClientLink(int ctx, ipa_t cliIp, ipp_t cliPort, int rtr,
 	       		 + Util::num2string((int) comt,s2) + " client "
 			 + Np4d::ip2string(cliIp,s3);
 	string negRstr = noRstr;
-	if (!handleReply(reply,repCp,noRstr,negRstr)) return false;
+	if (!handleReply(reply,repCp,noRstr,negRstr)) { 
+cerr << "drop comtree link request failed comt=" << comt;
+		return false;
+	}
 	return true;
 } 
 
@@ -1228,9 +1293,11 @@ bool setComtLinkRates(int ctx, int lnk, int rtr, Queue& inQ, Queue& outQ) {
 	reqCp.setAttr(PKT_RATE_OUT,rs.pktRateUp);
 	int reply = sendCtlPkt(reqCp,rtrAdr,inQ,outQ);
 	CtlPkt repCp; string s1, s2;
-	string noRstr = "addPath: mod comtree link request to "
+	string noRstr = "setComtLinkRates: mod comtree link request to "
 	 	 + net->getNodeName(rtr,s1) + " for comtree "
 	       	 + Util::num2string(comt,s2);
+	noRstr += " link " + Util::num2string(net->getLLnum(lnk,rtr),s1)
+		  + " with rateSpec " + rs.toString(s2);
 	string negRstr = noRstr;
 	bool success = handleReply(reply,repCp,noRstr,negRstr);
 	if (reply == NORESPONSE) return false;
@@ -1257,13 +1324,14 @@ bool setComtLinkRates(int ctx, int lnk, int rtr, Queue& inQ, Queue& outQ) {
 				avail.bitRateUp =
 					repCp.getAttr(AVAIL_BIT_RATE_OUT);
 				avail.pktRateUp =
-					repCp.getAttr(AVAIL_BIT_RATE_OUT);
+					repCp.getAttr(AVAIL_PKT_RATE_OUT);
 			} else {
 				avail.bitRateDown =
 					repCp.getAttr(AVAIL_BIT_RATE_OUT);
 				avail.pktRateDown =
-					repCp.getAttr(AVAIL_BIT_RATE_OUT);
+					repCp.getAttr(AVAIL_PKT_RATE_OUT);
 			}
+cerr << "router reports avail rates " << avail.toString(s1) << endl;
 			net->setAvailRates(lnk,avail);
 			pthread_mutex_unlock(&rateLock);
 		}
@@ -1287,16 +1355,19 @@ bool setComtLeafRates(int ctx, fAdr_t leafAdr, Queue& inQ, Queue& outQ) {
 
 	CtlPkt reqCp(MOD_COMTREE_LINK,REQUEST,0);
 	reqCp.setAttr(COMTREE_NUM,comt);
-	reqCp.setAttr(LINK_NUM,comtrees->getPlink(ctx,leafAdr));
+	int llnk = comtrees->getPlink(ctx,leafAdr);
+	reqCp.setAttr(LINK_NUM,llnk);
 	reqCp.setAttr(BIT_RATE_IN,rs.bitRateUp);
 	reqCp.setAttr(BIT_RATE_OUT,rs.bitRateDown);
 	reqCp.setAttr(PKT_RATE_IN,rs.pktRateUp);
 	reqCp.setAttr(PKT_RATE_OUT,rs.pktRateDown);
 	int reply = sendCtlPkt(reqCp,rtrAdr,inQ,outQ);
 	CtlPkt repCp; string s1, s2;
-	string noRstr = "addPath: mod comtree link request to "
+	string noRstr = "setComtLeafRates: mod comtree link request to "
 	 	 	+ net->getNodeName(rtr,s1) + " for comtree "
 	       	 	+ Util::num2string(comt,s2);
+	noRstr += " link " + Util::num2string(llnk,s1)
+		+ " with rateSpec " + rs.toString(s2);
 	string negRstr = noRstr;
 	bool success = handleReply(reply,repCp,noRstr,negRstr);
 	if (reply == NORESPONSE) return false;
@@ -1322,7 +1393,7 @@ bool modComtRates(int ctx, list<LinkMod>& modList, bool nostop,
 		if (!nostop &&
 		    !setComtLinkRates(ctx,pp->lnk,pp->child,inQ,outQ))
 			return false;
-		int parent = net->getPeer(pp->lnk,pp->child);
+		int parent = net->getPeer(pp->child,pp->lnk);
 		if (!nostop &&
 		    !setComtLinkRates(ctx,pp->lnk,parent,inQ,outQ))
 			return false;
@@ -1363,7 +1434,7 @@ int sendCtlPkt(CtlPkt& cp, fAdr_t dest, Queue& inQ, Queue& outQ) {
 	h.setLength(plen + Forest::OVERHEAD);
 	if (cp.getCpType() < CLIENT_NET_SIG_SEP) {
 		h.setPtype(CLIENT_SIG);
-		h.setComtree(Forest::CLIENT_CON_COMT);
+		h.setComtree(Forest::CLIENT_SIG_COMT);
 	} else {
 		h.setPtype(NET_SIG);
 		h.setComtree(Forest::NET_SIG_COMT);

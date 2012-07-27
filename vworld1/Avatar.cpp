@@ -424,7 +424,7 @@ void Avatar::run(uint32_t finishTime) {
 					startComtSwitch(newComt,now);
 					waiting4switch = true;
 				}
-				comtSwitchTime = now + randint(30,300)*1000000;
+				comtSwitchTime = now + randint(10,30)*1000000;
 			}
 		}
 
@@ -447,10 +447,10 @@ void Avatar::run(uint32_t finishTime) {
 void Avatar::startComtSwitch(comt_t newComt, uint32_t now) {
 	nextComt = newComt;
 	if (comt != 0) {
-	//	unsubscribeAll();
-	//	send2comtCtl(CLIENT_LEAVE_COMTREE);
-	//	switchState = LEAVING;
-	//	switchTimer = now; switchCnt = 1;
+		unsubscribeAll();
+		send2comtCtl(CLIENT_LEAVE_COMTREE);
+		switchState = LEAVING;
+		switchTimer = now; switchCnt = 1;
 	} else {
 		comt = nextComt;
 		send2comtCtl(CLIENT_JOIN_COMTREE);
@@ -761,7 +761,7 @@ int Avatar::receive() {
         }
 	ps->unpack(p);
 	if ((h.getPtype() == CLIENT_SIG &&
-	     h.getComtree() != Forest::CLIENT_CON_COMT) &&
+	     h.getComtree() != Forest::CLIENT_SIG_COMT) &&
 	    h.getComtree() != comt) {
 		ps->free(p);
 		return 0;

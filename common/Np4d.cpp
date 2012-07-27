@@ -465,7 +465,7 @@ int Np4d::sendBufBlock(int sock, char* buf, int buflen) {
  */
 int Np4d::sendString(int sock, string& s) {
 	const char *p; p = s.c_str();
-	int numLeft = s.size()+1; // extra 1 accounts for EOS terminator
+	int numLeft = s.size(); // do not include EOS
 	while (numLeft > 0) {
 		int nbytes = write(sock,(void *) p,numLeft);
 		if (nbytes <= 0) {
