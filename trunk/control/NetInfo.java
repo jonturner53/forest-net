@@ -1001,8 +1001,8 @@ public class NetInfo {
 				setNodeAdr(nodeNum,cLeaf.fAdr);
 				Pair<Double,Double> loc;
 				loc = new Pair<Double,Double>(
-					new Double(cRtr.latitude/1000000.0),
-					new Double(cRtr.longitude/1000000.0));
+					new Double(cLeaf.latitude/1000000.0),
+					new Double(cLeaf.longitude/1000000.0));
 				setNodeLocation(nodeNum,loc);
 				leafNum++;
 			} else if (s.equals("link")) {

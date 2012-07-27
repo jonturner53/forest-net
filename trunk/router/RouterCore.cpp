@@ -131,7 +131,7 @@ RouterCore::RouterCore(bool booting1, const RouterInfo& config)
 	sm = new StatsModule(1000, nLnks, nQus, ctt);
 	iop = new IoProcessor(nIfaces, ift, lt, ps, sm);
 	qm = new QuManager(nLnks, nPkts, nQus, min(50,5*nPkts/nLnks), ps, sm);
-	pktLog = new PacketLog(5000,500,ps);
+	pktLog = new PacketLog(20000,500,ps);
 
 	if (!booting)
 		leafAdr = new UiSetPair((config.lastLeafAdr - firstLeafAdr)+1);
@@ -722,17 +722,6 @@ void RouterCore::forward(int p, int ctx) {
 			int lnk = ctt->getLink(rcLnk);
 			int qid = ctt->getLinkQ(rcLnk);
 			if (lnk == h.getInLink() || !qm->enq(p,qid,now)) {
-if (h.getPtype() == NET_SIG) {
-CtlPkt cp; 
-cp.unpack(ps->getPayload(p),h.getLength()-Forest::OVERHEAD);
-if (cp.getCpType() == CLIENT_CONNECT) {
-string s;
-cerr << "forward discarding net signaling pkt lnk=" << lnk << " qid=" << qid
-     << " qlen=" << sm->getQlen(qid) << " qbytes=" << sm->getQbytes(qid)
-     << " inLink=" << h.getInLink() << "\n"
-     << h.toString(ps->getBuffer(p),s);
-}
-}
 				ps->free(p);
 			}
 			return;
@@ -1515,7 +1504,7 @@ bool RouterCore::addComtreeLink(int p, CtlPkt& cp, CtlPkt& reply) {
 	}
 	bool isRtr = (lt->getPeerType(lnk) == ROUTER);
 	bool isCore = false;
-	if(isRtr) {
+	if (isRtr) {
 		if(!cp.isSet(PEER_CORE_FLAG)) {
 			reply.setErrMsg("add comtree link: must "
 				"specify core flag on links to routers");
@@ -1637,6 +1626,8 @@ void RouterCore::dropComtreeLink(int ctx, int lnk, int cLnk) {
 	lt->addAvailInPktRate(lnk,ctt->getInPktRate(cLnk));
 	lt->addAvailOutBitRate(lnk,ctt->getOutBitRate(cLnk));
 	lt->addAvailOutPktRate(lnk,ctt->getOutPktRate(cLnk));
+cerr << "dropping comtree link " << lnk << " for comtree " << ctx
+<< " available input packet rate=" << lt->getAvailInPktRate(lnk) << endl;
 
 	// remove unicast route for this comtree
 	fAdr_t peerAdr = lt->getPeerAdr(lnk);
@@ -1712,8 +1703,8 @@ bool RouterCore::modComtreeLink(int p, CtlPkt& cp, CtlPkt& reply) {
 
 	if (cp.isSet(BIT_RATE_IN))  ibr = cp.getAttr(BIT_RATE_IN);
 	if (cp.isSet(PKT_RATE_IN))  ipr = cp.getAttr(PKT_RATE_IN);
-	if (cp.isSet(BIT_RATE_OUT)) ibr = cp.getAttr(BIT_RATE_OUT);
-	if (cp.isSet(PKT_RATE_OUT)) ipr = cp.getAttr(PKT_RATE_OUT);
+	if (cp.isSet(BIT_RATE_OUT)) obr = cp.getAttr(BIT_RATE_OUT);
+	if (cp.isSet(PKT_RATE_OUT)) opr = cp.getAttr(PKT_RATE_OUT);
 
 	int dibr = ibr - ctt->getInBitRate(cLnk);
 	int dipr = ipr - ctt->getInPktRate(cLnk);
@@ -1729,6 +1720,9 @@ bool RouterCore::modComtreeLink(int p, CtlPkt& cp, CtlPkt& reply) {
 	if (lt->getAvailInPktRate(lnk) < dipr) {
 		reply.setErrMsg("modify comtree link: increase in "
 				"input packet rate exceeds link capacity");
+cerr << "inPktRate " << ipr << " requires increase of " << dipr 
+<< " in input packet rate on link " << lnk << ", exceeding available rate "
+<< lt->getAvailInPktRate(lnk) << endl;
 		success = false;
 	}
 	if (lt->getAvailOutBitRate(lnk) < dobr) {

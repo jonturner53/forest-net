@@ -783,6 +783,7 @@ bool ComtInfo::computeMods(int ctx, list<LinkMod>& modList) {
 	fAdr_t root = getRoot(ctx);
 	map<fAdr_t,ComtRtrInfo>::iterator rp;
 	rp = comtree[ctx].rtrMap->find(root);
+	modList.clear();
 	return computeMods(ctx,root,rp->second.subtreeRates,modList);
 }
 
@@ -945,13 +946,11 @@ string& ComtInfo::leafLink2string(int ctx, fAdr_t leafAdr, string& s) const {
 
 	map<fAdr_t,ComtLeafInfo>::iterator lp;
 	lp = comtree[ctx].leafMap->find(leafAdr);
-	int parent = lp->second.parent;
+	int parent = net->getNodeNum(lp->second.parent);
 	stringstream ss;
 	ss << "(" << Forest::fAdr2string(leafAdr,s);
 	ss << "," << net->getNodeName(parent,s) << "." << lp->second.llnk;
-	RateSpec rs = lp->second.plnkRates;
-	ss << ",(" << rs.bitRateUp << "," << rs.bitRateDown
-	   << ","  << rs.pktRateUp << "," << rs.pktRateDown << "))";
+	ss << "," << lp->second.plnkRates.toString(s) << ")";
 	s = ss.str();
 	return s;
 }
@@ -969,13 +968,11 @@ string& ComtInfo::comt2string(int ctx, string& s) const {
 	   << net->getNodeName(net->getNodeNum(getOwner(ctx)),s) << ",";
 	ss << net->getNodeName(net->getNodeNum(getRoot(ctx)),s) << ","
 	   << (getConfigMode(ctx) ? "auto" : "manual") << ",";
-	RateSpec& brs = comtree[ctx].bbDefRates;
-	ss << "(" << brs.bitRateUp << "," << brs.bitRateDown << ","
-		  << brs.pktRateUp << "," << brs.pktRateDown << "),";
-	RateSpec& lrs = comtree[ctx].leafDefRates;
-	ss << "(" << lrs.bitRateUp << "," << lrs.bitRateDown << ","
-		  << lrs.pktRateUp << "," << lrs.pktRateDown << ")";
-	if (comtree[ctx].rtrMap->size() + comtree[ctx].leafMap->size() <= 1) {
+	ss << comtree[ctx].bbDefRates.toString(s) << ",";
+	ss << comtree[ctx].leafDefRates.toString(s);
+	int numNodes = comtree[ctx].rtrMap->size()
+			+ comtree[ctx].leafMap->size();
+	if (numNodes <= 1) {
 		ss << ")\n"; s = ss.str(); return s;
 	} else if (comtree[ctx].coreSet->size() > 1) {
 		ss << ",\n\t(";
@@ -991,28 +988,28 @@ string& ComtInfo::comt2string(int ctx, string& s) const {
 	} else {
 		ss << ",";
 	}
-	if (comtree[ctx].rtrMap->size() + comtree[ctx].leafMap->size() <= 1) {
+	if (numNodes <= 1) {
 		ss << "\n)\n";
 	} else {
 		ss << ",\n";
+		int num2go = numNodes - 1;
 		// iterate through routers and print parent links
+		int numDone = 0;
 		map<fAdr_t,ComtRtrInfo>::iterator rp;
 		for (rp  = comtree[ctx].rtrMap->begin();
-		     rp != comtree[ctx].rtrMap->end(); ) {
-			if (rp->second.plnk == 0) { rp++; continue; }
+		     rp != comtree[ctx].rtrMap->end(); rp++) {
+			if (rp->second.plnk == 0) continue;
 			ss << "\t" << link2string(ctx,rp->second.plnk,s);
-			rp++;
-			if (rp != comtree[ctx].rtrMap->end()) ss << ",";
+			if (++numDone < num2go) ss << ",";
 			ss << "\n";
 		}
 		// iterate through leaf nodes and print parent links
 		map<fAdr_t,ComtLeafInfo>::iterator lp;
 		for (lp  = comtree[ctx].leafMap->begin();
-		     lp != comtree[ctx].leafMap->end(); ) {
+		     lp != comtree[ctx].leafMap->end(); lp++) {
 			ss << "\t"
 			   << leafLink2string(ctx,lp->first,s);
-			lp++;
-			if (lp != comtree[ctx].leafMap->end()) ss << ",";
+			if (++numDone < num2go) ss << ",";
 			ss << "\n";
 		}
 		ss << ")\n";
@@ -1035,13 +1032,11 @@ string& ComtInfo::comtStatus2string(int ctx, string& s) const {
 	   << net->getNodeName(net->getNodeNum(getOwner(ctx)),s) << ",";
 	ss << net->getNodeName(net->getNodeNum(getRoot(ctx)),s) << ","
 	   << (getConfigMode(ctx) ? "auto" : "manual") << ",";
-	RateSpec& brs = comtree[ctx].bbDefRates;
-	ss << "(" << brs.bitRateUp << "," << brs.bitRateDown << ","
-		  << brs.pktRateUp << "," << brs.pktRateDown << "),";
-	RateSpec& lrs = comtree[ctx].leafDefRates;
-	ss << "(" << lrs.bitRateUp << "," << lrs.bitRateDown << ","
-		  << lrs.pktRateUp << "," << lrs.pktRateDown << ")";
-	if (comtree[ctx].rtrMap->size() + comtree[ctx].leafMap->size() <= 1) {
+	ss << comtree[ctx].bbDefRates.toString(s) << ",";
+	ss << comtree[ctx].leafDefRates.toString(s);
+	int numNodes = comtree[ctx].rtrMap->size()
+			+ comtree[ctx].leafMap->size();
+	if (numNodes <= 1) {
 		ss << ")\n"; s = ss.str(); return s;
 	} else if (comtree[ctx].coreSet->size() > 1) {
 		ss << ",\n\t(";
@@ -1057,15 +1052,23 @@ string& ComtInfo::comtStatus2string(int ctx, string& s) const {
 	} else {
 		ss << ",";
 	}
-	if (comtree[ctx].rtrMap->size() + comtree[ctx].leafMap->size() <= 1) {
+	if (numNodes <= 1) {
 		ss << "\n)\n";
 	} else {
 		ss << ",\n";
+		// count number of nodes to be added to string
+		int num2go = comtree[ctx].rtrMap->size();
+		map<fAdr_t,ComtLeafInfo>::iterator lp;
+		for (lp  = comtree[ctx].leafMap->begin();
+		     lp != comtree[ctx].leafMap->end(); lp++) {
+			if (net->getNodeNum(lp->first) != 0) num2go++;
+		}
 		// iterate through routers and print nodes, parents, rates
 		// and link counts
+		int numDone = 0;
 		map<fAdr_t,ComtRtrInfo>::iterator rp;
 		for (rp  = comtree[ctx].rtrMap->begin();
-		     rp != comtree[ctx].rtrMap->end(); ) {
+		     rp != comtree[ctx].rtrMap->end(); rp++) {
 			fAdr_t radr = rp->first;
 			int rtr = net->getNodeNum(radr);
 			ss << "\t(";
@@ -1082,24 +1085,22 @@ string& ComtInfo::comtStatus2string(int ctx, string& s) const {
 				   << "," << rp->second.lnkCnt;
 			}
 			ss << ")";
-			rp++;
-			if (rp != comtree[ctx].rtrMap->end()) ss << ",";
+			if (++numDone < num2go) ss << ",";
 			ss << "\n";
 		}
 		// iterate through static leaf nodes and print parent links
-		map<fAdr_t,ComtLeafInfo>::iterator lp;
 		for (lp  = comtree[ctx].leafMap->begin();
-		     lp != comtree[ctx].leafMap->end(); ) {
+		     lp != comtree[ctx].leafMap->end(); lp++) {
 			fAdr_t ladr = lp->first;
 			int leaf = net->getNodeNum(ladr);
+			if (leaf == 0) continue; // skip dynamic leafs
 			ss << "\t(";
-			int parent = lp->second.parent;
+			int parent = net->getNodeNum(lp->second.parent);
 			ss << net->getNodeName(leaf,s) << ",";
 			ss << net->getNodeName(parent,s) << "."
 			   << lp->second.llnk ;
 			ss << "," << lp->second.plnkRates.toString(s) << ")";
-			lp++;
-			if (lp != comtree[ctx].leafMap->end()) ss << ",";
+			if (++numDone < num2go) ss << ",";
 			ss << "\n";
 		}
 		ss << ")\n";

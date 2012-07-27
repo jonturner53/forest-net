@@ -52,7 +52,7 @@ public class ComtreeDisplay {
 
 	private static NetInfo net;	///< contains net toppology
 	private static ComtInfo comtrees; ///< info about comtrees
-	private static java.util.HashSet<Integer> comtSet;
+	private static java.util.TreeSet<Integer> comtSet;
 					///< current set of comtrees
 	
 	/** Main method processes arguments, connects to ComtCtl and
@@ -80,13 +80,17 @@ public class ComtreeDisplay {
 		// setup input stream and get network topology
 		InputStream in = null;
 		PushbackReader inRdr = null;
-		String s = "getNet\ngetComtSet\n";
+		String s;
+		comtSet = new java.util.TreeSet<Integer>();
 		try {
+			s = "getNet\n";
 			out.write(s.getBytes());
 			in = ccChan.socket().getInputStream();
 			inRdr = new PushbackReader(new InputStreamReader(in));
 			if (!net.read(inRdr))
 				Util.fatal("can't read network topology\n");
+			s = "getComtSet\n";
+			out.write(s.getBytes());
 			readComtSet(inRdr);
 		} catch(Exception e) {
 			Util.fatal("can't read network topology/comtrees\n"	
@@ -96,6 +100,7 @@ public class ComtreeDisplay {
 		// initial display (no comtrees yet)
 		linkDetail = false;
 		setupDisplay();
+		updateDisplay();
 
 		// main loop
 		ccomt = 0;
@@ -103,18 +108,21 @@ public class ComtreeDisplay {
 			String lineBuf = readKeyboardIn();
 			if (lineBuf.length() > 0) processKeyboardIn(lineBuf);
 			if (!comtSet.contains(ccomt)) continue;
-			// send ccomt to ComtCtl
-			s = "getComtSet\n" + "getComtree " + ccomt + "\n";
 			try {
+				s = "getComtSet\n";
 				out.write(s.getBytes());
+				readComtSet(inRdr);
+				s = "getComtree " + ccomt + "\n";
+				out.write(s.getBytes());
+				// now read updated list and comtree status
+				int recvdComt = comtrees.readComtStatus(inRdr);
+				if (recvdComt != ccomt) {
+System.out.println("recvdComt=" + recvdComt);
+					Util.fatal("received comtree info does "
+						   + "not match request");
+				}
 			} catch(Exception e) {
-				Util.fatal("can't write to ComtCtl " + e);
-			}
-			// now read updated list and comtree status
-			readComtSet(inRdr);
-			if (ccomt != comtrees.readComtStatus(inRdr)) {
-				Util.fatal("received comtree info does not "
-					   + "match request");
+				Util.fatal("can't update status " + e);
 			}
 			updateDisplay();
 		}
@@ -188,10 +196,10 @@ public class ComtreeDisplay {
                         if (kbStream == null) {
                                 kbStream = new BufferedReader(
 					new InputStreamReader(System.in));
-                                System.out.print("::");
+                                System.out.print("comtree: ");
                         } else if (kbStream.ready()) {
 				lineBuf = kbStream.readLine();
-                                System.out.print("::");
+                                System.out.print("ComtreeDisplay: ");
 			}
                 } catch(Exception e) {
                         System.out.println("input error: " + e);
@@ -246,6 +254,10 @@ public class ComtreeDisplay {
 			StdDraw.text(x, y, "" + c);
 			y -= delta;
 		}
+		if (ccomt == 0) { // quite early
+			StdDraw.show(500); return;
+		}
+
 		StdDraw.setPenColor(Color.BLACK);
 
 		// find min and max latitude and longitude
@@ -256,6 +268,7 @@ public class ComtreeDisplay {
 					new Double(0), new Double(0));
 		for (int node = net.firstNode(); node != 0;
 			 node = net.nextNode(node)) {
+			net.getNodeLocation(node,loc);
 			minLat  = Math.min(minLat,  loc.first);
 			maxLat  = Math.max(maxLat,  loc.first);
 			minLong = Math.min(minLong, loc.second);
@@ -299,13 +312,13 @@ public class ComtreeDisplay {
 				RateSpec rs = new RateSpec(0);
 				int childAdr = comtrees.getChild(ctx,lnk);
 				comtrees.getLinkRates(ctx,childAdr,rs);
-				StdDraw.text(x, y+.8*nodeRadius,
+				StdDraw.text(x, y+.9*nodeRadius,
 						"brU=" + rs.bitRateUp);
 				StdDraw.text(x, y+.3*nodeRadius,
 						"brD=" + rs.bitRateDown);
 				StdDraw.text(x, y-.3*nodeRadius,
 						"prU=" + rs.pktRateUp);
-				StdDraw.text(x, y-.8*nodeRadius,
+				StdDraw.text(x, y-.9*nodeRadius,
 						"prD=" + rs.pktRateDown);
 			}
 		}
@@ -324,7 +337,7 @@ public class ComtreeDisplay {
 				if (net.isRouter(node))
 					lnkCnt=comtrees.getLinkCnt(ctx,nodeAdr);
 				nodeColor = Color.WHITE;
-				if (node == comtrees.getRoot(ctx))
+				if (nodeAdr == comtrees.getRoot(ctx))
 					nodeColor = Color.YELLOW;
 			}
 			StdDraw.setPenColor(nodeColor);
@@ -350,6 +363,6 @@ public class ComtreeDisplay {
 						     net.getNodeAdr(node)));
 			}
 		}
-		StdDraw.show(50);
+		StdDraw.show(500);
 	}
 }

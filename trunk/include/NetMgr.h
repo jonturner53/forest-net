@@ -6,8 +6,8 @@
  *  See http://www.apache.org/licenses/LICENSE-2.0 for details.
  */
 
-#ifndef MONITOR_H
-#define MONITOR_H
+#ifndef NETMGR_H
+#define NETMGR_H
 
 #include <pthread.h>
 #include "CommonDefs.h"

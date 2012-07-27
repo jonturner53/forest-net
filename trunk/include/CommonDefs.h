@@ -176,8 +176,9 @@ inline fAdr_t Forest::forestAdr(int zip, int local ) {
  */
 inline fAdr_t Forest::forestAdr(const char *fas) {
 	int zip, local, mcAdr;
-	if (sscanf(fas,"%d.%d", &zip, &local) == 2 && zip > 0 && local > 0)
+	if (sscanf(fas,"%d.%d", &zip, &local) == 2 && zip > 0 && local > 0) {
 		return forestAdr(zip,local);
+	}
 	else if (sscanf(fas,"%d", &mcAdr) == 1 && mcAdr < 0)
 		return mcAdr;
 	else

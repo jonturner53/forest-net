@@ -140,16 +140,17 @@ int NetInfo::addLeaf(const string& name, ntyp_t nTyp) {
  *  link number with a specified router)
  */
 int NetInfo::addLink(int u, int v, int uln, int vln) {
-	int lnk = netTopo->join(u,v);
+	int lnk = (isLeaf(v) ? netTopo->join(v,u) : netTopo->join(u,v));
 	if (lnk == 0) return 0;
 	netTopo->setWeight(lnk,0);
-	if (getNodeType(u) == ROUTER) {
+	if (isRouter(u)) {
 		if (!locLnk2lnk->put(ll2l_key(u,uln),2*lnk)) {
 			netTopo->remove(lnk); return 0;
 		}
-		setLeftLLnum(lnk,uln);
+		if (isLeaf(v))	setRightLLnum(lnk,uln);
+		else 		setLeftLLnum(lnk,uln);
 	}
-	if (getNodeType(v) == ROUTER) {
+	if (isRouter(v)) {
 		if (!locLnk2lnk->put(ll2l_key(v,vln),2*lnk+1)) {
 			locLnk2lnk->remove(ll2l_key(u,uln));
 			netTopo->remove(lnk); return 0;
@@ -243,8 +244,8 @@ bool NetInfo::read(istream& in) {
 			setLeafType(nodeNum,cLeaf.nType);
 			setLeafIpAdr(nodeNum,cLeaf.ipAdr);
 			setNodeAdr(nodeNum,cLeaf.fAdr);
-			pair<double,double> loc(cRtr.latitude/1000000.0,
-						cRtr.longitude/1000000.0);
+			pair<double,double> loc(cLeaf.latitude/1000000.0,
+						cLeaf.longitude/1000000.0);
 			setNodeLocation(nodeNum,loc);
 			leafNum++;
 		} else if (s == "link") {
