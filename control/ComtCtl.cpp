@@ -996,7 +996,7 @@ if (!rs.isZero()) {
 string s1;
 rs.negate();
 cerr << "handleLeave found leaf with mismatched ratespec "
-     << Forest::forestAdr(cliAdr,s1) << " in comtree " << comt;
+     << Forest::fAdr2string(cliAdr,s1) << " in comtree " << comt;
 cerr << rs.toString(s1);
 }
 	comtrees->removeNode(ctx,cliAdr);
