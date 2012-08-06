@@ -835,9 +835,10 @@ cerr << "failed no backbone capacity" << endl;
 		}
 		pthread_mutex_unlock(&rateLock);
 		// we now have the path reserved in the internal data structure,
+		// and we've adjusted backbone rates as necessary;
 		// so no other thread can interfere with completion
 	
-		// now configure routers on path and exit loop if successful
+		// now configure routers and exit loop if successful
 		if (!setupPath(ctx,path,inQ,outQ)) {
 			// could not configure path at some router
 			teardownPath(ctx,path,inQ,outQ);
@@ -876,7 +877,6 @@ cerr << "failed no backbone capacity" << endl;
 	comtrees->addNode(ctx,cliAdr);
 	comtrees->setParent(ctx,cliAdr,cliRtrAdr,llnk);
 	comtrees->setLinkRates(ctx,cliAdr,leafDefRates);
-
 
 if (cliAdr == Forest::forestAdr(3,13)) {
 cerr << "setting up client" << endl;
@@ -989,6 +989,16 @@ cerr << comtrees->comt2string(ctx,s1);
 	RateSpec rs;
 	comtrees->getLinkRates(ctx,cliAdr,rs); rs.negate();
 	comtrees->adjustSubtreeRates(ctx,cliRtrAdr,rs);
+RateSpec bbDefRates, leafDefRates;
+comtrees->getDefRates(ctx,bbDefRates,leafDefRates);
+rs.add(leafDefRates);
+if (!rs.isZero()) {
+string s1;
+rs.negate();
+cerr << "handleLeave found leaf with mismatched ratespec "
+     << Forest::forestAdr(cliAdr,s1) << " in comtree " << comt;
+cerr << rs.toString(s1);
+}
 	comtrees->removeNode(ctx,cliAdr);
 
 	// for autoConfig case, modify backbone rates
@@ -1321,15 +1331,15 @@ bool setComtLinkRates(int ctx, int lnk, int rtr, Queue& inQ, Queue& outQ) {
 			RateSpec avail;
 			net->getAvailRates(lnk,avail);
 			if (rtr == net->getLeft(lnk)) {
-				avail.bitRateUp =
-					repCp.getAttr(AVAIL_BIT_RATE_OUT);
-				avail.pktRateUp =
-					repCp.getAttr(AVAIL_PKT_RATE_OUT);
+				avail.set(repCp.getAttr(AVAIL_BIT_RATE_OUT),
+					  repCp.getAttr(AVAIL_BIT_RATE_IN),
+					  repCp.getAttr(AVAIL_PKT_RATE_OUT),
+					  repCp.getAttr(AVAIL_PKT_RATE_IN));
 			} else {
-				avail.bitRateDown =
-					repCp.getAttr(AVAIL_BIT_RATE_OUT);
-				avail.pktRateDown =
-					repCp.getAttr(AVAIL_PKT_RATE_OUT);
+				avail.set(repCp.getAttr(AVAIL_BIT_RATE_IN),
+					  repCp.getAttr(AVAIL_BIT_RATE_OUT),
+					  repCp.getAttr(AVAIL_PKT_RATE_IN),
+					  repCp.getAttr(AVAIL_PKT_RATE_OUT));
 			}
 cerr << "router reports avail rates " << avail.toString(s1) << endl;
 			net->setAvailRates(lnk,avail);
