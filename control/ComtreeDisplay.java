@@ -196,7 +196,7 @@ System.out.println("recvdComt=" + recvdComt);
                         if (kbStream == null) {
                                 kbStream = new BufferedReader(
 					new InputStreamReader(System.in));
-                                System.out.print("comtree: ");
+                                System.out.print("ComtreeDisplay: ");
                         } else if (kbStream.ready()) {
 				lineBuf = kbStream.readLine();
                                 System.out.print("ComtreeDisplay: ");
