@@ -1578,10 +1578,6 @@ bool RouterCore::addComtreeLink(int p, CtlPkt& cp, CtlPkt& reply) {
 	ctt->setOutBitRate(cLnk,br);
 	ctt->setOutPktRate(cLnk,pr);
 
-cerr << "added comtree link " << comt << ":" << lnk 
-<< " opr=" << ctt->getOutPktRate(cLnk)
-<< " avail opr=" << lt->getAvailOutPktRate(lnk) << endl;
-
 	qm->setQRates(qid,br,pr);
 	if (isRtr) qm->setQLimits(qid,500,1000000);
 	else	   qm->setQLimits(qid,500,1000000);
@@ -1621,9 +1617,6 @@ bool RouterCore::dropComtreeLink(int p, CtlPkt& cp, CtlPkt& reply) {
 	if (cLnk != 0) {
 		dropComtreeLink(ctx,lnk,cLnk);
 	}
-else {
-cerr << "cLnk=0 for comt " << comt << " lnk " << lnk << endl;
-}
 	return true;
 }
 
@@ -1637,9 +1630,6 @@ void RouterCore::dropComtreeLink(int ctx, int lnk, int cLnk) {
 	// remove unicast route for this comtree
 	fAdr_t peerAdr = lt->getPeerAdr(lnk);
 	int comt = ctt->getComtree(ctx);
-cerr << "dropping comtree link " << comt << ":" << lnk 
-<< " opr=" << ctt->getOutPktRate(cLnk)
-<< " new avail opr=" << lt->getAvailOutPktRate(lnk) << endl;
 	if (lt->getPeerType(lnk) != ROUTER) {
 		int rtx = rt->getRteIndex(comt,peerAdr);
 		if (rtx != 0) rt->removeEntry(rtx);
@@ -1719,18 +1709,6 @@ bool RouterCore::modComtreeLink(int p, CtlPkt& cp, CtlPkt& reply) {
 	int dobr = obr - ctt->getOutBitRate(cLnk);
 	int dopr = opr - ctt->getOutPktRate(cLnk);
 
-if (lnk > 4 && comt > 100 && (dibr != 0 || dipr != 0 || dobr != 0 || dopr != 0)) {
-cerr << "modifying comtree link rates for " << comt << " link " << lnk << endl
-<< " dibr=" << dibr << " ibr=" << ibr << " inBitRate="
-<< ctt->getInBitRate(cLnk) << endl
-<< " dobr=" << dobr << " obr=" << obr << " outBitRate="
-<< ctt->getOutBitRate(cLnk) << endl
-<< " dipr=" << dipr << " ipr=" << ipr << " inPktRate="
-<< ctt->getInPktRate(cLnk) << endl
-<< " dopr=" << dopr << " opr=" << opr << " outPktRate="
-<< ctt->getOutPktRate(cLnk) << endl;
-}
-
 	bool success = true;
 	if (lt->getAvailInBitRate(lnk) < dibr) {
 		reply.setErrMsg("modify comtree link: increase in "
@@ -1740,9 +1718,6 @@ cerr << "modifying comtree link rates for " << comt << " link " << lnk << endl
 	if (lt->getAvailInPktRate(lnk) < dipr) {
 		reply.setErrMsg("modify comtree link: increase in "
 				"input packet rate exceeds link capacity");
-cerr << "inPktRate " << ipr << " requires increase of " << dipr 
-<< " in input packet rate on link " << lnk << ", exceeding available rate "
-<< lt->getAvailInPktRate(lnk) << endl;
 		success = false;
 	}
 	if (lt->getAvailOutBitRate(lnk) < dobr) {
@@ -1751,9 +1726,6 @@ cerr << "inPktRate " << ipr << " requires increase of " << dipr
 		success = false;
 	}
 	if (lt->getAvailOutPktRate(lnk) < dopr) {
-cerr << "outPktRate " << opr << " requires increase of " << dopr 
-<< " in output packet rate on link " << lnk << ", exceeding available rate "
-<< lt->getAvailOutPktRate(lnk) << endl;
 		reply.setErrMsg("modify comtree link: increase in "
 				"output packet rate exceeds link capacity");
 		success = false;
@@ -1772,10 +1744,6 @@ cerr << "outPktRate " << opr << " requires increase of " << dopr
 	if (dopr != 0) {
 		lt->addAvailOutPktRate(lnk,-dopr); ctt->setOutPktRate(cLnk,opr);
 	}
-cerr << "adjusted comtree link rates " << comt << ":" << lnk 
-<< " opr=" << ctt->getOutPktRate(cLnk) << " dopr=" << dopr
-<< " avail opr=" << lt->getAvailOutPktRate(lnk) << endl;
-
 	return true;
 }
 
