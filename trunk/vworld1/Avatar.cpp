@@ -142,7 +142,8 @@ bool Avatar::login(ipa_t cmIpAdr, string uname, string pword) {
 	}
 	// send login string to Client Manager
 	stringstream ss;
-	ss << uname << " " << pword << " " << Np4d::getSockPort(sock) << " noproxy";
+	ss << uname << " " << pword << " " << Np4d::getSockPort(sock)
+	   << " noproxy";
 	Np4d::sendBufBlock(cmSock,(char *) ss.str().c_str(),
 			   ss.str().size()+1);
 	//receive rtrAdr, myAdr, rtrIp, comtCtlAdr

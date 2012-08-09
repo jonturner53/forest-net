@@ -467,6 +467,7 @@ bool handleNewClient(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 		errReply(p,cp,outQ,"No router assigned to client's IP");
 		return true;
 	}
+	int rtr = net->getNodeNum(rtrAdr);
 
 	// send add link packet to router and extract info from reply
 	CtlPkt reqCp(ADD_LINK,REQUEST,0);
@@ -544,6 +545,30 @@ bool handleNewClient(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 	}
 	ps->free(reply);
 
+	// Now modify comtree link rate
+	reqCp.reset(MOD_COMTREE_LINK,REQUEST,0);
+	reqCp.setAttr(COMTREE_NUM,Forest::CLIENT_CON_COMT);
+	reqCp.setAttr(LINK_NUM,clientLink);
+
+	int ctx = comtrees->getComtIndex(Forest::CLIENT_CON_COMT);
+	RateSpec bbRates, leafRates;
+	comtrees->getDefRates(ctx,bbRates,leafRates);
+	reqCp.setAttr(BIT_RATE_IN,leafRates.bitRateUp);
+	reqCp.setAttr(BIT_RATE_OUT,leafRates.bitRateDown);
+	reqCp.setAttr(PKT_RATE_IN,leafRates.pktRateUp);
+	reqCp.setAttr(PKT_RATE_OUT,leafRates.pktRateDown);
+
+	reply = sendCtlPkt(reqCp,rtrAdr,inQ,outQ);
+	if (reply == NORESPONSE) {
+		cerr << "handleNewClient: no reply from router " << rtr
+		     << " to modify comtree link message for comtree "
+		     << Forest::CLIENT_CON_COMT << " link "
+		     << clientLink << "\n";
+		ps->free(reply);
+		return false;
+	}
+	ps->free(reply);
+
 	// now add the new client to the client signaling comtree
 	reqCp.reset(ADD_COMTREE_LINK,REQUEST,0);
 	reqCp.setAttr(COMTREE_NUM,Forest::CLIENT_SIG_COMT);
@@ -563,6 +588,29 @@ bool handleNewClient(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 				   "comtree");
 		cerr << "handleNewClient: router could not add client to "
 			"signalling comtree";
+		ps->free(reply);
+		return false;
+	}
+	ps->free(reply);
+
+	// and modify comtree link rate for this one
+	reqCp.reset(MOD_COMTREE_LINK,REQUEST,0);
+	reqCp.setAttr(COMTREE_NUM,Forest::CLIENT_SIG_COMT);
+	reqCp.setAttr(LINK_NUM,clientLink);
+
+	ctx = comtrees->getComtIndex(Forest::CLIENT_SIG_COMT);
+	comtrees->getDefRates(ctx,bbRates,leafRates);
+	reqCp.setAttr(BIT_RATE_IN,leafRates.bitRateUp);
+	reqCp.setAttr(BIT_RATE_OUT,leafRates.bitRateDown);
+	reqCp.setAttr(PKT_RATE_IN,leafRates.pktRateUp);
+	reqCp.setAttr(PKT_RATE_OUT,leafRates.pktRateDown);
+
+	reply = sendCtlPkt(reqCp,rtrAdr,inQ,outQ);
+	if (reply == NORESPONSE) {
+		cerr << "handleNewClient: no reply from router " << rtr
+		     << " to modify comtree link message for comtree "
+		     << Forest::CLIENT_SIG_COMT << " link "
+		     << clientLink << "\n";
 		ps->free(reply);
 		return false;
 	}
