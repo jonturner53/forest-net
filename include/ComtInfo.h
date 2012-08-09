@@ -95,19 +95,23 @@ public:
 	void	unprovision(int);
 	void	unprovision(int,list<LinkMod>&);
 
-	// io routines
+	// io methods
 	bool	read(istream&);
 	comt_t	readComtree(istream&,string&);
 	bool	readRateSpec(istream&,RateSpec&);
 	bool	readLink(istream&,int&,RateSpec&,int&,string&);
 	bool	readLinkEndpoint(istream&,string&,int&);
-	bool	check();
-
 	string& link2string(int,int,string&) const;
 	string& leafLink2string(int,fAdr_t,string&) const;
 	string& comt2string(int,string&) const;
 	string& comtStatus2string(int,string&) const;
 	string& toString(string&) const;
+
+	// verification methods
+	bool	check();
+	bool	checkLinkCounts(int);
+	bool	checkSubtreeRates(int);
+	bool	checkLinkRates(int);
 
 private:
 	int maxComtree;		///< maximum number of comtrees
@@ -145,13 +149,6 @@ private:
 	};
 	ComtreeInfo *comtree;	///< array of comtrees
 	IdMap *comtreeMap;	///< maps comtree numbers to indices in array
-
-	// post-io setup and validity checking
-	bool 	check() const;
-	bool 	checkComtrees() const;
-	
-	bool	setComtLinkRtrInfo();
-	bool	setComtLinkRates(int,int,int);
 };
 
 // Note that methods that take a comtree index as an argument

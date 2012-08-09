@@ -451,7 +451,7 @@ bool ComtInfo::check() {
 				if (lnk == plink[u]) continue;
 				int vzip = Forest::zipCode(vAdr);
 				if (plink.find(v) != plink.end()) {
-					cerr << "ComtInfo::checkComtrees: "
+					cerr << "ComtInfo::check: "
 						"comtree " << comt
 					     << " contains a cycle\n";
 					foundCycle = true;
@@ -490,6 +490,156 @@ bool ComtInfo::check() {
 		if (nodeCount != comtree[ctx].rtrMap->size()) {
 			cerr << "ComtInfo::check: comtree " << comt
 			     << " not connected";
+			status = false;
+		}
+	}
+	return status;
+}
+
+bool ComtInfo::checkLinkCounts(int ctx) {
+	int n = net->getMaxRouter();
+	int *lnkCounts = new int[n+1];
+
+	bool status = true;
+	for (int i = 1; i <= n; i++) lnkCounts[i] = 0;
+
+	int comt = getComtree(ctx);
+	fAdr_t rootAdr = getRoot(ctx);
+	int root = net->getNodeNum(rootAdr);
+
+	// first count links from leaf nodes
+	map<fAdr_t,ComtLeafInfo>::iterator lp;
+	for (lp  = comtree[ctx].leafMap->begin();
+	     lp != comtree[ctx].leafMap->end(); lp++) {
+		fAdr_t padr = getParent(ctx,lp->first);
+		int parent = net->getNodeNum(padr);
+		lnkCounts[parent]++;
+	}
+	// next, count links to other routers
+	map<fAdr_t,ComtRtrInfo>::iterator rp;
+	for (rp  = comtree[ctx].rtrMap->begin();
+	     rp != comtree[ctx].rtrMap->end(); rp++) {
+		fAdr_t radr = rp->first;
+		int rtr = net->getNodeNum(radr);
+		fAdr_t padr = getParent(ctx,radr);
+		if (padr == 0) continue;
+		int parent = net->getNodeNum(padr);
+		lnkCounts[parent]++;
+		lnkCounts[rtr]++;
+	}
+
+	// now check stored link counts for routers
+	for (rp  = comtree[ctx].rtrMap->begin();
+	     rp != comtree[ctx].rtrMap->end(); rp++) {
+		fAdr_t radr = rp->first;
+		int rtr = net->getNodeNum(radr);
+		if (lnkCounts[rtr] != rp->second.lnkCnt) {
+			string s;
+			cerr << "router " << net->getNodeName(rtr,s)
+			     << " has " << lnkCounts[rtr]
+			     << " links in comtree " << comt
+			     << ", but recorded lnkCnt is "
+			     << rp->second.lnkCnt;
+			status = false;
+		}
+	}
+	return status;
+}
+
+bool ComtInfo::checkSubtreeRates(int ctx) {
+	int n = net->getMaxRouter();
+	RateSpec *subtreeRates = new RateSpec[n+1];
+
+	bool status = true;
+	for (int i = 1; i <= n; i++) subtreeRates[i].set(0);
+
+	int comt = getComtree(ctx);
+	fAdr_t rootAdr = getRoot(ctx);
+	int root = net->getNodeNum(rootAdr);
+
+	// compute bottom-up from leaf nodes
+	// check for negative rates while we're at it
+	map<fAdr_t,ComtLeafInfo>::iterator lp;
+	for (lp  = comtree[ctx].leafMap->begin();
+	     lp != comtree[ctx].leafMap->end(); lp++) {
+		RateSpec& prates = lp->second.plnkRates;
+		if (prates.bitRateUp <= 0 || prates.bitRateDown <= 0 ||
+		    prates.pktRateUp <= 0 || prates.pktRateDown <= 0) {
+			string s1, s2;
+			int lnk = net->getLinkNum(
+				  	net->getNodeNum(lp->second.parent),
+					lp->second.llnk);
+			cerr << "detected non-positive comtree link rate for "
+			     << comt << " link " << net->link2string(lnk,s1)
+			     << " rateSpec=" << prates.toString(s2) << endl;
+			status = false;
+		}
+		fAdr_t radr = getParent(ctx,lp->first);
+		while (true) {
+			int rtr = net->getNodeNum(radr);
+			subtreeRates[rtr].add(prates);
+			if (rtr == root) break;
+			radr = getParent(ctx,radr);
+		} 
+	}
+
+	// now check stored subtree rates
+	map<fAdr_t,ComtRtrInfo>::iterator rp;
+	for (rp  = comtree[ctx].rtrMap->begin();
+	     rp != comtree[ctx].rtrMap->end(); rp++) {
+		fAdr_t radr = rp->first;
+		int rtr = net->getNodeNum(radr);
+		if (!subtreeRates[rtr].equals(rp->second.subtreeRates)) {
+			string s1, s2, s3;
+			cerr << "router " << net->getNodeName(rtr,s1)
+			     << " has subtree rate "
+			     << subtreeRates[rtr].toString(s2)
+			     << " in comtree " << comt << ", but recorded"
+			     << " value is "
+			     << rp->second.subtreeRates.toString(s3) << endl;
+			status = false;
+		}
+	}
+	return status;
+}
+
+bool ComtInfo::checkLinkRates(int ctx) {
+	if (!getConfigMode(ctx)) return true;
+
+	bool status = true;
+	int comt = getComtree(ctx);
+	fAdr_t rootAdr = getRoot(ctx);
+	int root = net->getNodeNum(rootAdr);
+	
+	map<fAdr_t,ComtRtrInfo>::iterator rp;
+	rp = comtree[ctx].rtrMap->find(rootAdr);
+	RateSpec& rootRates = rp->second.subtreeRates;
+
+	for (rp  = comtree[ctx].rtrMap->begin();
+	     rp != comtree[ctx].rtrMap->end(); rp++) {
+		if (rp->second.frozen) continue;
+		int lnk = rp->second.plnk;
+		if (lnk == 0) continue;
+		fAdr_t rtr = rp->first;
+		RateSpec rs(0);
+		RateSpec& srates = rp->second.subtreeRates;
+		RateSpec trates = rootRates; trates.subtract(srates);
+		if (isCoreNode(ctx,rtr)) {
+			rs.set(	srates.bitRateUp,trates.bitRateUp,
+				srates.pktRateUp,trates.pktRateUp);
+		} else {		
+			rs.set(	srates.bitRateUp,
+			    	min(srates.bitRateDown,trates.bitRateUp),
+			    	srates.pktRateUp,
+			    	min(srates.pktRateDown,trates.pktRateUp));
+		}
+		if (!rs.equals(rp->second.plnkRates)) {
+			string s1, s2, s3;
+			cerr << "detected inconsistent comtree link rates in "
+			     << comt << " link " << net->link2string(lnk,s1)
+			     << " computed rates: " << rs.toString(s2)
+			     << " and stored rates: "
+			     << rp->second.plnkRates.toString(s3) << endl;
 			status = false;
 		}
 	}
@@ -768,8 +918,9 @@ void ComtInfo::removePath(int ctx, list<LinkMod>& path) {
 	if (path.begin() == path.end()) return;
 	list<LinkMod>::iterator pp;
 	for (pp = path.begin(); pp != path.end(); pp++) {
-		removeNode(ctx,pp->child);
-		RateSpec rs = pp->rs;
+		fAdr_t childAdr = net->getNodeAdr(pp->child);
+		removeNode(ctx,childAdr);
+		RateSpec rs; getLinkRates(ctx,childAdr,rs);
 		if (pp->child != net->getLeft(pp->lnk)) rs.flip();
 		RateSpec availRates;
 		net->getAvailRates(pp->lnk,availRates);

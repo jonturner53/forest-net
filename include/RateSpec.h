@@ -86,6 +86,14 @@ public:
 		pktRateDown = (int) (f*pktRateDown);
 	}
 
+	/** Compare another RateSpec to this for equality. */
+	bool equals(RateSpec& rs) {
+		return	bitRateUp == rs.bitRateUp &&
+			bitRateDown == rs.bitRateDown &&
+			pktRateUp == rs.pktRateUp &&
+			pktRateDown == rs.pktRateDown;
+	};
+
 	/** Compare another RateSpec to this one. */
 	bool leq(RateSpec& rs) {
 		return	bitRateUp <= rs.bitRateUp &&
