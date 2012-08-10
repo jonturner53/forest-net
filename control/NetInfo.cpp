@@ -980,8 +980,11 @@ string& NetInfo::rtr2string(int rtr, string& s) const {
 	pair<fAdr_t,fAdr_t>range; getLeafRange(rtr,range);
 	ss << "(" << Forest::fAdr2string(range.first,s1);
 	ss << "-" << Forest::fAdr2string(range.second,s1) << "),\n";
+	bool firstIface = true;
 	for (int i = 1; i <= getNumIf(rtr); i++) {
 		if (!validIf(rtr,i)) continue;
+		if (firstIface) firstIface = false;
+		else ss << ",\n";
 		ss << "\t[ " << i << ",  "
 		   << Np4d::ip2string(getIfIpAdr(rtr,i),s1) << ", "; 
 		pair<int,int> links; getIfLinks(rtr,i,links);
@@ -991,9 +994,9 @@ string& NetInfo::rtr2string(int rtr, string& s) const {
 			ss << links.first << "-" << links.second << ", ";
 		}
 		RateSpec rs; getIfRates(rtr,i,rs);
-		ss << rs.toString(s1) << " ]\n";
+		ss << rs.toString(s1) << " ]";
 	}
-	ss << ")\n";
+	ss << "\n)\n";
 	s = ss.str();
 	return s;
 }
