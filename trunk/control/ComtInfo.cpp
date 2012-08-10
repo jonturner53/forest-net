@@ -447,6 +447,7 @@ bool ComtInfo::check() {
 				int v = net->getPeer(u,lnk);
 				if (!net->isRouter(v)) continue;
 				fAdr_t vAdr = net->getNodeAdr(v);
+				if (!isComtNode(ctx,vAdr)) continue;
 				if (getPlink(ctx,vAdr) != lnk) continue;
 				if (lnk == plink[u]) continue;
 				int vzip = Forest::zipCode(vAdr);
@@ -489,7 +490,7 @@ bool ComtInfo::check() {
 		}
 		if (nodeCount != comtree[ctx].rtrMap->size()) {
 			cerr << "ComtInfo::check: comtree " << comt
-			     << " not connected";
+			     << " not connected\n";
 			status = false;
 		}
 	}
