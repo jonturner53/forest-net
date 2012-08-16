@@ -15,38 +15,46 @@
 #include <fstream>
 #include <sstream>
 /** usage:
- *  ClientMgr netMgrAdr rtrAdr rtrIp myIp myAdr finTime usersFile
+ *  ClientMgr netMgrAdr rtrAdr ccAdr rtrIp intIp extIp myAdr finTime
+ *  usersFile acctFile prefixFile
  *
  *  Command line arguments include the following:
  *  netMgrAdr - The Forest address of a Network Manager
  *  rtrAdr - The Forest address of the router to connect to
  *  CC_Adr - The Forest address of a Comtree Controller
  *  rtrIp - The IP address of the router to connect to
- *  myIp - The IP address of this Client Manager
+ *  intIp - The IP address used for TCP connections from "internal" hosts
+ *  extIp - The IP address used for TCP connections from "external" hosts
  *  myAdr - The Forest address of this Client Manager
  *  finTime - How many seconds this program should run before terminating
- *  unamesFile - List of usernames and associated passwords
- *  acctFile - output file keeping track of which clients connect to this Client Manager
+ *  users - list of usernames and associated passwords
+ *  acctFile - output file keeping track of which clients connect to
+ *  this Client Manager
+ *  prefixFile - file defining how different remote IP prefixes map to
+ *  routers in the forest network
  */
 
 int main(int argc, char ** argv) {
 	uint32_t finTime = 0;
-	ipa_t rtrIp, myIp; fAdr_t rtrAdr, myAdr, CC_Adr, netMgrAdr;
-	rtrIp = myIp = 0; rtrAdr = myAdr = CC_Adr = netMgrAdr = 0;
-	if(argc != 11 ||
+	ipa_t rtrIp, intIp, extIp; fAdr_t rtrAdr, myAdr, CC_Adr, netMgrAdr;
+	rtrIp = intIp = extIp = 0; rtrAdr = myAdr = CC_Adr = netMgrAdr = 0;
+	if(argc != 12 ||
 	    (netMgrAdr = Forest::forestAdr(argv[1])) == 0 ||
 	    (rtrAdr = Forest::forestAdr(argv[2])) == 0 ||
 	    (CC_Adr = Forest::forestAdr(argv[3])) == 0 ||
 	    (rtrIp = Np4d::ipAddress(argv[4])) == 0 ||
-	    (myIp = Np4d::ipAddress(argv[5])) == 0 ||
-	    (myAdr = Forest::forestAdr(argv[6])) == 0 ||
-	    (sscanf(argv[7],"%d", &finTime)) != 1) {
+	    (intIp = Np4d::ipAddress(argv[5])) == 0 ||
+	    (extIp = Np4d::ipAddress(argv[6])) == 0 ||
+	    (myAdr = Forest::forestAdr(argv[7])) == 0 ||
+	    (sscanf(argv[8],"%d", &finTime)) != 1) {
 		fatal("ClientMgr usage: ClientMgr netMgrAdr rtrAdr comtCtlAdr "
-		      "rtrIp myIp myAdr finTime usersFile acctFile prefixFile");
+		      "rtrIp intIp extIp myAdr finTime usersFile acctFile "
+		      "prefixFile");
 	}
-	if(!init(netMgrAdr,rtrIp,rtrAdr,CC_Adr,myIp, myAdr, argv[8], argv[9]))
+	if(!init(netMgrAdr,rtrIp,rtrAdr,CC_Adr,intIp, extIp, myAdr,
+	         argv[9], argv[10]))
 		fatal("init: Failed to initialize ClientMgr");
-	if(!readPrefixInfo(argv[10]))
+	if(!readPrefixInfo(argv[11]))
 		fatal("readPrefixFile: Failed to read prefixes");
 	
 	pthread_t run_thread;
@@ -68,10 +76,12 @@ int main(int argc, char ** argv) {
  *  @param acctFile is the file to write connection records to
  *  @return true on success, false on failure
  */
-bool init(fAdr_t nma, ipa_t ri, fAdr_t ra, fAdr_t cca, ipa_t mi, fAdr_t ma, char * filename, char * acctFile) {
+bool init(fAdr_t nma, ipa_t ri, fAdr_t ra, fAdr_t cca,
+	ipa_t iip, ipa_t xip, fAdr_t ma, char * filename, char * acctFile) {
 	netMgrAdr = nma; rtrIp = ri; rtrAdr = ra;
-	CC_Adr = cca; myIp = mi; myAdr = ma; unamesFile = filename; 
-	sock = extSockInt = extSockExt = avaSock = -1;
+	CC_Adr = cca; intIp = iip; extIp = xip;
+	myAdr = ma; unamesFile = filename; 
+	sock = tcpSockInt = tcpSockExt = avaSock = -1;
 	unames = new map<string,string>;
 	readUsernames();
 	int nPkts = 10000;
@@ -84,34 +94,42 @@ bool init(fAdr_t nma, ipa_t ri, fAdr_t ra, fAdr_t cca, ipa_t mi, fAdr_t ma, char
 	pool = new ThreadPool[TPSIZE+1];
 	threads = new UiSetPair(TPSIZE);
 	tMap = new IdMap(TPSIZE);
+
 	//setup sockets
-	extSockInt = Np4d::streamSocket();
-	extSockExt = Np4d::streamSocket();
+	tcpSockInt = Np4d::streamSocket();
+	tcpSockExt = Np4d::streamSocket();
 	sock = Np4d::datagramSocket();
 	if(sock < 0) return false;
-	if(extSockInt < 0) return false;
-	if(extSockExt < 0) return false;
-	bool status = Np4d::bind4d(extSockInt,myIp,LISTEN_PORT) &&
-		      Np4d::bind4d(extSockExt,Np4d::myIpAddress(),LISTEN_PORT);
-	if(!status) return false;
-	status = Np4d::bind4d(sock,myIp,LISTEN_PORT);
-	if(!status) return false;
+	if(tcpSockInt < 0) return false;
+	if(tcpSockExt < 0) return false;
+	bool status = Np4d::bind4d(tcpSockInt,intIp,LISTEN_PORT) &&
+		      Np4d::bind4d(tcpSockExt,extIp,LISTEN_PORT);
+	if (!status) return false;
+	status = Np4d::bind4d(sock,intIp,LISTEN_PORT);
+	if (!status) return false;
 	connect();
 	usleep(1000000); //sleep for one second
+
+	pthread_attr_t attr;
+	pthread_attr_init(&attr);
+	pthread_attr_setstacksize(&attr,PTHREAD_STACK_MIN);
+	size_t stacksize;
+	pthread_attr_getstacksize(&attr,&stacksize);
+	cerr << "min stack size=" << PTHREAD_STACK_MIN << endl;
+	cerr << "threads in pool have stacksize=" << stacksize << endl;
+	if (stacksize != PTHREAD_STACK_MIN)
+		fatal("init: can't set stack size");
 	for (int t = 1; t <= TPSIZE; t++) {
 		if (!pool[t].qp.in.init() || !pool[t].qp.out.init())
 			fatal("init: can't initialize thread queues\n");
-		pthread_attr_t attr;
-		pthread_attr_init(&attr);
-		pthread_attr_setstacksize(&attr,8096); //stack size 8 kB
-                if (pthread_create(&pool[t].th,NULL,handler,
+                if (pthread_create(&pool[t].th,&attr,handler,
 		    (void *) &pool[t]) != 0)
 			fatal("init: can't create thread pool");
         }
-	return Np4d::listen4d(extSockInt)
-		&& Np4d::nonblock(extSockInt)
-		&& Np4d::listen4d(extSockExt)
-		&& Np4d::nonblock(extSockExt)
+	return Np4d::listen4d(tcpSockInt)
+		&& Np4d::nonblock(tcpSockInt)
+		&& Np4d::listen4d(tcpSockExt)
+		&& Np4d::nonblock(tcpSockExt)
 		&& Np4d::nonblock(sock);
 }
 
@@ -242,8 +260,8 @@ void* run(void* finishTime) {
 	while (now <= finTime) {
 		bool nothing2do = true;
 		ipa_t avIp; ipp_t port;
-		int avaSock = Np4d::accept4d(extSockExt,avIp,port);
-		if(avaSock <= 0) avaSock = Np4d::accept4d(extSockInt,avIp,port);
+		int avaSock = Np4d::accept4d(tcpSockExt,avIp,port);
+		if(avaSock <= 0) avaSock = Np4d::accept4d(tcpSockInt,avIp,port);
 		if(avaSock > 0) {
 			nothing2do = false;
 			int t = threads->firstOut();
