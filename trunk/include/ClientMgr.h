@@ -11,8 +11,9 @@
 #include <map>
 
 void* run(void *);		///< main run method, takes in finTime
-bool init(fAdr_t,ipa_t,fAdr_t,fAdr_t,ipa_t,fAdr_t,char*,char*);		///< initialize sockets
-ipa_t myIp;		///< IP address for self
+bool init(fAdr_t,ipa_t,fAdr_t,fAdr_t,ipa_t,ipa_t,fAdr_t,char*,char*); ///< initialize sockets
+ipa_t intIp;		///< address for tcp connections from "internal" hosts
+ipa_t extIp;		///< address for tcp connections from "external" hosts
 ipa_t rtrIp;		///< IP address for forest router
 fAdr_t netMgrAdr;	///< Forest address of NetMgr
 fAdr_t rtrAdr;		///< Forest address of router
@@ -25,8 +26,8 @@ static const int NORESPONSE = (1 << 31);
 
 PacketStoreTs *ps;	///< pointer to packet store
 int sock;		///< Forest socket
-int extSockInt;		///< Listen for avatars on internal ip
-int extSockExt;		///< Listen for avatars on external ip
+int tcpSockInt;		///< Listen for avatars on internal ip
+int tcpSockExt;		///< Listen for avatars on external ip
 int avaSock;		///< Avatar connection socket
 uint64_t seqNum;
 map<string,string>* unames; ///< map of known usernames to pwords
