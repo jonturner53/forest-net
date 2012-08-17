@@ -257,7 +257,7 @@ void* run(void* finishTime) {
 	uint64_t now = Misc::getTimeNs();
 	uint64_t finTime = *((uint32_t *) finishTime);
 	finTime *= 1000000000;
-	while (now <= finTime) {
+	while (finTime == 0 || now <= finTime) {
 		bool nothing2do = true;
 		ipa_t avIp; ipp_t port;
 		int avaSock = Np4d::accept4d(tcpSockExt,avIp,port);
