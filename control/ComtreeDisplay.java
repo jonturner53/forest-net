@@ -13,6 +13,7 @@ import java.io.*;
 import java.net.*;
 import java.nio.*;
 import java.nio.channels.*;
+import java.awt.*;
 import java.awt.Color;
 import java.awt.geom.Point2D;
 
@@ -248,6 +249,8 @@ System.out.println("recvdComt=" + recvdComt);
 		StdDraw.text(x, y, "" + ccomt);
 		y -= 2*delta;
 		StdDraw.setPenColor(Color.BLACK);
+		Font bigFont = new Font("SansSerif", Font.PLAIN, 16);
+		StdDraw.setFont(bigFont);
 		for (int c : comtSet) {
 			if (y <= bmargin) break;
 			if (c == ccomt) continue;
@@ -302,25 +305,6 @@ System.out.println("recvdComt=" + recvdComt);
 				StdDraw.setPenRadius(5*PEN_RADIUS);
 			StdDraw.line(lx,ly,rx,ry);
 			StdDraw.setPenRadius(PEN_RADIUS);
-			if (comtrees.isComtLink(ctx,lnk) && linkDetail) {
-				x = (lx+rx)/2; y = (ly+ry)/2;
-				StdDraw.setPenColor(Color.WHITE);
-				StdDraw.filledSquare(x, y, 1.5*nodeRadius);
-				StdDraw.setPenColor(Color.BLACK);
-				StdDraw.setPenRadius(PEN_RADIUS);
-				StdDraw.square(x, y, 1.5*nodeRadius);
-				RateSpec rs = new RateSpec(0);
-				int childAdr = comtrees.getChild(ctx,lnk);
-				comtrees.getLinkRates(ctx,childAdr,rs);
-				StdDraw.text(x, y+.9*nodeRadius,
-						"brU=" + rs.bitRateUp);
-				StdDraw.text(x, y+.3*nodeRadius,
-						"brD=" + rs.bitRateDown);
-				StdDraw.text(x, y-.3*nodeRadius,
-						"prU=" + rs.pktRateUp);
-				StdDraw.text(x, y-.9*nodeRadius,
-						"prD=" + rs.pktRateDown);
-			}
 		}
 
 		// draw all the nodes in the net
@@ -361,6 +345,42 @@ System.out.println("recvdComt=" + recvdComt);
 				StdDraw.text(x, y-nodeRadius/3,
 					        "" + Forest.fAdr2string(
 						     net.getNodeAdr(node)));
+			}
+		}
+		// finally, draw all the link details
+		Font smallFont = new Font("SansSerif", Font.PLAIN, 12);
+		StdDraw.setFont(smallFont);
+		for (int lnk = net.firstLink(); lnk != 0;
+			 lnk = net.nextLink(lnk)) {
+			int left = net.getLeft(lnk);
+			int right = net.getRight(lnk);
+			net.getNodeLocation(left,loc);
+			double lx = xorigin + (loc.second - xcenter)*scale;
+			double ly = yorigin + (loc.first - ycenter)*scale;
+			net.getNodeLocation(right,loc);
+			double rx = xorigin + (loc.second - xcenter)*scale;
+			double ry = yorigin + (loc.first - ycenter)*scale;
+
+			StdDraw.setPenColor(Color.BLACK);
+			StdDraw.setPenRadius(PEN_RADIUS);
+			if (comtrees.isComtLink(ctx,lnk) && linkDetail) {
+				x = (lx+rx)/2; y = (ly+ry)/2;
+				StdDraw.setPenColor(Color.WHITE);
+				StdDraw.filledSquare(x, y, nodeRadius);
+				StdDraw.setPenColor(Color.BLACK);
+				StdDraw.setPenRadius(PEN_RADIUS);
+				StdDraw.square(x, y, nodeRadius);
+				RateSpec rs = new RateSpec(0);
+				int childAdr = comtrees.getChild(ctx,lnk);
+				comtrees.getLinkRates(ctx,childAdr,rs);
+				StdDraw.text(x, y+.6*nodeRadius,
+						"brU=" + rs.bitRateUp);
+				StdDraw.text(x, y+.2*nodeRadius,
+						"brD=" + rs.bitRateDown);
+				StdDraw.text(x, y-.2*nodeRadius,
+						"prU=" + rs.pktRateUp);
+				StdDraw.text(x, y-.6*nodeRadius,
+						"prD=" + rs.pktRateDown);
 			}
 		}
 		StdDraw.show(500);
