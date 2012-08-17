@@ -106,13 +106,24 @@ bool init(const char *topoFile) {
 		return false;
 	}
 
+	pthread_attr_t attr;
+	pthread_attr_init(&attr);
+	pthread_attr_setstacksize(&attr,PTHREAD_STACK_MIN);
+	size_t stacksize;
+	pthread_attr_getstacksize(&attr,&stacksize);
+	cerr << "min stack size=" << PTHREAD_STACK_MIN << endl;
+	cerr << "threads in pool have stacksize=" << stacksize << endl;
+	if (stacksize != PTHREAD_STACK_MIN)
+		fatal("init: can't set stack size");
+
 	// setup thread pool for handling control packets
 	for (int t = 1; t <= TPSIZE; t++) {
 		if (!pool[t].qp.in.init() || !pool[t].qp.out.init())
 			fatal("init: can't initialize thread queues\n");
-		if (pthread_create(&pool[t].thid,NULL,handler,
-				   (void *) &pool[t].qp) != 0) 
+		if (pthread_create(&pool[t].thid,&attr,handler,
+				   (void *) &pool[t].qp) != 0)  {
                 	fatal("init: can't create thread pool");
+		}
 	}
 	
 	// setup sockets
@@ -661,6 +672,9 @@ bool handleBootRequest(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 	}
 	// first send reply, acknowledging request and supplying
 	// leaf address range
+	string tempstr;
+	cout << "received boot request from "
+	     << Forest::fAdr2string(rtrAdr,tempstr) << endl;
 	CtlPkt repCp(BOOT_REQUEST,POS_REPLY,cp.getSeqNum());
 	pair<fAdr_t,fAdr_t> leafRange; net->getLeafRange(rtr,leafRange);
         repCp.setAttr(FIRST_LEAF_ADR,leafRange.first);
@@ -960,6 +974,8 @@ bool handleBootRequest(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 		ps->free(reply);
 		return false;
 	}
+	cout << "completed boot request for "
+	     << Forest::fAdr2string(rtrAdr,tempstr) << endl;
 	ps->free(reply);
 	return true;
 }

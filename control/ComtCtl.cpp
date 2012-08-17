@@ -117,10 +117,19 @@ bool init(const char *topoFile) {
 	}
 
 	// setup thread pool for handling control packets
+	pthread_attr_t attr;
+	pthread_attr_init(&attr);
+	pthread_attr_setstacksize(&attr,PTHREAD_STACK_MIN);
+	size_t stacksize;
+	pthread_attr_getstacksize(&attr,&stacksize);
+	cerr << "min stack size=" << PTHREAD_STACK_MIN << endl;
+	cerr << "threads in pool have stacksize=" << stacksize << endl;
+	if (stacksize != PTHREAD_STACK_MIN)
+		fatal("init: can't set stack size");
 	for (int t = 1; t <= TPSIZE; t++) {
 		if (!pool[t].qp.in.init() || !pool[t].qp.out.init())
 			fatal("init: can't initialize thread queues\n");
-		if (pthread_create(&pool[t].thid,NULL,handler,
+		if (pthread_create(&pool[t].thid,&attr,handler,
 				   (void *) &pool[t].qp) != 0) 
 			fatal("init: can't create thread pool");
 	}
@@ -430,6 +439,7 @@ cerr << "error errno=" << errno << "\n";
 		uint32_t comt = 0;
 		if (word.compare("getNet") == 0) {
 			string netString; net->toString(netString);
+cerr << "sending netString\n" << netString;
 			if (Np4d::sendString(sock,netString) < 0) {
 				cerr << "handleComtreeDisplay: unable to send "
 					"network topology to display\n";
