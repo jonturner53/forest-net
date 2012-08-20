@@ -1,9 +1,10 @@
 ALGOLIBROOT = ../../algolib-jst
 JAVAROOT = ~/bin/java
+JAVAC=/usr/java/latest/bin/javac
 CLASSFILES = StdDraw.class
 
 %.class: %.java
-	javac -cp ${JAVAROOT} $<
+	${JAVAC} -cp ${JAVAROOT} $<
 	mv *.class ${JAVAROOT}/princeton
 
 all : ${CLASSFILES}

@@ -1,26 +1,28 @@
 SHELL := /bin/bash
 ALGOLIBROOT = ~/src/algolib-jst
-FLIB = $(shell pwd)/lib/lib-forest.a
+FORESTROOT = $(shell pwd)
+FLIB = ${FORESTROOT}/lib/lib-forest.a
 LIBS = ${FLIB} ${ALGOLIBROOT}/lib/lib-ds.a ${ALGOLIBROOT}/lib/lib-util.a
-CXXFLAGS = -Wall -O2 -m64 -I ../include -I ${ALGOLIBROOT}/include
+CXXFLAGS = -Wall -O2 -m32 -I ${FORESTROOT}/include -I ${ALGOLIBROOT}/include
+JAVAC=/usr/java/latest/bin/javac
 BIN = ~/bin
 
 all:
 	make -C common          ALGOLIBROOT='${ALGOLIBROOT}' FLIB='${FLIB}' \
 				BIN='${BIN}' CXXFLAGS='${CXXFLAGS}' \
-				LIBS='${LIBS}' all
+				LIBS='${LIBS}' JAVAC='${JAVAC}' all
 	make -C router          ALGOLIBROOT='${ALGOLIBROOT}' FLIB='${FLIB}' \
 				BIN='${BIN}' CXXFLAGS='${CXXFLAGS}' \
-				LIBS='${LIBS}' all
+				LIBS='${LIBS}' JAVAC='${JAVAC}' all
 	make -C control         ALGOLIBROOT='${ALGOLIBROOT}' FLIB='${FLIB}' \
 				BIN='${BIN}' CXXFLAGS='${CXXFLAGS}' \
-				LIBS='${LIBS}' all
+				LIBS='${LIBS}' JAVAC='${JAVAC}' all
 	make -C vworld1         ALGOLIBROOT='${ALGOLIBROOT}' FLIB='${FLIB}' \
 				BIN='${BIN}' CXXFLAGS='${CXXFLAGS}' \
-				LIBS='${LIBS}' all
+				LIBS='${LIBS}' JAVAC='${JAVAC}' all
 	make -C misc            ALGOLIBROOT='${ALGOLIBROOT}' FLIB='${FLIB}' \
 				BIN='${BIN}' CXXFLAGS='${CXXFLAGS}' \
-				LIBS='${LIBS}' all
+				LIBS='${LIBS}' JAVAC='${JAVAC}' all
 
 clean:
 	rm -f ${FLIB} 
