@@ -14,6 +14,11 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
+
+#define CLIMGRDB "forest"
+#define CLIMGRDBHOST "localhost"
+#define CLIMGRDBUSER "root"
+#define CLIMGRDBPASS ""
 /** usage:
  *  ClientMgr netMgrAdr rtrAdr ccAdr rtrIp intIp extIp myAdr finTime
  *  usersFile acctFile prefixFile
@@ -94,7 +99,7 @@ bool init(fAdr_t nma, ipa_t ri, fAdr_t ra, fAdr_t cca,
 	pool = new ThreadPool[TPSIZE+1];
 	threads = new UiSetPair(TPSIZE);
 	tMap = new IdMap(TPSIZE);
-
+	pthread_mutex_init(&sqlLock,NULL);
 	//setup sockets
 	tcpSockInt = Np4d::streamSocket();
 	tcpSockExt = Np4d::streamSocket();
@@ -107,6 +112,12 @@ bool init(fAdr_t nma, ipa_t ri, fAdr_t ra, fAdr_t cca,
 	if (!status) return false;
 	status = Np4d::bind4d(sock,intIp,LISTEN_PORT);
 	if (!status) return false;
+	try {
+	//setup connection to sql db
+		sqlconn = new mysqlpp::Connection(CLIMGRDB,"/tmp/mysql.sock",CLIMGRDBUSER,CLIMGRDBPASS);
+	} catch(const mysqlpp::Exception& er) {
+		fatal("cannot connect to mysql db");
+	}
 	connect();
 	usleep(1000000); //sleep for one second
 
@@ -122,6 +133,9 @@ bool init(fAdr_t nma, ipa_t ri, fAdr_t ra, fAdr_t cca,
 	for (int t = 1; t <= TPSIZE; t++) {
 		if (!pool[t].qp.in.init() || !pool[t].qp.out.init())
 			fatal("init: can't initialize thread queues\n");
+		pthread_attr_t attr;
+		pthread_attr_init(&attr);
+		pthread_attr_setstacksize(&attr,PTHREAD_STACK_MIN); //stack size 8 kB
                 if (pthread_create(&pool[t].th,&attr,handler,
 		    (void *) &pool[t]) != 0)
 			fatal("init: can't create thread pool");
@@ -200,10 +214,8 @@ void send(int p) {
 bool findCliRtr(ipa_t cliIp, fAdr_t& rtrAdr, ipa_t& rtrIp) {
 	string cip;
 	Np4d::ip2string(cliIp,cip);
-cerr << "findCliRtr cip=" << cip << endl;
 	for(unsigned int i = 0; i < (unsigned int) numPrefixes; ++i) {
 		string ip = prefixes[i].prefix;
-cerr << prefixes[i].prefix << endl;
 		unsigned int j = 0;
 		while (j < ip.size() && j < cip.size()) {
 			if (ip[j] != '*' && cip[j] != ip[j]) break;
@@ -211,14 +223,12 @@ cerr << prefixes[i].prefix << endl;
 			    j+1 == ip.size() && j+1 == cip.size()) {
 				rtrAdr = prefixes[i].rtrAdr;
 				rtrIp  = prefixes[i].rtrIp;
-string s;
-cerr << "returning true " << Forest::fAdr2string(rtrAdr,s) << "\n";
 				return true;
 			}
 			j++;
 		}
 	}
-cerr << "findCliRtr returns false\n";
+cerr<<"ending2\n";
 	return false;
 }
 
@@ -285,16 +295,16 @@ void* run(void* finishTime) {
 			ipp_t proxUdp, proxTcp;
 			iss >> ipStr >> proxUdp >> proxTcp;
 			ipa_t proxIp = Np4d::ipAddress(ipStr.c_str());
-			ipa_t rtrIp; fAdr_t rtrAdr;
+			ipa_t rtrIp = -1; fAdr_t rtrAdr = -1;
 			if(!findCliRtr(proxIp,rtrAdr,rtrIp)) {
-				rtrAdr = prefixes[0].rtrAdr;
-				rtrIp  = prefixes[0].rtrIp;
+				cerr << "no proxy/ip prefix match\n";
 			}
 			proxies[proxyIndex].pip = proxIp;
 			proxies[proxyIndex].udpPort = proxUdp;
 			proxies[proxyIndex].tcpPort = proxTcp;
 			if(proxyQueues->find(rtrAdr)==proxyQueues->end()) {
 				(*proxyQueues)[rtrAdr] = new Queue(10);
+				((proxyQueues->find(rtrAdr))->second)->init();
 			}
 			Queue* q = (proxyQueues->find(rtrAdr))->second;
 			q->enq(proxyIndex++);
@@ -402,7 +412,6 @@ void handleIncoming(int p) {
 void* handler(void * tp) {
 	Queue& inQ = (((ThreadPool *) tp)->qp).in;
 	Queue& outQ = (((ThreadPool *) tp)->qp).out;
-
 	while (true) {
 		int start = inQ.deq();
 		if (start != 1) {
@@ -415,6 +424,7 @@ void* handler(void * tp) {
 			close(avaSock);
 			continue;
 		}
+cerr << "deq'd\n";
 		int aip = ((ThreadPool *) tp)->ipa;
 		int avaSock = ((ThreadPool *) tp)->sock;
 		int seqNum = ((ThreadPool *) tp)->seqNum;
@@ -422,14 +432,25 @@ void* handler(void * tp) {
 		uint32_t port;
 	        Np4d::recvBufBlock(avaSock,buf,100);
 		istringstream iss(buf);
-		string uname, pword, proxy;
-		iss >> uname >> pword >> port >> proxy;
+		string uname, pword, proxy, cliIpStr;
+		iss >> uname >> pword >> port >> cliIpStr >> proxy;
+		if(!checkUser(uname,pword)) {
+			cerr << "invalid username/password\n";
+			Np4d::sendInt(avaSock,-1);
+			outQ.enq(0);
+			close(avaSock);
+			continue;
+		}
+		if(Np4d::ipAddress(cliIpStr.c_str())) aip = Np4d::ipAddress(cliIpStr.c_str());
 		bool needProxy = (proxy=="proxy");
 		CtlPkt cp2(NEW_CLIENT,REQUEST,seqNum);
 		fAdr_t rtrAdr; ipa_t rtrIp;
 		if(!findCliRtr(aip,rtrAdr,rtrIp)) {
-			rtrAdr = prefixes[0].rtrAdr;
-			rtrIp = prefixes[0].rtrIp;
+			cerr << "client did not match ip prefix\n";
+			Np4d::sendInt(avaSock,-1);
+			outQ.enq(0);
+			close(avaSock);
+			continue;
 		}
 		proxyStruct pro;
 		if(needProxy) {
@@ -630,3 +651,28 @@ int sendCtlPkt(CtlPkt& cp, comt_t comt, fAdr_t dest, Queue& inQ, Queue& outQ) {
         return reply;
 }
 
+bool checkUser(string &user, string &pass) {
+	vector<user_pass> results;
+	try {
+		pthread_mutex_lock(&sqlLock);
+		mysqlpp::Query q = sqlconn->query();
+		q << "SELECT pass FROM users WHERE user='" << user << "'";
+		q.storein(results);
+		pthread_mutex_unlock(&sqlLock);
+		if(results.size() > 0 && results[0].pass==pass) return true;
+	} catch(mysqlpp::Exception e) {
+		cerr << "MySQL error\n";
+	}
+	return false;
+}
+/*
+vector<fAdr_t>& getAdrs(string &user,vector<fAdr_t>& adrs) {
+	
+}
+
+string& getUser(fAdr_t adr) {
+	
+}
+
+
+*/
