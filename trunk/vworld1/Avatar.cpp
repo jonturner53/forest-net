@@ -38,7 +38,7 @@ int main(int argc, char *argv[]) {
 	ipa_t myIpAdr, cliMgrIpAdr;
 	comt_t firstComt, lastComt;
 	uint32_t finTime;
-	if (!argc == 9 ||
+	if (argc != 9 ||
 	    (myIpAdr  = Np4d::ipAddress(argv[1])) == 0 ||
 	    (cliMgrIpAdr   = Np4d::ipAddress(argv[2])) == 0 ||
 	    sscanf(argv[4],"%d", &firstComt) != 1 ||

@@ -548,6 +548,9 @@ void RouterCore::run(uint64_t finishTime) {
 	if (booting) {
 		if (!iop->setupBootSock(bootIp,nmIp))
 			fatal("RouterCore:run: could not setup boot socket\n");
+		string s1;
+		cout << "sending boot request to " << Np4d::ip2string(nmIp,s1)
+		     << endl;
 		CtlPkt cp(BOOT_REQUEST,REQUEST,0);
 		if (!sendCpReq(cp,nmAdr))
 			fatal("RouterCore::run: could not send boot request\n");
@@ -2037,6 +2040,9 @@ void RouterCore::resendCpReq() {
 			pending->erase(pp->first);
 			continue;
 		}
+		string s1;
+		cout << "resending control packet\n"
+		     << h.toString(ps->getBuffer(p),s1);
 		// make copy of packet and send the copy
 		pp->second.timestamp = now;
 		pp->second.nSent++;
