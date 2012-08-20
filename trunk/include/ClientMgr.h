@@ -9,6 +9,8 @@
 #include "UiSetPair.h"
 #include <pthread.h> 
 #include <map>
+#include <mysql++/mysql++.h>
+#include <mysql++/ssqls.h>
 
 void* run(void *);		///< main run method, takes in finTime
 bool init(fAdr_t,ipa_t,fAdr_t,fAdr_t,ipa_t,ipa_t,fAdr_t,char*,char*); ///< initialize sockets
@@ -24,11 +26,20 @@ const static int LISTEN_PORT = 30140; ///< TCP port to listen for avatars on
 static const int TPSIZE = 500;
 static const int NORESPONSE = (1 << 31);
 
+mysqlpp::Connection * sqlconn; //< pointer to mysql connection
+sql_create_3(user_pass,1,3,
+  mysqlpp::sql_int, id,
+  mysqlpp::sql_varchar, user,
+  mysqlpp::sql_varchar, pass)
+
 PacketStoreTs *ps;	///< pointer to packet store
 int sock;		///< Forest socket
 int tcpSockInt;		///< Listen for avatars on internal ip
 int tcpSockExt;		///< Listen for avatars on external ip
 int avaSock;		///< Avatar connection socket
+
+pthread_mutex_t sqlLock;
+
 uint64_t seqNum;
 map<string,string>* unames; ///< map of known usernames to pwords
 
@@ -92,5 +103,5 @@ void connect();		///< connect to forest network
 void disconnect();	///< disconnect from forest network
 void readUsernames();	///< read filenames and store
 void initializeAvatar();///< try to connect to and initialize ClientAvatar
-;
+bool checkUser(string&,string&); ///< check if username/pword pair is in sql db
 #endif
