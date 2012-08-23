@@ -15,10 +15,6 @@
 #include <fstream>
 #include <sstream>
 
-#define CLIMGRDB "forest"
-#define CLIMGRDBHOST "localhost"
-#define CLIMGRDBUSER "root"
-#define CLIMGRDBPASS ""
 /** usage:
  *  ClientMgr netMgrAdr rtrAdr ccAdr rtrIp intIp extIp myAdr finTime
  *  usersFile acctFile prefixFile
@@ -41,8 +37,8 @@
 
 int main(int argc, char ** argv) {
 	uint32_t finTime = 0;
-	ipa_t rtrIp, intIp, extIp; fAdr_t rtrAdr, myAdr, CC_Adr, netMgrAdr;
-	rtrIp = intIp = extIp = 0; rtrAdr = myAdr = CC_Adr = netMgrAdr = 0;
+	ipa_t rtrIp, intIp, extIp, sqlIp; fAdr_t rtrAdr, myAdr, CC_Adr, netMgrAdr;
+	rtrIp = intIp = extIp = sqlIp = 0; rtrAdr = myAdr = CC_Adr = netMgrAdr = 0;
 	if(argc != 12 ||
 	    (netMgrAdr = Forest::forestAdr(argv[1])) == 0 ||
 	    (rtrAdr = Forest::forestAdr(argv[2])) == 0 ||
@@ -50,14 +46,19 @@ int main(int argc, char ** argv) {
 	    (rtrIp = Np4d::ipAddress(argv[4])) == 0 ||
 	    (intIp = Np4d::ipAddress(argv[5])) == 0 ||
 	    (extIp = Np4d::ipAddress(argv[6])) == 0 ||
-	    (myAdr = Forest::forestAdr(argv[7])) == 0 ||
-	    (sscanf(argv[8],"%d", &finTime)) != 1) {
+	    (sqlIp = Np4d::ipAddress(argv[7])) == 0 ||
+	    (myAdr = Forest::forestAdr(argv[8])) == 0 ||
+	    (sscanf(argv[9],"%d", &finTime)) != 1) {
 		fatal("ClientMgr usage: ClientMgr netMgrAdr rtrAdr comtCtlAdr "
-		      "rtrIp intIp extIp myAdr finTime usersFile acctFile "
+		      "rtrIp intIp extIp sqlIp myAdr finTime acctFile "
 		      "prefixFile");
 	}
-	if(!init(netMgrAdr,rtrIp,rtrAdr,CC_Adr,intIp, extIp, myAdr,
-	         argv[9], argv[10]))
+	if (extIp == Np4d::ipAddress("127.0.0.1")) extIp = Np4d::myIpAddress(); 
+	if (extIp == 0) fatal("can't retrieve default IP address");
+
+
+	if(!init(netMgrAdr,rtrIp,rtrAdr,CC_Adr,intIp, extIp, sqlIp, myAdr,
+	         argv[10]))
 		fatal("init: Failed to initialize ClientMgr");
 	if(!readPrefixInfo(argv[11]))
 		fatal("readPrefixFile: Failed to read prefixes");
@@ -82,13 +83,11 @@ int main(int argc, char ** argv) {
  *  @return true on success, false on failure
  */
 bool init(fAdr_t nma, ipa_t ri, fAdr_t ra, fAdr_t cca,
-	ipa_t iip, ipa_t xip, fAdr_t ma, char * filename, char * acctFile) {
+	ipa_t iip, ipa_t xip, ipa_t sip, fAdr_t ma, char * acctFile) {
 	netMgrAdr = nma; rtrIp = ri; rtrAdr = ra;
-	CC_Adr = cca; intIp = iip; extIp = xip;
-	myAdr = ma; unamesFile = filename; 
+	CC_Adr = cca; intIp = iip; extIp = xip; sqlIp = sip;
+	myAdr = ma;
 	sock = tcpSockInt = tcpSockExt = avaSock = -1;
-	unames = new map<string,string>;
-	readUsernames();
 	int nPkts = 10000;
 	ps = new PacketStoreTs(nPkts+1);
 	acctFileStream.open(acctFile);
@@ -99,7 +98,6 @@ bool init(fAdr_t nma, ipa_t ri, fAdr_t ra, fAdr_t cca,
 	pool = new ThreadPool[TPSIZE+1];
 	threads = new UiSetPair(TPSIZE);
 	tMap = new IdMap(TPSIZE);
-	pthread_mutex_init(&sqlLock,NULL);
 	//setup sockets
 	tcpSockInt = Np4d::streamSocket();
 	tcpSockExt = Np4d::streamSocket();
@@ -112,12 +110,7 @@ bool init(fAdr_t nma, ipa_t ri, fAdr_t ra, fAdr_t cca,
 	if (!status) return false;
 	status = Np4d::bind4d(sock,intIp,LISTEN_PORT);
 	if (!status) return false;
-	try {
-	//setup connection to sql db
-		sqlconn = new mysqlpp::Connection(CLIMGRDB,"/tmp/mysql.sock",CLIMGRDBUSER,CLIMGRDBPASS);
-	} catch(const mysqlpp::Exception& er) {
-		fatal("cannot connect to mysql db");
-	}
+	
 	connect();
 	usleep(1000000); //sleep for one second
 
@@ -179,24 +172,6 @@ void writeToAcctFile(CtlPkt cp) {
 	}
 }
 
-
-/* Read usernames and passwords from file and save into respective arrays
- * @param filename is the usernames file to read from
- */
-void readUsernames() {
-	ifstream ifs(unamesFile);
-	if (ifs.good()) {
-		while(!ifs.eof()) {
-			string uname; string pword;
-			ifs >> uname;
-			ifs >> pword;
-			Misc::skipBlank(ifs);
-			(*unames)[uname] = pword;
-		}
-	} else
-		fatal("Could not read usernames file");
-}
-
 void send(int p) {
 	int length = ps->getHeader(p).getLength();
 	ps->pack(p);
@@ -228,7 +203,6 @@ bool findCliRtr(ipa_t cliIp, fAdr_t& rtrAdr, ipa_t& rtrIp) {
 			j++;
 		}
 	}
-cerr<<"ending2\n";
 	return false;
 }
 
@@ -652,27 +626,18 @@ int sendCtlPkt(CtlPkt& cp, comt_t comt, fAdr_t dest, Queue& inQ, Queue& outQ) {
 }
 
 bool checkUser(string &user, string &pass) {
-	vector<user_pass> results;
-	try {
-		pthread_mutex_lock(&sqlLock);
-		mysqlpp::Query q = sqlconn->query();
-		q << "SELECT pass FROM users WHERE user='" << user << "'";
-		q.storein(results);
-		pthread_mutex_unlock(&sqlLock);
-		if(results.size() > 0 && results[0].pass==pass) return true;
-	} catch(mysqlpp::Exception e) {
-		cerr << "MySQL error\n";
+	int sqlSock = Np4d::streamSocket();
+	ipp_t sqlPort = 30190;
+	if(!Np4d::bind4d(sqlSock,intIp,0) ||
+	   !Np4d::connect4d(sqlSock,sqlIp,sqlPort)) {
+		cerr << "could not connect to sql proxy\n";
+		return false;
 	}
+	string sql = "SELECT pass FROM users WHERE user='" + user + "'";
+	Np4d::sendBuf(sqlSock,(char*)sql.c_str(),sql.size()+1);
+	char * ret = new char[100];
+	Np4d::recvBuf(sqlSock,ret,100);
+	string retStr = string(ret);
+	if(retStr==pass) return true;
 	return false;
 }
-/*
-vector<fAdr_t>& getAdrs(string &user,vector<fAdr_t>& adrs) {
-	
-}
-
-string& getUser(fAdr_t adr) {
-	
-}
-
-
-*/
