@@ -119,12 +119,12 @@ bool init(const char *topoFile) {
 	// setup thread pool for handling control packets
 	pthread_attr_t attr;
 	pthread_attr_init(&attr);
-	pthread_attr_setstacksize(&attr,PTHREAD_STACK_MIN);
+	pthread_attr_setstacksize(&attr,4*PTHREAD_STACK_MIN);
 	size_t stacksize;
 	pthread_attr_getstacksize(&attr,&stacksize);
-	cerr << "min stack size=" << PTHREAD_STACK_MIN << endl;
+	cerr << "min stack size=" << 4*PTHREAD_STACK_MIN << endl;
 	cerr << "threads in pool have stacksize=" << stacksize << endl;
-	if (stacksize != PTHREAD_STACK_MIN)
+	if (stacksize != 4*PTHREAD_STACK_MIN)
 		fatal("init: can't set stack size");
 	for (int t = 1; t <= TPSIZE; t++) {
 		if (!pool[t].qp.in.init() || !pool[t].qp.out.init())
