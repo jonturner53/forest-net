@@ -108,12 +108,12 @@ bool init(const char *topoFile) {
 
 	pthread_attr_t attr;
 	pthread_attr_init(&attr);
-	pthread_attr_setstacksize(&attr,PTHREAD_STACK_MIN);
+	pthread_attr_setstacksize(&attr,4*PTHREAD_STACK_MIN);
 	size_t stacksize;
 	pthread_attr_getstacksize(&attr,&stacksize);
-	cerr << "min stack size=" << PTHREAD_STACK_MIN << endl;
+	cerr << "min stack size=" << 4*PTHREAD_STACK_MIN << endl;
 	cerr << "threads in pool have stacksize=" << stacksize << endl;
-	if (stacksize != PTHREAD_STACK_MIN)
+	if (stacksize != 4*PTHREAD_STACK_MIN)
 		fatal("init: can't set stack size");
 
 	// setup thread pool for handling control packets
@@ -185,7 +185,6 @@ void* run(void* finTimeSec) {
 				int t;
 				fAdr_t srcAdr = h.getSrcAdr();
 				if (cp.getRrType() == REQUEST) {
-cerr << "recv req\n";
 					// first make sure this is not a repeat
 					// of a request we're already working on
 					t = threads->firstOut();
