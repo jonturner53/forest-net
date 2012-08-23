@@ -1,19 +1,18 @@
 JAVAROOT = ~/bin/java
-JAVAC=/usr/java/latest/bin/javac
 ALGOLIBROOT = ../../algolib-jst
 FLIB = ../lib/lib-forest.a
 LIBS = ${FLIB} ${ALGOLIBROOT}/lib/lib-ds.a ${ALGOLIBROOT}/lib/lib-util.a
-CXXFLAGS = -Wall -O2 -m32 -I ../include -I ${ALGOLIBROOT}/include
+CXXFLAGS = -Wall -O2 -m64 -I ../include -I ${ALGOLIBROOT}/include
 
 LIBFILES = NetInfo.o ComtInfo.o
-XFILES = NetMgr CliMgr ComtCtl Console BuildRtables
+XFILES = NetMgr CliMgr ComtCtl Console BuildRtables SqlProxy
 CLASSFILES = NetInfo.class ComtInfo.class ComtreeDisplay.class
 
 %.o: %.cpp %.h stdinc.h
 	${CXX} ${CXXFLAGS} -c $<
 
 %.class: %.java
-	${JAVAC} -nowarn -cp ${JAVAROOT} $<
+	javac -cp ${JAVAROOT} $<
 	cp *.class ${JAVAROOT}/forest/control
 
 all : lib ${CLASSFILES} ${XFILES}
@@ -36,7 +35,9 @@ CliMgr : ClientMgr.o ${LIBS}
 ComtCtl : ComtCtl.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -lpthread -o $@
 	cp $@ ${HOME}/bin
-
+SqlProxy : SqlProxy.o ${LIBS}
+	${CXX} ${CXXFLAGS} $< ${LIBS} ${HOME}/libmysqlpp.a ${HOME}/libmysqlclient.a -lssl -o $@
+	cp $@ ${HOME}/bin
 BuildRtables : BuildRtables.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
 	cp $@ ${HOME}/bin
