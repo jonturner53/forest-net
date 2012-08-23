@@ -185,6 +185,7 @@ void* run(void* finTimeSec) {
 				int t;
 				fAdr_t srcAdr = h.getSrcAdr();
 				if (cp.getRrType() == REQUEST) {
+cerr << "recv req\n";
 					// first make sure this is not a repeat
 					// of a request we're already working on
 					t = threads->firstOut();
