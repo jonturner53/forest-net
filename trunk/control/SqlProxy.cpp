@@ -5,20 +5,20 @@ int main(int argc, char *argv[]){
 	uint32_t finTime;
 	ipa_t intIp, extIp;
 	if(!argc == 2 ||
-	    (sscanf(argv[3],"%d",&finTime) != 1) ||
+	    (sscanf(argv[4],"%d",&finTime) != 1) ||
 	    (intIp = Np4d::ipAddress(argv[1])) == 0 ||
 	    (extIp = Np4d::ipAddress(argv[2])) == 0)
-		fatal("usage: SqlProxy intIp extIp runTime");
+		fatal("usage: SqlProxy intIp extIp socketFile runTime");
 
 	if (extIp == Np4d::ipAddress("127.0.0.1")) extIp = Np4d::myIpAddress(); 
 	if (extIp == 0) fatal("can't retrieve default IP address");
 
 	SqlProxy sp;
-	if(!sp.init(intIp,extIp)) fatal("Failed to init client proxy sockets");
+	if(!sp.init(intIp,extIp,argv[3])) fatal("Failed to init client proxy sockets");
 	sp.run(1000000*finTime);
 }
 
-bool SqlProxy::init(ipa_t intIp, ipa_t extIp) {
+bool SqlProxy::init(ipa_t intIp, ipa_t extIp, char * socketFile) {
 	tcpSockInt = Np4d::streamSocket();
 	tcpSockExt = Np4d::streamSocket();
 	sqlSock = -1;
@@ -31,7 +31,7 @@ bool SqlProxy::init(ipa_t intIp, ipa_t extIp) {
 		return false;
 	}
 	try {
-		sqlconn = new mysqlpp::Connection("forest","/tmp/mysql.sock","root","");
+		sqlconn = new mysqlpp::Connection("forest",socketFile,"root","");
 	} catch(const mysqlpp::Exception& er) {
 		fatal("cannot connect to mysql db");
 	}
