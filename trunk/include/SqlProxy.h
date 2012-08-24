@@ -7,7 +7,7 @@
 class SqlProxy {
 public:
 	void run(uint32_t);		///< main run method, takes in finTime
-	bool init(ipa_t,ipa_t,char*); ///< initialize sockets
+	bool init(ipa_t,ipa_t,char*,char*,char*,char*); ///< initialize sockets
 	ipa_t extIp;		///< address for tcp connections from "external" hosts
 	ipa_t intIp;
 
