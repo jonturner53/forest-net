@@ -8,7 +8,7 @@ int main(int argc, char *argv[]){
 	    (sscanf(argv[7],"%d",&finTime) != 1) ||
 	    (intIp = Np4d::ipAddress(argv[1])) == 0 ||
 	    (extIp = Np4d::ipAddress(argv[2])) == 0)
-		fatal("usage: SqlProxy intIp extIp socketFile runTime");
+		fatal("usage: SqlProxy intIp extIp db host user pass runTime");
 
 	if (extIp == Np4d::ipAddress("127.0.0.1")) extIp = Np4d::myIpAddress(); 
 	if (extIp == 0) fatal("can't retrieve default IP address");
