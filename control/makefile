@@ -2,10 +2,10 @@ JAVAROOT = ~/bin/java
 ALGOLIBROOT = ../../algolib-jst
 FLIB = ../lib/lib-forest.a
 LIBS = ${FLIB} ${ALGOLIBROOT}/lib/lib-ds.a ${ALGOLIBROOT}/lib/lib-util.a
-CXXFLAGS = -Wall -O2 -m64 -I ../include -I ${ALGOLIBROOT}/include
+CXXFLAGS = -Wall -O2 -m64 -I ../include -I ${ALGOLIBROOT}/include -I /usr/include/mysql
 
 LIBFILES = NetInfo.o ComtInfo.o
-XFILES = NetMgr CliMgr ComtCtl Console BuildRtables SqlProxy
+XFILES = NetMgr CliMgr CliMgr-v0 ComtCtl Console BuildRtables SqlProxy
 CLASSFILES = NetInfo.class ComtInfo.class ComtreeDisplay.class
 
 %.o: %.cpp %.h stdinc.h
@@ -32,11 +32,15 @@ CliMgr : ClientMgr.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -lpthread -o $@
 	cp $@ ${HOME}/bin
 
+CliMgr-v0 : ClientMgr-v0.o ${LIBS}
+	${CXX} ${CXXFLAGS} $< ${LIBS} -lpthread -o $@
+	cp $@ ${HOME}/bin
+
 ComtCtl : ComtCtl.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -lpthread -o $@
 	cp $@ ${HOME}/bin
 SqlProxy : SqlProxy.o ${LIBS}
-	${CXX} ${CXXFLAGS} $< ${LIBS} ${HOME}/libmysqlpp.a ${HOME}/libmysqlclient.a -lssl -o $@
+	${CXX} ${CXXFLAGS} $< ${LIBS} libmysqlpp.a libmysqlclient.a -lssl -o $@
 	cp $@ ${HOME}/bin
 BuildRtables : BuildRtables.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
