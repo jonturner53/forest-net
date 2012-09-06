@@ -795,12 +795,13 @@ void Avatar::updateStatus(uint32_t now) {
 	if (postRegion != prevRegion) updateVisSet();
 	int generalDirection = ((int)(direction/90))%4;
 	int regionBelow = groupNum(x,y-10000)-1;
-        if (x == 0)        	direction = -direction;
-        else if (x == GRID*worldSize-1)   direction = -direction;
-        else if (y == 0)        direction = 180 - direction;
-        else if (y == GRID*worldSize-1)   direction = 180 - direction;
-	if(connSock >=0){
-		//stop the driver and let them choose where to go next if they hit the wall	
+        if (x == 0)        		direction = -direction;
+        else if (x == GRID*worldSize-1) direction = -direction;
+        else if (y == 0)        	direction = 180 - direction;
+        else if (y == GRID*worldSize-1) direction = 180 - direction;
+	if (connSock >= 0) {
+		//stop the driver and let them choose where to go next
+		// if they hit the wall	
                 if (prevRegion == postRegion + 1 &&
 			(walls[prevRegion]==1 || walls[prevRegion]==3)) {
 			// going east to west and hitting wall
@@ -881,16 +882,15 @@ void Avatar::updateStatus(uint32_t now) {
                         	x = (postRegion%worldSize)*GRID - 1;
 			} 
 		}
-	}
-        else if (connSock < 0) {
+	} else if (connSock < 0) {
 		//avoid walls
 		//first check for the edges of the map 
-		if (x-(.4*GRID)< 0){
+		if (x - (.4*GRID) < 0){
 			//left edge
-			if(generalDirection == 3){
+			if (generalDirection == 3) {
 				direction = direction + 10;// (10*speed/x);
 			}
-			else if(generalDirection == 2){
+			else if (generalDirection == 2){
 				direction = direction -10;//(10*speed/x);
 			}	
 		}
@@ -921,9 +921,10 @@ void Avatar::updateStatus(uint32_t now) {
 				direction = direction - 10;
 			}
 		}
-		//if you're not near an edge then check to see which walls are in your region and avoid them
+		//if you're not near an edge then check to see which 
+		// walls are in your region and avoid them
 		//if you're in a region with a top and left 
-		if(walls[postRegion] ==3 ){
+		if (walls[postRegion] ==3 ){
 			//check to avoid the top
 			if(y%GRID >= (.7*GRID)){
 				if(generalDirection == 0){

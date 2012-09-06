@@ -3,8 +3,9 @@ ALGOLIBROOT = ~/src/algolib-jst
 FORESTROOT = $(shell pwd)
 FLIB = ${FORESTROOT}/lib/lib-forest.a
 LIBS = ${FLIB} ${ALGOLIBROOT}/lib/lib-ds.a ${ALGOLIBROOT}/lib/lib-util.a
-CXXFLAGS = -Wall -O2 -m32 -I ${FORESTROOT}/include -I ${ALGOLIBROOT}/include
-JAVAC=/usr/java/latest/bin/javac
+CXXFLAGS = -Wall -O2 -m64 -I ${FORESTROOT}/include -I ${ALGOLIBROOT}/include
+#JAVAC=/usr/java/latest/bin/javac
+JAVAC=javac
 BIN = ~/bin
 
 all:

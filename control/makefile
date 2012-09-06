@@ -5,7 +5,7 @@ LIBS = ${FLIB} ${ALGOLIBROOT}/lib/lib-ds.a ${ALGOLIBROOT}/lib/lib-util.a
 CXXFLAGS = -Wall -O2 -m64 -I ../include -I ${ALGOLIBROOT}/include -I /usr/include/mysql
 
 LIBFILES = NetInfo.o ComtInfo.o
-XFILES = NetMgr CliMgr CliMgr-v0 ComtCtl Console BuildRtables SqlProxy
+XFILES = NetMgr CliMgr CliMgr-v0 ComtCtl Console BuildRtables #SqlProxy
 CLASSFILES = NetInfo.class ComtInfo.class ComtreeDisplay.class
 
 %.o: %.cpp %.h stdinc.h

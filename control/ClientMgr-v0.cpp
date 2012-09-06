@@ -5,7 +5,7 @@
  *
  *
  */
-#include "ClientMgr.h"
+#include "ClientMgr-v0.h"
 #include "CommonDefs.h"
 #include "stdinc.h"
 #include "Np4d.h"
