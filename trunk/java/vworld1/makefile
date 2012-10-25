@@ -1,39 +1,12 @@
-ALGOLIBROOT = ../../algolib-jst
-JAVAC=/usr/java/latest/bin/javac
-FLIB = ../lib/lib-forest.a
-LIBS = ${FLIB} ${ALGOLIBROOT}/lib/lib-util.a ${ALGOLIBROOT}/lib/lib-ds.a
-XFILES = Avatar Avatar-v0 Monitor genWalls cliProxy
+JAVAC=javac
 CLASSFILES = AvatarStatus.class AvatarGraphic.class ShowWorld.class \
 	DriveAvatar.class ShowWalls.class 
-CXXFLAGS = -Wall -O2 -m64 -I ../include -I ${ALGOLIBROOT}/include
-
-%.o: %.cpp %.h stdinc.h
-	${CXX} ${CXXFLAGS} -c $<
 
 %.class: %.java
 	${JAVAC} -nowarn -cp ~/bin/java $<
 	cp *.class ~/bin/java/forest/vworld1
 
-all : ${XFILES} ${CLASSFILES}
-
-Avatar : Avatar.o ${LIBS}
-	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
-	cp $@ ${HOME}/bin
-
-Avatar-v0 : Avatar-v0.o ${LIBS}
-	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
-	cp $@ ${HOME}/bin
-
-Monitor : Monitor.o ${LIBS}
-	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
-	cp $@ ${HOME}/bin
-
-genWalls : genWalls.o ${LIBS}
-	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
-	cp $@ ${HOME}/bin
-cliProxy : ClientProxy.o ${LIBS}
-	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
-	cp $@ ${HOME}/bin
+all : ${CLASSFILES}
 
 clean :
-	rm -f *.o 
+	rm -f *.class 

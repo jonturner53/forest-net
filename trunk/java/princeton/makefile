@@ -1,6 +1,5 @@
-ALGOLIBROOT = ../../algolib-jst
 JAVAROOT = ~/bin/java
-JAVAC=/usr/java/latest/bin/javac
+JAVAC=javac
 CLASSFILES = StdDraw.class
 
 %.class: %.java
