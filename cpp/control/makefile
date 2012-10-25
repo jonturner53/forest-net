@@ -6,16 +6,11 @@ CXXFLAGS = -Wall -O2 -m64 -I ../include -I ${ALGOLIBROOT}/include -I /usr/includ
 
 LIBFILES = NetInfo.o ComtInfo.o
 XFILES = NetMgr CliMgr CliMgr-v0 ComtCtl Console BuildRtables #SqlProxy
-CLASSFILES = NetInfo.class ComtInfo.class ComtreeDisplay.class
 
 %.o: %.cpp %.h stdinc.h
 	${CXX} ${CXXFLAGS} -c $<
 
-%.class: %.java
-	javac -cp ${JAVAROOT} $<
-	cp *.class ${JAVAROOT}/forest/control
-
-all : lib ${CLASSFILES} ${XFILES}
+all : lib ${XFILES}
 
 lib : ${LIBFILES}
 	ar -ru ${FLIB} ${LIBFILES}
@@ -47,4 +42,4 @@ BuildRtables : BuildRtables.o ${LIBS}
 	cp $@ ${HOME}/bin
 
 clean :
-	rm -f *.o *.class ${XFILES}
+	rm -f *.o ${XFILES}
