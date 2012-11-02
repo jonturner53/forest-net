@@ -24,6 +24,12 @@ StatsModule::StatsModule(int maxStats1, int maxLnk1, int maxQ1,
 		qCnts[i].bytLen = qCnts[i].pktLen = 0;
 	}
 	n = 0;
+    totInByte = 0; totInPkt = 0; totDiscards = 0;
+	rtrInByte = 0; rtrInPkt = 0; 
+	leafInByte = 0; leafInPkt = 0; 
+	totOutByte = 0; totOutPkt = 0;
+	rtrOutByte = 0; rtrOutPkt = 0; rtrDiscards = 0;
+	leafOutByte = 0; leafOutPkt = 0; leafDiscards = 0;
 };
 	
 StatsModule::~StatsModule() { delete [] stat; }

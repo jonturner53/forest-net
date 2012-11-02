@@ -72,7 +72,7 @@ bool processArgs(int argc, char *argv[], RouterInfo& args) {
 			"firstLeafAdr, lastLeafAdr and that firstLeafAdr "
 			"be no larger than lastLeafAdr\n";
 		return false;
-	} else if (args.mode.compare("remote") &&
+	} else if (args.mode.compare("remote") == 0 &&
 		   (args.bootIp == 0 || args.myAdr == 0 ||
 		    args.nmIp == 0 || args.nmAdr == 0)) {
 		cerr << "processArgs: remote configuration requires bootIp, "
@@ -104,6 +104,7 @@ int main(int argc, char *argv[]) {
 	cout << endl;
 	router.dump(cout); 		// print final tables
 	cout << endl;
+    return 0;
 }
 
 /** Constructor for RouterCore, initializes key parameters and allocates space.
@@ -141,8 +142,8 @@ RouterCore::RouterCore(bool booting1, const RouterInfo& config)
 }
 
 RouterCore::~RouterCore() {
-	delete ift; delete lt; delete ctt; delete rt;
-	delete ps; delete qm; delete iop; delete sm;
+    delete pktLog; delete qm; delete iop; delete sm;
+    delete rt; delete ctt; delete lt; delete ift; delete ps;
 	if (leafAdr != 0) delete leafAdr;
 }
 

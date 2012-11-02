@@ -97,9 +97,11 @@ public:
 	static const short int MAXINTF= 20;	///< max # of interfaces
 	static const short int MAXLNK = 1000;	///< max # of links per router
 	static const int MINBITRATE = 20; 	///< min link bit rate in Kb/s
-	static const int MAXBITRATE = 900000;	///< max link bit rate in Kb/s
+	//static const int MAXBITRATE = 900000;	///< max link bit rate in Kb/s
+	static const int MAXBITRATE = 10000000;	// MAH: 10 Gbps
 	static const int MINPKTRATE = 10; 	///< min packet rate in p/s
-	static const int MAXPKTRATE = 450000;	///< max packet rate in p/s
+	//static const int MAXPKTRATE = 450000;	///< max packet rate in p/s
+	static const int MAXPKTRATE = 15000000;	 // MAH: 15 Million pkts/s is enough for 10 Gbps
 	static const uint32_t BUF_SIZ = 1600;	///< size of a packet buffer
 
 	// comtrees used for control
