@@ -80,6 +80,11 @@ private:
 
 	PacketStore *ps;		///< pointer to packet store object
 	StatsModule *sm;		///< pointer to statistics module
+	
+    #ifdef PROFILING // MAH for profiling
+    Timer *enq_timer;
+    Timer *deq_timer;
+    #endif
 };
 
 inline bool QuManager::validQ(int qid) const {

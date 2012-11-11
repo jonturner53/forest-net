@@ -87,10 +87,8 @@ bool processArgs(int argc, char *argv[], RouterInfo& args) {
  */
 int main(int argc, char *argv[]) {
 	RouterInfo args;
-	
 	if (!processArgs(argc, argv, args))
 		fatal("fRouter: error processing command line arguments");
-
 	bool booting = args.mode.compare("remote") == 0;
 	RouterCore router(booting,args);
 
@@ -545,6 +543,17 @@ void RouterCore::dump(ostream& out) {
  *  if it is zero, the router runs without stopping (until killed)
  */
 void RouterCore::run(uint64_t finishTime) {
+    #ifdef PROFILING // MAH
+    Timer timer_loop(    "RouterCore::run() main loop                   ");
+    Timer timer_deq(     "RouterCore::run() -> QuManager::deq()         ");
+    //Timer timer_enq("RouterCore::run() -> QuManager::enq()");
+    //Timer timer_lookup("RouterCore::run() -> UiHashTbl::lookup()");
+    Timer timer_pktCheck("RouterCore::run() -> RouterCore::pktCheck()   ");
+    Timer timer_pktLog(    "RouterCore::run() -> PacketLog::log()         ");    
+    Timer timer_forward( "RouterCore::run() -> RouterCore::forward()    ");
+    Timer timer_receive( "RouterCore::run() -> IoProcessor::receive()   ");
+    Timer timer_send(    "RouterCore::run() -> IoProcessor::send()      ");    
+    #endif
 	now = Misc::getTimeNs();
 	if (booting) {
 		if (!iop->setupBootSock(bootIp,nmIp))
@@ -570,19 +579,46 @@ void RouterCore::run(uint64_t finishTime) {
 		didNothing = true;
 
 		// input processing
+        #ifdef PROFILING // MAH
+        timer_loop.start();
+        timer_receive.start();
+        #endif
 		int p = iop->receive();
+        #ifdef PROFILING // MAH
+        if (p == 0) { timer_receive.cancel(); } // Don't count receive when no packet
+        else { timer_receive.stop(); }
+        #endif
 		if (p != 0) {
 			didNothing = false;
 			PacketHeader& h = ps->getHeader(p);
 			int ptype = h.getPtype();
+			#ifdef PROFILING
+            timer_pktLog.start();
 			pktLog->log(p,h.getInLink(),false,now);
+            timer_pktLog.stop();
+            #else
+            pktLog->log(p,h.getInLink(),false,now);
+            #endif
 			int ctx = ctt->getComtIndex(h.getComtree());
+            #ifdef PROFILING // MAH
+            timer_pktCheck.start();
+            bool pkt_check = pktCheck(p,ctx);
+            timer_pktCheck.stop();
+            if (!pkt_check) {
+			#else
 			if (!pktCheck(p,ctx)) {
+		    #endif
 				ps->free(p);
 			} else if (booting) {
 				handleCtlPkt(p);
 			} else if (ptype == CLIENT_DATA) {
+                #ifdef PROFILING // MAH
+                timer_forward.start();
+                #endif
 				forward(p,ctx);
+                #ifdef PROFILING // MAH
+                timer_forward.stop();
+                #endif				
 			} else if (ptype == SUB_UNSUB) {
 				subUnsub(p,ctx);
 			} else if (ptype == RTE_REPLY) {
@@ -590,19 +626,42 @@ void RouterCore::run(uint64_t finishTime) {
 			} else if (ptype == CONNECT || ptype == DISCONNECT) {
 				handleConnDisc(p);
 			} else if (h.getDstAdr() != myAdr) {
+                #ifdef PROFILING // MAH
+                timer_forward.start();
+                #endif
 				forward(p,ctx);
+                #ifdef PROFILING // MAH
+                timer_forward.stop();
+                #endif				
 			} else {
 				ctlQ.push(p);
 			}
 		}
 
+        #ifdef PROFILING // MAH
+        timer_deq.start();
+        #endif
 		// output processing
 		int lnk;
 		while ((p = qm->deq(lnk, now)) != 0) {
 			didNothing = false;
+		    #ifdef PROFILING
+            timer_deq.stop();
+            timer_pktLog.start();
+            #endif
 			pktLog->log(p,lnk,true,now);
+			#ifdef PROFILING
+			timer_pktLog.stop();
+            timer_send.start();
+            #endif
 			iop->send(p,lnk);
+			#ifdef PROFILING
+            timer_send.stop();
+            #endif
 		}
+        #ifdef PROFILING
+        timer_deq.cancel();
+        #endif
 
 		// control packet processing
 		if (!ctlQ.empty() && (didNothing || --controlCount <= 0)) {
@@ -626,6 +685,9 @@ void RouterCore::run(uint64_t finishTime) {
 
 		// update current time
 		now = Misc::getTimeNs();
+		#ifdef PROFILING // MAH
+        timer_loop.stop();
+        #endif
 	}
 
 	// write out recorded events
@@ -637,6 +699,14 @@ void RouterCore::run(uint64_t finishTime) {
 	     << sm->oPktCnt(-1) << " to routers\n";
 	cout << sm->iPktCnt(-2) << " from clients,    "
 	     << sm->oPktCnt(-2) << " to clients\n";
+	#ifdef PROFILING // MAH
+    cout << timer_loop << endl;
+    cout << timer_deq << endl;
+    cout << timer_pktCheck << endl;
+    cout << timer_forward << endl;
+    cout << timer_receive << endl;
+    cout << timer_send << endl;
+	#endif
 }
 
 /** Perform error checks on forest packet.
@@ -1214,8 +1284,8 @@ bool RouterCore::addLink(int p, CtlPkt& cp, CtlPkt& reply) {
 			reply.setRrType(NEG_REPLY);
 			return false;
 		}
-		if (peerType == ROUTER && pipp != Forest::ROUTER_PORT ||
-		    peerType != ROUTER && pipp == Forest::ROUTER_PORT ||
+		if ((peerType == ROUTER && pipp != Forest::ROUTER_PORT) ||
+		    (peerType != ROUTER && pipp == Forest::ROUTER_PORT) ||
 		    (lnk = lt->addEntry(lnk,pipa,pipp)) == 0) {
 			ift->addAvailBitRate(iface,br);
 			ift->addAvailPktRate(iface,pr);

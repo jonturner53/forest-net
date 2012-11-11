@@ -47,3 +47,36 @@ ntyp_t Forest::getNodeType(string& s) {
 	return UNDEF_NODE;
 }
 
+// MAH: for profiling
+
+/*int64_t cycCnt1(void)
+{
+    uint32_t hi, lo; uint64_t v64;
+    //  rdtsc: Loads the time-stamp counter value into %edx:%eax 
+    asm volatile ("cpuid; rdtsc; movl %%edx, %0; movl %%eax, %1" // Read the counter
+        : "=r" (hi), "=r" (lo)                  // output 
+        :                                       // input (none) 
+        : "%edx", "%eax");                      // Let gcc know whch registers are used
+    v64 = ((uint64_t)hi << 32) + (uint64_t)lo;
+    return (int64_t)v64;
+}
+
+unsigned long long int cycCnt2(void)
+{
+   unsigned long long int x;
+   unsigned a, d;
+
+   __asm__ volatile("rdtsc" : "=a" (a), "=d" (d));
+
+   return ((unsigned long long)a) | (((unsigned long long)d) << 32);;
+}*/
+
+// MAH: for profiling
+std::ostream& operator<<(std::ostream& os, const Timer& timer) {
+    os << "Timer " << timer.name << ": " 
+       << " count=" << timer.count
+       << ", cycles=" << timer.cycles
+       << ", average=" << timer.avg(); 
+    return os;
+}
+
