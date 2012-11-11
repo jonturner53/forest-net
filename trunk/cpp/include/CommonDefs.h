@@ -209,4 +209,42 @@ inline string& Forest::fAdr2string(fAdr_t fAdr, string& s) {
  */
 inline int Forest::truPktLeng(int x) { return 70+x; }
 
+// MAH: uncomment to enable profiling
+#define PROFILING
+
+#include "cycle.h"
+typedef ticks cycle_t;
+inline cycle_t cycCnt() { return getticks(); }
+//typedef unsigned long long int cycle_t;
+//typedef int64_t cycle_t;
+//cycle_t cycCnt(void);
+
+// MAH: for profiling
+class Timer {
+public:
+    Timer(const char *name="") : name(name) { count = 0; cycles = 0; last = 0; running = false; }
+    Timer(const Timer &other) { this->copy(other); }
+    Timer& operator=(const Timer& other) {
+        if (&other == this) return *this;
+        this->copy(other); return *this;
+    }
+    void copy(const Timer& other) { 
+        name = other.name; count = other.count; running = other.running;
+        cycles = other.cycles; last = other.last; }
+    inline void start() { last = cycCnt(); running=true; }
+    inline void stop() { if (!running) return;
+        cycles += (cycCnt() - last); 
+        count++; last = 0; running = false;
+    }
+    inline void cancel() { last = 0; running = false; }
+    friend ostream& operator<<(ostream& os, const Timer&);
+    cycle_t avg() const { return (count > 0) ? (cycles/count) : 0; }
+protected:
+    std::string name;
+    cycle_t count;
+    cycle_t cycles;
+    cycle_t last;
+    bool running;
+};
+
 #endif

@@ -56,11 +56,22 @@ QuManager::QuManager(int nL1, int nP1, int nQ1, int maxppl1,
 	}
 	quInfo[nQ].lnk = 0; free = 1;
 	qCnt = 0;
+    // MAH
+	#ifdef PROFILING
+    enq_timer = new Timer("QuManager::enq(int, int, uint64_t)");
+    deq_timer = new Timer("QuManager::deq(int&, uint64_t)");
+	#endif	
 }
 		
 QuManager::~QuManager() {
 	delete queues; delete active; delete vactive;
 	delete [] quInfo; delete [] lnkInfo; delete hset;
+	// MAH: profiling
+	#ifdef PROFILING
+    cout << *enq_timer << endl;
+    cout << *deq_timer << endl;
+    delete enq_timer; delete deq_timer;
+    #endif
 }
 
 /** Allocate a queue and assign it to a link.
@@ -99,6 +110,10 @@ void QuManager::freeQ(int qid) {
  *  is at its limit for packets queued
  */
 bool QuManager::enq(int p, int qid, uint64_t now) {
+    // MAH
+    #ifdef PROFILING
+    enq_timer->start();
+    #endif
 	int pleng = Forest::truPktLeng((ps->getHeader(p)).getLength());
 	QuInfo& q = quInfo[qid]; int lnk = q.lnk;
 
@@ -107,6 +122,10 @@ bool QuManager::enq(int p, int qid, uint64_t now) {
 	if (sm->getLinkQlen(lnk) >= maxppl ||
 	    sm->getQlen(qid) >= q.pktLim ||
 	    sm->getQbytes(qid) + pleng > q.byteLim) {
+        // MAH
+	    #ifdef PROFILING
+        enq_timer->stop();
+	    #endif
 		return false;
 	}
 
@@ -141,6 +160,10 @@ bool QuManager::enq(int p, int qid, uint64_t now) {
 	// add packet to queue
 	queues->addLast(p,qid);
 	sm->incQlen(qid,lnk,pleng);
+	// MAH
+	#ifdef PROFILING
+	enq_timer->stop();
+	#endif
 	return true;
 }
 
@@ -152,6 +175,9 @@ bool QuManager::enq(int p, int qid, uint64_t now) {
  *  are no links that are ready to send a packet
  */
 int QuManager::deq(int& lnk, uint64_t now) {
+    #ifdef PROFILING // MAH
+    deq_timer->start();
+    #endif
 	// first process virtually active links that should now be idle
 	//
 	int vl = vactive->findmin(); uint64_t d = vactive->key(vl);
@@ -159,10 +185,16 @@ int QuManager::deq(int& lnk, uint64_t now) {
 		vactive->remove(vl);
 		vl = vactive->findmin(); d = vactive->key(vl);
 	}
+#ifdef PROFILING
+    if (active->empty()) { deq_timer->stop(); return 0; }
+    lnk = active->findmin(); d = active->key(lnk);
+    if (now < d) { deq_timer->stop(); return 0; }
+#else
 	// determine next active link that is ready to send
 	if (active->empty()) return 0;
 	lnk = active->findmin(); d = active->key(lnk);
 	if (now < d) return 0;
+#endif
 
 	// dequeue packet and update statistics
 	int qid = hset->findMin(lnk);
@@ -202,6 +234,9 @@ int QuManager::deq(int& lnk, uint64_t now) {
 	} else {
 		active->changekey(lnk,t);
 	}
-
+	
+	#ifdef PROFILING // MAH
+	deq_timer->stop();
+	#endif
 	return p;
 }

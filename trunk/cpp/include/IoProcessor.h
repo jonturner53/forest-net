@@ -44,7 +44,10 @@ private:
 	LinkTable *lt;			///< pointer to link table
 	PacketStore *ps;		///< pointer to packet store
 	StatsModule *sm;		///< pointer to statistics module
-
+    #ifdef PROFILING // MAH
+    Timer *timer_send, *timer_receive;
+    Timer *timer_np4d_sendto4d, *timer_np4d_recvfrom4d;
+    #endif
 };
 
 

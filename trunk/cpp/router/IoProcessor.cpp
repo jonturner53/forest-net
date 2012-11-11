@@ -17,6 +17,12 @@ IoProcessor::IoProcessor(int maxIface1, IfaceTable *ift1, LinkTable *lt1,
 	sockets = new fd_set;
 	sock = new int[maxIface+1];
 	bootSock = -1;
+	#ifdef PROFILING // MAH
+    timer_send = new Timer("IoProcessor::send()");
+    timer_receive = new Timer("IoProcessor::receive() excluding when no pkts received");
+    timer_np4d_sendto4d = new Timer("IoProcessor::receive() -> timer_np4d_sendto4d()");
+    timer_np4d_recvfrom4d = new Timer("IoProcessor::receive() -> timer_np4d_recvfrom4d()");
+	#endif
 }
 
 IoProcessor::~IoProcessor() {
@@ -25,6 +31,14 @@ IoProcessor::~IoProcessor() {
 	     iface = ift->nextIface(iface))
 		close(sock[iface]);
 	delete sockets;
+	#ifdef PROFILING // MAH
+    cout << *timer_send << endl;
+    cout << *timer_np4d_sendto4d << endl;
+    cout << *timer_receive << endl;
+    cout << *timer_np4d_recvfrom4d << endl;
+    delete timer_send; delete timer_receive;
+    delete timer_np4d_sendto4d; delete timer_np4d_recvfrom4d; 
+	#endif
 }
 
 // Setup an interface. Return true on success, false on failure.
@@ -70,6 +84,9 @@ void IoProcessor::closeBootSock() {
 }
 
 int IoProcessor::receive() { 
+    #ifdef PROFILING
+    timer_receive->start();
+    #endif
 // Return next waiting packet or 0 if there is none. 
 	if (bootSock >= 0) {
 		int nbytes;	  	// number of bytes in received packet
@@ -80,8 +97,14 @@ int IoProcessor::receive() {
 	        buffer_t& b = ps->getBuffer(p);
 	
 		ipa_t sIpAdr; ipp_t sPort;
+		#ifdef PROFILING
+        timer_np4d_recvfrom4d->start();
+        #endif
 		nbytes = Np4d::recvfrom4d(bootSock, (void *) &b[0], 1500,
 					  sIpAdr, sPort);
+		#ifdef PROFILING
+        timer_np4d_recvfrom4d->stop();
+        #endif
 		h.setIoBytes(nbytes);
 		if (nbytes < 0) {
 			if (errno == EAGAIN) {
@@ -96,6 +119,9 @@ int IoProcessor::receive() {
 	        if (!ps->hdrErrCheck(p)) { ps->free(p); return 0; }
         	h.setTunSrcIp(sIpAdr); h.setTunSrcPort(sPort);
 		h.setInLink(0); h.setIoBytes(nbytes);
+		#ifdef PROFILING // MAH
+        timer_receive->stop();
+        #endif
 		return p;
 	}
 	// proceed to normal case, when we're not booting
@@ -137,8 +163,14 @@ int IoProcessor::receive() {
         buffer_t& b = ps->getBuffer(p);
 
 	ipa_t sIpAdr; ipp_t sPort;
+	#ifdef PROFILING
+    timer_np4d_recvfrom4d->start();
+    #endif
 	nbytes = Np4d::recvfrom4d(sock[cIf], (void *) &b[0], 1500,
 				  sIpAdr, sPort);
+	#ifdef PROFILING
+    timer_np4d_recvfrom4d->stop();
+    #endif
 	if (nbytes < 0) fatal("IoProcessor::receive: error in recvfrom call");
 
 	ps->unpack(p);
@@ -157,37 +189,65 @@ int IoProcessor::receive() {
 
         sm->cntInLink(lnk,Forest::truPktLeng(nbytes),
 		      (lt->getPeerType(lnk) == ROUTER));
-
+		#ifdef PROFILING // MAH
+        timer_receive->stop();
+        #endif
         return p;
 }
 
 // Send packet on specified link and recycle storage.
 void IoProcessor::send(int p, int lnk) {
+    #ifdef PROFILING
+    timer_send->start();
+    #endif
 	if (bootSock >= 0) {
 		int rv, lim = 0;
 		int length = ps->getHeader(p).getLength();
 		do {
+		    #ifdef PROFILING
+            timer_np4d_sendto4d->start();
+            #endif
 			rv = Np4d::sendto4d(bootSock,
 				(void *) ps->getBuffer(p), length,
 				nmIp, Forest::NM_PORT);
+			#ifdef PROFILING
+			timer_np4d_sendto4d->stop();
+			#endif
 		} while (rv == -1 && errno == EAGAIN && lim++ < 10);
 		if (rv == -1) {
 			fatal("IoProcessor:: send: failure in sendto");
 		}
 		ps->free(p);
+	    #ifdef PROFILING
+	    timer_send->stop();
+	    #endif
 		return;
 	}
 	ipp_t farPort = lt->getPeerPort(lnk);
+	#ifdef PROFILING
+	if (farPort == 0) {
+	     ps->free(p); 
+         timer_send->stop();
+         return;
+    }
+    #else
 	if (farPort == 0) { ps->free(p); return; }
+    #endif
 
 	ipa_t farIp = lt->getPeerIpAdr(lnk);
 	int length = ps->getHeader(p).getLength();
 
 	int rv, lim = 0;
 	do {
+		#ifdef PROFILING
+		timer_np4d_sendto4d->start();
+		#endif
 		rv = Np4d::sendto4d(sock[lt->getIface(lnk)],
 			(void *) ps->getBuffer(p), length,
 			farIp, farPort);
+		#ifdef PROFILING
+	    timer_np4d_sendto4d->stop();
+		#endif
 	} while (rv == -1 && errno == EAGAIN && lim++ < 10);
 	if (rv == -1) {
 		cerr << "IoProcessor:: send: failure in sendto (errno="
@@ -197,4 +257,7 @@ void IoProcessor::send(int p, int lnk) {
 	sm->cntOutLink(lnk,Forest::truPktLeng(length),
 		       (lt->getPeerType(lnk) == ROUTER));
 	ps->free(p);
+	#ifdef PROFILING
+	timer_send->stop();
+	#endif
 }
