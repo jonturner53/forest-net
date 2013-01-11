@@ -1275,7 +1275,7 @@ void Avatar::unsubscribe(list<int>& glist) {
 		int g = *gp; nunsub++;
 		if (nunsub > 350) {
 			pp[0] = 0; pp[1] = htonl(nunsub-1);
-			h.setLength(Forest::OVERHEAD + 4*(2+nunsub));
+			h.setLength(Forest::OVERHEAD + 4*(1+nunsub));
 			h.setPtype(SUB_UNSUB); h.setFlags(0);
 			h.setComtree(comt);
 			h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
