@@ -1242,7 +1242,7 @@ void Avatar::subscribe(list<int>& glist) {
 		int g = *gp; nsub++;
 		if (nsub > 350) {
 			pp[0] = htonl(nsub-1); pp[nsub] = 0;
-			h.setLength(Forest::OVERHEAD + 4*(2+nsub));
+			h.setLength(Forest::OVERHEAD + 4*(1+nsub));
 			h.setPtype(SUB_UNSUB); h.setFlags(0);
 			h.setComtree(comt);
 			h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
