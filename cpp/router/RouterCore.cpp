@@ -681,7 +681,7 @@ void RouterCore::run(uint64_t finishTime) {
 		}
 
 		// if did nothing on that pass, sleep for a millisecond.
-		//if (didNothing) { usleep(1000); }
+		if (didNothing) { usleep(1000); }
 
 		// update current time
 		now = Misc::getTimeNs();
@@ -952,6 +952,11 @@ void RouterCore::subUnsub(int p, int ctx) {
 	PacketHeader& h = ps->getHeader(p);
 	uint32_t *pp = ps->getPayload(p);
 
+if (Forest::localAdr(h.getSrcAdr()) > 10)  {
+string s;
+cerr << "got subUnsub from " << Forest::fAdr2string(h.getSrcAdr(),s) << endl;
+}
+
 	// add/remove branches from routes
 	// if non-core node, also propagate requests upward as
 	// appropriate
@@ -965,12 +970,17 @@ void RouterCore::subUnsub(int p, int ctx) {
 	bool propagate = false;
 	int rtx; fAdr_t addr;
 
+if (Forest::localAdr(h.getSrcAdr()) > 10)  
+cerr << "aa" << endl;
+
 	// add subscriptions
 	int addcnt = ntohl(pp[0]);
 	if (addcnt < 0 || addcnt > 350 ||
 	    Forest::OVERHEAD + (addcnt + 2)*4 > h.getLength()) {
 		ps->free(p); return;
 	}
+if (Forest::localAdr(h.getSrcAdr()) > 10)  
+cerr << "bb" << endl;
 	for (int i = 1; i <= addcnt; i++) {
 		addr = ntohl(pp[i]);
 		if (!Forest::mcastAdr(addr)) continue;  // ignore unicast or 0
@@ -983,12 +993,16 @@ void RouterCore::subUnsub(int p, int ctx) {
 			pp[i] = 0; // so, parent will ignore
 		}
 	}
+if (Forest::localAdr(h.getSrcAdr()) > 10)  
+cerr << "cc" << endl;
 	// remove subscriptions
 	int dropcnt = ntohl(pp[addcnt+1]);
 	if (dropcnt < 0 || addcnt + dropcnt > 350 ||
 	    Forest::OVERHEAD + (addcnt + dropcnt + 2)*4 > h.getLength()) {
 		ps->free(p); return;
 	}
+if (Forest::localAdr(h.getSrcAdr()) > 10)  
+cerr << "dd" << endl;
 	for (int i = addcnt + 2; i <= addcnt + dropcnt + 1; i++) {
 		addr = ntohl(pp[i]);
 		if (!Forest::mcastAdr(addr)) continue; // ignore unicast or 0
@@ -1002,6 +1016,8 @@ void RouterCore::subUnsub(int p, int ctx) {
 			pp[i] = 0;
 		}
 	}
+if (Forest::localAdr(h.getSrcAdr()) > 10)  
+cerr << "ee" << endl;
 	// propagate subscription packet to parent if not a core node
 	if (propagate && !ctt->inCore(ctx) && ctt->getPlink(ctx) != 0) {
 		ps->payErrUpdate(p);
@@ -1010,6 +1026,8 @@ void RouterCore::subUnsub(int p, int ctx) {
 			return;
 		}
 	}
+if (Forest::localAdr(h.getSrcAdr()) > 10)  
+cerr << "ff" << endl;
 	ps->free(p); return;
 }
 

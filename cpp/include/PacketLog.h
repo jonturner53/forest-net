@@ -28,6 +28,8 @@ private:
 	int	numPkts;		///< # of packets logged so far
 	int	numData;		///< # of data packets logged so far
 
+	uint64_t dumpTime;		///< # time of last dump
+
 	struct EventStruct {
 	int pkt;
         int sendFlag;

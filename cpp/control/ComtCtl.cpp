@@ -9,7 +9,7 @@
 #include "ComtCtl.h"
 
 /** usage:
- *       ComtCtl intIp extIp topoFile firstComt lastComt finTime
+ *       ComtCtl extIp topoFile firstComt lastComt finTime
  * 
  *  Command line arguments include two IP addresses. The first is
  *  an internal IP addresses used for communication with an access
