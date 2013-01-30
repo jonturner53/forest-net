@@ -210,7 +210,7 @@ inline string& Forest::fAdr2string(fAdr_t fAdr, string& s) {
 inline int Forest::truPktLeng(int x) { return 70+x; }
 
 // MAH: uncomment to enable profiling
-#define PROFILING
+// #define PROFILING
 
 #include "cycle.h"
 typedef ticks cycle_t;

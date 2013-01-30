@@ -40,6 +40,16 @@ void StatsModule::record(uint64_t now) {
 
 	val = -1;
 	if (n == 0) return;
+
+	// check for the statsSwitch file
+        string fname = "statsSwitch";
+        ifstream sfs; sfs.open(fname.c_str());
+        string statsSwitch;
+        if (sfs.fail()) return;
+        if (!Misc::readWord(sfs,statsSwitch) || statsSwitch != "on") {
+                sfs.close(); return;
+	}
+        sfs.close();
 	for (i = 1; i <= n; i++) {
 		StatItem& s = stat[i];
 		switch(s.typ) {
