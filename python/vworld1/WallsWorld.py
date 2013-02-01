@@ -241,7 +241,12 @@ class WallsWorld :
 			if self.walls[(i+1)+j*self.size]&1 :
 				return False
 			while j+1 < y+slope :
-				if self.walls[(i+1)+j*self.size]&2 :
+				c = (i+1)+j*self.size
+				if c < 0 or c >= len(self.walls) :
+					print "bad pair i=",i,"j=",j,\
+						"size=",self.size,\
+						"len=",len(self.walls)
+				if self.walls[c]&2 :
 					return False
 				j += 1
 			i += 1; x += 1.0; y += slope
