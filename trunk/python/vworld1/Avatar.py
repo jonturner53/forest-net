@@ -107,10 +107,17 @@ while True :
 	sys.stdout.write(": ")
 	line = sys.stdin.readline()
 	if line[0] == "q" : break;
-	elif line[0] == "a" : core.x = max(0,core.x-GRID)
-	elif line[0] == "d" : core.x = min(GRID*world.size,core.x+GRID)
-	elif line[0] == "s" : core.y = max(0,core.y-GRID)
-	elif line[0] == "w" : core.y = min(GRID*world.size,core.y+GRID)
+	elif line[0] == "a" :
+		if core.speed == STOPPED : core.direction -= 90
+		else : core.direction -= 10
+	elif line[0] == "d" :
+		if core.speed == STOPPED : core.direction += 90
+		else : core.direction += 10
+	elif line[0] == "s" :
+		if core.speed != STOPPED : core.speed = STOPPED
+	elif line[0] == "w" : 
+		if core.speed == STOPPED : core.speed = SLOW
+	if core.direction < 0 : core.direction += 360
 core.stop(); core.join()
 sub.stop(); sub.join
 sys.exit(0)

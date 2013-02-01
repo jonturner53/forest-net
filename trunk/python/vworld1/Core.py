@@ -107,9 +107,6 @@ class Core(Thread) :
 		p = Packet(); p.type = CONNECT
 		p.comtree = CLIENT_CON_COMT
 		p.srcAdr = self.myFadr; p.dstAdr = self.rtrFadr
-		buf = p.pack()
-		pp = Packet();
-		pp.unpack(buf)
 		self.sub.send(p)
 
 	def disconnect(self) :
@@ -182,7 +179,8 @@ class Core(Thread) :
 		p = Packet()
 		p.leng = OVERHEAD + 4*8; p.type = CLIENT_DATA; p.flags = 0
 		p.comtree = self.comtree
-		p.srcAdr = self.myFadr; p.dstAdr = -self.groupNum(self.x,self.y)
+		p.srcAdr = self.myFadr;
+		p.dstAdr = -self.groupNum(self.x,self.y)
 	
 		p.payload = struct.pack('!IIIIIIII', \
 					STATUS_REPORT, self.now, \
@@ -242,7 +240,7 @@ class Core(Thread) :
 				p.length = OVERHEAD + 4*(1+nsub)
 				p.type = SUB_UNSUB
 				p.comtree = self.comtree
-				p.srcAdr = myFadr; p.destAdr = rtrFadr
+				p.srcAdr = self.myFadr; p.dstAdr = rtrFadr
 				self.sub.send(p)
 				p = Packet()
 				nsub = 1
@@ -250,10 +248,10 @@ class Core(Thread) :
 
 		struct.pack_into('!I',buf,0,nsub)
 		struct.pack_into('!I',buf,4*(nsub+1),0)
-		p.payload = str(buf)
 		p.length = OVERHEAD + 4*(2+nsub); p.type = SUB_UNSUB
+		p.payload = str(buf[0:4*(2+nsub)])
 		p.comtree = self.comtree;
-		p.srcAdr = self.myFadr; p.destAdr = self.rtrFadr
+		p.srcAdr = self.myFadr; p.dstAdr = self.rtrFadr
 		self.sub.send(p)
 	
 	def unsubscribe(self,glist) :
@@ -270,7 +268,7 @@ class Core(Thread) :
 				p.length = OVERHEAD + 4*(1+nunsub)
 				p.type = SUB_UNSUB
 				p.comtree = self.comtree
-				p.srcAdr = myFadr; p.destAdr = rtrFadr
+				p.srcAdr = self.myFadr; p.dstAdr = rtrFadr
 				self.sub.send(p)
 				p = Packet()
 				nunsub = 1
@@ -279,7 +277,9 @@ class Core(Thread) :
 		struct.pack_into('!II',buf,0,0,nunsub)
 		p.payload = str(buf)
 		p.length = OVERHEAD + 4*(2+nunsub); p.type = SUB_UNSUB
-		p.comtree = self.comtree; p.srcAdr = myFadr; p.destAdr = rtrFadr
+		p.payload = str(buf[0:4*(2+nunsub)])
+		p.comtree = self.comtree;
+		p.srcAdr = self.myFadr; p.dstAdr = self.rtrFadr
 		self.sub.send(p)
 	
 	def subscribeAll(self) :
@@ -320,21 +320,21 @@ class Core(Thread) :
 		are such that we will get at least one report from a newly
 		invisible avatar.
 		"""
-		p.unpack()
-		tuple = struct.unpack('!IIII',p.payload)
+		tuple = struct.unpack('!IIII',p.payload[0:16])
 
 		if tuple[0] != STATUS_REPORT : return
 		x1 = tuple[2]; y1 = tuple[3]
 		avId = p.srcAdr
-		if len(nearAvatars) < MAXNEAR : nearAvatars.add(p.srcAdr)
+		if len(self.nearAvatars) < MAXNEAR :
+			self.nearAvatars.add(p.srcAdr)
 
 		# determine if we can see the Avatar that sent this report
 		g1 = self.groupNum(x1,y1)
 		if g1-1 not in self.visSet :
-			visibleAvatars.discard(avId)
+			self.visibleAvatars.discard(avId)
 			return
 		
-		if len(visibleAvatars) >= MAXNEAR : return
-		p = ((x+0.0)/GRID,(y+0.0)/GRID)
+		if len(self.visibleAvatars) >= MAXNEAR : return
+		p = ((self.x+0.0)/GRID,(self.y+0.0)/GRID)
 		p1 = ((x1+0.0)/GRID,(y1+0.0)/GRID)
-		if self.world.canSee(p,p1) : visibleAvatars.add(avId)
+		if self.world.canSee(p,p1) : self.visibleAvatars.add(avId)
