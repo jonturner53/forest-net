@@ -12,22 +12,22 @@ all : ${XFILES}
 
 Avatar : Avatar.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
-	cp $@ ${HOME}/bin
+	cp $@ ${BIN}
 
 Avatar-v0 : Avatar-v0.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
-	cp $@ ${HOME}/bin
+	cp $@ ${BIN}
 
 Monitor : Monitor.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
-	cp $@ ${HOME}/bin
+	cp $@ ${BIN}
 
 genWalls : genWalls.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
-	cp $@ ${HOME}/bin
+	cp $@ ${BIN}
 cliProxy : ClientProxy.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
-	cp $@ ${HOME}/bin
+	cp $@ ${BIN}
 
 clean :
 	rm -f *.o 
