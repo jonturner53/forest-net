@@ -12,7 +12,7 @@ all : lib Router
 
 Router : RouterCore.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
-	cp $@ ${HOME}/bin
+	cp $@ ${BIN}
 
 lib : ${LIBFILES}
 	ar -ru ${FLIB} ${LIBFILES}
