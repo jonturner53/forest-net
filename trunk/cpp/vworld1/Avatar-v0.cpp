@@ -92,8 +92,8 @@ bool Avatar::init(ipa_t cmIpAdr, string& uname, string& pword,
 	// open and configure forest socket
 	sock = Np4d::datagramSocket();
 	if (sock<0 || !Np4d::bind4d(sock,myIpAdr,0) || !Np4d::nonblock(sock)) {
-		cerr << "Avatar::init: could not open/configure forest socket "
-			"sockets\n";
+		cerr << "Avatar::init: could not open/configure forest "
+			"socket\n";
 		return false;
 	}
 
@@ -223,6 +223,7 @@ bool Avatar::setupWalls(const char *wallsFile) {
 void Avatar::computeVisSet(int g1, set<int>& vSet) {
 	int x1 = (g1-1)%worldSize; int y1 = (g1-1)/worldSize;
 	vSet.clear();
+	vSet.insert(g1);
 
 	bool *visVec = new bool[worldSize];
 	bool *prevVisVec = new bool[worldSize];
