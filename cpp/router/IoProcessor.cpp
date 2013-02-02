@@ -182,7 +182,8 @@ int IoProcessor::receive() {
 	    (sPort == Forest::ROUTER_PORT && lt->getPeerType(lnk) != ROUTER) ||
 	    (sPort != Forest::ROUTER_PORT && lt->getPeerType(lnk) == ROUTER)) {
 		string s;
-		cerr << "bad packet " << h.toString(ps->getBuffer(p),s) << endl;
+		cerr << "IoProcessor::receive: bad packet: lnk=" << lnk << " "
+		     << h.toString(ps->getBuffer(p),s) << endl;
 		ps->free(p); return 0;
 	}
         
