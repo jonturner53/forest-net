@@ -114,9 +114,13 @@ while True :
 		if core.speed == STOPPED : core.direction += 90
 		else : core.direction += 10
 	elif line[0] == "s" :
-		if core.speed != STOPPED : core.speed = STOPPED
+		if core.speed == SLOW : core.speed = STOPPED
+		elif core.speed == MEDIUM : core.speed = SLOW
+		elif core.speed == FAST : core.speed = MEDIUM
 	elif line[0] == "w" : 
 		if core.speed == STOPPED : core.speed = SLOW
+		elif core.speed == SLOW : core.speed = MEDIUM
+		elif core.speed == MEDIUM : core.speed = FAST
 	if core.direction < 0 : core.direction += 360
 core.stop(); core.join()
 sub.stop(); sub.join

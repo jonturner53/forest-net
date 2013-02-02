@@ -74,8 +74,7 @@ class Core(Thread) :
 		self.direction = randint(0,359)
 		self.speed = STOPPED
 		pos = (self.x/GRID) + (self.y/GRID)*self.world.size
-		self.visSet = self.world.updateVisSet(pos,pos,self.visSet)
-		print "visSet=", self.visSet
+		self.visSet = self.world.computeVisSet(pos)
 
 		self.quit = False
 
@@ -210,7 +209,8 @@ class Core(Thread) :
 		# stop if we hit a wall
 		if x == 0 or x == GRID*self.world.size-1 or \
 		   y == 0 or y == GRID*self.world.size-1 or \
-		   self.world.separated(prevRegion,postRegion) :
+		   (prevRegion != postRegion and
+		    self.world.separated(prevRegion,postRegion)) :
 			self.speed = STOPPED
 		else :
 			self.x = x; self.y = y
@@ -223,7 +223,7 @@ class Core(Thread) :
 		 x1 is the x coordinate of the position of interest
 		 y1 is the y coordinate of the position of interest
 		 """
-		return 1 + (x1/GRID) + (y1/GRID)*self.world.size
+		return 1 + (int(x1)/GRID) + (int(y1)/GRID)*self.world.size
 	
 	def subscribe(self,glist) :
 		""" Subscribe to a list of multicast groups.
