@@ -240,7 +240,13 @@ class World(DirectObject):
     #Records the state of the arrow keys
     def setKey(self, key, value):
         self.keyMap[key] = value
+
+"""
+    def addAvatar(self, x, y, direction, identifier) : ...
+
+    def updateAvatar(self, x, y, direction, identifier)
     
+"""
 
     # Accepts arrow keys to move either the player or the menu cursor,
     # Also deals with grid checking and collision detection
