@@ -325,6 +325,17 @@ class Core(Thread) :
 		if tuple[0] != STATUS_REPORT : return
 		x1 = tuple[2]; y1 = tuple[3]
 		avId = p.srcAdr
+
+/*
+if this p is from an avatar not in nearAvatar
+	addAvatar(p.x, p.y, p.direction, p.srcAdr)
+else :
+	updateAvatar(p.x, p.y, p.direction, p.srcAdr)
+
+*/
+
+
+
 		if len(self.nearAvatars) < MAXNEAR :
 			self.nearAvatars.add(p.srcAdr)
 
