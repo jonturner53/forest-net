@@ -1,39 +1,48 @@
-# Author: Chao Wang
-# Last Updated: 2/1/2013
-# 
-# This program is a front-end of Avatar, an application
-# that demonstrates the Forest overlay network.
-#
-# The gameplay (intended) is to have two pandas walk around
-# in a 3D virtual world, each of which is controlled by a player.
-# Besides the two pandas, there are several little boys running
-# aimlessly in the world. Each player guides his panda
-# to get close to a boy, and casts a spell that turns the
-# boy into a panda. A player won by turning the maximum
-# number of boys into pandas.
-#
-# The 2D map on the upper-right corner of the screen
-# shows the positions of both players and NPCs. The text
-# on the upper-left of the screen shows each player's
-# (x,y) position, the # of nearby NPCs, the # of visible NPCs,
-# and the # of boys that have been turned into pandas by him.
-#
-# Use arrow keys (Up, Left, Right) to move the avatar, and
-# keys "A" and "S" to rotate the camera.
-#
-#
-# This program is based on "Roaming Ralph", a tutorial
-# included in Panda3D package. Below is the original doc:
-#
-# Author: Ryan Myers
-# Models: Jeff Styers, Reagan Heller
+""" A front-end of Avatar
 
-# Last Updated: 6/13/2005
-#
-# This tutorial provides an example of creating a character
-# and having it walk around on uneven terrain, as well
-# as implementing a fully rotatable camera.
-# 
+usage: 
+	  ppython Avatar-2.py
+
+control:
+      Use arrow keys (Up, Left, Right) to move the avatar;
+      press "A" and "S" to rotate the camera.
+"""
+
+"""
+Author: Chao Wang
+Last Updated: 2/1/2013
+ 
+This program is a front-end of Avatar, an application
+that demonstrates the Forest overlay network.
+ 
+The gameplay (intended) is to have two pandas walk around
+in a 3D virtual world, each of which is controlled by a player.
+Besides the two pandas, there are several little boys running
+aimlessly in the world. Each player guides his panda
+to get close to a boy, and casts a spell that turns the
+boy into a panda. A player won by turning the maximum
+number of boys into pandas.
+ 
+The 2D map on the upper-right corner of the screen
+shows the positions of both players and NPCs. The text
+on the upper-left of the screen shows each player's
+(x,y) position, the # of nearby NPCs, the # of visible NPCs,
+and the # of boys that have been turned into pandas by him. 
+""" 
+
+""" 
+This program is based on "Roaming Ralph", a tutorial
+included in Panda3D package. Below is the original doc:
+ 
+Author: Ryan Myers
+Models: Jeff Styers, Reagan Heller
+
+Last Updated: 6/13/2005
+ 
+This tutorial provides an example of creating a character
+and having it walk around on uneven terrain, as well
+as implementing a fully rotatable camera.
+"""  
 
 import direct.directbase.DirectStart
 from panda3d.core import *
@@ -84,13 +93,12 @@ class World(DirectObject):
         base.win.setClearColor(Vec4(0,0,0,1))
 
         # Post the instructions
-
         self.title = addTitle("Finding Boys")
 
-        self.Dmap = OnscreenImage(image = '2Dmap.png', pos = (.8,0,.6),
+        self.Dmap = OnscreenImage(image = 'models/2Dmap.png', pos = (.8,0,.6),
                                    scale = .4)
         self.Dmap.setTransparency(TransparencyAttrib.MAlpha)
-        self.dot = OnscreenImage(image = 'dot.png', pos = (1,0,1),
+        self.dot = OnscreenImage(image = 'models/dot.png', pos = (1,0,1),
                                    scale = .02)
         
         # Set up the environment
@@ -108,12 +116,10 @@ class World(DirectObject):
         self.environ = loader.loadModel("models/vworld-grid-24")
         self.environ.reparentTo(render)
         self.environ.setPos(0,0,0)
-
 		
         base.setBackgroundColor(0.4,0.4,0.5,1)
         
         # Create the panda
-
         self.avatar = Actor("models/panda-model",
                                  {"run":"models/panda-walk4",
                                   "walk":"models/panda-walk"})
@@ -129,7 +135,7 @@ class World(DirectObject):
         self.dotOrigin = self.dot.getPos()
 
         # Show avatar's position on the screen
-        self.avPos = addAvPos(0.55, self.avatar)
+        # self.avPos = addAvPos(0.55, self.avatar)
 
 		# print Map's pos
         # self.mapPos = showMapPos(0.2, self.Dmap)
@@ -140,12 +146,10 @@ class World(DirectObject):
 
         # Create a floater object.  We use the "floater" as a temporary
         # variable in a variety of calculations.
-        
         self.floater = NodePath(PandaNode("floater"))
         self.floater.reparentTo(render)
 
         # Accept the control keys for movement and rotation
-
         self.accept("escape", sys.exit)
         self.accept("arrow_left", self.setKey, ["left",1])
         self.accept("arrow_right", self.setKey, ["right",1])
@@ -164,7 +168,6 @@ class World(DirectObject):
         self.isMoving = False
 
         # Set up the camera
-        
         base.disableMouse()
         base.camera.setPos(self.avatar.getX(),self.avatar.getY()+12,9)
         base.camera.setHpr(135,0,0)
@@ -201,23 +204,17 @@ class World(DirectObject):
         self.cTrav.addCollider(self.camGroundColNp, self.camGroundHandler)
         
         # Create some lighting
-        #ambientLight = AmbientLight("ambientLight")
-        #ambientLight.setColor(Vec4(.4, .4, .4, 1))
         directionalLight = DirectionalLight("directionalLight")
         directionalLight.setDirection(Vec3(-5, -5, -5))
         directionalLight.setColor(Vec4(.8, .8, .9, 1))
         directionalLight.setSpecularColor(Vec4(.3, .1, .1, 1))
-        #render.setLight(render.attachNewNode(ambientLight))
         render.setLight(render.attachNewNode(directionalLight))
+
         dLight2 = DirectionalLight("directionalLight2")
         dLight2.setDirection(Vec3(5, 5, 5))
         dLight2.setColor(Vec4(.5, .5, .5, 1))
         dLight2.setSpecularColor(Vec4(.3, .3, .1, 1))
         render.setLight(render.attachNewNode(dLight2))
-
-        self.alight = render.attachNewNode(AmbientLight("Ambient"))
-        self.alight.node().setColor(Vec4(0.2, 0.2, 0.2, 1))
-        render.setLight(self.alight)
 
         self.light = render.attachNewNode(Spotlight("Spot"))
         self.light.node().setScene(render)
@@ -251,7 +248,6 @@ class World(DirectObject):
 
         # If the camera-left key is pressed, move camera left.
         # If the camera-right key is pressed, move camera right.
-
         # base.camera.lookAt(self.avatar)
         if (self.keyMap["cam-left"]!=0):
             base.camera.setX(base.camera, -20 * globalClock.getDt())
@@ -260,12 +256,10 @@ class World(DirectObject):
 
         # save avatar's initial position so that we can restore it,
         # in case he falls off the map or runs into something.
-
         startpos = self.avatar.getPos()
 
         # If a move-key is pressed, move avatar in the specified direction.
         # Chao: I need to know more about globalClock to set the walking speed right
-
         if (self.keyMap["left"]!=0):
             self.avatar.setH(self.avatar.getH() + 300 * globalClock.getDt())
         if (self.keyMap["right"]!=0):
@@ -275,7 +269,6 @@ class World(DirectObject):
 
         # If avatar is moving, loop the run animation.
         # If he is standing still, stop the animation.
-
         if (self.keyMap["forward"]!=0) or (self.keyMap["left"]!=0) or (self.keyMap["right"]!=0):
             if self.isMoving is False:
                 self.avatar.loop("run")
@@ -288,7 +281,6 @@ class World(DirectObject):
 
         # If the camera is too far from avatar, move it closer.
         # If the camera is too close to avatar, move it farther.
-
         camvec = self.avatar.getPos() - base.camera.getPos()
         camvec.setZ(0)
         camdist = camvec.length()
@@ -301,7 +293,6 @@ class World(DirectObject):
             camdist = 5.0
 
         # Now check for collisions.
-
         self.cTrav.traverse(render)
 
         # Adjust avatar's Z coordinate.  If avatar's ray hit terrain,
@@ -320,8 +311,7 @@ class World(DirectObject):
             self.avatar.setPos(startpos)
 
         # Keep the camera at one foot above the terrain,
-        # or 1.5 feet above avatar, whichever is greater.
-        
+        # or 8 feet above avatar, whichever is greater.
         entries = []
         for i in range(self.camGroundHandler.getNumEntries()):
             entry = self.camGroundHandler.getEntry(i)
@@ -336,31 +326,22 @@ class World(DirectObject):
         # The camera should look in avatar's direction,
         # but it should also try to stay horizontal, so look at
         # a floater which hovers above avatar's head.
-        
         self.floater.setPos(self.avatar.getPos())
         self.floater.setZ(self.avatar.getZ() + 1.0)
         base.camera.lookAt(self.floater)
 
         # Finally, update the text that shows avatar's position on the screen
-        self.avPos.setText("Avatar's pos: (%d, %d)"
-                            % (self.avatar.getX(), self.avatar.getY()))
+#        self.avPos.setText("Avatar's pos: (%d, %d)"
+#                            % (self.avatar.getX(), self.avatar.getY()))
 #        self.dotPos.setText("dot's pos: (%f, %f)"
 #                            % (self.dot.getX(), self.dot.getZ()))
 
-        # Chao: a hack for the 2D mapping
+        # map the avatar's position to the 2D map on the top-right corner of the screen
         self.dot.setPos((self.avatar.getX()/120.0)*0.7+0.45,
                         0,
                         (self.avatar.getY()/120.0)*0.7+0.25)
-        #self.dot.setPos(self.avatar.getX()/120.0+self.Dmap.getX()-0.35,
-        #                0,
-        #                self.avatar.getY()/120.0+self.Dmap.getZ()-0.35)
-        #self.dot.setPos(self.dotOrigin.getX() + (self.avatar.getX()/5)/100.0,
-        #                0,
-        #                self.dotOrigin.getZ() + (self.avatar.getY()/5)/100.0)
-
 
         return task.cont
-
 
 w = World()
 run()
