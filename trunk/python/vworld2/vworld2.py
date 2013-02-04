@@ -10,7 +10,7 @@ control:
 
 """
 Author: Chao Wang
-Last Updated: 2/1/2013
+Last Updated: 2/4/2013
  
 This program is a front-end of Avatar, an application
 that demonstrates the Forest overlay network.
