@@ -103,7 +103,7 @@ public class EMapPanel extends JPanel {
 		return getHeight() - (ins.bottom + 5 + ((int) (h*y)));
 	}
 
-	/** Add or remove a wall at a specified location.
+	/** Add or remove a wall at a specified location, or block/unblock cell.
 	 *  @param x is the x-coordinate of a point in user-space
 	 *  @param y is the y-coordinate of a point in user-space
 	 */
@@ -122,7 +122,12 @@ public class EMapPanel extends JPanel {
 
 		double x0 = (col-cornerX)*ss;
 		double y0 = (row-cornerY)*ss;
-		if ((xd-x0) < (yd-y0) && (xd-x0) < (y0+ss-yd)) {
+
+
+		if (.25*ss < (xd-x0) && (xd-x0) < .75*ss &&
+		    .25*ss < (yd-y0) && (yd-y0) < .75*ss) {
+			walls[col+row*worldSize] ^= 4;
+		} else if ((xd-x0) < (yd-y0) && (xd-x0) < (y0+ss-yd)) {
 			walls[col+row*worldSize] ^= 1;
 		} else if ((xd-x0) < (yd-y0) && (xd-x0) > (y0+ss-yd)) {
 			walls[col+row*worldSize] ^= 2;
@@ -141,27 +146,46 @@ public class EMapPanel extends JPanel {
 		if (walls == null) return;
 
 		Graphics2D g2 = (Graphics2D) g;
-		g2.setStroke(new BasicStroke(1));
-		g2.setPaint(Color.lightGray);
 
 		double ss = 1.0/viewSize; // size of one square
+
+		int w = getWidth() - (ins.left + ins.right + 10);
+		int ssc = (int) (ss * w);
+
+		// draw squares
+		for (int x = cornerX; x < cornerX+viewSize; x++) {
+			for (int y = cornerY; y < cornerY+viewSize; y++) {
+				int xy = x + y * worldSize;
+				if ((walls[xy]&4) != 0)
+					g2.setPaint(Color.gray);
+				else
+					g2.setPaint(Color.white);
+				int row = y - cornerY; int col = x - cornerX;
+				g.fillRect(xc(ss*col),yc(ss*(row+1)),ssc,ssc);
+			}
+		}
+
+		// draw grid lines
+		g2.setStroke(new BasicStroke(1));
+		g2.setPaint(Color.lightGray);
 		for (int i = 0; i <= viewSize; i++) {
 			g.drawLine(xc(0),yc(ss*i),xc(1),yc(ss*i));
 			g.drawLine(xc(ss*i),yc(0),xc(ss*i),yc(1));
 		}
 
+		// draw walls
 		g2.setStroke(new BasicStroke(4));
 		g2.setPaint(Color.BLACK);
-		for (int x = 0; x < worldSize; x++) {
-			for (int y = 0; y < worldSize; y++) {
+		for (int x = cornerX; x < cornerX+viewSize; x++) {
+			for (int y = cornerY; y < cornerY+viewSize; y++) {
 				int xy = x + y * worldSize;
 				int row = y - cornerY; int col = x - cornerX;
-				if (walls[xy] == 1 || walls[xy] == 3) {
+				if ((walls[xy]&1) != 0) {
 					g.drawLine(
 					    xc(ss*col), yc(ss*row),
 					    xc(ss*col), yc(ss*(row+1)));
 				} 
-				if (walls[xy] == 2 || walls[xy] == 3) {
+				if ((walls[xy]&2) != 0) {
 					g.drawLine(
 					    xc(ss*col),yc(ss*(row+1)),
 					    xc(ss*(col+1)),yc(ss*(row+1)));
