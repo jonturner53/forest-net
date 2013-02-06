@@ -32,7 +32,8 @@ from Core import *
 from Substrate import *
 from Packet import *
 from Util import *
-from vworld2 import *
+#from vworld2 import *
+import vworld2
 
 def login() :
 	cmSock = socket(AF_INET, SOCK_STREAM);
@@ -98,8 +99,11 @@ if not login() :
 	sys.stderr.write("cannot login");
 	sys.exit(1)
 
+# init panda3D
+vw2 = vworld2.World()
+
 sub.init(rtrIp)
-core = Core(sub,myIpAdr,myFadr,rtrFadr,comtCtlFadr,myComtree,finTime,world)
+core = Core(sub,myIpAdr,myFadr,rtrFadr,comtCtlFadr,myComtree,finTime,world,vw2)
 
 # and start them running
 try : sub.start(); core.start();

@@ -1,9 +1,16 @@
-While Panda3D runs Python 2.5, Avatar.py must be run on Python 2.7.
-To make Panda3D runs Python 2.7, do the following:
+1. While Panda3D runs Python 2.5, Avatar.py must be run on Python 2.7.
+   To make Panda3D runs Python 2.7, do the following:
 
-sudo cp /Library/Python/2.5/site-packages/Panda3D.pth /Library/Python/2.7/site-packages/
-export VERSIONER_PYTHON_PREFER_32_BIT=yes
+   sudo cp /Library/Python/2.5/site-packages/Panda3D.pth /Library/Python/2.7/site-packages/
+   export VERSIONER_PYTHON_PREFER_32_BIT=yes
 
 
-walls24 is the wall configuration converted from the 3D map.
+2. walls24 is the 2D mapping of the 3D map "vworld-grid-24". All files are
+   located in models/; 2Dmap.png is the top view of the 3D map.
+   The 3D model was created using SketchUp. SketchUp can export a model in
+   the .dae format. The script 2egg.sh converts .dae into the .egg format.
+   To make the collision mesh work (see the comment in def __init___() in
+   vworld2.py), copy the content of collision.cfg into appropriate places
+   in the .egg file.
+
 
