@@ -365,7 +365,7 @@ void Avatar::run(uint32_t finishTime) {
 	comt = 0;
 
 	bool waiting4switch = false;
-	while (now <= finishTime) {
+	while (finishTime == 0 || now <= finishTime) {
 		//reset hashtables and report
 		numNear = nearAvatars->size(); nearAvatars->clear();
 		numVisible = visibleAvatars->size(); visibleAvatars->clear();
