@@ -184,6 +184,8 @@ int IoProcessor::receive() {
 		string s;
 		cerr << "IoProcessor::receive: bad packet: lnk=" << lnk << " "
 		     << h.toString(ps->getBuffer(p),s) << endl;
+		cerr << "sender (" << Np4d::ip2string(sIpAdr,s) << ","
+		     << sPort << ")\n";
 		ps->free(p); return 0;
 	}
         
