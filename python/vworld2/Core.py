@@ -30,7 +30,7 @@ class Core(Thread) :
 
     This class implements the main thread of a simple Avatar.
     """
-    def __init__(self,sub,myIp,myFadr,rtrFadr,comtCtlFadr,comtree,finTime,world):
+    def __init__(self,sub,myIp,myFadr,rtrFadr,comtCtlFadr,comtree,finTime,world,vworld2):
         """ Initialize a new Forwarder object.
 
         sub is a reference to a Substrate thread
@@ -58,6 +58,10 @@ class Core(Thread) :
 
         self.seqNum = 1
 
+        # create 3D world
+        # self.w = vworld2.World()
+        self.w = vworld2
+
     def run(self) :
         """ This is the main thread for the Core object.
         """
@@ -81,7 +85,7 @@ class Core(Thread) :
         self.quit = False
 
         # create 3D world
-        #w = vworld2.World()
+    #    w = vworld2.World()
 
         while not self.quit :
             self.now = time() - t0
@@ -106,7 +110,7 @@ class Core(Thread) :
             if delay > 0 : sleep(delay)
 
             # draw the world
-#            w.taskMgr.step()
+            self.w.Task.step()
 
         self.leaveComtree()
         self.disconnect()
