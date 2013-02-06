@@ -93,7 +93,7 @@ Monitor::~Monitor() {
 bool Monitor::init() {
 	intSock = Np4d::datagramSocket();
 	if (intSock < 0 || 
-	    !Np4d::bind4d(intSock,intIp,0) ||
+	    !Np4d::bind4d(intSock,intIp,MON_PORT) ||
 	    !Np4d::nonblock(intSock))
 		return false;
 
