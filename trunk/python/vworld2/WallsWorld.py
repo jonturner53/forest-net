@@ -14,7 +14,7 @@ class WallsWorld :
 		f = None
 		try :
 			f = open(wallsFile, 'r')
-		except error as e :
+		except error,  e :
 			sys.stderr.write("WallsWorld: cannot open " + wallsFile)
 			return False
 		y = 0;

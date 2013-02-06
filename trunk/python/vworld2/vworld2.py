@@ -1,7 +1,11 @@
 """ A front-end of Avatar
 
 usage: 
-	  ppython Avatar-2.py
+      This module is intended to be called by Avatar.py.
+	  To run it independently, uncomment the last two lines:
+         #w = World()
+         #run()
+      and run 'python vworld2.py' in command line.
 
 control:
       Use arrow keys (Up, Left, Right) to move the avatar;
@@ -10,7 +14,7 @@ control:
 
 """
 Author: Chao Wang
-Last Updated: 2/4/2013
+Last Updated: 2/6/2013
  
 This program is a front-end of Avatar, an application
 that demonstrates the Forest overlay network.
@@ -241,12 +245,12 @@ class World(DirectObject):
     def setKey(self, key, value):
         self.keyMap[key] = value
 
-"""
+    """
     def addAvatar(self, x, y, direction, identifier) : ...
-
+    
     def updateAvatar(self, x, y, direction, identifier)
     
-"""
+    """
 
     # Accepts arrow keys to move either the player or the menu cursor,
     # Also deals with grid checking and collision detection
@@ -349,6 +353,6 @@ class World(DirectObject):
 
         return task.cont
 
-w = World()
-run()
+#w = World()
+#run()
 
