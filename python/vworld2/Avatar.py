@@ -1,7 +1,9 @@
 """ Avatar for a simple virtual world
 
 usage:
-      Avatar myIpAdr cliMgrIpAdr wallsFile comtree userName passWord finTime
+      Avatar myIpAdr cliMgrIpAdr wallsFile comtree userName passWord finTime debug
+example:
+      python Avatar.py 172.18.68.76 128.252.153.22 walls40 1001 user pass 300 debug
 
 Command line arguments include the ip address of the
 avatar's machine, the client manager's IP address,
@@ -30,7 +32,7 @@ from Core import *
 from Substrate import *
 from Packet import *
 from Util import *
-
+from vworld2 import *
 
 def login() :
 	cmSock = socket(AF_INET, SOCK_STREAM);

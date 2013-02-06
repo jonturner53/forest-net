@@ -11,6 +11,8 @@ from WallsWorld import *
 from Substrate import *
 from math import sin, cos
 
+#from vworld2 import *
+
 UPDATE_PERIOD = .05     # number of seconds between status updates
 STATUS_REPORT = 1     # code for status report packets
 NUM_ITEMS = 10        # number of items in status report
@@ -78,6 +80,9 @@ class Core(Thread) :
 
         self.quit = False
 
+        # create 3D world
+        #w = vworld2.World()
+
         while not self.quit :
             self.now = time() - t0
 
@@ -99,6 +104,10 @@ class Core(Thread) :
             nextTime += UPDATE_PERIOD
             delay = nextTime - (time()-t0)
             if delay > 0 : sleep(delay)
+
+            # draw the world
+#            w.taskMgr.step()
+
         self.leaveComtree()
         self.disconnect()
 

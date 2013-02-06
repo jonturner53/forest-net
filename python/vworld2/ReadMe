@@ -1,0 +1,9 @@
+While Panda3D runs Python 2.5, Avatar.py must be run on Python 2.7.
+To make Panda3D runs Python 2.7, do the following:
+
+sudo cp /Library/Python/2.5/site-packages/Panda3D.pth /Library/Python/2.7/site-packages/
+export VERSIONER_PYTHON_PREFER_32_BIT=yes
+
+
+walls24 is the wall configuration converted from the 3D map.
+
