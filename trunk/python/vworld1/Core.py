@@ -69,8 +69,13 @@ class Core(Thread) :
 			sys.stderr.write("Core.run: cannot join comtree")
 			return
 
-		self.x = randint(0,GRID*self.world.size-1)
-		self.y = randint(0,GRID*self.world.size-1)
+		# find a random starting point that is not in a blocked cell
+		while True :
+			self.x = randint(0,GRID*self.world.size-1)
+			self.y = randint(0,GRID*self.world.size-1)
+			c = self.groupNum(self.x,self.y)-1
+			if not self.world.blocked(c) : break;
+		
 		self.direction = randint(0,359)
 		self.speed = STOPPED
 		pos = (self.x/GRID) + (self.y/GRID)*self.world.size
@@ -209,6 +214,7 @@ class Core(Thread) :
 		# stop if we hit a wall
 		if x == 0 or x == GRID*self.world.size-1 or \
 		   y == 0 or y == GRID*self.world.size-1 or \
+		   self.world.blocked(postRegion) or \
 		   (prevRegion != postRegion and
 		    self.world.separated(prevRegion,postRegion)) :
 			self.speed = STOPPED
@@ -326,15 +332,13 @@ class Core(Thread) :
 		x1 = tuple[2]; y1 = tuple[3]
 		avId = p.srcAdr
 
-/*
-if this p is from an avatar not in nearAvatar
-	addAvatar(p.x, p.y, p.direction, p.srcAdr)
-else :
-	updateAvatar(p.x, p.y, p.direction, p.srcAdr)
-
-*/
-
-
+		"""
+		if this p is from an avatar not in nearAvatar
+			addAvatar(p.x, p.y, p.direction, p.srcAdr)
+		else :
+			updateAvatar(p.x, p.y, p.direction, p.srcAdr)
+		
+		"""
 
 		if len(self.nearAvatars) < MAXNEAR :
 			self.nearAvatars.add(p.srcAdr)

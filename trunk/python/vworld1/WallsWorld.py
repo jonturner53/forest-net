@@ -17,12 +17,11 @@ class WallsWorld :
 		except error as e :
 			sys.stderr.write("WallsWorld: cannot open " + wallsFile)
 			return False
-		y = 0;
 		lines = f.readlines()
-		self.size = len(lines)
-		print "self.size=", self.size
+		self.size = len(lines)/2
 		y = self.size - 1
 		self.walls = [0] * (self.size*self.size)
+		horizRow = True
 		for line in lines :
 			if len(line) != 1+len(lines) :
 				sys.stderr.write(str(len(line)) + " " + \
@@ -31,25 +30,34 @@ class WallsWorld :
 					"line " + str(self.size-y) + \
 					" does not match line count\n")
 				return False
-			for x in range(self.size) :
-				if  line[x] == '+' :
-					self.walls[y*self.size + x] = 3;
-				elif line[x] == '-' :
-					self.walls[y*self.size + x] = 2;
-				elif line[x] == '|' :
-					self.walls[y*self.size + x] = 1;
-				elif line[x] == ' ' :
-					self.walls[y*self.size + x] = 0;
+			for xx in range(0,2*self.size) :
+				pos = y * self.size+ xx/2
+				if horizRow :
+					if not xx&1 : continue
+					if line[xx] == '-' :
+						self.walls[pos] |= 2
+					continue
+				if xx&1 : 
+					if line[xx] == 'x' :
+						self.walls[pos] |= 4
 				else :
-					sys.write.stderr("Core.setupWorld: " + \
-						"unrecognized symbol in " + \
-						"map file!\n")
-					return False
-			y -= 1
+					if line[xx] == '|' :
+						self.walls[pos] |= 1
+			horizRow = not horizRow;
+			if horizRow : y -= 1
 		return True
+	
+	def blocked(self, c) :
+		""" Determine if a cell is blocked.
+		
+		c is the index of a cell
+		return True if c is blocked, else false
+		"""
+		return self.walls[c] & 4
 
 	def separated(self,c0,c1) :
 		""" Determine if two adjacent cells are separated by a wall.
+
 		c0 is index of some cell
 		c1 is index of an adjacent cell
 		"""
@@ -59,7 +67,7 @@ class WallsWorld :
 		elif c0%self.size == c1%self.size : # same column
 			return self.walls[c0] & 2
 		elif c0%self.size > c1%self.size : # se/nw diagonal
-			if self.walls[c0] == 3 or \
+			if self.walls[c0]&3 == 3 or \
 			   (self.walls[c0]&1 and self.walls[c1+1]&1) or \
 			   (self.walls[c0]&2 and self.walls[c0-1]&2) or \
 			   (self.walls[c1+1]&1 and self.walls[c0-1]&2) :

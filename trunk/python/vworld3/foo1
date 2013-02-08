@@ -1,0 +1,44 @@
+	def sendNow(self, p) :
+		if self.debug>=3 or \
+		   (self.debug>=2 and p.type!=CLIENT_DATA) or \
+		   (self.debug>=1 and p.type==CLIENT_SIG) :
+			print self.now, self.myAdr, "sending to", self.rtrAdr
+			print p.toString()
+			if p.type == CLIENT_SIG :
+				cp = CtlPkt(0,0,0)
+				cp.unpack(p.payload)
+				print cp.toString()
+			sys.stdout.flush()
+		self.sock.sendto(p.pack(),self.rtrAdr)
+
+	def recvNow(self) :
+		try :
+			buf, senderAdr = self.sock.recvfrom(2000)
+		except error as e :
+			if e.errno == 35 or e.errno == 11 : return None
+			# 11, 35 both imply no data to read
+			# treat anything else as fatal error
+			sys.stderr.write("Substrate: socket " \
+					 + "error: " + str(e))
+			sys.exit(1)
+			
+		# got a packet
+		if senderAdr != self.rtrAdr :
+			sys.stderr.write("Substrate: got an " \
+				+ "unexpected packet from " \
+				+ str(senderAdr))
+			sys.exit(1)
+		p = Packet()
+		p.unpack(buf)
+		if self.debug>=3 or \
+		   (self.debug>=2 and p.type!=CLIENT_DATA) or \
+		   (self.debug>=1 and p.type==CLIENT_SIG) :
+			print self.now, self.myAdr, \
+			      "received from", self.rtrAdr
+			print p.toString()
+			if p.type == CLIENT_SIG :
+				cp = CtlPkt(0,0,0)
+				cp.unpack(p.payload)
+				print cp.toString()
+			sys.stdout.flush()
+		return p
