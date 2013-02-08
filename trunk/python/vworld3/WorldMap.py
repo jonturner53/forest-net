@@ -2,25 +2,46 @@ import sys
 
 MAX_VIS = 20
 
-class WallsWorld :
-	""" Maintain information about walls.
+class WorldMap :
+	""" Maintain map of the virtual world.
+
+	This object maintains a map of a simple virtual world.
+	It defines regions where avatars can walk and regions where they can't.
+	It also defines the visibility of different regions using "walls".
+
+	The model is vey simple. The world is divided up into a grid of
+	squares, which are walkable or not. Each square can also have a
+	wall on its west edge or north edge. If two points are separated
+	by a wall, there is no visibility between those two points.
+
+	This was originally built for a forest demo involving wandering bots,
+	with no associated game engine or graphics. Will probably let it die
+	at some point, but not yet.
 	"""
 	def __init__(self) :
-		""" Initialize a new WallsWorld object.
+		""" Initialize a new WorldMap object.
 		"""
 		pass
 
-	def init(self, wallsFile) :
+	def init(self, mapFile) :
 		f = None
 		try :
-			f = open(wallsFile, 'r')
+			f = open(mapFile, 'r')
 		except error as e :
-			sys.stderr.write("WallsWorld: cannot open " + wallsFile)
+			sys.stderr.write("WorldMap: cannot open " + mapFile)
 			return False
+
+		# The map file is text that gives a rough approximation of 
+		# the map.
+		# Walls are shown as horizontal or vertical lines.
+		# Unwalkable squares are marked with an x.
+		# Each square occupies two columns and two rows in the file.
+		# The internal data structure is a linear list, with xy
+		# coordinates mapping to a "cell index"
 		lines = f.readlines()
 		self.size = len(lines)/2
 		y = self.size - 1
-		self.walls = [0] * (self.size*self.size)
+		self.map = [0] * (self.size*self.size)
 		horizRow = True
 		for line in lines :
 			if len(line) != 1+len(lines) :
@@ -35,25 +56,25 @@ class WallsWorld :
 				if horizRow :
 					if not xx&1 : continue
 					if line[xx] == '-' :
-						self.walls[pos] |= 2
+						self.map[pos] |= 2
 					continue
 				if xx&1 : 
 					if line[xx] == 'x' :
-						self.walls[pos] |= 4
+						self.map[pos] |= 4
 				else :
 					if line[xx] == '|' :
-						self.walls[pos] |= 1
+						self.map[pos] |= 1
 			horizRow = not horizRow;
 			if horizRow : y -= 1
 		return True
 	
 	def blocked(self, c) :
-		""" Determine if a cell is blocked.
+		""" Determine if a cell is blocked (not walkable).
 		
 		c is the index of a cell
 		return True if c is blocked, else false
 		"""
-		return self.walls[c] & 4
+		return self.map[c] & 4
 
 	def separated(self,c0,c1) :
 		""" Determine if two adjacent cells are separated by a wall.
@@ -63,22 +84,22 @@ class WallsWorld :
 		"""
 		if c0 > c1 : c0, c1 = c1, c0
 		if c0/self.size == c1/self.size : # same row
-			return self.walls[c1] & 1
+			return self.map[c1] & 1
 		elif c0%self.size == c1%self.size : # same column
-			return self.walls[c0] & 2
+			return self.map[c0] & 2
 		elif c0%self.size > c1%self.size : # se/nw diagonal
-			if self.walls[c0]&3 == 3 or \
-			   (self.walls[c0]&1 and self.walls[c1+1]&1) or \
-			   (self.walls[c0]&2 and self.walls[c0-1]&2) or \
-			   (self.walls[c1+1]&1 and self.walls[c0-1]&2) :
+			if self.map[c0]&3 == 3 or \
+			   (self.map[c0]&1 and self.map[c1+1]&1) or \
+			   (self.map[c0]&2 and self.map[c0-1]&2) or \
+			   (self.map[c1+1]&1 and self.map[c0-1]&2) :
 				return True
 			else :
 				return False
 		else : # sw/ne diagonal
-			if (self.walls[c0]&2 and self.walls[c0+1]&1) or \
-			   (self.walls[c0+1]&1 and self.walls[c1]&1) or \
-			   (self.walls[c0]&2 and self.walls[c0+1]&2) or \
-			   (self.walls[c0+1]&2 and self.walls[c1]&1) :
+			if (self.map[c0]&2 and self.map[c0+1]&1) or \
+			   (self.map[c0+1]&1 and self.map[c1]&1) or \
+			   (self.map[c0]&2 and self.map[c0+1]&2) or \
+			   (self.map[c0+1]&2 and self.map[c1]&1) :
 				return True
 			else :
 				return False
@@ -214,6 +235,8 @@ class WallsWorld :
 			   (i1+1-eps,j1+eps),   (i1+1-eps,j1+1-eps))
 		points2 = ((i2+eps,  j2+eps),   (i2+eps,  j2+1-eps),
 			   (i2+1-eps,j2+eps),   (i2+1-eps,j2+1-eps))
+
+		# Check sightlines between all pairs of "corners"
 		for p1 in points1 :
 			for p2 in points2 :
 				if self.canSee(p1,p2) : return True
@@ -232,7 +255,7 @@ class WallsWorld :
 
 		if i1 == i2 :
 			for j in range(minj,maxj) :
-				if self.walls[i1+j*self.size]&2 :
+				if self.map[i1+j*self.size]&2 :
 					return False
 			return True
 
@@ -245,23 +268,23 @@ class WallsWorld :
 		while i < i2 :
 			if slope > 0 :
 				while j+1 < y+yd :
-					if self.walls[c]&2 : return False
+					if self.map[c]&2 : return False
 					j += 1; c += self.size
 			else :
 				while j > y+yd :
 					j -= 1; c -= self.size
-					if self.walls[c]&2 : return False
+					if self.map[c]&2 : return False
 			c += 1
-			if self.walls[c]&1 : return False
+			if self.map[c]&1 : return False
 			if slope > 0 :
 				ylim = min(y+slope, p2[1])
 				while j+1 < ylim :
-					if self.walls[c]&2 : return False
+					if self.map[c]&2 : return False
 					j += 1; c += self.size
 			else :
 				ylim = max(y+slope, p2[1])
 				while j > ylim :
 					j -= 1; c -= self.size
-					if self.walls[c]&2 : return False
+					if self.map[c]&2 : return False
 			i += 1; x += 1.0; y += slope
 		return True

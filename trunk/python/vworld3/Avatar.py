@@ -1,27 +1,16 @@
-""" Avatar for a simple virtual world
+""" Demonstration of simple virtual world using Forest overlay
 
 usage:
-      Avatar myIp cliMgrIp wallsFile comtree userName passWord [ debug ]
+      Avatar myIp cliMgrIp mapFile comtree [ debug ] [ auto ]
 
-Command line arguments include the ip address of the
-avatar's machine, the client manager's IP address,
-the walls file, the comtree to be used in the packet,
-a user name and password and the number of
-seconds to run before terminating.
-"""
-
-"""
-Implementation notes
-
-Multiple threads
-- substrate handles all socket IO and multiplexes data from next level
-- net thread generates/consumes reports and sends/receives subscriptions
-  - just do a 20 ms loop, rather than bother with time
-- control thread sends/receives control packets; one at a time;
-  when core wants to join or leave a comtree, it sends a request to
-  the control thread and then waits for response; control thread handles
-  retransmissions;
-
+- myIp is the IP address of the user's computer
+- cliMgrIp is the IP address of the client manager's computer
+- mapFile is a text file that defines which parts of the world are
+  walkable and which are visible from each other
+- comtree is the number of a pre-configured Forest comtree
+- the debug option, if present controls the amount of debugging output;
+  use "debug" for a little debugging output, "debuggg" for lots
+- the auto option, if present, starts an avatar that wanders aimlessly
 """
 
 import sys
@@ -41,31 +30,32 @@ from direct.interval.IntervalGlobal import Sequence
 from panda3d.core import Point3
 import random, sys, os, math
 
-if len(sys.argv) < 8 :
-	sys.stderr.write("usage: Avatar myIp cliMgrIp walls " + \
-			 "comtree uname pword finTime\n")
+# process command line arguments
+if len(sys.argv) < 5 :
+	sys.stderr.write("usage: Avatar myIp cliMgrIp mapFile " + \
+			 "comtree [ debug ] [ auto ]\n")
         sys.exit(1)
 
 myIp = sys.argv[1]; cliMgrIp = sys.argv[2]
-wallsFile = sys.argv[3]; myComtree = int(sys.argv[4])
-uname = sys.argv[5]; pword = sys.argv[6]
+mapFile = sys.argv[3]; myComtree = int(sys.argv[4])
 
-debug = 0
-if len(sys.argv) > 7 :
-	if sys.argv[7] == "debug" : debug = 1
-	elif sys.argv[7] == "debugg" : debug = 2
-	elif sys.argv[7] == "debuggg" : debug = 3
+auto = False; debug = 1
+for i in range(5,len(sys.argv)) :
+	if sys.argv[i] == "debug" : debug = 1
+	elif sys.argv[i] == "debugg" : debug = 2
+	elif sys.argv[i] == "debuggg" : debug = 3
+	elif sys.argv[i] == "auto" : debug = True
 
-world = WallsWorld() 
-if not world.init(wallsFile) :
-	sys.stderr.write("cannot initialize world from walls file\n");
+map = WorldMap() 
+if not map.init(mapFile) :
+	sys.stderr.write("cannot initialize map from mapFile\n");
 	sys.exit(1)
 
 pWorld = PandaWorld()
-net = Net(myIp, cliMgrIp, myComtree, world, pWorld, debug)
+net = Net(myIp, cliMgrIp, myComtree, map, pWorld, debug, auto)
 
 # setup tasks
-if not net.init(uname, pword) :
+if not net.init("user", "pass") :
 	sys.stderr.write("cannot initialize net object\n");
 	sys.exit(1)
 

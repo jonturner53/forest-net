@@ -1,25 +1,12 @@
-""" A front-end of Avatar
+""" PandaWorld - simple virtual environment with wandering pandas.
 
-usage: 
-	  ppython Avatar-2.py
+Use arrow keys to move forward, turn left/right.
+Hold down a/s keys to look up/down.
 
-control:
-	  Use arrow keys (Up, Left, Right) to move the avatar;
-	  press "A" and "S" to rotate the camera.
-"""
-
-"""
-Author: Chao Wang
+Author: Chao Wang and Jon Turner
 Last Updated: 2/1/2013
-With further hacks by Jon Turner
  
-This program is a front-end of Avatar, an application
-that demonstrates the Forest overlay network.
-""" 
-
-""" 
-This program is based on "Roaming Ralph", a tutorial
-included in Panda3D package.
+Adapted from "Roaming Ralph", a tutorial included in Panda3D package.
 Author: Ryan Myers
 Models: Jeff Styers, Reagan Heller
 """  
@@ -42,7 +29,8 @@ def addTitle(text):
 # Function to print Avatar's position on the screen.
 def addAvPos(pos, avatar):
 	return OnscreenText( \
-		text="Avatar's pos: (%d, %d)" % (avatar.getX(), avatar.getY()),\
+		text="Avatar's pos: (%d, %d, %d)" % \
+		(avatar.getX(), avatar.getY(), (avatar.getHpr()[0])%360),\
 		style=2, fg=(1,0.8,0.7,1), pos=(-1.3, pos), \
 		align=TextNode.ALeft, scale = .06, mayChange = True)
 
@@ -59,10 +47,8 @@ class PandaWorld(DirectObject):
 				"cam-up":0, "cam-down":0}
 		base.win.setClearColor(Vec4(0,0,0,1))
 
-		# Post the instructions
+		# Add title and show map
 		self.title = addTitle("wandering pandas")
-
-		
 		self.Dmap = OnscreenImage(image = 'models/2Dmap.png', \
 					  pos = (.8,0,.6), scale = .4)
 		self.Dmap.setTransparency(TransparencyAttrib.MAlpha)
@@ -107,15 +93,14 @@ class PandaWorld(DirectObject):
 		self.avPos = addAvPos(0.9, self.avatar)
 
 		# print Map's pos
-		self.mapPos = showMapPos(0.8, self.Dmap)
-		self.dotPos = showMapPos(0.7, self.dot)
+		#self.mapPos = showMapPos(0.8, self.Dmap)
+		#self.dotPos = showMapPos(0.7, self.dot)
 			
 		# setup pool of remotes
 		# do not attach to scene yet
-
 		self.remoteMap = {}
 		self.freeRemotes = []
-		for i in range(0,1000) :
+		for i in range(0,100) : # allow up to 100 remotes
 			self.freeRemotes.append(Actor("models/panda-model", \
 						{"run":"models/panda-walk4"}))
 			self.freeRemotes[i].setScale(.002)
@@ -224,9 +209,17 @@ class PandaWorld(DirectObject):
 		self.keyMap[key] = value
 
 	def addRemote(self, x, y, direction, id) : 
-		# check that we don't already have a remote with id
-		# if not, add one to our map of remotes
-		# set the position and direction of the remote
+		""" Add a remote panda.
+
+		This method is used by the Net object when it starts
+		getting packets from a panda that it did not previously
+		know about.
+		x,y gives the remote's position
+		direction gives its heading
+		id is an identifier used to distinguish this remote from others
+
+		New remotes are included in the scene graph.
+		"""
 		if id in self.remoteMap :
 			self.updateRemote(x,y,direction,id); return
 		if len(self.freeRemotes) == 0 :
@@ -242,6 +235,14 @@ class PandaWorld(DirectObject):
 		remote.loop("run")
 
 	def updateRemote(self, x, y, direction, id) :
+		""" Update location of a remote panda.
+
+		This method is used by the Net object to update the location
+		know about.
+		x,y gives the remote's position
+		direction gives its heading
+		id is an identifier used to distinguish this remote from others
+		"""
 		if id not in self.remoteMap : return
 		remote, isMoving = self.remoteMap[id]
 		if abs(x - remote.getX()) < .1 and \
@@ -259,6 +260,10 @@ class PandaWorld(DirectObject):
 		remote.setHpr(direction,0,0) 
 
 	def removeRemote(self, id) :
+		""" Remove a remote when it goes out of range.
+		
+		id is the identifier for the remote
+		"""
 		if id not in remoteMap : return
 		remote = self.remoteMap[id]
 		remote.detach(render) # ??? check this
@@ -270,8 +275,7 @@ class PandaWorld(DirectObject):
 	
 		Intended for use by a Net object that must track avatar's 
 		position return a tuple containing the x-coordinate,
-		y-coordinate, heading, and an integer indicating the
-		maximum x,y value
+		y-coordinate, heading.
 		"""
 		return (self.avatar.getX(), self.avatar.getY(), \
 			(self.avatar.getHpr()[0])%360)
@@ -281,9 +285,13 @@ class PandaWorld(DirectObject):
 		"""
 		return 120
 
-	# Accepts arrow keys to move either the player or the menu cursor,
-	# Also deals with grid checking and collision detection
 	def move(self, task):
+		""" Update the position of this avatar.
+
+		This method is called by the task scheduler on every frame.
+		It responds to the arrow keys to move the avatar
+		and to the camera up/down keys.
+		"""
 
 		# If the camera-up key is held down, look up
 		# If the camera-down key is pressed, look down
@@ -299,10 +307,10 @@ class PandaWorld(DirectObject):
 		# direction.
 		if (self.keyMap["left"]!=0):
 			self.avatar.setH(self.avatar.getH() + \
-					 100 * globalClock.getDt())
+					 50 * globalClock.getDt())
 		if (self.keyMap["right"]!=0):
 			self.avatar.setH(self.avatar.getH() - \
-					 100 * globalClock.getDt())
+					 50 * globalClock.getDt())
 		if (self.keyMap["forward"]!=0):
 			self.avatar.setY(self.avatar, \
 					 -3000 * globalClock.getDt())
@@ -346,34 +354,13 @@ class PandaWorld(DirectObject):
 		else:
 			self.avatar.setPos(startpos)
 
-		# Keep the camera at one foot above the terrain,
-		# or 8 feet above avatar, whichever is greater.
-		#entries = []
-		#for i in range(self.camGroundHandler.getNumEntries()):
-	#		entry = self.camGroundHandler.getEntry(i)
-	#		entries.append(entry)
-	#	entries.sort(lambda x,y: cmp(y.getSurfacePoint(render).getZ(), \
-	#			 x.getSurfacePoint(render).getZ()))
-		#if (len(entries)>0) and \
-		#   (entries[0].getIntoNode().getName() == "ID602"):
-		#	base.camera.setZ(entries[0].getSurfacePoint(render).getZ()+1.0)
-		#if (base.camera.getZ() < self.avatar.getZ() + 8):
-		#	base.camera.setZ(self.avatar.getZ() + 8)
-			
-		# The camera should look in avatar's direction,
-		# but it should also try to stay horizontal, so look at
-		# a floater which hovers above avatar's head.
-		#self.floater.setPos(self.avatar.getPos())
-		#self.floater.setZ(self.avatar.getZ() + 1.0)
-		#base.camera.lookAt(self.floater)
-
 		# Finally, update the text that shows avatar's position on 
 		# the screen
 		self.avPos.setText("Avatar's pos: (%d, %d, %d)" % \
 			(self.avatar.getX(), self.avatar.getY(),
-			 self.avatar.getHpr()[0]))
-		self.dotPos.setText("dot's pos: (%f, %f)" % \
-			(self.dot.getX(), self.dot.getZ()))
+			 (self.avatar.getHpr()[0])%360))
+		#self.dotPos.setText("dot's pos: (%f, %f)" % \
+		#	(self.dot.getX(), self.dot.getZ()))
 
 		# map the avatar's position to the 2D map on the top-right 
 		# corner of the screen

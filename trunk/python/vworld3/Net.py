@@ -7,7 +7,7 @@ from Queue import Queue
 from collections import deque
 from Packet import *
 from CtlPkt import *
-from WallsWorld import *
+from WorldMap import *
 from Substrate import *
 from math import sin, cos
 from direct.task import Task
@@ -28,12 +28,12 @@ class Net :
 	""" Net support.
 
 	"""
-	def __init__(self, myIp, cliMgrIp, comtree, world, pWorld, debug):
+	def __init__(self, myIp, cliMgrIp, comtree, map, pWorld, debug, auto):
 		""" Initialize a new Net object.
 
 		myIp address is IP address of this host
 		comtree is the number of the comtree to use
-		world is a WallsWorld object
+		map is a WorldMap object
 		debug is an integer >=0 that determines amount of
 		debugging output
 		"""
@@ -41,9 +41,10 @@ class Net :
 		self.myIp = myIp
 		self.cliMgrIp = cliMgrIp
 		self.comtree = comtree
-		self.world = world
+		self.map = map
 		self.pWorld = pWorld
 		self.debug = debug
+		self.auto = auto
 
 		self.mySubs = set()
 		self.nearRemotes = set()
@@ -57,37 +58,30 @@ class Net :
 		self.sock.setblocking(0)
 		self.myAdr = self.sock.getsockname()
 
-		sys.stderr.write("x\n")
 		self.limit = pWorld.getLimit()
-		self.scale = (GRID*self.world.size + 0.0)/(self.limit + 0.0)
+		self.scale = (GRID*self.map.size + 0.0)/(self.limit + 0.0)
 
 		x, y, self.direction = self.pWorld.getPosHeading()
 		self.x = int(x*self.scale); self.y = int(y*self.scale)
 		self.speed = SLOW  # only used for auto operation
 
-		cell = (self.x/GRID) + (self.y/GRID)*self.world.size
-		self.visSet = self.world.computeVisSet(cell)
+		cell = (self.x/GRID) + (self.y/GRID)*self.map.size
+		self.visSet = self.map.computeVisSet(cell)
 
 		self.seqNum = 1
 
 	def init(self, uname, pword) :
 		if not self.login(uname, pword) : return False
-
 		self.rtrAdr = (ip2string(self.rtrIp),ROUTER_PORT)
-
-		sys.stderr.write("connecting\n")
 		self.t0 = time(); self.now = 0; 
 		self.connect()
 		sleep(.1)
-		sys.stderr.write("joining\n")
 		if not self.joinComtree() :
 			sys.stderr.write("Net.run: cannot join comtree\n")
 			return False
-
-		sys.stderr.write("adding netTask to taskMgr list\n")
-		taskMgr.add(self.run,"netTask",uponDeath=self.wrapup, appendTask=True)
+		taskMgr.add(self.run, "netTask",uponDeath=self.wrapup, \
+				appendTask=True)
 		return True
-
 
 	def login(self, uname, pword) :
 		cmSock = socket(AF_INET, SOCK_STREAM);
@@ -137,18 +131,15 @@ class Net :
 		self.numVisible = len(self.visibleRemotes)
 		self.visibleRemotes.clear()
 
-		if self.now < .5 : sys.stderr.write("A\n")
 		while True :
 			# substrate has an incoming packet
 			p = self.receive()
 			if p == None : break
 			self.updateNearby(p)
 
-		if self.now < .5 : sys.stderr.write("B\n")
 		self.updateStatus()	# update Avatar status
 		self.updateSubs() 	# update subscriptions
 
-		if self.now < .5 : sys.stderr.write("C\n")
 		# send status on comtree
 		self.sendStatus()
 		return task.cont
@@ -270,9 +261,7 @@ class Net :
 	def sendStatus(self) :
 		""" Send status packet on multicast group for current location.
 		"""
-		if self.now < .5 : sys.stderr.write("U\n")
 		if self.comtree == 0 : return
-		if self.now < .5 : sys.stderr.write("V\n")
 		p = Packet()
 		p.leng = OVERHEAD + 4*8; p.type = CLIENT_DATA; p.flags = 0
 		p.comtree = self.comtree
@@ -284,9 +273,7 @@ class Net :
 					self.x, self.y, \
 					self.direction, self.speed, \
 					self.numVisible, self.numNear)
-		if self.now < .5 : sys.stderr.write("X\n")
 		self.send(p)
-		if self.now < .5 : sys.stderr.write("Y\n")
 
 	def updateStatus(self) :
 		""" Update position and heading of avatar.
@@ -299,7 +286,7 @@ class Net :
 
 		postRegion = self.groupNum(self.x,self.y)-1
 		if postRegion != prevRegion :
-			self.visSet = self.world.updateVisSet( \
+			self.visSet = self.map.updateVisSet( \
 				prevRegion,postRegion,self.visSet)
 
 		"""
@@ -313,21 +300,21 @@ class Net :
 
 		x = self.x + int(dist * sin(dirRad))
 		y = self.y + int(dist * cos(dirRad))
-		x = max(x,0); x = min(x,GRID*self.world.size-1)
-		y = max(y,0); y = min(y,GRID*self.world.size-1)
+		x = max(x,0); x = min(x,GRID*self.map.size-1)
+		y = max(y,0); y = min(y,GRID*self.map.size-1)
 
 		postRegion = self.groupNum(x,y)-1
 
 		# stop if we hit a wall
-		if x == 0 or x == GRID*self.world.size-1 or \
-		   y == 0 or y == GRID*self.world.size-1 or \
+		if x == 0 or x == GRID*self.map.size-1 or \
+		   y == 0 or y == GRID*self.map.size-1 or \
 		   (prevRegion != postRegion and
-		    self.world.separated(prevRegion,postRegion)) :
+		    self.map.separated(prevRegion,postRegion)) :
 			self.speed = STOPPED
 		else :
 			self.x = x; self.y = y
 			if postRegion != prevRegion :
-				self.visSet = self.world.updateVisSet( \
+				self.visSet = self.map.updateVisSet( \
 					prevRegion,postRegion,self.visSet)
 		"""
 	
@@ -336,7 +323,7 @@ class Net :
 		 x1 is the x coordinate of the position of interest
 		 y1 is the y coordinate of the position of interest
 		 """
-		return 1 + (int(x1)/GRID) + (int(y1)/GRID)*self.world.size
+		return 1 + (int(x1)/GRID) + (int(y1)/GRID)*self.map.size
 	
 	def subscribe(self,glist) :
 		""" Subscribe to a list of multicast groups.
@@ -457,4 +444,4 @@ class Net :
 		if len(self.visibleRemotes) >= MAXNEAR : return
 		p = ((self.x+0.0)/GRID,(self.y+0.0)/GRID)
 		p1 = ((x1+0.0)/GRID,(y1+0.0)/GRID)
-		if self.world.canSee(p,p1) : self.visibleRemotes.add(avId)
+		if self.map.canSee(p,p1) : self.visibleRemotes.add(avId)
