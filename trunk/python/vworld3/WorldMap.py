@@ -218,7 +218,7 @@ class WorldMap :
 					done = False
 			if done : break
 			for x2 in range(x1,min(x1+d+1,self.size)) :
-				dx = x1-x2; prevVisVec[dx] = visVec[dx]
+				dx = x2-x1; prevVisVec[dx] = visVec[dx]
 		return vSet
 
 	def isVis(self, c1, c2) :
@@ -230,7 +230,7 @@ class WorldMap :
 		i1 = c1%self.size; j1 = c1/self.size;
 		i2 = c2%self.size; j2 = c2/self.size;
 
-		eps = .001
+		eps = .01
 		points1 = ((i1+eps,  j1+eps),   (i1+eps,  j1+1-eps),
 			   (i1+1-eps,j1+eps),   (i1+1-eps,j1+1-eps))
 		points2 = ((i2+eps,  j2+eps),   (i2+eps,  j2+1-eps),
@@ -251,9 +251,9 @@ class WorldMap :
 
 		i1 = int(p1[0]); j1 = int(p1[1])
 		i2 = int(p2[0]); j2 = int(p2[1])
-		minj = min(j1,j2); maxj = max(j1,j2)
 
 		if i1 == i2 :
+			minj = min(j1,j2); maxj = max(j1,j2)
 			for j in range(minj,maxj) :
 				if self.map[i1+j*self.size]&2 :
 					return False
@@ -266,24 +266,26 @@ class WorldMap :
 		xd = i1+1 - x; yd = xd*slope
 		c = i+j*self.size
 		while i < i2 :
+			#print "i=", i
 			if slope > 0 :
-				while j+1 < y+yd :
+				while j+1 <= y+yd :
+					#print "j=",j
 					if self.map[c]&2 : return False
 					j += 1; c += self.size
 			else :
-				while j > y+yd :
+				while j >= y+yd :
 					j -= 1; c -= self.size
 					if self.map[c]&2 : return False
 			c += 1
 			if self.map[c]&1 : return False
 			if slope > 0 :
 				ylim = min(y+slope, p2[1])
-				while j+1 < ylim :
+				while j+1 <= ylim :
 					if self.map[c]&2 : return False
 					j += 1; c += self.size
 			else :
 				ylim = max(y+slope, p2[1])
-				while j > ylim :
+				while j >= ylim :
 					j -= 1; c -= self.size
 					if self.map[c]&2 : return False
 			i += 1; x += 1.0; y += slope

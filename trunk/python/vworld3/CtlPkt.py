@@ -90,7 +90,7 @@ class CtlPkt:
 		if self.cpTyp == CLIENT_JOIN_COMTREE :
 			s += "client join comtree"
 		elif self.cpTyp == CLIENT_LEAVE_COMTREE :
-			s += "client join comtree"
+			s += "client leave comtree"
 		else :
 			s += "unknown type"
 
