@@ -1,7 +1,7 @@
 import sys
 import struct
 from time import sleep, time
-from random import randint
+from random import randint, random
 from threading import *
 from Queue import Queue
 from collections import deque
@@ -19,10 +19,11 @@ GRID = 10000  		# xy extent of one grid square
 MAXNEAR = 1000		# max # of nearby avatars
 
 # speeds below are the amount avatar moves during an update period
+# making them all equal to avoid funky animation
 STOPPED =   0		# not moving
-SLOW    = 100    	# slow avatar speed
-MEDIUM  = 250    	# medium avatar speed
-FAST    = 600    	# fast avatar speed
+SLOW    = 50    	# slow avatar speed
+MEDIUM  = 50    	# medium avatar speed
+FAST    = 50    	# fast avatar speed
 
 class Net :
 	""" Net support.
@@ -46,40 +47,47 @@ class Net :
 		self.debug = debug
 		self.auto = auto
 
-		self.mySubs = set()
-		self.nearRemotes = set()
-		self.visibleRemotes = set()
-		self.visSet = set()
-		self.numNear = self.numVisible = 0
-
 		# open and configure socket to be nonblocking
 		self.sock = socket(AF_INET, SOCK_DGRAM);
 		self.sock.bind((myIp,0))
 		self.sock.setblocking(0)
 		self.myAdr = self.sock.getsockname()
 
-		self.limit = pWorld.getLimit()
-		self.scale = (GRID*self.map.size + 0.0)/(self.limit + 0.0)
+		# set initial position
+		if self.auto :
+			self.x = 58*GRID/5; self.y = 67*GRID/5
+			self.direction = randint(0,359)
+		else :
+			# compute scale factor for pWorld
+			self.limit = pWorld.getLimit()
+			self.scale = (GRID*self.map.size + 0.0) \
+					/ (self.limit + 0.0)
+			# set initial position
+			x, y, self.direction = self.pWorld.getPosHeading()
+			self.x = int(x*self.scale); self.y = int(y*self.scale)
+			# correct panda headings to match mapWorld (yuck)
+			self.direction = self.redirect(self.direction)
+		self.speed = SLOW; self.deltaDir = 0 
 
-		x, y, self.direction = self.pWorld.getPosHeading()
-		self.x = int(x*self.scale); self.y = int(y*self.scale)
-		self.speed = SLOW  # only used for auto operation
+		self.mySubs = set()	# multicast subscriptions
+		self.nearRemotes = {}	# map: fadr -> [x,y,dir,dx,dy,count]
+		self.visSet = set()	# set of visible squares
+		loc = self.groupNum(self.x,self.y) - 1
+		self.visSet = self.map.computeVisSet(loc)
 
-		cell = (self.x/GRID) + (self.y/GRID)*self.map.size
-		self.visSet = self.map.computeVisSet(cell)
-
-		self.seqNum = 1
+		self.seqNum = 1		# sequence # for control packets
 
 	def init(self, uname, pword) :
 		if not self.login(uname, pword) : return False
 		self.rtrAdr = (ip2string(self.rtrIp),ROUTER_PORT)
-		self.t0 = time(); self.now = 0; 
+		self.t0 = time(); self.now = 0; self.nextTime = 0;
 		self.connect()
 		sleep(.1)
 		if not self.joinComtree() :
 			sys.stderr.write("Net.run: cannot join comtree\n")
 			return False
-		taskMgr.add(self.run, "netTask",uponDeath=self.wrapup, \
+		self.updateSubs()
+		taskMgr.add(self.run, "netTask", uponDeath=self.wrapup, \
 				appendTask=True)
 		return True
 
@@ -117,31 +125,39 @@ class Net :
 				fadr2string(self.comtCtlFadr);
 		return True
 
+	def redirect(self, direction) :
+		""" Convert between panda headings and MapWorld directions.
+
+		MapWorld uses compass headings, so positive y-axis points
+		north (compass heading 0) and positive x-axis points east
+		(compass heading 90). Panda's 0 heading is the negative
+		y-axis and directions change in opposite directions (ugh).
+		This method transforms between the two. Note, it symmetric,
+		so you can use it to transform headings from panda to MapWorld
+		or from MapWorld to panda.
+		"""
+		return (180 - direction)%360
+
 	def run(self, task) :
 		""" This is the main method for the Net object.
 		"""
 
 		self.now = time() - self.t0
-		if self.now < .5 :
-			sys.stderr.write("Net.run at " + str(self.now) + "\n")
 
-		# track nearby and visible avatars
-		self.numNear = len(self.nearRemotes)
-		self.nearRemotes.clear()
-		self.numVisible = len(self.visibleRemotes)
-		self.visibleRemotes.clear()
+		# process once per UPDATE_PERIOD
+		if self.now < self.nextTime : return task.cont
+		self.nextTime += UPDATE_PERIOD
 
 		while True :
 			# substrate has an incoming packet
 			p = self.receive()
 			if p == None : break
-			self.updateNearby(p)
+			self.updateNearby(p) # update map of nearby remotes
 
+		self.pruneNearby()	# check for remotes that are MIA
 		self.updateStatus()	# update Avatar status
-		self.updateSubs() 	# update subscriptions
+		self.sendStatus()	# send status on comtree
 
-		# send status on comtree
-		self.sendStatus()
 		return task.cont
 
 	def wrapup(self, task) :
@@ -149,9 +165,9 @@ class Net :
 		self.leaveComtree()
 		self.disconnect()
 
-
-
 	def send(self, p) :
+		""" Send a packet to the router.
+		"""
 		if self.debug >= 3 or \
 		   (self.debug >= 2 and p.type != CLIENT_DATA) or \
 		   (self.debug >= 1 and p.type == CLIENT_SIG) :
@@ -165,6 +181,11 @@ class Net :
 		self.sock.sendto(p.pack(),self.rtrAdr)
 
 	def receive(self) :
+		""" Receive a packet from the router.
+
+		If the socket has a packet available, it is unpacked
+		and returned. Othereise, None is returned.
+		"""
 		try :
 			buf, senderAdr = self.sock.recvfrom(2000)
 		except error as e :
@@ -268,61 +289,117 @@ class Net :
 		p.srcAdr = self.myFadr;
 		p.dstAdr = -self.groupNum(self.x,self.y)
 	
+		numNear = len(self.nearRemotes)
 		p.payload = struct.pack('!IIIIIIII', \
 					STATUS_REPORT, self.now, \
 					self.x, self.y, \
 					self.direction, self.speed, \
-					self.numVisible, self.numNear)
+					numNear, numNear)
 		self.send(p)
 
 	def updateStatus(self) :
 		""" Update position and heading of avatar.
 
+		When a player is controlling the avatar, just update
+		local state from the panda model. Otherwise, wander
+		randomly, avoiding walls and non-walkable squares.
 		"""
-		prevRegion = self.groupNum(self.x,self.y)-1
+		loc = self.groupNum(self.x,self.y)-1
 
-		x, y, self.direction = self.pWorld.getPosHeading()
-		self.x = int(x*self.scale); self.y = int(y*self.scale)
+		if not self.auto : # in this case, panda controls position
+			x, y, self.direction = self.pWorld.getPosHeading()
+			self.x = int(x*self.scale); self.y = int(y*self.scale)
+			self.direction = self.redirect(self.direction)
 
-		postRegion = self.groupNum(self.x,self.y)-1
-		if postRegion != prevRegion :
-			self.visSet = self.map.updateVisSet( \
-				prevRegion,postRegion,self.visSet)
+			nuloc = self.groupNum(self.x,self.y)-1
+			if nuloc != loc :
+				self.visSet = self.map.computeVisSet(nuloc)
+				self.updateSubs()
+			return
 
-		"""
-		PI = 3.141519625
-	
-		# update position
-		dist = self.speed + 0.0
-		dirRad = self.direction * (2*PI/360)
-
-		prevRegion = self.groupNum(self.x,self.y)-1
-
-		x = self.x + int(dist * sin(dirRad))
-		y = self.y + int(dist * cos(dirRad))
-		x = max(x,0); x = min(x,GRID*self.map.size-1)
-		y = max(y,0); y = min(y,GRID*self.map.size-1)
-
-		postRegion = self.groupNum(x,y)-1
-
-		# stop if we hit a wall
-		if x == 0 or x == GRID*self.map.size-1 or \
-		   y == 0 or y == GRID*self.map.size-1 or \
-		   (prevRegion != postRegion and
-		    self.map.separated(prevRegion,postRegion)) :
-			self.speed = STOPPED
+		# code for auto operation
+		atLeft  = (loc%self.map.size == 0)
+		atRight = (loc%self.map.size == self.map.size-1)
+		atBot   = (loc/self.map.size == 0)
+		atTop   = (loc/self.map.size == self.map.size-1)
+		xd = self.x%GRID; yd = self.y%GRID
+		if xd < .4*GRID and \
+		   (atLeft or self.map.separated(loc,loc-1) or \
+		    self.map.blocked(loc-1)) :
+			# near left edge of loc
+			if 160 < self.direction and self.direction < 270 :
+				 self.direction -= 1
+			if 270 <= self.direction or self.direction < 20 :
+				 self.direction += 1
+			self.speed = SLOW; self.deltaDir = 0
+		elif xd > .6*GRID and \
+		   (atRight or self.map.separated(loc,loc+1) or \
+		    self.map.blocked(loc+1)) :
+			# near right edge of loc
+			if 340 < self.direction or self.direction <= 90 :
+				 self.direction -= 1
+			if 90 < self.direction and self.direction < 200 :
+				 self.direction += 1
+			self.speed = SLOW; self.deltaDir = 0
+		elif yd < .4*GRID and \
+		   (atBot or self.map.separated(loc,loc-self.map.size) or \
+		    self.map.blocked(loc-self.map.size)) :
+			# near bottom edge of loc
+			if 70 < self.direction and self.direction <= 180 :
+				 self.direction -= 1
+			if 180 < self.direction and self.direction < 290 :
+				 self.direction += 1
+			self.speed = SLOW; self.deltaDir = 0
+		elif yd > .6*GRID and \
+		   (atTop or self.map.separated(loc,loc+self.map.size) or \
+		    self.map.blocked(loc+self.map.size)) :
+			# near top edge of loc
+			if 250 < self.direction and self.direction <= 359 :
+				self.direction -= 1
+			if 0 <= self.direction and self.direction < 110 :
+				 self.direction += 1
+			self.speed = SLOW; self.deltaDir = 0
 		else :
-			self.x = x; self.y = y
-			if postRegion != prevRegion :
-				self.visSet = self.map.updateVisSet( \
-					prevRegion,postRegion,self.visSet)
-		"""
+			# no walls to avoid, so just make random
+			# changes to direction and speed
+			self.direction += self.deltaDir;
+			r = random()
+			if r < 0.1 :
+				if r < .05 : self.deltaDir -= 0.2 * random()
+				else :       self.deltaDir += 0.2 * random()
+				self.deltaDir = min(1.0,self.deltaDir)
+				self.deltaDir = max(-1.0,self.deltaDir)
+			# update speed
+			r = random()
+			if r <= 0.1 :
+				if self.speed == SLOW or self.speed == FAST :
+					self.speed = MEDIUM
+				elif r < 0.05 :
+					self.speed = SLOW
+				else :
+					self.speed = FAST
+		# update position using adjusted direction and speed
+		self.direction %= 360
+		dist = self.speed
+		PI = 3.141519625
+		dirRad = self.direction * (2*PI/360)
+		self.x += (int) (dist * sin(dirRad))
+		self.y += (int) (dist * cos(dirRad))
+		nuloc = self.groupNum(self.x,self.y)-1
+		if nuloc != loc :
+			self.visSet = self.map.computeVisSet(nuloc)
+			self.updateSubs()
 	
 	def groupNum(self, x1, y1) :
 		""" Return multicast group number for given position.
-		 x1 is the x coordinate of the position of interest
-		 y1 is the y coordinate of the position of interest
-		 """
+
+		x1 is the x coordinate of the position of interest
+		y1 is the y coordinate of the position of interest
+		Note: multicast group numbers are 1 larger than the
+		index of the MapWorld square that contains (x1,y1).
+		To convert group number to a Forest multicast address,
+		just negate it.
+		"""
 		return 1 + (int(x1)/GRID) + (int(y1)/GRID)*self.map.size
 	
 	def subscribe(self,glist) :
@@ -410,15 +487,11 @@ class Net :
 		self.subscribeAll()
 	
 	def updateNearby(self, p) :
-		""" Update the set of nearby Remotes.
+		""" Process a packet from a remote.
 
-		If the given packet is a status report, check to see if the
-		sending avatar is visible. If it is visible, but not in our
-		set of nearby avatars, then add it. If it is not visible
-		but is in our set of nearby avatars, then delete it.
-		Note: we assume that the visibility range and avatar speeds
-		are such that we will get at least one report from a newly
-		invisible avatar.
+		Currently, this just updates the map of remotes.
+		Could be extended to change the state of this avatar
+		(say, process a "kill packet")
 		"""
 		tuple = struct.unpack('!IIIII',p.payload[0:20])
 
@@ -426,22 +499,46 @@ class Net :
 		x1 = tuple[2]; y1 = tuple[3]; dir1 = tuple[4]
 		avId = p.srcAdr
 
-		if avId not in self.nearRemotes and \
-		   len(self.nearRemotes) < MAXNEAR :
-			self.nearRemotes.add(avId)
-			self.pWorld.addRemote(x1/self.scale, y1/self.scale, \
-					      dir1, avId)
-		else :
-			self.pWorld.updateRemote(x1/self.scale, y1/self.scale, \
-					      	 dir1, avId)
+		if avId in self.nearRemotes :
+			# update map entry for this remote
+			remote = self.nearRemotes[avId]
+			remote[3] = x1 - remote[0]; remote[4] = y1 - remote[1]
+			remote[0] = x1; remote[1] = y1; remote[2] = dir1
+			remote[5] = 0
+			dir1 = self.redirect(dir1)
+			if not self.auto :
+				self.pWorld.updateRemote(x1/self.scale, \
+					y1/self.scale, dir1, avId)
+		elif len(self.nearRemotes) < MAXNEAR :
+			# fadr -> x,y,direction,dx,dy,count
+			self.nearRemotes[avId] = [x1,y1,dir1,0,0,0]
+			dir1 = self.redirect(dir1)
+			if not self.auto :
+				self.pWorld.addRemote(x1/self.scale, \
+					y1/self.scale, dir1, avId)
+	
+	def pruneNearby(self) :
+		""" Remove old entries from nearRemotes
 
-		# determine if we can see the Avatar that sent this report
-		g1 = self.groupNum(x1,y1)
-		if g1-1 not in self.visSet :
-			self.visibleRemotes.discard(avId)
-			return
-		
-		if len(self.visibleRemotes) >= MAXNEAR : return
-		p = ((self.x+0.0)/GRID,(self.y+0.0)/GRID)
-		p1 = ((x1+0.0)/GRID,(y1+0.0)/GRID)
-		if self.map.canSee(p,p1) : self.visibleRemotes.add(avId)
+		If we haven't heard from a remote in a while, we remove
+		it from the map of nearby remotes. When a remote first
+		"goes missing" we continue to update its position,
+		by extrapolating from last update.
+		"""
+		dropList = []
+		for avId, remote in self.nearRemotes.iteritems() :
+			if remote[0] > 0 : # implies missing update
+				# update position based on dx, dy
+				remote[0] += remote[3]; remote[1] += remote[4]
+				remote[0] = max(0,remote[0])
+				remote[0] = min(self.map.size*GRID-1,remote[0])
+				remote[1] = max(0,remote[1])
+				remote[1] = min(self.map.size*GRID-1,remote[1])
+			if remote[5] >= 6 :
+				dropList.append(avId)
+			remote[5] += 1
+		for avId in dropList :
+			rem = self.nearRemotes[avId]
+			x = rem[0]; y = rem[1]
+			del self.nearRemotes[avId]
+			if not self.auto : self.pWorld.removeRemote(avId)

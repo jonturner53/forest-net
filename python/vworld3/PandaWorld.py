@@ -237,16 +237,15 @@ class PandaWorld(DirectObject):
 	def updateRemote(self, x, y, direction, id) :
 		""" Update location of a remote panda.
 
-		This method is used by the Net object to update the location
-		know about.
+		This method is used by the Net object to update the location.
 		x,y gives the remote's position
 		direction gives its heading
 		id is an identifier used to distinguish this remote from others
 		"""
 		if id not in self.remoteMap : return
 		remote, isMoving = self.remoteMap[id]
-		if abs(x - remote.getX()) < .1 and \
-		   abs(y - remote.getY()) < .1 and \
+		if abs(x - remote.getX()) < .001 and \
+		   abs(y - remote.getY()) < .001 and \
 		   direction == remote.getHpr()[0] :
 			remote.stop(); remote.pose("run",5)
 			self.remoteMap[id][1] = False
@@ -264,10 +263,10 @@ class PandaWorld(DirectObject):
 		
 		id is the identifier for the remote
 		"""
-		if id not in remoteMap : return
-		remote = self.remoteMap[id]
-		remote.detach(render) # ??? check this
-		freeRemotes.append(remote)
+		if id not in self.remoteMap : return
+		remote = self.remoteMap[id][0]
+		remote.detachNode() # ??? check this
+		self.freeRemotes.append(remote)
 		del self.remoteMap[id]
 
 	def getPosHeading(self) :

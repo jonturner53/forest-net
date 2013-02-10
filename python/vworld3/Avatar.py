@@ -44,14 +44,14 @@ for i in range(5,len(sys.argv)) :
 	if sys.argv[i] == "debug" : debug = 1
 	elif sys.argv[i] == "debugg" : debug = 2
 	elif sys.argv[i] == "debuggg" : debug = 3
-	elif sys.argv[i] == "auto" : debug = True
+	elif sys.argv[i] == "auto" : auto = True
 
 map = WorldMap() 
 if not map.init(mapFile) :
 	sys.stderr.write("cannot initialize map from mapFile\n");
 	sys.exit(1)
 
-pWorld = PandaWorld()
+pWorld = None if auto else PandaWorld()
 net = Net(myIp, cliMgrIp, myComtree, map, pWorld, debug, auto)
 
 # setup tasks
