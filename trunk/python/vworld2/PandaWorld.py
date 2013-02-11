@@ -237,7 +237,7 @@ class PandaWorld(DirectObject):
 		"""
 		Note we use a single collision handler to handle all collisions
 		"""
-		self.avatarVisRayHandler = CollisionHandlerQueue()
+		self.avatarVisRayHandlers = [None] * self.maxRemotes
 		self.visRays = [None] * self.maxRemotes
 		self.avatarVisRays = [None] * self.maxRemotes
 		self.avatarVisRayNps = [None] * self.maxRemotes
@@ -251,8 +251,9 @@ class PandaWorld(DirectObject):
 			self.avatarVisRays[i].setIntoCollideMask(BitMask32.allOff())
 			self.avatarVisRayNps[i] = \
 				self.avatar.attachNewNode(self.avatarVisRays[i])
+			self.avatarVisRayHandlers[i] = CollisionHandlerQueue()
 			self.cTrav.addCollider(self.avatarVisRayNps[i], \
-				self.avatarVisRayHandler)
+				self.avatarVisRayHandlers[i])
 
 
 		""" If we want to count numNearBy, this does the job
@@ -337,7 +338,10 @@ class PandaWorld(DirectObject):
 					 "remotes\n")
 			sys.exit(1)
 		remote = self.freeRemotes.pop()
-		self.remoteMap[id] = [remote, True, self.visRays.pop()]
+		self.remoteMap[id] = [remote, True,
+					self.visRays.pop(), self.avatarVisRayHandlers.pop(),
+					OnscreenImage(image = 'models/dot1.png', pos = (0,0,0), scale = .01)
+					]
 		# set position and direction of remote and make it visible
 		remote.reparentTo(render)
 		remote.setPos(x,y,0) 
@@ -353,7 +357,7 @@ class PandaWorld(DirectObject):
 		id is an identifier used to distinguish this remote from others
 		"""
 		if id not in self.remoteMap : return
-		remote, isMoving, rayToIt = self.remoteMap[id]
+		remote, isMoving, rayToIt, rayHandler, dot = self.remoteMap[id]
 		if abs(x - remote.getX()) < .001 and \
 		   abs(y - remote.getY()) < .001 and \
 		   direction == remote.getHpr()[0] :
@@ -374,7 +378,9 @@ class PandaWorld(DirectObject):
 		id is the identifier for the remote
 		"""
 		if id not in self.remoteMap : return
+		self.remoteMap[4].destroy()
 		self.visRays.append(self.remoteMap[id][2])
+		self.avatarVisRayHandlers.append(self.remoteMap[id][3])
 		remote = self.remoteMap[id][0]
 		remote.detachNode() # ??? check this
 		self.freeRemotes.append(remote)
@@ -466,8 +472,7 @@ class PandaWorld(DirectObject):
 		# anything, put him back where he was last frame.
 		entries = []
 		for i in range(self.avatarGroundHandler.getNumEntries()):
-			entry = self.avatarGroundHandler.getEntry(i)
-			entries.append(entry)
+			entries.append(self.avatarGroundHandler.getEntry(i))
 		entries.sort(lambda x,y: cmp(y.getSurfacePoint(render).getZ(), \
 				 x.getSurfacePoint(render).getZ()))
 		if (len(entries)>0) and \
@@ -478,35 +483,36 @@ class PandaWorld(DirectObject):
 			self.avatar.setPos(startpos)
 
 		# Check visibility
-		entries = []
-		self.visList = []
-		for i in range(self.avatarVisRayHandler.getNumEntries()):
-			entry = self.avatarVisRayHandler.getEntry(i)
-			entries.append(entry)
-		if (len(entries)>0):
-				for e in entries:
-					name = e.getIntoNode().getName()
-					# these are IDs of the wooden walls in virtual world
-					# TODO: need to include brick walls
-					if e.getIntoNode().getName() == "ID2" or \
-					   e.getIntoNode().getName() == "ID15" or \
-					   e.getIntoNode().getName() == "ID44" or \
-					   e.getIntoNode().getName() == "ID52" or \
-					   e.getIntoNode().getName() == "ID60" or \
-					   e.getIntoNode().getName() == "ID68" or \
-					   e.getIntoNode().getName() == "ID76" or \
-					   e.getIntoNode().getName() == "ID84" or \
-					   e.getIntoNode().getName() == "ID92" or \
-					   e.getIntoNode().getName() == "ID100" or \
-					   e.getIntoNode().getName() == "ID108" or \
-					   e.getIntoNode().getName() == "ID129" or \
-					   e.getIntoNode().getName() == "ID161" or \
-					   e.getIntoNode().getName() == "ID169" or \
-					   e.getIntoNode().getName() == "ID389" or \
-					   e.getIntoNode().getName() == "ID397" : # the last one is ground ID
-						pass
-					elif name not in self.visList:
-						self.visList.append(name)
+		for id in self.remoteMap:
+			self.remoteMap[id][3].sortEntries()
+			entries = []
+			for i in range(self.remoteMap[id][3].getNumEntries()):
+				entries.append(self.remoteMap[id][3].getEntry(i))
+			if len(entries) == 0: continue
+			e = self.remoteMap[id][3].getEntry(0)
+			name = e.getIntoNode().getName()
+			# these are IDs of the wooden walls in virtual world
+			# TODO: need to include brick walls
+			if name == "ID2" or \
+			   name == "ID15" or \
+			   name == "ID44" or \
+			   name == "ID52" or \
+			   name == "ID60" or \
+			   name == "ID68" or \
+			   name == "ID76" or \
+			   name == "ID84" or \
+			   name == "ID92" or \
+			   name == "ID100" or \
+			   name == "ID108" or \
+			   name == "ID129" or \
+			   name == "ID161" or \
+			   name == "ID169" or \
+			   name == "ID389" or \
+			   name == "ID397" : # the last one is ground ID
+				if id in self.visList:
+					self.visList.remove(id)
+			elif id not in self.visList:
+				self.visList.append(id)
 
 		"""
 		Handler for the collisionSphere surrounded the avatar.
@@ -536,6 +542,9 @@ class PandaWorld(DirectObject):
 		# corner of the screen
 		self.dot.setPos((self.avatar.getX()/120.0)*0.7+0.45, \
 				0,(self.avatar.getY()/120.0)*0.7+0.25)
+		for id in self.remoteMap:
+			self.remoteMap[id][4].setPos((self.remoteMap[id][0].getX()/120.0)*0.7+0.45, \
+				0,(self.remoteMap[id][0].getY()/120.0)*0.7+0.25)
 
  		self.showNumVisible.setText("visible avatars: %s" % \
  			self.visList)
@@ -543,4 +552,8 @@ class PandaWorld(DirectObject):
 		return task.cont
 
 #w = PandaWorld()
+#w.addRemote(68, 70, 135, 'Sean')
+#w.addRemote(20, 33, 135, 'Mary')
+#w.addRemote(40, 60, 135, 'Jenny')
+#w.addRemote(90, 79, 135, 'Peter')
 #run()
