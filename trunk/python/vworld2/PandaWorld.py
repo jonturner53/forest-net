@@ -30,6 +30,8 @@ from direct.interval.IntervalGlobal import Sequence
 from panda3d.core import Point3
 import random, sys, os, math
 
+from Util import *
+
 # Function to put title on the screen.
 def addTitle(text):
 	return OnscreenText(text=text, style=1, fg=(1,1,1,1), \
@@ -113,7 +115,7 @@ class PandaWorld(DirectObject):
 		#self.npc1.setPos(48,47,0)
 
  		# Show a list of visible NPCs
- 		self.showNumVisible = printText(0.2)
+ 		self.showNumVisible = printText(0.8)
  		self.visList = []
 
 		# print Map's pos
@@ -546,8 +548,11 @@ class PandaWorld(DirectObject):
 			self.remoteMap[id][4].setPos((self.remoteMap[id][0].getX()/120.0)*0.7+0.45, \
 				0,(self.remoteMap[id][0].getY()/120.0)*0.7+0.25)
 
- 		self.showNumVisible.setText("visible avatars: %s" % \
- 			self.visList)
+ 		#self.showNumVisible.setText("visible avatars: %s" % \
+ 		#	self.visList)
+		s = ""
+		for id in self.remoteMap : s += fadr2string(id) + " "
+ 		self.showNumVisible.setText("Visible avatars: %s" % s)
 
 		return task.cont
 
