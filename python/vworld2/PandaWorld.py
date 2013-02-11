@@ -378,7 +378,7 @@ class PandaWorld(DirectObject):
 		id is the identifier for the remote
 		"""
 		if id not in self.remoteMap : return
-		self.remoteMap[4].destroy()
+		self.remoteMap[id][4].destroy()
 		self.visRays.append(self.remoteMap[id][2])
 		self.avatarVisRayHandlers.append(self.remoteMap[id][3])
 		remote = self.remoteMap[id][0]
