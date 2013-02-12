@@ -1,8 +1,9 @@
 """ PandaWorld - simple virtual environment with wandering pandas.
 
 This module is intended to be called by Avatar.py;
-To run it independently, uncomment the last two lines:
+To run it independently, uncomment the end of this code:
 	# w = PandaWorld()
+	# (what in bewteens are NPCs for test)
  	# run()
 and type "python PandaWorld.py"
  
@@ -11,7 +12,7 @@ control:
 	Rotate -> A, S
 	Strafe -> Z, X
 
-Last Updated: 2/10/2013
+Last Updated: 2/12/2013
 Author: Chao Wang and Jon Turner
 World Model: Chao Wang
  
@@ -28,7 +29,7 @@ from direct.actor.Actor import Actor
 from direct.showbase.DirectObject import DirectObject
 from direct.interval.IntervalGlobal import Sequence
 from panda3d.core import Point3
-import random, sys, os, math
+import random, sys, os, math, re
 
 from Util import *
 
@@ -44,12 +45,32 @@ def printText(pos):
 		style=2, fg=(1,0.8,0.7,1), pos=(-1.3, pos), \
 		align=TextNode.ALeft, scale = .06, mayChange = True)
 
-# Function to check if an object (or part of it) is visible in the frustum
-def isInView(object):
-	lensBounds = base.cam.node().getLens().makeBounds()
-	bounds = object.getBounds()
-	bounds.xform(object.getParent().getMat(base.cam))
- 	return lensBounds.contains(bounds)
+# Function to test if two points is visible from each other
+def canSee(self, p1, p2):
+	traverser = CollisionTraverser('CustomTraverser')
+
+	ray = CollisionSegment()
+	# make the positions above the grouond;
+	# otherwise, the ray might hit the edge of shallow terrain
+	p1[2] += 0.5
+	p2[2] += 0.5
+	ray.setPointA(p1)
+	ray.setPointB(p2)
+	fromObj = self.environ.attachNewNode(CollisionNode('visRay'))
+	fromObj.node().addSolid(ray)
+	fromObj.node().setFromCollideMask(BitMask32.bit(0))
+	fromObj.node().setIntoCollideMask(BitMask32.allOff())
+	handler = CollisionHandlerQueue()
+
+	traverser.addCollider(fromObj, handler)
+
+	traverser.traverse(render)
+
+	if handler.getNumEntries() != 0:
+		return False
+	else:
+		return True
+
 
 class PandaWorld(DirectObject):
 	def __init__(self):
@@ -93,7 +114,6 @@ class PandaWorld(DirectObject):
 		self.avatar.reparentTo(render)
 		self.avatar.setScale(.002)
 		self.avatar.setPos(58,67,0)
-		self.avatar.setHpr(135,0,0)
 
 		# set the dot's position
 		self.dot.setPos(self.avatar.getX()/(120.0+self.Dmap.getX()), \
@@ -106,22 +126,10 @@ class PandaWorld(DirectObject):
 		# Set the upper bound of # of remote avatars
 		self.maxRemotes = 100
 
-		# Create a NPC
-		#self.npc1 = Actor("models/panda-model", \
-		#		    {"run":"models/panda-walk4", \
-		#		    "walk":"models/panda-walk"})
-		#self.npc1.reparentTo(render)
-		#self.npc1.setScale(.002)
-		#self.npc1.setPos(48,47,0)
-
  		# Show a list of visible NPCs
  		self.showNumVisible = printText(0.8)
  		self.visList = []
 
-		# print Map's pos
-		#self.mapPos = printText(0.8)
-		#self.dotPos = printText(0.7)
-			
 		# setup pool of remotes
 		# do not attach to scene yet
 		self.remoteMap = {}
@@ -197,126 +205,29 @@ class PandaWorld(DirectObject):
 		self.camGroundHandler = CollisionHandlerQueue()
 		self.cTrav.addCollider(self.camGroundColNp, \
 			self.camGroundHandler)
-		
 
-
-
-		"""
-		Setup a collisionSphere that surrounds a panda
-		(can be a NPC or a player). It serves as an
-		"into" object. A collision occurs if either
-			1. the collisionSphere surrounded another panda
-				overlaps with this sphere, or
-			2. the collisionSegment, which is between
-				this sphere and the avatar, does not
-				collide with any collision polygon
-		"""
-		# Give each remote a sphere
-		self.remoteVisCols = [None] * self.maxRemotes
-		self.remoteVisColNps = [None] * self.maxRemotes
-		for i in range(0,self.maxRemotes) : 
-			self.remoteVisCols[i] = CollisionNode('npc' + str(i))
-			self.remoteVisCols[i].addSolid(CollisionSphere(0,0,0,2))
-			self.remoteVisColNps[i] = \
-				self.freeRemotes[i].attachNewNode(self.remoteVisCols[i])
-
-#	If we want to show collisionSphere on the screen:
-#		self.npcVisColNp.reparentTo(render)
-#		self.npcVisColNp.setPos(self.npc1.getPos())
-#		self.npcVisColNp.show()
-#	Add only if we want ot make it a from object:
-	#	self.npcVisHandler = CollisionHandlerQueue()
-#		self.cTrav.addCollider(self.npcVisColNp, \
-#			self.npcVisHandler)
-
-		"""
-		Set a pool of collisionSegments. A collisionSegment detects
-		if the target is visible. CollisionSegment is a "from" object.
-		The segment starts from our panda and ends at the target.
-		The target is not visible if the segment hits a blockage
-		(e.g., a wooden wall polygon) before arriving at the target.
-		"""
-		"""
-		Note we use a single collision handler to handle all collisions
-		"""
-		self.avatarVisRayHandlers = [None] * self.maxRemotes
-		self.visRays = [None] * self.maxRemotes
-		self.avatarVisRays = [None] * self.maxRemotes
-		self.avatarVisRayNps = [None] * self.maxRemotes
-		for i in range(0,self.maxRemotes) :
-			self.visRays[i] = CollisionSegment(0,0,0,1,1,1)
-			#self.visRays[i] = CollisionSegment()
-			self.visRays[i].setPointA(self.avatar.getPos())
-			self.avatarVisRays[i] = CollisionNode('visRayTo' + str(i))
-			self.avatarVisRays[i].addSolid(self.visRays[i])
-			self.avatarVisRays[i].setFromCollideMask(BitMask32.bit(0))
-			self.avatarVisRays[i].setIntoCollideMask(BitMask32.allOff())
-			self.avatarVisRayNps[i] = \
-				self.avatar.attachNewNode(self.avatarVisRays[i])
-			self.avatarVisRayHandlers[i] = CollisionHandlerQueue()
-			self.cTrav.addCollider(self.avatarVisRayNps[i], \
-				self.avatarVisRayHandlers[i])
-
-
-		""" If we want to count numNearBy, this does the job
-		"""
-#		avatarVisSphere = CollisionSphere(0,0,0,10) #assume visRange=10
-#		self.avatarVisCol = CollisionNode('avatarSphere')
-#		self.avatarVisCol.addSolid(avatarVisSphere)
-#		self.avatarVisCol.setFromCollideMask(BitMask32.bit(0))
-#		self.avatarVisCol.setIntoCollideMask(BitMask32.allOff())
-#		self.avatarVisColNp = \
-#			self.avatar.attachNewNode(self.avatarVisCol)
-#
-#		self.avatarVisColNp.reparentTo(render)
-#		self.avatarVisColNp.setPos(self.avatar.getPos())
-#
-#		self.avatarVisSphereHandler = CollisionHandlerQueue()
-#
-#		self.cTrav.addCollider(self.avatarVisColNp, \
-#			self.avatarVisSphereHandler)
-#		self.avatarVisColNp.show()
-		
-
-
-		""" Create some lighting
-		"""
-		pLight = PointLight('pLight')
-		pLight.setColor(VBase4(5, 5, 5, 1))
-		pLight.setAttenuation(Point3(0,0,0.8))
-		plnp = render.attachNewNode(pLight)
-		plnp.setPos(60, 100, 10)
-		render.setLight(plnp)
+		# Create some lighting
+		self.ambientLight = render.attachNewNode( AmbientLight( "ambientLight" ) )
+		self.ambientLight.node().setColor( Vec4( .8, .8, .8, 1 ) )
+		render.setLight(self.ambientLight)
 
 		dLight1 = DirectionalLight("dLight1")
-		dLight1.setColor(Vec4(1, .8, .9, 1))
-		dLight1.setShadowCaster(True, 512, 512)
+		dLight1.setColor(Vec4(1, .6, .7, 1))
 		dLight1.setDirection(Vec3(1,1,1))
 		dlnp1 = render.attachNewNode(dLight1)
 		dlnp1.setHpr(30,-160,0)
 		render.setLight(dlnp1)
 
 		dLight2 = DirectionalLight("dLight2")
-		dLight2.setColor(Vec4(.6, .8, 1, 1))
-		#dLight2.setShadowCaster(True, 512, 512)
+		dLight2.setColor(Vec4(.6, .7, 1, 1))
 		dLight2.setDirection(Vec3(-1,-1,-1))
 		self.dlnp2 = render.attachNewNode(dLight2)
 		self.dlnp2.node().setScene(render)
-		self.dlnp2.node().setShadowCaster(True)
 		self.dlnp2.setHpr(-70,-60,0)
 		render.setLight(self.dlnp2)
 
-		self.environ.setShaderInput("light", self.dlnp2)
 
-		aLight = AmbientLight('aLight')
-		aLight.setColor(VBase4(.4, .4, .4, 1))
-		alnp = render.attachNewNode(aLight)
-		render.setLight(alnp)
 
-		render.setShaderAuto()
-		self.shaderenable = 1
-
-	
 	# Records the state of the arrow keys
 	def setKey(self, key, value):
 		self.keyMap[key] = value
@@ -340,10 +251,10 @@ class PandaWorld(DirectObject):
 					 "remotes\n")
 			sys.exit(1)
 		remote = self.freeRemotes.pop()
-		self.remoteMap[id] = [remote, True,
-					self.visRays.pop(), self.avatarVisRayHandlers.pop(),
-					OnscreenImage(image = 'models/dot1.png', pos = (0,0,0), scale = .01)
-					]
+		self.remoteMap[id] = [remote, True ,
+				OnscreenImage(image = 'models/dot1.png', pos = (0,0,0), scale = .01)
+				]
+
 		# set position and direction of remote and make it visible
 		remote.reparentTo(render)
 		remote.setPos(x,y,0) 
@@ -359,7 +270,7 @@ class PandaWorld(DirectObject):
 		id is an identifier used to distinguish this remote from others
 		"""
 		if id not in self.remoteMap : return
-		remote, isMoving, rayToIt, rayHandler, dot = self.remoteMap[id]
+		remote, isMoving, dot = self.remoteMap[id]
 		if abs(x - remote.getX()) < .001 and \
 		   abs(y - remote.getY()) < .001 and \
 		   direction == remote.getHpr()[0] :
@@ -381,8 +292,6 @@ class PandaWorld(DirectObject):
 		"""
 		if id not in self.remoteMap : return
 		self.remoteMap[id][4].destroy()
-		self.visRays.append(self.remoteMap[id][2])
-		self.avatarVisRayHandlers.append(self.remoteMap[id][3])
 		remote = self.remoteMap[id][0]
 		remote.detachNode() # ??? check this
 		self.freeRemotes.append(remote)
@@ -461,11 +370,6 @@ class PandaWorld(DirectObject):
 		hpr[0] += 180; hpr[1] = camAngle
 		base.camera.setPos(pos); base.camera.setHpr(hpr)
 		
-		""" Update visRays
-		"""
-		for id in self.remoteMap :
- 			self.remoteMap[id][2].setPointB(Point3(self.remoteMap[id][0].getPos(self.avatar)))
-
 		# Now check for collisions.
 		self.cTrav.traverse(render)
 
@@ -478,7 +382,7 @@ class PandaWorld(DirectObject):
 		entries.sort(lambda x,y: cmp(y.getSurfacePoint(render).getZ(), \
 				 x.getSurfacePoint(render).getZ()))
 		if (len(entries)>0) and \
-		   (entries[0].getIntoNode().getName() == "ID397") :
+		   (entries[0].getIntoNode().getName() == "ID257") : # the tag of terrain
 			self.avatar.setZ( \
 				entries[0].getSurfacePoint(render).getZ())
 		else:
@@ -486,79 +390,38 @@ class PandaWorld(DirectObject):
 
 		# Check visibility
 		for id in self.remoteMap:
-			self.remoteMap[id][3].sortEntries()
-			entries = []
-			for i in range(self.remoteMap[id][3].getNumEntries()):
-				entries.append(self.remoteMap[id][3].getEntry(i))
-			if len(entries) == 0: continue
-			e = self.remoteMap[id][3].getEntry(0)
-			name = e.getIntoNode().getName()
-			# these are IDs of the wooden walls in virtual world
-			# TODO: need to include brick walls
-			if name == "ID2" or \
-			   name == "ID15" or \
-			   name == "ID44" or \
-			   name == "ID52" or \
-			   name == "ID60" or \
-			   name == "ID68" or \
-			   name == "ID76" or \
-			   name == "ID84" or \
-			   name == "ID92" or \
-			   name == "ID100" or \
-			   name == "ID108" or \
-			   name == "ID129" or \
-			   name == "ID161" or \
-			   name == "ID169" or \
-			   name == "ID389" or \
-			   name == "ID397" : # the last one is ground ID
-				if id in self.visList:
-					self.visList.remove(id)
-			elif id not in self.visList:
-				self.visList.append(id)
-
-		"""
-		Handler for the collisionSphere surrounded the avatar.
-		We can count the total number of nearby pandas using this.
-		"""
-#		entries = []
-#		for i in range(self.avatarVisSphereHandler.getNumEntries()):
-#			entry = self.avatarVisSphereHandler.getEntry(i)
-#			entries.append(entry)
-#		if (len(entries)>0):
-#			for e in entries:
-#				if e.getIntoNode().getName() == "npcSphere":
-#					print "True"
-#		else:
-#			print "False"
-
+			if canSee(self, self.avatar.getPos(),
+					self.remoteMap[id][0].getPos()) == True:
+				if id not in self.visList:
+					self.visList.append(id)
+			elif id in self.visList:
+				self.visList.remove(id)
 
 		# Finally, update the text that shows avatar's position on 
 		# the screen
-		self.avPos.setText("Avatar's pos: (%d, %d, %d)" % \
+		self.avPos.setText("Panda's pos: (%d, %d, %d)" % \
 			(self.avatar.getX(), self.avatar.getY(),
 			 (self.avatar.getHpr()[0])%360))
-		#self.dotPos.setText("dot's pos: (%f, %f)" % \
-		#	(self.dot.getX(), self.dot.getZ()))
 
 		# map the avatar's position to the 2D map on the top-right 
 		# corner of the screen
 		self.dot.setPos((self.avatar.getX()/120.0)*0.7+0.45, \
 				0,(self.avatar.getY()/120.0)*0.7+0.25)
 		for id in self.remoteMap:
-			self.remoteMap[id][4].setPos((self.remoteMap[id][0].getX()/120.0)*0.7+0.45, \
+			self.remoteMap[id][2].setPos((self.remoteMap[id][0].getX()/120.0)*0.7+0.45, \
 				0,(self.remoteMap[id][0].getY()/120.0)*0.7+0.25)
 
- 		#self.showNumVisible.setText("visible avatars: %s" % \
- 		#	self.visList)
 		s = ""
-		for id in self.remoteMap : s += fadr2string(id) + " "
- 		self.showNumVisible.setText("Visible avatars: %s" % s)
+		for id in self.visList : s += fadr2string(id) + " "
+ 		self.showNumVisible.setText("Visible pandas: %s" % s)
 
 		return task.cont
 
 #w = PandaWorld()
-#w.addRemote(68, 70, 135, 'Sean')
-#w.addRemote(20, 33, 135, 'Mary')
-#w.addRemote(40, 60, 135, 'Jenny')
-#w.addRemote(90, 79, 135, 'Peter')
+#w.addRemote(69, 67, 135, 111)
+#w.addRemote(20, 33, 135, 222)
+#w.addRemote(40, 60, 135, 333)
+#w.addRemote(90, 79, 135, 444)
+#w.addRemote(30, 79, 135, 555)
+#w.addRemote(20, 39, 135, 666)
 #run()
