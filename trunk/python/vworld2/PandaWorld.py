@@ -3,7 +3,7 @@
 This module is intended to be called by Avatar.py;
 To run it independently, uncomment the end of this code:
 	# w = PandaWorld()
-	# (what in bewteens are NPCs for test)
+	# (spawning NPCs...)
  	# run()
 and type "python PandaWorld.py"
  
@@ -33,20 +33,33 @@ import random, sys, os, math, re
 
 from Util import *
 
-# Function to put title on the screen.
 def addTitle(text):
+	""" Put title on the screen
+	"""
 	return OnscreenText(text=text, style=1, fg=(1,1,1,1), \
 		pos=(1.3,-0.95), align=TextNode.ARight, scale = .07)
 
-# Function to print text on the screen.
 def printText(pos):
+	""" Print text on the screen
+	"""
 	return OnscreenText( \
 		text=" ", \
 		style=2, fg=(1,0.8,0.7,1), pos=(-1.3, pos), \
 		align=TextNode.ALeft, scale = .06, mayChange = True)
 
-# Function to test if two points is visible from each other
 def canSee(self, p1, p2):
+	""" Test if two points are visible from one another
+
+	It works by setting up a collisionSegment between the
+	two positions. Return True if the segment didn't hit
+	any from/into object in between.
+
+	An alternative is to create a pool of rays etc. in
+	PandaWorld class, like what we've done with remotes, and pass
+	them here, so that we don't create objects on the fly. But
+	for canSee(), the current version demands less computation
+	resources.
+	"""
 	traverser = CollisionTraverser('CustomTraverser')
 
 	ray = CollisionSegment()
@@ -116,7 +129,7 @@ class PandaWorld(DirectObject):
 		self.avatar.setScale(.002)
 		self.avatar.setPos(58,67,0)
 
-		# set the dot's position
+		# Set the dot's position
 		self.dot.setPos(self.avatar.getX()/(120.0+self.Dmap.getX()), \
 				0,self.avatar.getY()/(120.0+self.Dmap.getZ()))
 		self.dotOrigin = self.dot.getPos()
@@ -131,7 +144,7 @@ class PandaWorld(DirectObject):
  		self.showNumVisible = printText(0.8)
  		self.visList = []
 
-		# setup pool of remotes
+		# Setup pool of remotes
 		# do not attach to scene yet
 		self.remoteMap = {}
 		self.freeRemotes = []
@@ -229,8 +242,9 @@ class PandaWorld(DirectObject):
 
 
 
-	# Records the state of the arrow keys
 	def setKey(self, key, value):
+		""" Records the state of the arrow keys
+		"""
 		self.keyMap[key] = value
 
 	def addRemote(self, x, y, direction, id) : 
@@ -389,7 +403,7 @@ class PandaWorld(DirectObject):
 		else:
 			self.avatar.setPos(startpos)
 
-		# Check visibility
+		# Check visibility and update visList
 		for id in self.remoteMap:
 			if canSee(self, self.avatar.getPos(),
 					self.remoteMap[id][0].getPos()) == True:
@@ -397,8 +411,11 @@ class PandaWorld(DirectObject):
 					self.visList.append(id)
 			elif id in self.visList:
 				self.visList.remove(id)
+		s = ""
+		for id in self.visList : s += fadr2string(id) + " "
+ 		self.showNumVisible.setText("Visible pandas: %s" % s)
 
-		# Finally, update the text that shows avatar's position on 
+		# Update the text showing panda's position on 
 		# the screen
 		self.avPos.setText("Panda's pos: (%d, %d, %d)" % \
 			(self.avatar.getX(), self.avatar.getY(),
@@ -411,10 +428,6 @@ class PandaWorld(DirectObject):
 		for id in self.remoteMap:
 			self.remoteMap[id][2].setPos((self.remoteMap[id][0].getX()/120.0)*0.7+0.45, \
 				0,(self.remoteMap[id][0].getY()/120.0)*0.7+0.25)
-
-		s = ""
-		for id in self.visList : s += fadr2string(id) + " "
- 		self.showNumVisible.setText("Visible pandas: %s" % s)
 
 		return task.cont
 

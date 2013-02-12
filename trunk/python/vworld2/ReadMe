@@ -5,8 +5,7 @@
 
    For OS X, we need to tell it run the 32-bit version:
 		export VERSIONER_PYTHON_PREFER_32_BIT=yes
-
-   For Linux/Windows, install 32-bit python.
+   for Linux/Windows, install 32-bit python package.
 
    After that, run it with command "python" instead of "ppython".
 
