@@ -30,6 +30,7 @@ from direct.interval.IntervalGlobal import Sequence
 from panda3d.core import Point3
 import random, sys, os, math
 
+
 # process command line arguments
 if len(sys.argv) < 5 :
 	sys.stderr.write("usage: Avatar myIp cliMgrIp mapFile " + \
@@ -44,7 +45,10 @@ for i in range(5,len(sys.argv)) :
 	if sys.argv[i] == "debug" : debug = 1
 	elif sys.argv[i] == "debugg" : debug = 2
 	elif sys.argv[i] == "debuggg" : debug = 3
-	elif sys.argv[i] == "auto" : auto = True
+	elif sys.argv[i] == "auto" :
+		auto = True
+#		loadPrcFile('models/myConfig.prc')
+#		noScreen = ConfigVariableString('window-type','none')
 
 map = WorldMap() 
 if not map.init(mapFile) :
@@ -61,6 +65,9 @@ if not net.init("user", "pass") :
 
 loadPrcFileData("", "parallax-mapping-samples 3")
 loadPrcFileData("", "parallax-mapping-scale 0.1")
+loadPrcFileData("", "window-type none")
 
 SPEED = 0.5
+#print(cpMgr.getSearchPath())
+#print(cpMgr)
 run()  # start the panda taskMgr

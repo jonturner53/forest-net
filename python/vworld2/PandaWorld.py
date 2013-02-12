@@ -74,7 +74,8 @@ def canSee(self, p1, p2):
 
 class PandaWorld(DirectObject):
 	def __init__(self):
- 		self.keyMap = {"left":0, "right":0, "forward":0, "backward":0, \
+ 
+		self.keyMap = {"left":0, "right":0, "forward":0, "backward":0, \
  				"cam-up":0, "cam-down":0, \
  				"strafe-left":0, "strafe-right":0}
 		base.win.setClearColor(Vec4(0,0,0,1))
@@ -291,7 +292,7 @@ class PandaWorld(DirectObject):
 		id is the identifier for the remote
 		"""
 		if id not in self.remoteMap : return
-		self.remoteMap[id][4].destroy()
+		self.remoteMap[id][2].destroy()
 		remote = self.remoteMap[id][0]
 		remote.detachNode() # ??? check this
 		self.freeRemotes.append(remote)
