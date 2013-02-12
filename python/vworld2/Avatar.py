@@ -47,7 +47,7 @@ for i in range(5,len(sys.argv)) :
 	elif sys.argv[i] == "debuggg" : debug = 3
 	elif sys.argv[i] == "auto" :
 		auto = True
-#		loadPrcFile('models/myConfig.prc')
+#		loadPrcFile('myConfig.prc')
 #		noScreen = ConfigVariableString('window-type','none')
 
 map = WorldMap() 
@@ -68,6 +68,4 @@ loadPrcFileData("", "parallax-mapping-scale 0.1")
 loadPrcFileData("", "window-type none")
 
 SPEED = 0.5
-#print(cpMgr.getSearchPath())
-#print(cpMgr)
 run()  # start the panda taskMgr
