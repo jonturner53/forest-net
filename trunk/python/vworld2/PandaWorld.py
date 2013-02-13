@@ -63,10 +63,12 @@ def canSee(self, p1, p2):
 	traverser = CollisionTraverser('CustomTraverser')
 
 	ray = CollisionSegment()
-	# make the positions above the grouond;
-	# otherwise, the ray might hit the edge of shallow terrain
+	# lift two points a bit above the grouond to prevent the
+	# collision ray from hiting the edge of shallow terrain;
+	# also, put them at different level so that the ray has
+	# nonzero length (a requirement for collisionSegment()).
 	p1[2] += 0.5
-	p2[2] += 0.5
+	p2[2] += 0.4
 	ray.setPointA(p1)
 	ray.setPointB(p2)
 	fromObj = self.environ.attachNewNode(CollisionNode('visRay'))
