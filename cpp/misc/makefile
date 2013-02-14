@@ -10,7 +10,7 @@ all : Host
 
 Host : Host.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
-	cp $@ ${HOME}/bin
+	cp $@ ${BIN}
 
 clean :
 	rm -f *.o Host

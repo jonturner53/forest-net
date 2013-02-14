@@ -1,4 +1,4 @@
-JAVAROOT = ~/bin/java
+JAVAROOT = ${BIN}/java
 ALGOLIBROOT = ../../algolib-jst
 FLIB = ../lib/lib-forest.a
 LIBS = ${FLIB} ${ALGOLIBROOT}/lib/lib-ds.a ${ALGOLIBROOT}/lib/lib-util.a
@@ -17,29 +17,29 @@ lib : ${LIBFILES}
 
 NetMgr : NetMgr.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -lpthread -o $@
-	cp $@ ${HOME}/bin
+	cp $@ ${BIN}
 
 Console : Console.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
-	cp $@ ${HOME}/bin
+	cp $@ ${BIN}
 
 CliMgr : ClientMgr.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -lpthread -o $@
-	cp $@ ${HOME}/bin
+	cp $@ ${BIN}
 
 CliMgr-v0 : ClientMgr-v0.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -lpthread -o $@
-	cp $@ ${HOME}/bin
+	cp $@ ${BIN}
 
 ComtCtl : ComtCtl.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -lpthread -o $@
-	cp $@ ${HOME}/bin
+	cp $@ ${BIN}
 SqlProxy : SqlProxy.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} libmysqlpp.a libmysqlclient.a -lssl -o $@
-	cp $@ ${HOME}/bin
+	cp $@ ${BIN}
 BuildRtables : BuildRtables.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
-	cp $@ ${HOME}/bin
+	cp $@ ${BIN}
 
 clean :
 	rm -f *.o ${XFILES}

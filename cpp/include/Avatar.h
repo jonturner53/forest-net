@@ -107,6 +107,7 @@ private:
 	int	groupNum(int, int);
 	bool	login(ipa_t,string,string); 	
 	bool	setupWalls(const char*);
+	bool	separated(int, int);
 	void	updateVisSet();
 	void	computeVisSet(int, set<int>&);
 	bool	isVis(int, int);

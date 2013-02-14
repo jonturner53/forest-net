@@ -103,7 +103,7 @@ bool init(fAdr_t nma, ipa_t ri, fAdr_t ra, fAdr_t cca,
 	if(tcpSockInt < 0) return false;
 	if(tcpSockExt < 0) return false;
 	bool status = Np4d::bind4d(tcpSockInt,intIp,LISTEN_PORT) &&
-		      Np4d::bind4d(tcpSockExt,extIp,LISTEN_PORT);
+		      Np4d::bind4d(tcpSockExt,extIp,LISTEN_PORT+1);
 	if (!status) return false;
 	status = Np4d::bind4d(sock,intIp,LISTEN_PORT);
 	if (!status) return false;

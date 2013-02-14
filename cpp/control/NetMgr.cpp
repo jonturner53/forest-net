@@ -1114,7 +1114,7 @@ void errReply(int p, CtlPkt& cp, Queue& outQ, const char* msg) {
 bool findCliRtr(ipa_t cliIp, fAdr_t& rtrAdr) {
 	string cip;
 	Np4d::ip2string(cliIp,cip);
-	for(unsigned int i = 0; i < (unsigned int) numPrefixes; ++i) {
+	for (unsigned int i = 0; i < (unsigned int) numPrefixes; ++i) {
 		string ip = prefixes[i].prefix;
 		unsigned int j = 0;
 		while (j < ip.size() && j < cip.size()) {
@@ -1127,7 +1127,14 @@ bool findCliRtr(ipa_t cliIp, fAdr_t& rtrAdr) {
 			j++;
 		}
 	}
-	return false;
+	// if no prefix for client address, select router at random
+	int i = randint(0,net->getNumRouters()-1);
+	for (int r = net->firstRouter(); r != 0; r = net->nextRouter(r)) {
+		if (i-- == 0) {
+			rtrAdr = net->getNodeAdr(r); return true;
+		}
+	}
+	return false; // should never reach here
 }
 
 /** Reads the prefix file
