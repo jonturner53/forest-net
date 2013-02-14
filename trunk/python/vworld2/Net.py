@@ -161,7 +161,6 @@ class Net :
 		return task.cont
 
 	def wrapup(self, task) :
-		sys.stderr.write("running Net.wrapup()")
 		self.leaveComtree()
 		self.disconnect()
 

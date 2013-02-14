@@ -269,7 +269,8 @@ class PandaWorld(DirectObject):
 			sys.exit(1)
 		remote = self.freeRemotes.pop()
 		self.remoteMap[id] = [remote, True ,
-				OnscreenImage(image = 'models/dot1.png', pos = (0,0,0), scale = .01)
+				OnscreenImage(image = 'models/dot1.png', \
+						pos = (0,0,0), scale = .01)
 				]
 
 		# set position and direction of remote and make it visible
