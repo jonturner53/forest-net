@@ -74,15 +74,26 @@ class CtlPkt:
 		buf = buf[16:]
 		if self.cpTyp == CLIENT_JOIN_COMTREE or \
 		   self.cpTyp == CLIENT_LEAVE_COMTREE :
-			if self.rrTyp != RR_NEG_REPLY : return True
-			tuple = struct.unpack('!' + str(len(buf)) + 's',buf)
-			if len(tuple) != 1 : return False
-			self.errMsg = tuple[0]
+			if self.rrTyp == RR_POS_REPLY : return True
+			if self.rrTyp == RR_NEG_REPLY : 
+				tuple = struct.unpack('!' + str(len(buf)) + \
+						      's',buf)
+				if len(tuple) != 1 : return False
+				self.errMsg = tuple[0]
+				return True
+			# request type
+			tuple = struct.unpack('!IIIIII',buf)
+			if len(tuple) != 6 or tuple[0] != COMTREE_NUM or \
+			   tuple[2] != CLIENT_IP or tuple[4] != CLIENT_PORT :
+				return False
+			self.comtree = tuple[1]
+			self.clientIp = tuple[3]
+			self.clientPort = tuple[5]
 			return True
 		else :
 			sys.stderr.write("CtlPkt.unpack: unimplemented " + \
-				"control packet type\n" \
-				+ self.toString() + "\n")
+				"control packet type (" + str(self.cpTyp) + \
+				")\n" + self.toString() + "\n")
 			return None
 
 	def toString(self) :
