@@ -389,7 +389,6 @@ void* handler(void *qp) {
  *  by a normal close; return false if an error occurs
  */
 
-static int cnt = 0;
 bool handleComtreeDisplay(int sock, Queue& inQ, Queue& outQ) {
 	const int BLEN = 100;
 	char buf[BLEN+1]; int i;
@@ -778,6 +777,15 @@ bool handleJoinComtReq(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 		return true;
 	}
 	pthread_mutex_lock(&comtLock[ctx]);
+cerr << "starting join" << endl;
+string s;
+cerr << comtrees->comtStatus22string(ctx,s) << endl;
+for (int lnk = net->firstLink(); lnk != 0; lnk = net->nextLink(lnk)) {
+	int u = net->getLeft(lnk); int v = net->getRight(lnk);
+	if (net->isRouter(u) && net->isRouter(v)) {
+		cerr << net->linkState2string(lnk,s) << endl;
+	}
+}
 
 	if (comtrees->isComtLeaf(ctx,cliAdr)) {
 		// if client already in comtree, this is probably a
@@ -859,14 +867,11 @@ bool handleJoinComtReq(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 		path.clear(); modList.clear();
 	}
 
-	// need to update local data structure and send messages to
-	// client router.
-
+	// now add client to comtree
 	int llnk = setupClientLink(ctx,cliIp,cliPort,cliRtr,inQ,outQ);
 	comtrees->addNode(ctx,cliAdr);
 	comtrees->setParent(ctx,cliAdr,cliRtrAdr,llnk);
 	comtrees->setLinkRates(ctx,cliAdr,leafDefRates);
-
 
 	if (llnk == 0 || !setComtLeafRates(ctx,cliAdr,inQ,outQ)) {
 		// tear it all down and fail
@@ -1188,11 +1193,12 @@ bool teardownClientLink(int ctx, ipa_t cliIp, ipp_t cliPort, int rtr,
 	reqCp.setAttr(PEER_IP,cliIp);
 	reqCp.setAttr(PEER_PORT,cliPort);
 	int reply = sendCtlPkt(reqCp,rtrAdr,inQ,outQ);
-	CtlPkt repCp; string s1, s2, s3;
+	CtlPkt repCp; string s1, s2, s3, s4;
 	string noRstr = "handleLeaveComt: drop comtree link request to "
 		 	 + net->getNodeName(rtr,s1) + " for comtree "
 	       		 + Util::num2string((int) comt,s2) + " client "
-			 + Np4d::ip2string(cliIp,s3);
+			 + Np4d::ip2string(cliIp,s3) + " port "
+			 + Util::num2string(cliPort,s4);
 	string negRstr = noRstr;
 	if (!handleReply(reply,repCp,noRstr,negRstr)) { 
 		return false;

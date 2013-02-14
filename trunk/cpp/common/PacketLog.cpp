@@ -64,4 +64,5 @@ void PacketLog::write(ostream& out) const {
 		int p = events[i].pkt;
 		out << (ps->getHeader(p)).toString(ps->getBuffer(p),s);
 	}
+	out.flush();
 }

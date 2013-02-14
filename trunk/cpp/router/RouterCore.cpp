@@ -1024,6 +1024,10 @@ void RouterCore::handleConnDisc(int p) {
 		ps->free(p); return;
 	}
 	if (h.getPtype() == CONNECT) {
+		if (lt->getPeerPort(inLnk) == 0) {
+			lt->setPeerPort(inLnk,h.getTunSrcPort());
+		}
+/*
 		if (lt->getPeerPort(inLnk) != h.getTunSrcPort()) {
 			if (lt->getPeerPort(inLnk) != 0) {
 				string s;
@@ -1033,6 +1037,7 @@ void RouterCore::handleConnDisc(int p) {
 			}
 			lt->setPeerPort(inLnk,h.getTunSrcPort());
 		}
+*/
 		if (nmAdr != 0 && lt->getPeerType(inLnk) == CLIENT) {
 			CtlPkt cp(CLIENT_CONNECT,REQUEST,0);
 			cp.setAttr(CLIENT_ADR,h.getSrcAdr());

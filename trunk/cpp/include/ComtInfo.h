@@ -105,6 +105,7 @@ public:
 	string& leafLink2string(int,fAdr_t,string&) const;
 	string& comt2string(int,string&) const;
 	string& comtStatus2string(int,string&) const;
+	string& comtStatus22string(int,string&) const;
 	string& toString(string&) const;
 
 	// verification methods

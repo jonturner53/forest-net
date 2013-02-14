@@ -1,12 +1,12 @@
 SHELL := /bin/bash
-ALGOLIBROOT = ~/src/algolib-jst
+ALGOLIBROOT = /forest/src/algolib-jst
 FORESTROOT = $(shell pwd)
 FLIB = ${FORESTROOT}/lib/lib-forest.a
 LIBS = ${FLIB} ${ALGOLIBROOT}/lib/lib-ds.a ${ALGOLIBROOT}/lib/lib-util.a
-CXXFLAGS = -Wall -O2 -m64 -I ${FORESTROOT}/include -I ${ALGOLIBROOT}/include
+CXXFLAGS = -Wall -O2 -I ${FORESTROOT}/include -I ${ALGOLIBROOT}/include
 #JAVAC=/usr/java/latest/bin/javac
 JAVAC=javac
-BIN = ~/bin
+BIN = /forest/bin
 
 all:
 	make -C common          ALGOLIBROOT='${ALGOLIBROOT}' FLIB='${FLIB}' \
