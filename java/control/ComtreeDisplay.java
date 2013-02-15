@@ -37,6 +37,7 @@ import princeton.*;
  *  can also be used to turn on/off the display of  detailed link information.
  */
 public class ComtreeDisplay {
+	private static final int COMTCTL_PORT = 30133;
 	private static final int maxNode    = 10000;
 	private static final int maxLink    = 20000;
 	private static final int maxRtr     =  1000;
@@ -154,18 +155,24 @@ System.out.println("recvdComt=" + recvdComt);
 	}
 
 	/** Process command line arguments.
+	 *  There is only one argument, which can be either the name
+	 *  or the IP address of the host running the comtree controller.
 	 *  @param args - command line arguments for ComtreeDisplay
 	 *  @return the socket address of the ComtCtl program or null
  	 *  on failure
 	 */
 	private static InetSocketAddress processArgs(String[] args) {
 		InetSocketAddress sockAdr;
+		if (args.length < 1) {
+                        System.out.println("usage: ComtreeDisplay comtCtl");
+			return null;
+		}
                 try {
 			InetAddress adr = InetAddress.getByName(args[0]);
-			int port = Integer.parseInt(args[1]);
+			int port = COMTCTL_PORT;
                         sockAdr = new InetSocketAddress(adr,port);
                 } catch (Exception e) {
-                        System.out.println("usage: ComtreeDisplay ipAdr port");
+                        System.out.println("usage: ComtreeDisplay comtCtl");
                         System.out.println(e);
                         return null;
                 }
