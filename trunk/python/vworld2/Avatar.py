@@ -37,10 +37,12 @@ if len(sys.argv) < 5 :
 			 "comtree [ debug ] [ auto ]\n")
         sys.exit(1)
 
-myIp = sys.argv[1]; cliMgrIp = sys.argv[2]
-mapFile = sys.argv[3]; myComtree = int(sys.argv[4])
+myIp = gethostbyname(sys.argv[1])
+cliMgrIp = gethostbyname(sys.argv[2])
+mapFile = sys.argv[3]
+myComtree = int(sys.argv[4])
 
-auto = False; debug = 1
+auto = False; debug = 0
 for i in range(5,len(sys.argv)) :
 	if sys.argv[i] == "debug" : debug = 1
 	elif sys.argv[i] == "debugg" : debug = 2

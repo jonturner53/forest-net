@@ -119,10 +119,6 @@ class Net :
 		self.rtrIp = tuple[1]
 		self.comtCtlFadr = tuple[2]
 	
-		print	"avatar address:", fadr2string(self.myFadr), \
-	       		" router address:", fadr2string(self.rtrFadr), \
-	       		" comtree controller address:", \
-				fadr2string(self.comtCtlFadr);
 		return True
 
 	def redirect(self, direction) :
@@ -203,9 +199,9 @@ class Net :
 			sys.exit(1)
 		p = Packet()
 		p.unpack(buf)
-		if self.debug>=3 or \
-		   (self.debug>=2 and p.type!=CLIENT_DATA) or \
-		   (self.debug>=1 and p.type==CLIENT_SIG) :
+		if self.debug >= 3 or \
+		   (self.debug >= 2 and p.type != CLIENT_DATA) or \
+		   (self.debug >= 1 and p.type == CLIENT_SIG) :
 			print self.now, self.myAdr, \
 			      "received from", self.rtrAdr
 			print p.toString()
@@ -268,7 +264,8 @@ class Net :
 
 		while True :
 			reply = self.receive()
-			if reply != None : return reply
+			if reply != None :
+				return reply
 			elif now > sendTime + 1 :
 				if numAttempts > 3 : return None
 				sendTime = now
@@ -289,6 +286,8 @@ class Net :
 		p.dstAdr = -self.groupNum(self.x,self.y)
 	
 		numNear = len(self.nearRemotes)
+		if numNear > 5000 or numNear < 0 :
+			print "numNear=", numNear
 		p.payload = struct.pack('!IIIIIIII', \
 					STATUS_REPORT, self.now, \
 					self.x, self.y, \
