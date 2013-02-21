@@ -415,7 +415,7 @@ class Net :
 				p.length = OVERHEAD + 4*(1+nsub)
 				p.type = SUB_UNSUB
 				p.comtree = self.comtree
-				p.srcAdr = self.myFadr; p.dstAdr = rtrFadr
+				p.srcAdr = self.myFadr; p.dstAdr = self.rtrFadr
 				self.send(p)
 				p = Packet()
 				nsub = 1
@@ -443,7 +443,7 @@ class Net :
 				p.length = OVERHEAD + 4*(1+nunsub)
 				p.type = SUB_UNSUB
 				p.comtree = self.comtree
-				p.srcAdr = self.myFadr; p.dstAdr = rtrFadr
+				p.srcAdr = self.myFadr; p.dstAdr = self.rtrFadr
 				self.send(p)
 				p = Packet()
 				nunsub = 1
