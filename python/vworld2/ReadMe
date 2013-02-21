@@ -1,6 +1,6 @@
 1. While Panda3D runs Python 2.5, Avatar.py must be run on Python 2.7.
    To make Panda3D runs Python 2.7, copy Panda3D.pth from Python 2.5
-   site-packates directory into Python 2.7's site-packages directory.
+   site-packages directory into Python 2.7's site-packages directory.
    Type "ppython -m" and "python -m" to locate those directories.
 
    For OS X, we need to tell it run the 32-bit version:
