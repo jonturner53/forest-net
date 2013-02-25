@@ -1,10 +1,20 @@
 """ PandaWorld - simple virtual environment with wandering pandas.
 
-Use arrow keys to move forward, turn left/right.
-Hold down a/s keys to look up/down.
+This module is intended to be called by Avatar.py;
+To run it independently, uncomment the end of this code:
+	# w = PandaWorld()
+	# (spawning NPCs...)
+ 	# run()
+and type "python PandaWorld.py"
+ 
+control:
+	Move   -> Up, Left, Right, Down
+	Rotate -> A, S
+	Strafe -> Z, X
 
+Last Updated: 2/12/2013
 Author: Chao Wang and Jon Turner
-Last Updated: 2/1/2013
+World Model: Chao Wang
  
 Adapted from "Roaming Ralph", a tutorial included in Panda3D package.
 Author: Ryan Myers
@@ -19,32 +29,32 @@ from direct.actor.Actor import Actor
 from direct.showbase.DirectObject import DirectObject
 from direct.interval.IntervalGlobal import Sequence
 from panda3d.core import Point3
-import random, sys, os, math
+import random, sys, os, math, re
 
-# Function to put title on the screen.
+from Util import *
+
 def addTitle(text):
+	""" Put title on the screen
+	"""
 	return OnscreenText(text=text, style=1, fg=(1,1,1,1), \
 		pos=(1.3,-0.95), align=TextNode.ARight, scale = .07)
 
-# Function to print Avatar's position on the screen.
-def addAvPos(pos, avatar):
+def printText(pos):
+	""" Print text on the screen
+	"""
 	return OnscreenText( \
-		text="Avatar's pos: (%d, %d, %d)" % \
-		(avatar.getX(), avatar.getY(), (avatar.getHpr()[0])%360),\
+		text=" ", \
 		style=2, fg=(1,0.8,0.7,1), pos=(-1.3, pos), \
 		align=TextNode.ALeft, scale = .06, mayChange = True)
 
-# Function to print Map's position on the screen.
-def showMapPos(pos, avatar):
-	return OnscreenText( \
-		text="Map's pos: (%f, %f)" % (avatar.getX(),avatar.getZ()), \
-		style=2, fg=(1,0.8,0.7,1), pos=(-1.3, pos), \
-		align=TextNode.ALeft, scale = .06, mayChange = True)
+
 
 class PandaWorld(DirectObject):
 	def __init__(self):
-		self.keyMap = {"left":0, "right":0, "forward":0, \
-				"cam-up":0, "cam-down":0}
+ 
+		self.keyMap = {"left":0, "right":0, "forward":0, "backward":0, \
+ 				"cam-up":0, "cam-down":0, \
+ 				"strafe-left":0, "strafe-right":0}
 		base.win.setClearColor(Vec4(0,0,0,1))
 
 		# Add title and show map
@@ -73,7 +83,7 @@ class PandaWorld(DirectObject):
 		self.environ.reparentTo(render)
 		self.environ.setPos(0,0,0)
 		
-		base.setBackgroundColor(0.4,0.4,0.5,1)
+ 		base.setBackgroundColor(0.2,0.23,0.4,1)
 		
 		# Create the panda
 		self.avatar = Actor("models/panda-model", \
@@ -82,25 +92,27 @@ class PandaWorld(DirectObject):
 		self.avatar.reparentTo(render)
 		self.avatar.setScale(.002)
 		self.avatar.setPos(58,67,0)
-		self.avatar.setHpr(135,0,0)
 
-		# set the dot's position
+		# Set the dot's position
 		self.dot.setPos(self.avatar.getX()/(120.0+self.Dmap.getX()), \
 				0,self.avatar.getY()/(120.0+self.Dmap.getZ()))
 		self.dotOrigin = self.dot.getPos()
 
 		# Show avatar's position on the screen
-		self.avPos = addAvPos(0.9, self.avatar)
+		self.avPos = printText(0.9)
 
-		# print Map's pos
-		#self.mapPos = showMapPos(0.8, self.Dmap)
-		#self.dotPos = showMapPos(0.7, self.dot)
-			
-		# setup pool of remotes
+		# Set the upper bound of # of remote avatars
+		self.maxRemotes = 100
+
+ 		# Show a list of visible NPCs
+ 		self.showNumVisible = printText(0.8)
+ 		self.visList = []
+
+		# Setup pool of remotes
 		# do not attach to scene yet
 		self.remoteMap = {}
 		self.freeRemotes = []
-		for i in range(0,100) : # allow up to 100 remotes
+		for i in range(0,self.maxRemotes) : # allow up to 100 remotes
 			self.freeRemotes.append(Actor("models/panda-model", \
 						{"run":"models/panda-walk4"}))
 			self.freeRemotes[i].setScale(.002)
@@ -115,13 +127,19 @@ class PandaWorld(DirectObject):
 		self.accept("arrow_left", self.setKey, ["left",1])
 		self.accept("arrow_right", self.setKey, ["right",1])
 		self.accept("arrow_up", self.setKey, ["forward",1])
+ 		self.accept("arrow_down", self.setKey, ["backward",1])
 		self.accept("a", self.setKey, ["cam-up",1])
 		self.accept("s", self.setKey, ["cam-down",1])
+ 		self.accept("z", self.setKey, ["strafe-left",1])
+ 		self.accept("x", self.setKey, ["strafe-right",1])
 		self.accept("arrow_left-up", self.setKey, ["left",0])
 		self.accept("arrow_right-up", self.setKey, ["right",0])
 		self.accept("arrow_up-up", self.setKey, ["forward",0])
+ 		self.accept("arrow_down-up", self.setKey, ["backward",0])
 		self.accept("a-up", self.setKey, ["cam-up",0])
 		self.accept("s-up", self.setKey, ["cam-down",0])
+ 		self.accept("z-up", self.setKey, ["strafe-left",0])
+ 		self.accept("x-up", self.setKey, ["strafe-right",0])
 
 		taskMgr.add(self.move,"moveTask")
 
@@ -130,21 +148,16 @@ class PandaWorld(DirectObject):
 
 		# Set up the camera
 		base.disableMouse()
-		#base.camera.setPos(self.avatar.getX(),self.avatar.getY()+12,9)
-		#base.camera.setHpr(135,0,0)
 		base.camera.setPos(self.avatar.getX(),self.avatar.getY(),.2)
 		base.camera.setHpr(self.avatar.getHpr()[0],0,0)
 		
-		# We will detect the height of the terrain by creating a
-		# collision ray and casting it downward toward the terrain.
-		# One ray will start above avatar's head, and the other will
-		# start above the camera.  A ray may hit the terrain, or it
-		# may hit a rock or a tree.  If it hits the terrain, we can
-		# detect the height.  If it hits anything
-		# else, we rule that the move is illegal.
-
 		self.cTrav = CollisionTraverser()
 
+ 		"""
+ 		CollisionRay that detects walkable region.
+ 		A move is illegal if the groundRay hits but the terrain.
+ 		"""
+		# TODO: maybe we don't need avatarGroundRay; camGroundRay suffices.
 		self.avatarGroundRay = CollisionRay()
 		self.avatarGroundRay.setOrigin(0,0,1000)
 		self.avatarGroundRay.setDirection(0,0,-1)
@@ -170,42 +183,48 @@ class PandaWorld(DirectObject):
 		self.camGroundHandler = CollisionHandlerQueue()
 		self.cTrav.addCollider(self.camGroundColNp, \
 			self.camGroundHandler)
-		
+
 		# Create some lighting
-		directionalLight = DirectionalLight("directionalLight")
-		directionalLight.setDirection(Vec3(-5, -5, -5))
-		directionalLight.setColor(Vec4(.8, .8, .9, 1))
-		directionalLight.setSpecularColor(Vec4(.3, .1, .1, 1))
-		render.setLight(render.attachNewNode(directionalLight))
+		self.ambientLight = render.attachNewNode( AmbientLight( "ambientLight" ) )
+		self.ambientLight.node().setColor( Vec4( .8, .8, .8, 1 ) )
+		render.setLight(self.ambientLight)
 
-		dLight2 = DirectionalLight("directionalLight2")
-		dLight2.setDirection(Vec3(5, 5, 5))
-		dLight2.setColor(Vec4(.5, .5, .5, 1))
-		dLight2.setSpecularColor(Vec4(.3, .3, .1, 1))
-		render.setLight(render.attachNewNode(dLight2))
+		dLight1 = DirectionalLight("dLight1")
+		dLight1.setColor(Vec4(1, .6, .7, 1))
+		dLight1.setDirection(Vec3(1,1,1))
+		dlnp1 = render.attachNewNode(dLight1)
+		dlnp1.setHpr(30,-160,0)
+		render.setLight(dlnp1)
 
-		self.light = render.attachNewNode(Spotlight("Spot"))
-		self.light.node().setScene(render)
-		self.light.node().setShadowCaster(True)
-		self.light.node().showFrustum()
-		self.light.node().getLens().setFov(40)
-		self.light.node().getLens().setNearFar(10,100)
-		self.light.node().setColor(Vec4(7, 7, 7, 1))
-		render.setLight(self.light)
+		dLight2 = DirectionalLight("dLight2")
+		dLight2.setColor(Vec4(.6, .7, 1, 1))
+		dLight2.setDirection(Vec3(-1,-1,-1))
+		self.dlnp2 = render.attachNewNode(dLight2)
+		self.dlnp2.node().setScene(render)
+		self.dlnp2.setHpr(-70,-60,0)
+		render.setLight(self.dlnp2)
 
-		self.light.setPos(-10,-50,100)
-		self.light.lookAt(120,120,0)
-		self.light.node().getLens().setNearFar(10,1000)
-		
-		self.environ.setShaderInput("light", self.light)
+		# setup collision detection objects used to implement
+		# canSee method
+		self.csSeg = CollisionSegment()
+		self.csSeg.setPointA(Point3(0,0,0))
+		self.csSeg.setPointB(Point3(0,0,.5))
 
-		# Important! Enable the shader generator.
-		render.setShaderAuto()
+		self.csNode = self.environ.attachNewNode(CollisionNode('csSeg'))
+		self.csNode.node().addSolid(self.csSeg)
+		self.csNode.node().setFromCollideMask(BitMask32.bit(0))
+		self.csNode.node().setIntoCollideMask(BitMask32.allOff())
 
-		self.shaderenable = 1
-	
-	# Records the state of the arrow keys
+		self.csHandler = CollisionHandlerQueue()
+
+		self.csTrav = CollisionTraverser('CustomTraverser')
+		self.csTrav.addCollider(self.csNode, self.csHandler)
+
+
+
 	def setKey(self, key, value):
+		""" Records the state of the arrow keys
+		"""
 		self.keyMap[key] = value
 
 	def addRemote(self, x, y, direction, id) : 
@@ -227,7 +246,11 @@ class PandaWorld(DirectObject):
 					 "remotes\n")
 			sys.exit(1)
 		remote = self.freeRemotes.pop()
-		self.remoteMap[id] = [remote,True]
+		self.remoteMap[id] = [remote, True ,
+				OnscreenImage(image = 'models/dot1.png', \
+						pos = (0,0,0), scale = .01)
+				]
+
 		# set position and direction of remote and make it visible
 		remote.reparentTo(render)
 		remote.setPos(x,y,0) 
@@ -243,7 +266,7 @@ class PandaWorld(DirectObject):
 		id is an identifier used to distinguish this remote from others
 		"""
 		if id not in self.remoteMap : return
-		remote, isMoving = self.remoteMap[id]
+		remote, isMoving, dot = self.remoteMap[id]
 		if abs(x - remote.getX()) < .001 and \
 		   abs(y - remote.getY()) < .001 and \
 		   direction == remote.getHpr()[0] :
@@ -264,6 +287,7 @@ class PandaWorld(DirectObject):
 		id is the identifier for the remote
 		"""
 		if id not in self.remoteMap : return
+		self.remoteMap[id][2].destroy()
 		remote = self.remoteMap[id][0]
 		remote.detachNode() # ??? check this
 		self.freeRemotes.append(remote)
@@ -283,6 +307,59 @@ class PandaWorld(DirectObject):
 		""" Get the limit on the xy coordinates.
 		"""
 		return 120
+
+	def canSee(self, p1, p2):
+		""" Test if two points are visible from one another
+	
+		It works by setting up a collisionSegment between the
+		two positions. Return True if the segment didn't hit
+		any from/into object in between.
+	
+		An alternative is to create a pool of rays etc. in
+		PandaWorld class, like what we've done with remotes, and pass
+		them here, so that we don't create objects on the fly. But
+		for canSee(), the current version demands less computation
+		resources.
+		"""
+
+		# lift two points a bit above the grouond to prevent the
+		# collision ray from hiting the edge of shallow terrain;
+		# also, put them at different level so that the ray has
+		# nonzero length (a requirement for collisionSegment()).
+		p1[2] += 0.5
+		p2[2] += 0.4
+		self.csSeg.setPointA(p1)
+		self.csSeg.setPointB(p2)
+	
+		self.csTrav.traverse(render)
+	
+		return (self.csHandler.getNumEntries() == 0)
+
+#		traverser = CollisionTraverser('CustomTraverser')
+#	
+#		ray = CollisionSegment()
+#		# lift two points a bit above the grouond to prevent the
+#		# collision ray from hiting the edge of shallow terrain;
+#		# also, put them at different level so that the ray has
+#		# nonzero length (a requirement for collisionSegment()).
+#		p1[2] += 0.5
+#		p2[2] += 0.4
+#		ray.setPointA(p1)
+#		ray.setPointB(p2)
+#		fromObj = self.environ.attachNewNode(CollisionNode('visRay'))
+#		fromObj.node().addSolid(ray)
+#		fromObj.node().setFromCollideMask(BitMask32.bit(0))
+#		fromObj.node().setIntoCollideMask(BitMask32.allOff())
+#		handler = CollisionHandlerQueue()
+#	
+#		traverser.addCollider(fromObj, handler)
+#	
+#		traverser.traverse(render)
+#	
+#		if handler.getNumEntries() != 0:
+#			return False
+#		else:
+#			return True
 
 	def move(self, task):
 		""" Update the position of this avatar.
@@ -313,6 +390,15 @@ class PandaWorld(DirectObject):
 		if (self.keyMap["forward"]!=0):
 			self.avatar.setY(self.avatar, \
 					 -3000 * globalClock.getDt())
+ 		if (self.keyMap["backward"]!=0):
+ 			self.avatar.setY(self.avatar, \
+ 					 +3000 * globalClock.getDt())
+ 		if (self.keyMap["strafe-left"]!=0):
+ 			self.avatar.setX(self.avatar, \
+ 					 +3000 * globalClock.getDt())
+ 		if (self.keyMap["strafe-right"]!=0):
+ 			self.avatar.setX(self.avatar, \
+ 					 -3000 * globalClock.getDt())
 
 		# If avatar is moving, loop the run animation.
 		# If he is standing still, stop the animation.
@@ -339,31 +425,51 @@ class PandaWorld(DirectObject):
 		# Adjust avatar's Z coordinate.  If avatar's ray hit terrain,
 		# update his Z. If it hit anything else, or didn't hit 
 		# anything, put him back where he was last frame.
-
 		entries = []
 		for i in range(self.avatarGroundHandler.getNumEntries()):
-			entry = self.avatarGroundHandler.getEntry(i)
-			entries.append(entry)
+			entries.append(self.avatarGroundHandler.getEntry(i))
 		entries.sort(lambda x,y: cmp(y.getSurfacePoint(render).getZ(), \
 				 x.getSurfacePoint(render).getZ()))
 		if (len(entries)>0) and \
-		   (entries[0].getIntoNode().getName() == "ID602") :
+		   (entries[0].getIntoNode().getName() == "ID257") : # the tag of terrain
 			self.avatar.setZ( \
 				entries[0].getSurfacePoint(render).getZ())
 		else:
 			self.avatar.setPos(startpos)
 
-		# Finally, update the text that shows avatar's position on 
+		# Check visibility and update visList
+		for id in self.remoteMap:
+			if self.canSee(self.avatar.getPos(),
+					self.remoteMap[id][0].getPos()) == True:
+				if id not in self.visList:
+					self.visList.append(id)
+			elif id in self.visList:
+				self.visList.remove(id)
+		s = ""
+		for id in self.visList : s += fadr2string(id) + " "
+ 		self.showNumVisible.setText("Visible pandas: %s" % s)
+
+		# Update the text showing panda's position on 
 		# the screen
-		self.avPos.setText("Avatar's pos: (%d, %d, %d)" % \
+		self.avPos.setText("Panda's pos: (%d, %d, %d)" % \
 			(self.avatar.getX(), self.avatar.getY(),
 			 (self.avatar.getHpr()[0])%360))
-		#self.dotPos.setText("dot's pos: (%f, %f)" % \
-		#	(self.dot.getX(), self.dot.getZ()))
 
 		# map the avatar's position to the 2D map on the top-right 
 		# corner of the screen
 		self.dot.setPos((self.avatar.getX()/120.0)*0.7+0.45, \
 				0,(self.avatar.getY()/120.0)*0.7+0.25)
+		for id in self.remoteMap:
+			self.remoteMap[id][2].setPos((self.remoteMap[id][0].getX()/120.0)*0.7+0.45, \
+				0,(self.remoteMap[id][0].getY()/120.0)*0.7+0.25)
 
 		return task.cont
+
+#w = PandaWorld()
+#w.addRemote(69, 67, 135, 111)
+#w.addRemote(20, 33, 135, 222)
+#w.addRemote(40, 60, 135, 333)
+#w.addRemote(90, 79, 135, 444)
+#w.addRemote(30, 79, 135, 555)
+#w.addRemote(20, 39, 135, 666)
+#run()

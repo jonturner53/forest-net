@@ -27,7 +27,7 @@ class WorldMap :
 		f = None
 		try :
 			f = open(mapFile, 'r')
-		except error as e :
+		except IOError as e :
 			sys.stderr.write("WorldMap: cannot open " + mapFile)
 			return False
 
