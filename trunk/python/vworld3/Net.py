@@ -7,9 +7,11 @@ from Queue import Queue
 from collections import deque
 from Packet import *
 from CtlPkt import *
-from WorldMap import *
-from Substrate import *
+#from WorldMap import *
+#from Substrate import *
 from math import sin, cos
+import direct.directbase.DirectStart
+from panda3d.core import *
 from direct.task import Task
 
 UPDATE_PERIOD = .05 	# number of seconds between status updates
@@ -17,6 +19,7 @@ STATUS_REPORT = 1 	# code for status report packets
 NUM_ITEMS = 10		# number of items in status report
 GRID = 10000  		# xy extent of one grid square
 MAXNEAR = 1000		# max # of nearby avatars
+MAX_VIS = 20		# visibility range (measured in cells)
 
 # speeds below are the amount avatar moves during an update period
 # making them all equal to avoid funky animation
@@ -29,12 +32,12 @@ class Net :
 	""" Net support.
 
 	"""
-	def __init__(self, myIp, cliMgrIp, comtree, map, pWorld, debug, auto):
+	def __init__(self, myIp, cliMgrIp, comtree, size, pWorld, debug, auto):
 		""" Initialize a new Net object.
 
 		myIp address is IP address of this host
 		comtree is the number of the comtree to use
-		map is a WorldMap object
+		size*size is the number of "cells" in the world
 		debug is an integer >=0 that determines amount of
 		debugging output
 		"""
@@ -42,10 +45,11 @@ class Net :
 		self.myIp = myIp
 		self.cliMgrIp = cliMgrIp
 		self.comtree = comtree
-		self.map = map
+		self.size = size
 		self.pWorld = pWorld
 		self.debug = debug
 		self.auto = auto
+		self.count = 0
 
 		# open and configure socket to be nonblocking
 		self.sock = socket(AF_INET, SOCK_DGRAM);
@@ -60,7 +64,7 @@ class Net :
 		else :
 			# compute scale factor for pWorld
 			self.limit = pWorld.getLimit()
-			self.scale = (GRID*self.map.size + 0.0) \
+			self.scale = (GRID*self.size + 0.0) \
 					/ (self.limit + 0.0)
 			# set initial position
 			x, y, self.direction = self.pWorld.getPosHeading()
@@ -73,7 +77,7 @@ class Net :
 		self.nearRemotes = {}	# map: fadr -> [x,y,dir,dx,dy,count]
 		self.visSet = set()	# set of visible squares
 		loc = self.groupNum(self.x,self.y) - 1
-		self.visSet = self.map.computeVisSet(loc)
+		self.visSet = self.computeVisSet(loc)
 
 		self.seqNum = 1		# sequence # for control packets
 
@@ -119,10 +123,6 @@ class Net :
 		self.rtrIp = tuple[1]
 		self.comtCtlFadr = tuple[2]
 	
-		print	"avatar address:", fadr2string(self.myFadr), \
-	       		" router address:", fadr2string(self.rtrFadr), \
-	       		" comtree controller address:", \
-				fadr2string(self.comtCtlFadr);
 		return True
 
 	def redirect(self, direction) :
@@ -161,7 +161,6 @@ class Net :
 		return task.cont
 
 	def wrapup(self, task) :
-		sys.stderr.write("running Net.wrapup()")
 		self.leaveComtree()
 		self.disconnect()
 
@@ -204,9 +203,9 @@ class Net :
 			sys.exit(1)
 		p = Packet()
 		p.unpack(buf)
-		if self.debug>=3 or \
-		   (self.debug>=2 and p.type!=CLIENT_DATA) or \
-		   (self.debug>=1 and p.type==CLIENT_SIG) :
+		if self.debug >= 3 or \
+		   (self.debug >= 2 and p.type != CLIENT_DATA) or \
+		   (self.debug >= 1 and p.type == CLIENT_SIG) :
 			print self.now, self.myAdr, \
 			      "received from", self.rtrAdr
 			print p.toString()
@@ -269,7 +268,8 @@ class Net :
 
 		while True :
 			reply = self.receive()
-			if reply != None : return reply
+			if reply != None :
+				return reply
 			elif now > sendTime + 1 :
 				if numAttempts > 3 : return None
 				sendTime = now
@@ -290,6 +290,8 @@ class Net :
 		p.dstAdr = -self.groupNum(self.x,self.y)
 	
 		numNear = len(self.nearRemotes)
+		if numNear > 5000 or numNear < 0 :
+			print "numNear=", numNear
 		p.payload = struct.pack('!IIIIIIII', \
 					STATUS_REPORT, self.now, \
 					self.x, self.y, \
@@ -313,82 +315,82 @@ class Net :
 
 			nuloc = self.groupNum(self.x,self.y)-1
 			if nuloc != loc :
-				self.visSet = self.map.computeVisSet(nuloc)
+				self.visSet = self.computeVisSet(nuloc)
 				self.updateSubs()
 			return
 
 		# code for auto operation
-		atLeft  = (loc%self.map.size == 0)
-		atRight = (loc%self.map.size == self.map.size-1)
-		atBot   = (loc/self.map.size == 0)
-		atTop   = (loc/self.map.size == self.map.size-1)
-		xd = self.x%GRID; yd = self.y%GRID
-		if xd < .4*GRID and \
-		   (atLeft or self.map.separated(loc,loc-1) or \
-		    self.map.blocked(loc-1)) :
-			# near left edge of loc
-			if 160 < self.direction and self.direction < 270 :
-				 self.direction -= 1
-			if 270 <= self.direction or self.direction < 20 :
-				 self.direction += 1
-			self.speed = SLOW; self.deltaDir = 0
-		elif xd > .6*GRID and \
-		   (atRight or self.map.separated(loc,loc+1) or \
-		    self.map.blocked(loc+1)) :
-			# near right edge of loc
-			if 340 < self.direction or self.direction <= 90 :
-				 self.direction -= 1
-			if 90 < self.direction and self.direction < 200 :
-				 self.direction += 1
-			self.speed = SLOW; self.deltaDir = 0
-		elif yd < .4*GRID and \
-		   (atBot or self.map.separated(loc,loc-self.map.size) or \
-		    self.map.blocked(loc-self.map.size)) :
-			# near bottom edge of loc
-			if 70 < self.direction and self.direction <= 180 :
-				 self.direction -= 1
-			if 180 < self.direction and self.direction < 290 :
-				 self.direction += 1
-			self.speed = SLOW; self.deltaDir = 0
-		elif yd > .6*GRID and \
-		   (atTop or self.map.separated(loc,loc+self.map.size) or \
-		    self.map.blocked(loc+self.map.size)) :
-			# near top edge of loc
-			if 250 < self.direction and self.direction <= 359 :
-				self.direction -= 1
-			if 0 <= self.direction and self.direction < 110 :
-				 self.direction += 1
-			self.speed = SLOW; self.deltaDir = 0
-		else :
-			# no walls to avoid, so just make random
-			# changes to direction and speed
-			self.direction += self.deltaDir;
-			r = random()
-			if r < 0.1 :
-				if r < .05 : self.deltaDir -= 0.2 * random()
-				else :       self.deltaDir += 0.2 * random()
-				self.deltaDir = min(1.0,self.deltaDir)
-				self.deltaDir = max(-1.0,self.deltaDir)
-			# update speed
-			r = random()
-			if r <= 0.1 :
-				if self.speed == SLOW or self.speed == FAST :
-					self.speed = MEDIUM
-				elif r < 0.05 :
-					self.speed = SLOW
-				else :
-					self.speed = FAST
-		# update position using adjusted direction and speed
-		self.direction %= 360
-		dist = self.speed
-		PI = 3.141519625
-		dirRad = self.direction * (2*PI/360)
-		self.x += (int) (dist * sin(dirRad))
-		self.y += (int) (dist * cos(dirRad))
-		nuloc = self.groupNum(self.x,self.y)-1
-		if nuloc != loc :
-			self.visSet = self.map.computeVisSet(nuloc)
-			self.updateSubs()
+#		atLeft  = (loc%self.size == 0)
+#		atRight = (loc%self.size == self.size-1)
+#		atBot   = (loc/self.size == 0)
+#		atTop   = (loc/self.size == self.size-1)
+#		xd = self.x%GRID; yd = self.y%GRID
+#		if xd < .4*GRID and \
+#		   (atLeft or self.map.separated(loc,loc-1) or \
+#		    self.map.blocked(loc-1)) :
+#			# near left edge of loc
+#			if 160 < self.direction and self.direction < 270 :
+#				 self.direction -= 1
+#			if 270 <= self.direction or self.direction < 20 :
+#				 self.direction += 1
+#			self.speed = SLOW; self.deltaDir = 0
+#		elif xd > .6*GRID and \
+#		   (atRight or self.map.separated(loc,loc+1) or \
+#		    self.map.blocked(loc+1)) :
+#			# near right edge of loc
+#			if 340 < self.direction or self.direction <= 90 :
+#				 self.direction -= 1
+#			if 90 < self.direction and self.direction < 200 :
+#				 self.direction += 1
+#			self.speed = SLOW; self.deltaDir = 0
+#		elif yd < .4*GRID and \
+#		   (atBot or self.map.separated(loc,loc-self.size) or \
+#		    self.map.blocked(loc-self.size)) :
+#			# near bottom edge of loc
+#			if 70 < self.direction and self.direction <= 180 :
+#				 self.direction -= 1
+#			if 180 < self.direction and self.direction < 290 :
+#				 self.direction += 1
+#			self.speed = SLOW; self.deltaDir = 0
+#		elif yd > .6*GRID and \
+#		   (atTop or self.map.separated(loc,loc+self.size) or \
+#		    self.map.blocked(loc+self.size)) :
+#			# near top edge of loc
+#			if 250 < self.direction and self.direction <= 359 :
+#				self.direction -= 1
+#			if 0 <= self.direction and self.direction < 110 :
+#				 self.direction += 1
+#			self.speed = SLOW; self.deltaDir = 0
+#		else :
+#			# no walls to avoid, so just make random
+#			# changes to direction and speed
+#			self.direction += self.deltaDir;
+#			r = random()
+#			if r < 0.1 :
+#				if r < .05 : self.deltaDir -= 0.2 * random()
+#				else :       self.deltaDir += 0.2 * random()
+#				self.deltaDir = min(1.0,self.deltaDir)
+#				self.deltaDir = max(-1.0,self.deltaDir)
+#			# update speed
+#			r = random()
+#			if r <= 0.1 :
+#				if self.speed == SLOW or self.speed == FAST :
+#					self.speed = MEDIUM
+#				elif r < 0.05 :
+#					self.speed = SLOW
+#				else :
+#					self.speed = FAST
+#		# update position using adjusted direction and speed
+#		self.direction %= 360
+#		dist = self.speed
+#		PI = 3.141519625
+#		dirRad = self.direction * (2*PI/360)
+#		self.x += (int) (dist * sin(dirRad))
+#		self.y += (int) (dist * cos(dirRad))
+#		nuloc = self.groupNum(self.x,self.y)-1
+#		if nuloc != loc :
+#			self.visSet = self.map.computeVisSet(nuloc)
+#			self.updateSubs()
 	
 	def groupNum(self, x1, y1) :
 		""" Return multicast group number for given position.
@@ -400,7 +402,7 @@ class Net :
 		To convert group number to a Forest multicast address,
 		just negate it.
 		"""
-		return 1 + (int(x1)/GRID) + (int(y1)/GRID)*self.map.size
+		return 1 + (int(x1)/GRID) + (int(y1)/GRID)*self.size
 	
 	def subscribe(self,glist) :
 		""" Subscribe to a list of multicast groups.
@@ -417,7 +419,7 @@ class Net :
 				p.length = OVERHEAD + 4*(1+nsub)
 				p.type = SUB_UNSUB
 				p.comtree = self.comtree
-				p.srcAdr = self.myFadr; p.dstAdr = rtrFadr
+				p.srcAdr = self.myFadr; p.dstAdr = self.rtrFadr
 				self.send(p)
 				p = Packet()
 				nsub = 1
@@ -445,7 +447,7 @@ class Net :
 				p.length = OVERHEAD + 4*(1+nunsub)
 				p.type = SUB_UNSUB
 				p.comtree = self.comtree
-				p.srcAdr = self.myFadr; p.dstAdr = rtrFadr
+				p.srcAdr = self.myFadr; p.dstAdr = self.rtrFadr
 				self.send(p)
 				p = Packet()
 				nunsub = 1
@@ -531,9 +533,9 @@ class Net :
 				# update position based on dx, dy
 				remote[0] += remote[3]; remote[1] += remote[4]
 				remote[0] = max(0,remote[0])
-				remote[0] = min(self.map.size*GRID-1,remote[0])
+				remote[0] = min(self.size*GRID-1,remote[0])
 				remote[1] = max(0,remote[1])
-				remote[1] = min(self.map.size*GRID-1,remote[1])
+				remote[1] = min(self.size*GRID-1,remote[1])
 			if remote[5] >= 6 :
 				dropList.append(avId)
 			remote[5] += 1
@@ -542,3 +544,194 @@ class Net :
 			x = rem[0]; y = rem[1]
 			del self.nearRemotes[avId]
 			if not self.auto : self.pWorld.removeRemote(avId)
+
+	def computeVisSet(self,c1) :
+		""" Compute a visibility set for a square in the virtual world.
+
+			c1 is cell number for a square in virtual world
+	 	"""
+		x1 = c1%self.size; y1 = c1/self.size;
+		vSet = set();
+		vSet.add(c1)
+	
+		visVec = [False] * self.size
+		prevVisVec = [False] * self.size
+	
+		# start with upper right quadrant
+		prevVisVec[0] = True
+		dlimit = 1 + min(self.size,MAX_VIS);
+		for d in range(1,dlimit) :
+			done = True
+			for x2 in range(x1,min(x1+d+1,self.size)) :
+				dx = x2 - x1; y2 = d + y1 - dx 
+				if y2 >= self.size : continue
+				visVec[dx] = False
+				if (x1==x2 and not prevVisVec[dx]) or \
+				   (x1!=x2 and y1==y2 and \
+						not prevVisVec[dx-1]) \
+				   or (x1!=x2 and y1!=y2 and \
+						not prevVisVec[dx-1] \
+				   and not prevVisVec[dx]) :
+					continue
+				c2 = x2 + y2*self.size
+	
+				if self.isVis(c1,c2) :
+					visVec[dx] = True
+					vSet.add(c2)
+					done = False
+			if done : break
+			for x2 in range(x1,min(x1+d+1,self.size)) :
+				prevVisVec[x2-x1] = visVec[x2-x1]
+		# now process upper left quadrant
+		prevVisVec[0] = True;
+		for d in range(1,dlimit) :
+			done = True;
+			for x2 in range(max(x1-d,0),x1+1) :
+				dx = x1-x2; y2 = d + y1 - dx
+				if y2 >= self.size : continue
+				visVec[dx] = False;
+				if (x1==x2 and not prevVisVec[dx]) or \
+				   (x1!=x2 and y1==y2 and \
+						not prevVisVec[dx-1]) or \
+				   (x1!=x2 and y1!=y2 and \
+						not prevVisVec[dx-1] and \
+						not prevVisVec[dx]) :
+					continue
+				c2 = x2 + y2*self.size;
+				if self.isVis(c1,c2) :
+					visVec[dx] = True
+					vSet.add(c2)
+					done = False
+			if done : break
+			for x2 in range(max(x1-d,0),x1+1) :
+				dx = x1-x2; prevVisVec[dx] = visVec[dx]
+		# now process lower left quadrant
+		prevVisVec[0] = True;
+		for d in range(1,dlimit) :
+			done = True;
+			for x2 in range(max(x1-d,0),x1+1) :
+				dx = x1-x2; y2 = (y1 - d) + dx
+				if y2 < 0 : continue
+				visVec[dx] = False
+				if (x1==x2 and not prevVisVec[dx]) or \
+				   (x1!=x2 and y1==y2 and \
+						not prevVisVec[dx-1]) or \
+				   (x1!=x2 and y1!=y2 and \
+						not prevVisVec[dx-1] and \
+						not prevVisVec[dx]) :
+					continue
+				c2 = x2 + y2*self.size;
+				if self.isVis(c1,c2) :
+					visVec[dx] = True
+					vSet.add(c2)
+					done = False
+			if done : break
+			for x2 in range(max(x1-d,0),x1+1) :
+				dx = x1-x2; prevVisVec[dx] = visVec[dx]
+		# finally, process lower right quadrant
+		prevVisVec[0] = True;
+		for d in range(1,dlimit) :
+			done = True;
+			for x2 in range(x1,min(x1+d+1,self.size)) :
+				dx = x2-x1; y2 = (y1 - d) + dx
+				if y2 < 0 : continue
+				visVec[dx] = False
+				if (x1==x2 and not prevVisVec[dx]) or \
+				   (x1!=x2 and y1==y2 and \
+						not prevVisVec[dx-1]) or \
+				   (x1!=x2 and y1!=y2 and \
+						not prevVisVec[dx-1] and \
+						not prevVisVec[dx]) :
+					continue
+				c2 = x2 + y2*self.size
+				if self.isVis(c1,c2) :
+					visVec[dx] = True
+					vSet.add(c2)
+					done = False
+			if done : break
+			for x2 in range(x1,min(x1+d+1,self.size)) :
+				dx = x2-x1; prevVisVec[dx] = visVec[dx]
+		return vSet
+
+	def isVis(self, c1, c2) :
+		""" Determine if two squares are visible from each other.
+
+	   	c1 is the cell number of the first square
+	   	c2 is the cell number of the second square
+		"""
+		i1 = c1%self.size; j1 = c1/self.size;
+		i2 = c2%self.size; j2 = c2/self.size;
+
+		scale = self.scale
+		# define points near cell corners in panda coordinates
+		points1 = ( \
+		  Point3((i1*GRID+1.0)/scale,(j1*GRID+1.0)/scale,0.0), \
+		  Point3(((i1+1)*GRID-1.0)/scale,(j1*GRID+1.0)/scale,0.0), \
+		  Point3((i1*GRID+1.0)/scale,((j1+1)*GRID-1.0)/scale,0.0), \
+		  Point3(((i1+1)*GRID-1.0)/scale,((j1+1)*GRID-1.0)/scale,0.0))
+		points2 = ( \
+		  Point3((i2*GRID+1.0)/scale,(j2*GRID+1.0)/scale,0.0), \
+		  Point3(((i2+1)*GRID-1.0)/scale,(j2*GRID+1.0)/scale,0.0), \
+		  Point3((i2*GRID+1.0)/scale,((j2+1)*GRID-1.0)/scale,0.0), \
+		  Point3(((i2+1)*GRID-1.0)/scale,((j2+1)*GRID-1.0)/scale,0.0))
+
+		# Check sightlines between all pairs of "corners"
+		for p1 in points1 :
+			for p2 in points2 :
+				t1 = time()
+				vis = self.pWorld.canSee(p1,p2)
+				t2 = time()
+				if self.count < 20 :
+					print t2-t1
+					self.count += 1
+				if vis : return True
+		return False
+
+#	def canSee(self,p1,p2) :
+#		""" Determine if two points are visible to each other.
+#
+#		p1 and p2 are (x,y) pairs representing points in the world
+#		"""
+#		if p1[0] > p2[0] : p1,p2 = p2,p1
+#
+#		i1 = int(p1[0]); j1 = int(p1[1])
+#		i2 = int(p2[0]); j2 = int(p2[1])
+#
+#		if i1 == i2 :
+#			minj = min(j1,j2); maxj = max(j1,j2)
+#			for j in range(minj,maxj) :
+#				if self.map[i1+j*self.size]&2 :
+#					return False
+#			return True
+#
+#		slope = (p2[1]-p1[1])/(p2[0]-p1[0])
+#
+#		i = i1; j = j1;
+#		x = p1[0]; y = p1[1]
+#		xd = i1+1 - x; yd = xd*slope
+#		c = i+j*self.size
+#		while i < i2 :
+#			#print "i=", i
+#			if slope > 0 :
+#				while j+1 <= y+yd :
+#					#print "j=",j
+#					if self.map[c]&2 : return False
+#					j += 1; c += self.size
+#			else :
+#				while j >= y+yd :
+#					j -= 1; c -= self.size
+#					if self.map[c]&2 : return False
+#			c += 1
+#			if self.map[c]&1 : return False
+#			if slope > 0 :
+#				ylim = min(y+slope, p2[1])
+#				while j+1 <= ylim :
+#					if self.map[c]&2 : return False
+#					j += 1; c += self.size
+#			else :
+#				ylim = max(y+slope, p2[1])
+#				while j >= ylim :
+#					j -= 1; c -= self.size
+#					if self.map[c]&2 : return False
+#			i += 1; x += 1.0; y += slope
+#		return True
