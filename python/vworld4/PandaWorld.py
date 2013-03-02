@@ -195,32 +195,20 @@ class PandaWorld(DirectObject):
  		CollisionRay that detects walkable region.
  		A move is illegal if the groundRay hits but the terrain.
  		"""
-		# TODO: maybe we don't need avatarGroundRay; camGroundRay suffices.
-		self.avatarGroundRay = CollisionRay()
-		self.avatarGroundRay.setOrigin(0,0,1000)
-		self.avatarGroundRay.setDirection(0,0,-1)
+		self.avatarGroundRay = CollisionSphere(0,0,0,1)
 		self.avatarGroundCol = CollisionNode('avatarRay')
 		self.avatarGroundCol.addSolid(self.avatarGroundRay)
 		self.avatarGroundCol.setFromCollideMask(BitMask32.bit(0))
 		self.avatarGroundCol.setIntoCollideMask(BitMask32.allOff())
 		self.avatarGroundColNp = \
 			self.avatar.attachNewNode(self.avatarGroundCol)
+		self.avatarGroundRay.setRadius(500)
+		self.avatarGroundRay.setCenter(0,-80,300)
 		self.avatarGroundHandler = CollisionHandlerQueue()
 		self.cTrav.addCollider(self.avatarGroundColNp, \
 			self.avatarGroundHandler)
-
-		self.camGroundRay = CollisionRay()
-		self.camGroundRay.setOrigin(0,0,1000)
-		self.camGroundRay.setDirection(0,0,-1)
-		self.camGroundCol = CollisionNode('camRay')
-		self.camGroundCol.addSolid(self.camGroundRay)
-		self.camGroundCol.setFromCollideMask(BitMask32.bit(0))
-		self.camGroundCol.setIntoCollideMask(BitMask32.allOff())
-		self.camGroundColNp = \
-			base.camera.attachNewNode(self.camGroundCol)
-		self.camGroundHandler = CollisionHandlerQueue()
-		self.cTrav.addCollider(self.camGroundColNp, \
-			self.camGroundHandler)
+#		self.avatarGroundColNp.show()
+		
 
 		# Create some lighting
 		self.ambientLight = render.attachNewNode( AmbientLight( "ambientLight" ) )
@@ -384,6 +372,8 @@ class PandaWorld(DirectObject):
 
 		# position the camera where the avatar is
 		pos = self.avatar.getPos(); pos[2] += 1
+#		pos[1] += 5
+#		pos[0] += 5
 		hpr = self.avatar.getHpr();
 		hpr[0] += 180; hpr[1] = camAngle
 		base.camera.setPos(pos); base.camera.setHpr(hpr)
@@ -397,14 +387,17 @@ class PandaWorld(DirectObject):
 		entries = []
 		for i in range(self.avatarGroundHandler.getNumEntries()):
 			entries.append(self.avatarGroundHandler.getEntry(i))
-		entries.sort(lambda x,y: cmp(y.getSurfacePoint(render).getZ(), \
-				 x.getSurfacePoint(render).getZ()))
-		if (len(entries)>0) and \
-		   (entries[0].getIntoNode().getName() == "ID257") : # the tag of terrain
-			self.avatar.setZ( \
-				entries[0].getSurfacePoint(render).getZ())
-		else:
-			self.avatar.setPos(startpos)
+		collide = False
+		if (len(entries)>0) :
+			for entry in entries :
+				if entry.getIntoNode().getName() != "ID257" : # tage of terrain
+					collide = True
+					break
+			if collide == True :
+				self.avatar.setPos(startpos)
+			else:
+				self.avatar.setZ( \
+					entries[0].getSurfacePoint(render).getZ())
 
 		# Check visibility and update visList
 		for id in self.remoteMap:

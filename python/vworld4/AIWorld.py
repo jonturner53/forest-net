@@ -87,13 +87,14 @@ class AIWorld(DirectObject):
 				    "walk":"models/panda-walk"})
 		self.avatar.reparentTo(render)
 		self.avatar.setScale(.002)
-		self.avatar.setPos(58,67,1)
+		self.avatar.setPos(58,67,0)
 
 		self.rotateDir = -1
 		self.rotateDuration = -1
 		self.moveDir = -1
 		self.moveDuration = -1
 		self.isAvoidingCollision = False
+		self.inBigRotate = False # if True, do not move forward; only rotate
 
 		# Set the dot's position
 		self.dot.setPos(self.avatar.getX()/(120.0+self.Dmap.getX()), \
@@ -141,15 +142,17 @@ class AIWorld(DirectObject):
  		CollisionRay that detects walkable region.
  		A move is illegal if the groundRay hits but the terrain.
  		"""
-		self.avatarGroundRay = CollisionRay()
-		self.avatarGroundRay.setOrigin(0,0,1000)
-		self.avatarGroundRay.setDirection(0,0,-1)
+		self.avatarGroundRay = CollisionSphere(0,0,0,1)
+#		self.avatarGroundRay.setOrigin(0,0,1000)
+#		self.avatarGroundRay.setDirection(0,0,-1)
 		self.avatarGroundCol = CollisionNode('avatarRay')
 		self.avatarGroundCol.addSolid(self.avatarGroundRay)
 		self.avatarGroundCol.setFromCollideMask(BitMask32.bit(0))
 		self.avatarGroundCol.setIntoCollideMask(BitMask32.allOff())
 		self.avatarGroundColNp = \
 			self.avatar.attachNewNode(self.avatarGroundCol)
+		self.avatarGroundRay.setRadius(500)
+		self.avatarGroundRay.setCenter(0,-80,300)
 		self.avatarGroundHandler = CollisionHandlerQueue()
 		self.cTrav.addCollider(self.avatarGroundColNp, \
 			self.avatarGroundHandler)
@@ -278,31 +281,6 @@ class AIWorld(DirectObject):
 	
 		return (self.csHandler.getNumEntries() == 0)
 
-#		traverser = CollisionTraverser('CustomTraverser')
-#	
-#		ray = CollisionSegment()
-#		# lift two points a bit above the grouond to prevent the
-#		# collision ray from hiting the edge of shallow terrain;
-#		# also, put them at different level so that the ray has
-#		# nonzero length (a requirement for collisionSegment()).
-#		p1[2] += 0.5
-#		p2[2] += 0.4
-#		ray.setPointA(p1)
-#		ray.setPointB(p2)
-#		fromObj = self.environ.attachNewNode(CollisionNode('visRay'))
-#		fromObj.node().addSolid(ray)
-#		fromObj.node().setFromCollideMask(BitMask32.bit(0))
-#		fromObj.node().setIntoCollideMask(BitMask32.allOff())
-#		handler = CollisionHandlerQueue()
-#	
-#		traverser.addCollider(fromObj, handler)
-#	
-#		traverser.traverse(render)
-#	
-#		if handler.getNumEntries() != 0:
-#			return False
-#		else:
-#			return True
 
 	def move(self, task):
 		""" Update the position of this avatar.
@@ -318,37 +296,40 @@ class AIWorld(DirectObject):
 
 		# randomly move the avatar
 		if self.rotateDir == -1:
-			self.rotateDir = random.randint(1,5)
+			self.rotateDir = random.randint(1,5) # 40% chance to rotate
 		if self.rotateDuration == -1:
-			self.rotateDuration = random.randint(10,30)
+			self.rotateDuration = random.randint(30,80)
 #		if self.moveDir == -1:
 #			self.moveDir = random.randint(1,10)
 #		if self.moveDuration == -1:
 #			self.moveDuration = random.randint(100,400)
 
-		if self.rotateDir == 1 and self.rotateDuration < 17: # turn left
+		if self.rotateDir == 1 : # turn left
+			if self.rotateDuration > 50 : self.inBigRotate = True
 			self.avatar.setH(self.avatar.getH() + \
 							 10 * globalClock.getDt())
 			self.rotateDuration -= 1
 			if not self.rotateDuration:
 				self.rotateDuration = -1
 				self.rotateDir = -1
-		elif self.rotateDir == 2 and self.rotateDuration < 17: # turn right
+				self.inBigRotate = False
+		elif self.rotateDir == 2 : # turn right
+			if self.rotateDuration > 50 : self.inBigRotate = True
 			self.avatar.setH(self.avatar.getH() - \
 							 10 * globalClock.getDt())
 			self.rotateDuration -= 1
 			if not self.rotateDuration:
 				self.rotateDuration = -1
 				self.rotateDir = -1
-		else : # do nothing
+				self.inBigRotate = False
+		else : # do not rotate; keep moving forward
 			self.rotateDuration -= 1
 			if not self.rotateDuration:
 				self.rotateDuration = -1
 				self.rotateDir = -1
 
-
 #		if self.moveDir > 2 and not self.isAvoidingCollision: # move forward
-		if not self.isAvoidingCollision: # move forward
+		if not self.inBigRotate and not self.isAvoidingCollision: # move forward
 			self.avatar.setY(self.avatar, -200 * globalClock.getDt())
 #			self.moveDuration -= 1
 #			if not self.moveDuration:
@@ -381,19 +362,21 @@ class AIWorld(DirectObject):
 		entries = []
 		for i in range(self.avatarGroundHandler.getNumEntries()):
 			entries.append(self.avatarGroundHandler.getEntry(i))
-		entries.sort(lambda x,y: cmp(y.getSurfacePoint(render).getZ(), \
-				 x.getSurfacePoint(render).getZ()))
-		if (len(entries)>0) and \
-		   (entries[0].getIntoNode().getName() == "ID257") : # the tag of terrain
-			self.isAvoidingCollision = False
-			self.avatar.setZ( \
-				entries[0].getSurfacePoint(render).getZ())
-		else:
-			self.isAvoidingCollision = True
-			self.avatar.setPos(startpos)
-			# take a left turn
-			self.avatar.setH(self.avatar.getH() + \
-					 50 * globalClock.getDt())
+		collide = False
+		if (len(entries)>0) :
+			for entry in entries :
+				if entry.getIntoNode().getName() != "ID257" : # tage of terrain
+					collide = True
+			if collide == True :
+				self.isAvoidingCollision = True
+				self.avatar.setPos(startpos)
+				# take a left turn
+				self.avatar.setH(self.avatar.getH() + \
+						 50 * globalClock.getDt())
+			else:
+				self.isAvoidingCollision = False
+				self.avatar.setZ( \
+					entries[0].getSurfacePoint(render).getZ())
 
 		# map the avatar's position to the 2D map on the top-right 
 		# corner of the screen
