@@ -284,72 +284,58 @@ class AIWorld(DirectObject):
 		""" Update the position of this avatar.
 
 		This method is called by the task scheduler on every frame.
-		It responds to the arrow keys to move the avatar
-		and to the camera up/down keys.
+		It guides the AI.
 		"""
 
 		# save avatar's initial position so that we can restore it,
-		# in case he falls off the map or runs into something.
+		# in case he falls off or runs into something.
 		startpos = self.avatar.getPos()
 
-		# randomly move the avatar
 		if self.rotateDir == -1:
-			self.rotateDir = random.randint(1,5) # 40% chance to rotate
+			self.rotateDir = random.randint(1,20) # 10% chance to rotate
 		if self.rotateDuration == -1:
-			self.rotateDuration = random.randint(30,80)
-#		if self.moveDir == -1:
-#			self.moveDir = random.randint(1,10)
-#		if self.moveDuration == -1:
-#			self.moveDuration = random.randint(100,400)
+			self.rotateDuration = random.randint(200,400)
 
-		if self.rotateDir == 1 : # turn left
-			if self.rotateDuration > 50 : self.inBigRotate = True
-			self.avatar.setH(self.avatar.getH() + \
-							 10 * globalClock.getDt())
-			self.rotateDuration -= 1
-			if not self.rotateDuration:
-				self.rotateDuration = -1
-				self.rotateDir = -1
-				self.inBigRotate = False
-		elif self.rotateDir == 2 : # turn right
-			if self.rotateDuration > 50 : self.inBigRotate = True
-			self.avatar.setH(self.avatar.getH() - \
-							 10 * globalClock.getDt())
-			self.rotateDuration -= 1
-			if not self.rotateDuration:
-				self.rotateDuration = -1
-				self.rotateDir = -1
-				self.inBigRotate = False
-		else : # do not rotate; keep moving forward
-			self.rotateDuration -= 1
-			if not self.rotateDuration:
-				self.rotateDuration = -1
-				self.rotateDir = -1
+		# if am not trying to avoid collision, randomly move
+		if not self.isAvoidingCollision :
+			if self.rotateDir == 1 : # turn left
+		#		if self.rotateDuration > 500 : self.inBigRotate = True
+				self.avatar.setH(self.avatar.getH() + \
+								 10 * globalClock.getDt())
+				self.rotateDuration -= 1
+				if self.rotateDuration <= 0:
+					self.rotateDuration = -1
+					self.rotateDir = -1
+		#			self.inBigRotate = False
+			elif self.rotateDir == 2 : # turn right
+		#		if self.rotateDuration > 500 : self.inBigRotate = True
+				self.avatar.setH(self.avatar.getH() - \
+								 10 * globalClock.getDt())
+				self.rotateDuration -= 1
+				if self.rotateDuration <= 0:
+					self.rotateDuration = -1
+					self.rotateDir = -1
+		#			self.inBigRotate = False
+			else : # do not rotate; keep moving forward
+				self.rotateDuration -= 1
+				if self.rotateDuration <= 0:
+					self.rotateDuration = -1
+					self.rotateDir = -1
 
-#		if self.moveDir > 2 and not self.isAvoidingCollision: # move forward
-		if not self.inBigRotate and not self.isAvoidingCollision: # move forward
-			self.avatar.setY(self.avatar, -200 * globalClock.getDt())
-#			self.moveDuration -= 1
-#			if not self.moveDuration:
-#				self.moveDuration = -1
-#				self.moveDir = -1
-#		elif not self.isAvoidingCollision: # move backward
-#			self.avatar.setY(self.avatar, +200 * globalClock.getDt())
-#			self.moveDuration -= 1
-#			if not self.moveDuration:
-#				self.moveDuration = -1
-#				self.moveDir = -1
-
-		# If avatar is moving, loop the run animation.
-		# If he is standing still, stop the animation.
-		self.avatar.loop("run")
-		self.isMoving = True
+			# move forward
+#			if not self.inBigRotate and not self.isAvoidingCollision:
+			if not self.isAvoidingCollision:
+				self.avatar.setY(self.avatar, -200 * globalClock.getDt())
 
 		# position the camera where the avatar is
 		pos = self.avatar.getPos(); pos[2] += 1
 		hpr = self.avatar.getHpr();
 		hpr[0] += 180; hpr[1] = 0 #camAngle
 		base.camera.setPos(pos); base.camera.setHpr(hpr)
+
+
+
+
 		
 		# Now check for collisions.
 		self.cTrav.traverse(render)
@@ -370,11 +356,13 @@ class AIWorld(DirectObject):
 				self.avatar.setPos(startpos)
 				# take a left turn
 				self.avatar.setH(self.avatar.getH() + \
-						 50 * globalClock.getDt())
+						 120 * globalClock.getDt())
+				self.rotateDuration = -1
+				self.rotateDir = -1
 			else:
 				self.isAvoidingCollision = False
-				self.avatar.setZ( \
-					entries[0].getSurfacePoint(render).getZ())
+	#			self.avatar.setZ( \
+	#				entries[0].getSurfacePoint(render).getZ())
 
 		# map the avatar's position to the 2D map on the top-right 
 		# corner of the screen
