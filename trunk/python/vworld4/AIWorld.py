@@ -139,20 +139,18 @@ class AIWorld(DirectObject):
 		self.cTrav = CollisionTraverser()
 
  		"""
- 		CollisionRay that detects walkable region.
+ 		CollisionSphere that detects walkable region.
  		A move is illegal if the groundRay hits but the terrain.
  		"""
-		self.avatarGroundRay = CollisionSphere(0,0,0,1)
-#		self.avatarGroundRay.setOrigin(0,0,1000)
-#		self.avatarGroundRay.setDirection(0,0,-1)
-		self.avatarGroundCol = CollisionNode('avatarRay')
-		self.avatarGroundCol.addSolid(self.avatarGroundRay)
+		self.avatarCS = CollisionSphere(0,0,0,1)
+		self.avatarGroundCol = CollisionNode('avatarSphere')
+		self.avatarGroundCol.addSolid(self.avatarCS)
 		self.avatarGroundCol.setFromCollideMask(BitMask32.bit(0))
 		self.avatarGroundCol.setIntoCollideMask(BitMask32.allOff())
 		self.avatarGroundColNp = \
 			self.avatar.attachNewNode(self.avatarGroundCol)
-		self.avatarGroundRay.setRadius(500)
-		self.avatarGroundRay.setCenter(0,-80,300)
+		self.avatarCS.setRadius(500)
+		self.avatarCS.setCenter(0,-80,300)
 		self.avatarGroundHandler = CollisionHandlerQueue()
 		self.cTrav.addCollider(self.avatarGroundColNp, \
 			self.avatarGroundHandler)
@@ -365,7 +363,7 @@ class AIWorld(DirectObject):
 		collide = False
 		if (len(entries)>0) :
 			for entry in entries :
-				if entry.getIntoNode().getName() != "ID257" : # tage of terrain
+				if entry.getIntoNode().getName() != "ID257" : # tag of terrain
 					collide = True
 			if collide == True :
 				self.isAvoidingCollision = True
