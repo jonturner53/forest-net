@@ -47,44 +47,6 @@ def printText(pos):
 		style=2, fg=(1,0.8,0.7,1), pos=(-1.3, pos), \
 		align=TextNode.ALeft, scale = .06, mayChange = True)
 
-def canSee(self, p1, p2):
-	""" Test if two points are visible from one another
-
-	It works by setting up a collisionSegment between the
-	two positions. Return True if the segment didn't hit
-	any from/into object in between.
-
-	An alternative is to create a pool of rays etc. in
-	PandaWorld class, like what we've done with remotes, and pass
-	them here, so that we don't create objects on the fly. But
-	for canSee(), the current version demands less computation
-	resources.
-	"""
-	traverser = CollisionTraverser('CustomTraverser')
-
-	ray = CollisionSegment()
-	# lift two points a bit above the grouond to prevent the
-	# collision ray from hiting the edge of shallow terrain;
-	# also, put them at different level so that the ray has
-	# nonzero length (a requirement for collisionSegment()).
-	p1[2] += 0.5
-	p2[2] += 0.4
-	ray.setPointA(p1)
-	ray.setPointB(p2)
-	fromObj = self.environ.attachNewNode(CollisionNode('visRay'))
-	fromObj.node().addSolid(ray)
-	fromObj.node().setFromCollideMask(BitMask32.bit(0))
-	fromObj.node().setIntoCollideMask(BitMask32.allOff())
-	handler = CollisionHandlerQueue()
-
-	traverser.addCollider(fromObj, handler)
-
-	traverser.traverse(render)
-
-	if handler.getNumEntries() != 0:
-		return False
-	else:
-		return True
 
 
 class PandaWorld(DirectObject):
@@ -195,20 +157,32 @@ class PandaWorld(DirectObject):
  		CollisionRay that detects walkable region.
  		A move is illegal if the groundRay hits but the terrain.
  		"""
-		self.avatarGroundRay = CollisionSphere(0,0,0,1)
+		# TODO: maybe we don't need avatarGroundRay; camGroundRay suffices.
+		self.avatarGroundRay = CollisionRay()
+		self.avatarGroundRay.setOrigin(0,0,1000)
+		self.avatarGroundRay.setDirection(0,0,-1)
 		self.avatarGroundCol = CollisionNode('avatarRay')
 		self.avatarGroundCol.addSolid(self.avatarGroundRay)
 		self.avatarGroundCol.setFromCollideMask(BitMask32.bit(0))
 		self.avatarGroundCol.setIntoCollideMask(BitMask32.allOff())
 		self.avatarGroundColNp = \
 			self.avatar.attachNewNode(self.avatarGroundCol)
-		self.avatarGroundRay.setRadius(500)
-		self.avatarGroundRay.setCenter(0,-80,300)
 		self.avatarGroundHandler = CollisionHandlerQueue()
 		self.cTrav.addCollider(self.avatarGroundColNp, \
 			self.avatarGroundHandler)
-#		self.avatarGroundColNp.show()
-		
+
+		self.camGroundRay = CollisionRay()
+		self.camGroundRay.setOrigin(0,0,1000)
+		self.camGroundRay.setDirection(0,0,-1)
+		self.camGroundCol = CollisionNode('camRay')
+		self.camGroundCol.addSolid(self.camGroundRay)
+		self.camGroundCol.setFromCollideMask(BitMask32.bit(0))
+		self.camGroundCol.setIntoCollideMask(BitMask32.allOff())
+		self.camGroundColNp = \
+			base.camera.attachNewNode(self.camGroundCol)
+		self.camGroundHandler = CollisionHandlerQueue()
+		self.cTrav.addCollider(self.camGroundColNp, \
+			self.camGroundHandler)
 
 		# Create some lighting
 		self.ambientLight = render.attachNewNode( AmbientLight( "ambientLight" ) )
@@ -229,6 +203,22 @@ class PandaWorld(DirectObject):
 		self.dlnp2.node().setScene(render)
 		self.dlnp2.setHpr(-70,-60,0)
 		render.setLight(self.dlnp2)
+
+		# setup collision detection objects used to implement
+		# canSee method
+		self.csSeg = CollisionSegment()
+		self.csSeg.setPointA(Point3(0,0,0))
+		self.csSeg.setPointB(Point3(0,0,.5))
+
+		self.csNode = self.environ.attachNewNode(CollisionNode('csSeg'))
+		self.csNode.node().addSolid(self.csSeg)
+		self.csNode.node().setFromCollideMask(BitMask32.bit(0))
+		self.csNode.node().setIntoCollideMask(BitMask32.allOff())
+
+		self.csHandler = CollisionHandlerQueue()
+
+		self.csTrav = CollisionTraverser('CustomTraverser')
+		self.csTrav.addCollider(self.csNode, self.csHandler)
 
 
 
@@ -302,6 +292,8 @@ class PandaWorld(DirectObject):
 		remote.detachNode() # ??? check this
 		self.freeRemotes.append(remote)
 		del self.remoteMap[id]
+		if id in self.visList:
+			self.visList.remove(id)
 
 	def getPosHeading(self) :
 		""" Get the position and heading.
@@ -317,6 +309,59 @@ class PandaWorld(DirectObject):
 		""" Get the limit on the xy coordinates.
 		"""
 		return 120
+
+	def canSee(self, p1, p2):
+		""" Test if two points are visible from one another
+	
+		It works by setting up a collisionSegment between the
+		two positions. Return True if the segment didn't hit
+		any from/into object in between.
+	
+		An alternative is to create a pool of rays etc. in
+		PandaWorld class, like what we've done with remotes, and pass
+		them here, so that we don't create objects on the fly. But
+		for canSee(), the current version demands less computation
+		resources.
+		"""
+
+		# lift two points a bit above the grouond to prevent the
+		# collision ray from hiting the edge of shallow terrain;
+		# also, put them at different level so that the ray has
+		# nonzero length (a requirement for collisionSegment()).
+		p1[2] += 0.5
+		p2[2] += 0.4
+		self.csSeg.setPointA(p1)
+		self.csSeg.setPointB(p2)
+	
+		self.csTrav.traverse(render)
+	
+		return (self.csHandler.getNumEntries() == 0)
+
+#		traverser = CollisionTraverser('CustomTraverser')
+#	
+#		ray = CollisionSegment()
+#		# lift two points a bit above the grouond to prevent the
+#		# collision ray from hiting the edge of shallow terrain;
+#		# also, put them at different level so that the ray has
+#		# nonzero length (a requirement for collisionSegment()).
+#		p1[2] += 0.5
+#		p2[2] += 0.4
+#		ray.setPointA(p1)
+#		ray.setPointB(p2)
+#		fromObj = self.environ.attachNewNode(CollisionNode('visRay'))
+#		fromObj.node().addSolid(ray)
+#		fromObj.node().setFromCollideMask(BitMask32.bit(0))
+#		fromObj.node().setIntoCollideMask(BitMask32.allOff())
+#		handler = CollisionHandlerQueue()
+#	
+#		traverser.addCollider(fromObj, handler)
+#	
+#		traverser.traverse(render)
+#	
+#		if handler.getNumEntries() != 0:
+#			return False
+#		else:
+#			return True
 
 	def move(self, task):
 		""" Update the position of this avatar.
@@ -372,8 +417,6 @@ class PandaWorld(DirectObject):
 
 		# position the camera where the avatar is
 		pos = self.avatar.getPos(); pos[2] += 1
-#		pos[1] += 5
-#		pos[0] += 5
 		hpr = self.avatar.getHpr();
 		hpr[0] += 180; hpr[1] = camAngle
 		base.camera.setPos(pos); base.camera.setHpr(hpr)
@@ -387,21 +430,18 @@ class PandaWorld(DirectObject):
 		entries = []
 		for i in range(self.avatarGroundHandler.getNumEntries()):
 			entries.append(self.avatarGroundHandler.getEntry(i))
-		collide = False
-		if (len(entries)>0) :
-			for entry in entries :
-				if entry.getIntoNode().getName() != "ID257" : # tage of terrain
-					collide = True
-					break
-			if collide == True :
-				self.avatar.setPos(startpos)
-			else:
-				self.avatar.setZ( \
-					entries[0].getSurfacePoint(render).getZ())
+		entries.sort(lambda x,y: cmp(y.getSurfacePoint(render).getZ(), \
+				 x.getSurfacePoint(render).getZ()))
+		if (len(entries)>0) and \
+		   (entries[0].getIntoNode().getName() == "ID257") : # the tag of terrain
+			self.avatar.setZ( \
+				entries[0].getSurfacePoint(render).getZ())
+		else:
+			self.avatar.setPos(startpos)
 
 		# Check visibility and update visList
 		for id in self.remoteMap:
-			if canSee(self, self.avatar.getPos(),
+			if self.canSee(self.avatar.getPos(),
 					self.remoteMap[id][0].getPos()) == True:
 				if id not in self.visList:
 					self.visList.append(id)
