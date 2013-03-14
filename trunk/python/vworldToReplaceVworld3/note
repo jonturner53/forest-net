@@ -1,0 +1,2 @@
+Add the following line to /Developer/Panda3D/etc/Config.prc:
+window-type none
