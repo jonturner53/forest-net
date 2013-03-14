@@ -1,18 +1,7 @@
-""" PandaWorld - simple virtual environment with wandering pandas.
+""" AIWorld - a virtual environment for each bot.
+Uncomment codes to show window display; see PandaWorld.py
 
-This module is intended to be called by Avatar.py;
-To run it independently, uncomment the end of this code:
-	# w = PandaWorld()
-	# (spawning NPCs...)
- 	# run()
-and type "python PandaWorld.py"
- 
-control:
-	Move   -> Up, Left, Right, Down
-	Rotate -> A, S
-	Strafe -> Z, X
-
-Last Updated: 2/12/2013
+Last Updated: 3/14/2013
 Author: Chao Wang and Jon Turner
 World Model: Chao Wang
  
@@ -33,23 +22,27 @@ import random, sys, os, math, re
 
 from Util import *
 
-def addTitle(text):
-	""" Put title on the screen
-	"""
-	return OnscreenText(text=text, style=1, fg=(1,1,1,1), \
-		pos=(0,-0.95), align=TextNode.ACenter, scale = .07)
-
-def printText(pos):
-	""" Print text on the screen
-	"""
-	return OnscreenText( \
-		text=" ", \
-		style=2, fg=(1,0.8,0.7,1), pos=(-1.3, pos), \
-		align=TextNode.ALeft, scale = .06, mayChange = True)
+#def addTitle(text):
+#	""" Put title on the screen
+#	"""
+#	return OnscreenText(text=text, style=1, fg=(1,1,1,1), \
+#		pos=(0,-0.95), align=TextNode.ACenter, scale = .07)
+#
+#def printText(pos):
+#	""" Print text on the screen
+#	"""
+#	return OnscreenText( \
+#		text=" ", \
+#		style=2, fg=(1,0.8,0.7,1), pos=(-1.3, pos), \
+#		align=TextNode.ALeft, scale = .06, mayChange = True)
 
 
 class AIWorld(DirectObject):
 	def __init__(self):
+
+#		base.windowType = 'onscreen' 
+#		wp = WindowProperties.getDefault() 
+#		base.openDefaultWindow(props = wp)
  
 #		base.win.setClearColor(Vec4(0,0,0,1))
 
@@ -58,8 +51,8 @@ class AIWorld(DirectObject):
 #		self.Dmap = OnscreenImage(image = 'models/2Dmap.png', \
 #					  pos = (.8,0,.6), scale = .4)
 #		self.Dmap.setTransparency(TransparencyAttrib.MAlpha)
-		self.dot = OnscreenImage(image = 'models/dot.png', \
-					 pos = (1,0,1), scale = .01)
+#		self.dot = OnscreenImage(image = 'models/dot.png', \
+#					 pos = (1,0,1), scale = .01)
 	
 		
 		# Set up the environment
@@ -79,7 +72,7 @@ class AIWorld(DirectObject):
 		self.environ.reparentTo(render)
 		self.environ.setPos(0,0,0)
 		
- 		base.setBackgroundColor(0.7,0.23,0.4,1)
+# 		base.setBackgroundColor(0.7,0.23,0.4,1)
 		
 		# Create the panda
 		self.avatar = Actor("models/panda-model", \
@@ -97,9 +90,9 @@ class AIWorld(DirectObject):
 		self.inBigRotate = False # if True, do not move forward; only rotate
 
 		# Set the dot's position
-		self.dot.setPos(self.avatar.getX()/(120.0+self.Dmap.getX()), \
-				0,self.avatar.getY()/(120.0+self.Dmap.getZ()))
-		self.dotOrigin = self.dot.getPos()
+#		self.dot.setPos(self.avatar.getX()/(120.0+self.Dmap.getX()), \
+#				0,self.avatar.getY()/(120.0+self.Dmap.getZ()))
+#		self.dotOrigin = self.dot.getPos()
 
 		# Set the upper bound of # of remote avatars
 		self.maxRemotes = 100
@@ -123,18 +116,18 @@ class AIWorld(DirectObject):
 
 		taskMgr.add(self.move,"moveTask")
 
-		# Create some lighting
-		self.ambientLight = render.attachNewNode( AmbientLight( "ambientLight" ) )
-		self.ambientLight.node().setColor( Vec4( .8, .8, .8, 1 ) )
-		render.setLight(self.ambientLight)
+#		# Create some lighting
+#		self.ambientLight = render.attachNewNode( AmbientLight( "ambientLight" ) )
+#		self.ambientLight.node().setColor( Vec4( .8, .8, .8, 1 ) )
+#		render.setLight(self.ambientLight)
 
 		# Game state variables
 		self.isMoving = False
 
 		# Set up the camera
-		base.disableMouse()
-		base.camera.setPos(self.avatar.getX(),self.avatar.getY(),.2)
-		base.camera.setHpr(self.avatar.getHpr()[0],0,0)
+#		base.disableMouse()
+#		base.camera.setPos(self.avatar.getX(),self.avatar.getY(),.2)
+#		base.camera.setHpr(self.avatar.getHpr()[0],0,0)
 		
 		self.cTrav = CollisionTraverser()
 
@@ -190,9 +183,10 @@ class AIWorld(DirectObject):
 					 "remotes\n")
 			sys.exit(1)
 		remote = self.freeRemotes.pop()
-		self.remoteMap[id] = [remote, True ,
-				OnscreenImage(image = 'models/dot1.png', \
-						pos = (0,0,0), scale = .01)
+		self.remoteMap[id] = [remote, True
+	#	self.remoteMap[id] = [remote, True ,
+	#			OnscreenImage(image = 'models/dot1.png', \
+	#					pos = (0,0,0), scale = .01)
 				]
 
 		# set position and direction of remote and make it visible
@@ -210,7 +204,8 @@ class AIWorld(DirectObject):
 		id is an identifier used to distinguish this remote from others
 		"""
 		if id not in self.remoteMap : return
-		remote, isMoving, dot = self.remoteMap[id]
+#		remote, isMoving, dot = self.remoteMap[id]
+		remote, isMoving = self.remoteMap[id]
 		if abs(x - remote.getX()) < .001 and \
 		   abs(y - remote.getY()) < .001 and \
 		   direction == remote.getHpr()[0] :
@@ -231,7 +226,7 @@ class AIWorld(DirectObject):
 		id is the identifier for the remote
 		"""
 		if id not in self.remoteMap : return
-		self.remoteMap[id][2].destroy()
+#		self.remoteMap[id][2].destroy()
 		remote = self.remoteMap[id][0]
 		remote.detachNode() # ??? check this
 		self.freeRemotes.append(remote)
@@ -328,10 +323,10 @@ class AIWorld(DirectObject):
 				self.avatar.setY(self.avatar, -200 * globalClock.getDt())
 
 		# position the camera where the avatar is
-		pos = self.avatar.getPos(); pos[2] += 1
-		hpr = self.avatar.getHpr();
-		hpr[0] += 180; hpr[1] = 0 #camAngle
-		base.camera.setPos(pos); base.camera.setHpr(hpr)
+#		pos = self.avatar.getPos(); pos[2] += 1
+#		hpr = self.avatar.getHpr();
+#		hpr[0] += 180; hpr[1] = 0 #camAngle
+#		base.camera.setPos(pos); base.camera.setHpr(hpr)
 
 
 
@@ -364,21 +359,13 @@ class AIWorld(DirectObject):
 	#			self.avatar.setZ( \
 	#				entries[0].getSurfacePoint(render).getZ())
 
-		# map the avatar's position to the 2D map on the top-right 
-		# corner of the screen
-		self.dot.setPos((self.avatar.getX()/120.0)*0.7+0.45, \
-				0,(self.avatar.getY()/120.0)*0.7+0.25)
-		for id in self.remoteMap:
-			self.remoteMap[id][2].setPos((self.remoteMap[id][0].getX()/120.0)*0.7+0.45, \
-				0,(self.remoteMap[id][0].getY()/120.0)*0.7+0.25)
+#		# map the avatar's position to the 2D map on the top-right 
+#		# corner of the screen
+#		self.dot.setPos((self.avatar.getX()/120.0)*0.7+0.45, \
+#				0,(self.avatar.getY()/120.0)*0.7+0.25)
+#		for id in self.remoteMap:
+#			self.remoteMap[id][2].setPos((self.remoteMap[id][0].getX()/120.0)*0.7+0.45, \
+#				0,(self.remoteMap[id][0].getY()/120.0)*0.7+0.25)
 
 		return task.cont
 
-#w = AIWorld()
-#w.addRemote(69, 67, 135, 111)
-#w.addRemote(20, 33, 135, 222)
-#w.addRemote(40, 60, 135, 333)
-#w.addRemote(90, 79, 135, 444)
-#w.addRemote(30, 79, 135, 555)
-#w.addRemote(20, 39, 135, 666)
-#run()
