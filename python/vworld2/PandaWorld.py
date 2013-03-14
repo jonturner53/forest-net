@@ -12,7 +12,7 @@ control:
 	Rotate -> A, S
 	Strafe -> Z, X
 
-Last Updated: 2/12/2013
+Last Updated: 3/14/2013
 Author: Chao Wang and Jon Turner
 World Model: Chao Wang
  
@@ -51,6 +51,10 @@ def printText(pos):
 
 class PandaWorld(DirectObject):
 	def __init__(self):
+
+		base.windowType = 'onscreen' 
+		wp = WindowProperties.getDefault() 
+		base.openDefaultWindow(props = wp)
  
 		self.keyMap = {"left":0, "right":0, "forward":0, "backward":0, \
  				"cam-up":0, "cam-down":0, \

@@ -51,13 +51,13 @@ def printText(pos):
 class AIWorld(DirectObject):
 	def __init__(self):
  
-		base.win.setClearColor(Vec4(0,0,0,1))
+#		base.win.setClearColor(Vec4(0,0,0,1))
 
 		# Add title and show map
-		self.title = addTitle("AI's viewpoint")
-		self.Dmap = OnscreenImage(image = 'models/2Dmap.png', \
-					  pos = (.8,0,.6), scale = .4)
-		self.Dmap.setTransparency(TransparencyAttrib.MAlpha)
+#		self.title = addTitle("AI's viewpoint")
+#		self.Dmap = OnscreenImage(image = 'models/2Dmap.png', \
+#					  pos = (.8,0,.6), scale = .4)
+#		self.Dmap.setTransparency(TransparencyAttrib.MAlpha)
 		self.dot = OnscreenImage(image = 'models/dot.png', \
 					 pos = (1,0,1), scale = .01)
 	
