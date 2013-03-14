@@ -7,19 +7,19 @@ class Mcast :
 	""" Multicast group management.
 
 	"""
-	def __init__(self, numg, maxVis, net, pWorld):
+	def __init__(self, numg, subLimit, net, pWorld):
 		""" Initialize a new Mcast object.
 
 		numg*numg is the number of multicast groups used to
 		share status info
-		maxVis is the visibility range, expressed in terms
-		of multicast groups
+		subLimit limits number of multicast groups we subscribe to;
+		we subscribe only if x-distance + y-distance is <= subLimit
 		net is a reference to the Net object
 		pWorld is a reference to the PandaWorld object
 		"""
 
 		self.numg = numg
-		self.maxVis = maxVis
+		self.subLimit = subLimit
 		self.net = net
 		self.pWorld = pWorld
 
@@ -54,9 +54,9 @@ class Mcast :
 		A vset defines the cells that are visible from a given cell.
 		Vset[c] includes two arrays, lo and hi, where lo[i]..hi[i]
 		specifies the cells in column i that are potentially
-		visible from cell c. The arrays have length 2*maxVis+1.
+		visible from cell c. The arrays have length 2*subLimit+1.
 		The center entry in each array corresponds to the column
-		of cell c, so lo[maxVis]..hi[maxVis] specifies the visible
+		of cell c, so lo[subLimit]..hi[subLimit] specifies the visible
 		cells directly to the "south" and "north" of cell c.
 
 		A vset also includes two auxiliary variables i and side.
@@ -68,21 +68,21 @@ class Mcast :
 		"""
 		col = c%self.numg; row = c/self.numg
 
-		lo = [row+1] * (2*self.maxVis+1) # low ends of column ranges
-		hi = [row] * (2*self.maxVis+1)   # high ends of column ranges
+		lo = [row+1] * (2*self.subLimit+1) # low ends of column ranges
+		hi = [row] * (2*self.subLimit+1)   # high ends of column ranges
 
-		i0 = self.maxVis # entry in lo/hi corresponding to col
+		i0 = self.subLimit # entry in lo/hi corresponding to col
 
-		# set initial visibility ranges using maxVis alone
-		lo[i0] = max(0,row-self.maxVis) 
-		hi[i0] = min(self.numg-1,row+self.maxVis) 
-		for i in range(1,self.maxVis+1) :
+		# set initial visibility ranges using subLimit alone
+		lo[i0] = max(0,row-self.subLimit) 
+		hi[i0] = min(self.numg-1,row+self.subLimit) 
+		for i in range(1,self.subLimit+1) :
 			if col-i >= 0 :
-				lo[i0-i] = max(0,row-(self.maxVis-i))
-				hi[i0-i] = min(self.numg-1,row+self.maxVis-i)
+				lo[i0-i] = max(0,row-(self.subLimit-i))
+				hi[i0-i] = min(self.numg-1,row+self.subLimit-i)
 			if col+i < self.numg :
-				lo[i0+i] = max(0,row-(self.maxVis-i))
-				hi[i0+i] = min(self.numg-1,row+self.maxVis-i)
+				lo[i0+i] = max(0,row-(self.subLimit-i))
+				hi[i0+i] = min(self.numg-1,row+self.subLimit-i)
 
 		# add new vset to array of vsets, with i=side=0
 		# and append it to the refineList, so we can start
@@ -109,7 +109,7 @@ class Mcast :
 		    	# side=1 if we're refining hi[i]
 
 		col = c%self.numg; row = c/self.numg
-		i0 = self.maxVis	# offset in lo/hi matching c's column
+		i0 = self.subLimit	# offset in lo/hi matching c's column
 
 		ccol = col + (i-i0)	# current column to refine
 		if ccol < 0 :
@@ -129,7 +129,7 @@ class Mcast :
 			crow = hi[i]; cc = ccol + crow*self.numg
 			if crow > row and not self.isVis(c,cc) :
 				hi[i] -= 1; return task.cont
-			if i < 2*self.maxVis :
+			if i < 2*self.subLimit :
 				self.vsets[c][0] = i+1; self.vsets[c][1] = 0
 			else :
 				self.vsets[c][0] = 0; self.vsets[c][1] = 0
@@ -187,11 +187,11 @@ class Mcast :
 		lo = vs[2]; hi = vs[3]
 
 		# identify all cells considered visible and subscribe to them
-		left = max(0,col-self.maxVis);
-		right = min(self.numg-1,col+self.maxVis)
+		left = max(0,col-self.subLimit);
+		right = min(self.numg-1,col+self.subLimit)
 		for i in range(left,right+1) :
-			bot = lo[self.maxVis+(i-col)]
-			top = hi[self.maxVis+(i-col)]
+			bot = lo[self.subLimit+(i-col)]
+			top = hi[self.subLimit+(i-col)]
 			for j in range(bot,top+1)  :
 				self.mySubs.add(i+j*self.numg+1)
 
