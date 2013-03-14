@@ -54,7 +54,7 @@ for i in range(6,len(sys.argv)) :
 		auto = True
 
 pWorld = AIWorld() if auto else PandaWorld()
-net = Net(myIp, cliMgrIp, myComtree, numg, subLimit, pWorld, debug, auto)
+net = Net(myIp, cliMgrIp, myComtree, numg, subLimit, pWorld, debug)
 
 # setup tasks
 if not net.init("user", "pass") :
