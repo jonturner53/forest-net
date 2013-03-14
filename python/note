@@ -1,0 +1,12 @@
+vworld1 - the original virtual world demo
+	  that does not require a game engine; we can have
+	  both C++ and python versions of the Avatar;
+	  useful to retain this for pure networking
+	  experiments, where we are not concerned with dealing
+	  with a real virtual world; so the python version will 
+	  use WorldMap for both visibility and auto operation
+
+vworld2 - a basic panda demo for others who may want to build
+	  their own games; we'll keep it simple
+
+vworldToReplaceVworld3 - a more scalable version
