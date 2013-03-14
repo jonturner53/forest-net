@@ -33,18 +33,20 @@ import random, sys, os, math
 # process command line arguments
 if len(sys.argv) < 4 :
 	sys.stderr.write("usage: Avatar myIp cliMgrIp " + \
-			 "comtree [ debug ] [ auto ] [# of bots]\n")
+			 "comtree [ debug ] [ auto ] \n")
         sys.exit(1)
 
 myIp = gethostbyname(sys.argv[1])
 cliMgrIp = gethostbyname(sys.argv[2])
 myComtree = int(sys.argv[3])
 
-auto = False; debug = 0; botNum = 10
+auto = False; debugAI = False
+debug = 0; botNum = 10
 for i in range(4,len(sys.argv)) :
 	if sys.argv[i] == "debug" : debug = 1
 	elif sys.argv[i] == "debugg" : debug = 2
 	elif sys.argv[i] == "debuggg" : debug = 3
+	elif sys.argv[i] == "debugAI" : debugAI = True
 	elif sys.argv[i] == "auto" :
 		auto = True
 #		loadPrcFile('myConfig.prc')
@@ -60,7 +62,7 @@ if auto == False :
 else :
 	vworld = {}; vnet = {}
 	for i in range(0,botNum) :
-		vworld[i] = AIWorld()
+		vworld[i] = AIWorld(debugAI)
 		vnet[i] = Net(myIp, cliMgrIp, myComtree, vworld[i], debug, True)
 		if not vnet[i].init("user", "pass") :
 			sys.stderr.write("cannot initialize net object\n");
