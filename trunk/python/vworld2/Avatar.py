@@ -1,11 +1,13 @@
 """ Demonstration of simple virtual world using Forest overlay
 
 usage:
-      Avatar myIp cliMgrIp numg maxVis comtree [ debug ] [ auto ]
+      Avatar myIp cliMgrIp numg subLimit comtree [ debug ] [ auto ]
 
 - myIp is the IP address of the user's computer
 - cliMgrIp is the IP address of the client manager's computer
 - numg*numg is the number of multicast groups to use
+- subLimit limits the number of multicast groups that we subscribe to;
+  we'll subscribe to a group is it's L_0 distance is at most subLimit
 - comtree is the number of a pre-configured Forest comtree
 - the debug option, if present controls the amount of debugging output;
   use "debug" for a little debugging output, "debuggg" for lots
@@ -34,13 +36,13 @@ import random, sys, os, math
 # process command line arguments
 if len(sys.argv) < 6 :
 	sys.stderr.write("usage: Avatar myIp cliMgrIp numg " + \
-			 "maxVis comtree [ debug ] [ auto ]\n")
+			 "subLimit comtree [ debug ] [ auto ]\n")
         sys.exit(1)
 
 myIp = gethostbyname(sys.argv[1])
 cliMgrIp = gethostbyname(sys.argv[2])
 numg = int(sys.argv[3])
-maxVis = int(sys.argv[4])
+subLimit = int(sys.argv[4])
 myComtree = int(sys.argv[5])
 
 auto = False; debug = 0
@@ -52,7 +54,7 @@ for i in range(6,len(sys.argv)) :
 		auto = True
 
 pWorld = AIWorld() if auto else PandaWorld()
-net = Net(myIp, cliMgrIp, myComtree, numg, maxVis, pWorld, debug, auto)
+net = Net(myIp, cliMgrIp, myComtree, numg, subLimit, pWorld, debug, auto)
 
 # setup tasks
 if not net.init("user", "pass") :

@@ -85,6 +85,7 @@ class Packet:
 		elif self.type == DISCONNECT : s += "disconnect"
 		else : s += "undef"
 
+		s += " len=" + str(OVERHEAD + len(self.payload))
 		s += " flags=" + str(self.flags) 
 		s += " comtree=" + str(self.comtree)
 		s += " srcAdr=" + fadr2string(self.srcAdr) 
