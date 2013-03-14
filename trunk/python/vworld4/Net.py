@@ -59,14 +59,10 @@ class Net :
 		#self.x = int(x); self.y = int(y)
 		self.x = x; self.y = y
 		if self.auto :	self.direction = randint(0,359)
-		# correct panda headings to match mapWorld (yuck)
-	#	self.direction = self.redirect(self.direction)
 		self.speed = SLOW
 
 		self.nearRemotes = {}	# map: fadr -> [x,y,dir,dx,dy,count]
-	#	self.region = self.regionNum(self.x, self.y) 
 		self.regSet = set() # set of region multicast subscriptions
-#		self.visSet = set()	# set of visible avatars
 		self.avaSet = set() # set of avatars within the visible range
 		self.mySubs = self.regSet.union(self.avaSet)# total subscriptions
 		self.avaInRegions = set() # set of avatars in the four regions
@@ -88,7 +84,14 @@ class Net :
 		if not self.joinComtree() :
 			sys.stderr.write("Net.run: cannot join comtree\n")
 			return False
-		self.subscribeAll()
+
+		currentRegion = self.regionNum(self.x, self.y)
+		self.mySubs.add(currentRegion)
+
+		glist = []
+		glist += [currentRegion]
+		self.subscribe(glist)
+
 		taskMgr.add(self.run, "netTask", uponDeath=self.wrapup, \
 				appendTask=True)
 		return True
@@ -129,39 +132,26 @@ class Net :
 		return True
 
 
-#	def redirect(self, direction) :
-#		""" Convert between panda headings and MapWorld directions.
-
-#		MapWorld uses compass headings, so positive y-axis points
-#		north (compass heading 0) and positive x-axis points east
-#		(compass heading 90). Panda's 0 heading is the negative
-#		y-axis and directions change in opposite directions (ugh).
-#		This method transforms between the two. Note, it symmetric,
-#		so you can use it to transform headings from panda to MapWorld
-#		or from MapWorld to panda.
-#		"""
-#		return (180 - direction)%360
-
-
 	def run(self, task) :
 		""" This is the main method for the Net object.
 		"""
 
 		self.now = time() - self.t0
 
-		# regulate the frequency of sending region multicast
+		# pacing the rate of sending status to a region multicast
 		if self.now < self.regionTime : pass
 		else :
 			self.sendStatusRegion()
 			self.regionTime += 1*(1+len(self.avaInRegions))
-			print "# of peers in regions:", len(self.avaInRegions)
+			if self.debug == 1 :
+				print "# of peers in regions:", len(self.avaInRegions)
 			self.avaInRegions.clear()
 
 		# process once per UPDATE_PERIOD
 		if self.now < self.nextTime : return task.cont
 		self.nextTime += UPDATE_PERIOD
 
-		avaSetCandi = set()
+		avaSetCandi = set() # candidates to be added in avaSet
 
 		while True :
 			# substrate has an incoming packet
@@ -176,9 +166,8 @@ class Net :
 							# (Chao: MIA == missing in action?)
 		self.updateStatus(avaSetCandi)	# update Avatar status
 		
-		# finally, send status on comtree
+		# finally, send status to avatar multicast
 		self.sendStatusAva()
-#		self.sendStatusRegion()
 
 		return task.cont
 
@@ -320,11 +309,8 @@ class Net :
 		p.comtree = self.comtree
 		p.srcAdr = self.myFadr
 		p.dstAdr = -self.myMulAdr
-		if self.debug == 2: print "sendStatus to mulAdr=", p.dstAdr
 	
 		numNear = len(self.nearRemotes)
-#		if numNear > 5000 or numNear < 0 :
-#			print "numNear=", numNear
 		p.payload = struct.pack('!8I', \
 					STATUS_REPORT, self.now, \
 					int(self.x*GRID), int(self.y*GRID), \
@@ -342,11 +328,8 @@ class Net :
 		p.comtree = self.comtree
 		p.srcAdr = self.myFadr
 		p.dstAdr = -self.regionNum(self.x,self.y)
-		if self.debug == 2: print "sendStatus to mulAdr=", p.dstAdr
 	
 		numNear = len(self.nearRemotes)
-#		if numNear > 5000 or numNear < 0 :
-#			print "numNear=", numNear
 		p.payload = struct.pack('!8I', \
 					STATUS_REPORT, self.now, \
 					int(self.x*GRID), int(self.y*GRID), \
@@ -363,7 +346,6 @@ class Net :
 
 		x, y, self.direction = self.pWorld.getPosHeading()
 		self.x = x; self.y = y
-	#	self.direction = self.redirect(self.direction)
 
 		# update region
 		currentRegion = self.regionNum(self.x, self.y)
@@ -373,8 +355,14 @@ class Net :
 		# add three adjacent regions in the set.
 		# 	first, calculate the reference point of current region
 		regNumPerAxis = self.limit/REGION_WIDTH
+
+		# calculate a reference point;
+		# use it to determine our relative location in a region;
+		# then use that info to determine which three adjacent
+		# regions to subscribe to
 		refX = ((currentRegion-1)%regNumPerAxis)*REGION_WIDTH
 		refY = ((currentRegion-1)/regNumPerAxis)*REGION_WIDTH
+
 		# lower-left subregion
 		if self.x-refX <= REGION_WIDTH/2 \
 		   and self.y-refY <= REGION_WIDTH/2 :
@@ -478,6 +466,7 @@ class Net :
 		p.srcAdr = self.myFadr; p.dstAdr = self.rtrFadr
 		self.send(p)
 	
+
 	def unsubscribe(self,glist) :
 		""" Unsubscribe from a list of multicast groups.
 		"""
@@ -506,36 +495,24 @@ class Net :
 		p.srcAdr = self.myFadr; p.dstAdr = self.rtrFadr
 		self.send(p)
 	
-	def subscribeAll(self) :
-		""" Subscribe to all multicasts for regions that are visible.
-		"""
-		glist = []
-#		for c in self.visSet :
-#			g = c+1
-#			if g not in self.mySubs :
-#				self.mySubs.add(g); glist += [g]
-	#	for c in range(1,10) :
-	#		self.mySubs.add(c); glist += [c]
-	#		print "subscribe", c
-		c = 5
-		if c not in self.mySubs :
-#			self.visSet.add(c)
-			self.mySubs.add(c); glist += [c]
-		self.subscribe(glist)
 	
 	def unsubscribeAll(self) :
 		""" Unsubscribe from all multicasts. """
 		self.unsubscribe(list(self.mySubs)); self.mySubs.clear()
 
+
 	def updateSubs(self, avaSetCandi, newRegSet) :	
 		""" Update subscriptions.
 		
 		Unsubscribe from
-			1. multicasts for avatars that are no longer visible;
-			2. previous region multicast
+			1. previous region multicast
 		Subscribe to
 			1. multicasts for visible avatars;
 			2. current region multicast
+
+		We unsubscribe an avatar's multicast
+		if we haven't heard from it in a while;
+		implemented in method pruneNearby()
 		"""
 
 		glist = [] # a list of multicast addresses to be subscribed
@@ -543,20 +520,24 @@ class Net :
 		glist += list(avaSetCandi.difference(self.avaSet))
 
 		self.subscribe(glist)
-		if glist != [] :
-			print "subscribe to :", glist
-		self.unsubscribe(list(self.regSet.difference(newRegSet)))
+		if self.debug == 1 :
+			if glist != [] :
+				print "subscribe to :", glist
+
 		glist1 = list(self.regSet.difference(newRegSet))
-		if glist1 != [] :
-			print "unsubscribe from :", glist1
+		self.unsubscribe(glist1)
+		if self.debug == 1 :
+			if glist1 != [] :
+				print "unsubscribe from :", glist1
 
 		self.regSet = newRegSet
 		self.avaSet = self.avaSet.union(avaSetCandi)
 		self.mySubs = self.regSet.union(self.avaSet)
 
-		if glist != [] or glist1 != [] :
+		if self.debug == 1 and (glist != [] or glist1 != []) :
 			print "regSet:", list(self.regSet)
-			print "avaSet:", [fadr2string(e-(self.limit/REGION_WIDTH)**2) 			for e in list(self.avaSet)]
+			avID = e-(self.limit/REGION_WIDTH)**2
+			print "avaSet:", [fadr2string(avID) for e in list(self.avaSet)]
 			print "mySubs:", list(self.mySubs)
 	
 
@@ -569,7 +550,6 @@ class Net :
 		(say, process a "kill packet")
 		"""
 		tuple = struct.unpack('!8I',p.payload[0:32])
-	#	tuple = struct.unpack('!IIIII',p.payload[0:20])
 
 		if tuple[0] != STATUS_REPORT : return
 		# Chao: currently, only STATUS_REPORT
@@ -587,10 +567,13 @@ class Net :
 
 			# Since we've subscribed to its avatar multicast,
 			# no need to update based on region multicase
+			# (and if we do, it's likely to cause choppy animation)
 			if peerMulAdr in self.avaSet and \
 			   -p.dstAdr <= (self.limit/REGION_WIDTH)**2 :
-				print "skip update from region multicast:" ,\
-					 fadr2string(peerMulAdr-(self.limit/REGION_WIDTH)**2)
+				if self.debug == 1 :
+					avID = peerMulAdr-(self.limit/REGION_WIDTH)**2
+					print "skip update from region multicast:" ,\
+						 fadr2string(avID)
 				return
 
 			# update map entry for this remote
@@ -598,7 +581,6 @@ class Net :
 			remote[3] = x1 - remote[0]; remote[4] = y1 - remote[1]
 			remote[0] = x1; remote[1] = y1; remote[2] = dir1
 			remote[5] = 0
-#			dir1 = self.redirect(dir1)
 			self.pWorld.updateRemote(x1,y1, dir1, avId)
 			return
 		elif len(self.nearRemotes) < MAXNEAR :
@@ -607,17 +589,17 @@ class Net :
 			if abs(self.x-x1)+abs(self.y-y1) <= VIS_RANGE :
 				# fadr -> x,y,direction,dx,dy,count
 				self.nearRemotes[avId] = [x1,y1,dir1,0,0,0]
-#				dir1 = self.redirect(dir1)
 				self.pWorld.addRemote(x1,y1, dir1, avId)
 				return peerMulAdr
 			else : return
 		return
 	
+
 	def pruneNearby(self) :
 		""" Remove old entries from nearRemotes
 
 		If we haven't heard from a remote in a while, we remove
-		it from the map of nearby remotes and unsubscribe to it.
+		it from the map of nearby remotes and unsubscribe from it.
 		When a remote first "goes missing" we continue to
 		update its position, by extrapolating from last update.
 		"""
@@ -646,7 +628,8 @@ class Net :
 
 		self.avaSet = self.avaSet.difference(set(unsubList))
 		self.mySubs = self.regSet.difference(set(unsubList))
-		if dropList != [] :
+		
+		if self.debug == 1 and dropList != [] :
 			print "--- pruning ---"
 			print "unsubscribe from :", unsubList
 			print "avaSet:", [fadr2string(e) for e in list(self.avaSet)]

@@ -1,8 +1,5 @@
-""" AIWorld - virtual environment with bots.
+""" AIWorld - virtual environment for bots.
 
-This module must be called by Avatar.py;
-
-Last Updated: 3/12/2013
 Author: Chao Wang and Jon Turner
 World Model: Chao Wang
  
@@ -23,6 +20,7 @@ import random, sys, os, math, re
 
 from Util import *
 
+
 def addTitle(text):
 	""" Put title on the screen
 	"""
@@ -39,17 +37,24 @@ def printText(pos):
 
 
 class AIWorld(DirectObject):
-	def __init__(self):
+	def __init__(self, debugAI):
  
-#		base.win.setClearColor(Vec4(0,0,0,1))
+		self.debugAI = debugAI
 
-		# Add title and show map
-		self.title = addTitle("AI's viewpoint")
-		self.Dmap = OnscreenImage(image = 'models/2Dmap.png', \
-					  pos = (.8,0,.6), scale = .4)
-		self.Dmap.setTransparency(TransparencyAttrib.MAlpha)
-		self.dot = OnscreenImage(image = 'models/dot.png', \
-					 pos = (1,0,1), scale = .01)
+		if self.debugAI == True:
+
+			base.windowType = 'onscreen' 
+			wp = WindowProperties.getDefault() 
+			base.openDefaultWindow(props = wp)
+
+			base.win.setClearColor(Vec4(0,0,0,1))
+			# Add title and show map
+			self.title = addTitle("AI's viewpoint")
+			self.Dmap = OnscreenImage(image = 'models/2Dmap.png', \
+						  pos = (.8,0,.6), scale = .4)
+			self.Dmap.setTransparency(TransparencyAttrib.MAlpha)
+			self.dot = OnscreenImage(image = 'models/dot.png', \
+						 pos = (1,0,1), scale = .01)
 	
 		
 		# Set up the environment
@@ -86,10 +91,11 @@ class AIWorld(DirectObject):
 		self.isAvoidingCollision = False
 		self.inBigRotate = False # if True, do not move forward; only rotate
 
-		# Set the dot's position
-		self.dot.setPos(self.avatar.getX()/(120.0+self.Dmap.getX()), \
-				0,self.avatar.getY()/(120.0+self.Dmap.getZ()))
-		self.dotOrigin = self.dot.getPos()
+		if self.debugAI == True:
+			# Set the dot's position
+			self.dot.setPos(self.avatar.getX()/(120.0+self.Dmap.getX()), \
+					0,self.avatar.getY()/(120.0+self.Dmap.getZ()))
+			self.dotOrigin = self.dot.getPos()
 
 		# Set the upper bound of # of remote avatars
 		self.maxRemotes = 100
@@ -113,18 +119,21 @@ class AIWorld(DirectObject):
 
 		taskMgr.add(self.move,"moveTask")
 
-		# Create some lighting
-		self.ambientLight = render.attachNewNode( AmbientLight( "ambientLight" ) )
-		self.ambientLight.node().setColor( Vec4( .8, .8, .8, 1 ) )
-		render.setLight(self.ambientLight)
+		if self.debugAI == True:
+			# Create some lighting
+			self.aLight = render.attachNewNode(AmbientLight("light"))
+			self.aLight.node().setColor(Vec4(.8,.8,.8,1))
+			render.setLight(self.aLight)
 
 		# Game state variables
 		self.isMoving = False
 
 		# Set up the camera
 		base.disableMouse()
-	#	base.camera.setPos(self.avatar.getX(),self.avatar.getY(),.2)
-	#	base.camera.setHpr(self.avatar.getHpr()[0],0,0)
+
+		if self.debugAI == True:
+			base.camera.setPos(self.avatar.getX(),self.avatar.getY(),.2)
+			base.camera.setHpr(self.avatar.getHpr()[0],0,0)
 		
 		self.cTrav = CollisionTraverser()
 
@@ -180,10 +189,14 @@ class AIWorld(DirectObject):
 					 "remotes\n")
 			sys.exit(1)
 		remote = self.freeRemotes.pop()
-		self.remoteMap[id] = [remote, True ,
-				OnscreenImage(image = 'models/dot1.png', \
-						pos = (0,0,0), scale = .01)
-				]
+		if self.debugAI == True:
+			self.remoteMap[id] = [remote, True ,
+					OnscreenImage(image = 'models/dot1.png',
+						 pos = (1,0,1), scale = .01)
+					]
+		else :
+			self.remoteMap[id] = [remote, True]
+
 
 		# set position and direction of remote and make it visible
 		remote.reparentTo(render)
@@ -200,7 +213,12 @@ class AIWorld(DirectObject):
 		id is an identifier used to distinguish this remote from others
 		"""
 		if id not in self.remoteMap : return
-		remote, isMoving, dot = self.remoteMap[id]
+
+		if self.debugAI == True:
+			remote, isMoving, dot = self.remoteMap[id]
+		else :
+			remote, isMoving = self.remoteMap[id]
+
 		if abs(x - remote.getX()) < .001 and \
 		   abs(y - remote.getY()) < .001 and \
 		   direction == remote.getHpr()[0] :
@@ -221,7 +239,8 @@ class AIWorld(DirectObject):
 		id is the identifier for the remote
 		"""
 		if id not in self.remoteMap : return
-		self.remoteMap[id][2].destroy()
+		if self.debugAI == True :
+			self.remoteMap[id][2].destroy()
 		remote = self.remoteMap[id][0]
 		remote.detachNode() # ??? check this
 		self.freeRemotes.append(remote)
@@ -317,21 +336,18 @@ class AIWorld(DirectObject):
 			if not self.isAvoidingCollision:
 				self.avatar.setY(self.avatar, -200 * globalClock.getDt())
 
-		# position the camera where the avatar is
-#		pos = self.avatar.getPos(); pos[2] += 1
-#		hpr = self.avatar.getHpr();
-#		hpr[0] += 180; hpr[1] = 0 #camAngle
-#		base.camera.setPos(pos); base.camera.setHpr(hpr)
-
-
-
-
+		if self.debugAI == True :
+			# position the camera where the avatar is
+			pos = self.avatar.getPos(); pos[2] += 1
+			hpr = self.avatar.getHpr();
+			hpr[0] += 180; hpr[1] = 0 #camAngle
+			base.camera.setPos(pos); base.camera.setHpr(hpr)
 		
 		# Now check for collisions.
 		self.cTrav.traverse(render)
 
-		# Adjust avatar's Z coordinate.  If avatar's ray hit terrain,
-		# update his Z. If it hit anything else, or didn't hit 
+		# Adjust avatar's Z coordinate.
+		# If it hit anything else, or didn't hit 
 		# anything, put him back where he was last frame.
 		entries = []
 		for i in range(self.avatarGroundHandler.getNumEntries()):
@@ -354,12 +370,13 @@ class AIWorld(DirectObject):
 	#			self.avatar.setZ( \
 	#				entries[0].getSurfacePoint(render).getZ())
 
-		# map the avatar's position to the 2D map on the top-right 
-		# corner of the screen
-		self.dot.setPos((self.avatar.getX()/120.0)*0.7+0.45, \
-				0,(self.avatar.getY()/120.0)*0.7+0.25)
-		for id in self.remoteMap:
-			self.remoteMap[id][2].setPos((self.remoteMap[id][0].getX()/120.0)*0.7+0.45, \
-				0,(self.remoteMap[id][0].getY()/120.0)*0.7+0.25)
+		if self.debugAI == True :
+			# map the avatar's position to the 2D map on the top-right 
+			# corner of the screen
+			self.dot.setPos((self.avatar.getX()/120.0)*0.7+0.45, \
+					0,(self.avatar.getY()/120.0)*0.7+0.25)
+			for id in self.remoteMap:
+				self.remoteMap[id][2].setPos((self.remoteMap[id][0].getX()/120.0)*0.7+0.45, \
+					0,(self.remoteMap[id][0].getY()/120.0)*0.7+0.25)
 
 		return task.cont

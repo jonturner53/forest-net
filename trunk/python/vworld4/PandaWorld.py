@@ -54,7 +54,6 @@ class PandaWorld(DirectObject):
  
 		base.windowType = 'onscreen' 
 		wp = WindowProperties.getDefault() 
-#		wp.setParentWindow(parentHandle) 
 		base.openDefaultWindow(props = wp)
 
 		self.keyMap = {"left":0, "right":0, "forward":0, "backward":0, \
