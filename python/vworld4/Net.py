@@ -12,14 +12,14 @@ from direct.task import Task
 
 UPDATE_PERIOD = .05 	# number of seconds between status updates
 STATUS_REPORT = 1 	# code for status report packets
-#NUM_ITEMS = 10		# number of items in status report #Chao: unused 
+#NUM_ITEMS = 10		# number of items in status report #Chao: unused for now
 GRID = 10000  		# xy extent of one grid square
 MAXNEAR = 1000		# max # of nearby avatars
-REGION_WIDTH = 40	# the width of an area for region multicast
-VIS_RANGE = 20		# visible range
+REGION_WIDTH = 40	# width of an area for region multicast (in meters)
+VIS_RANGE = 20		# visible range (in meters)
 
 # speeds below are the amount avatar moves during an update period
-# making them all equal to avoid funky animation
+# making them all equal for now, to avoid funky animation
 STOPPED =   0		# not moving
 SLOW    = 50    	# slow avatar speed
 MEDIUM  = 50    	# medium avatar speed
@@ -62,13 +62,18 @@ class Net :
 		self.speed = SLOW
 
 		self.nearRemotes = {}	# map: fadr -> [x,y,dir,dx,dy,count]
-		self.regSet = set() # set of region multicast subscriptions
-		self.avaSet = set() # set of avatars within the visible range
+		self.regSet = set() # subscriptions for region multicasts
+		self.avaSet = set() # subscriptions for avatar multicasts
+							# (those who are in the visible range)
 		self.mySubs = self.regSet.union(self.avaSet)# total subscriptions
-		self.avaInRegions = set() # set of avatars in the four regions
+		self.avaInRegions = set()   # bookkepping for avatar multicasts
+									# (those who are in the four regions)
 
+		# the total number of regions in current world partition
+		self.numRegions = (self.limit/REGION_WIDTH)**2
+		# A multicast address associated with our avatar.
+		# set to self.myFadr + self.numRegions during login()
 		self.myMulAdr = 0
-		# will be set to self.myFadr + max(regionNum) during login()
 
 
 		self.seqNum = 1		# sequence # for control packets
@@ -126,8 +131,10 @@ class Net :
 		self.rtrIp = tuple[1]
 		self.comtCtlFadr = tuple[2]
 
-		# set avatar's own multicast adr
-		self.myMulAdr = (self.limit/REGION_WIDTH)**2 + self.myFadr
+		# Set avatar's own multicast adr.
+		# Defined by its forest address plus
+		# the total number of regions in a map.
+		self.myMulAdr = self.myFadr+self.numRegions
 	
 		return True
 
@@ -440,10 +447,14 @@ class Net :
 		p = Packet()
 		nsub = 0
 		buf = bytearray(2048)
+
 		if self.debug == 1:
-			print "subscribe BEGIN"
-			for g in glist : print -g
-			print "subscribe End"
+			debugMsg = []
+			for g in glist :
+				if g <= self.numRegions : debugMsg += [g]
+				else : debugMsg += [fadr2string(g-self.numRegions)]
+			print "Multicasts to be subscribed : ", debugMsg
+
 		for g in glist :
 			nsub += 1
 			if nsub > 350 :
@@ -474,6 +485,14 @@ class Net :
 		p = Packet()
 		nunsub = 0
 		buf = bytearray(2048)
+
+		if self.debug == 1:
+			debugMsg = []
+			for g in glist :
+				if g <= self.numRegions : debugMsg += [g]
+				else : debugMsg += [fadr2string(g-self.numRegions)]
+			print "Multicasts to be unsubscribed : ", debugMsg
+
 		for g in glist :
 			nunsub += 1
 			if nunsub > 350 :
@@ -504,11 +523,11 @@ class Net :
 	def updateSubs(self, avaSetCandi, newRegSet) :	
 		""" Update subscriptions.
 		
-		Unsubscribe from
-			1. previous region multicast
 		Subscribe to
 			1. multicasts for visible avatars;
 			2. current region multicast
+		Unsubscribe from
+			1. previous region multicast
 
 		We unsubscribe an avatar's multicast
 		if we haven't heard from it in a while;
@@ -520,25 +539,18 @@ class Net :
 		glist += list(avaSetCandi.difference(self.avaSet))
 
 		self.subscribe(glist)
-		if self.debug == 1 :
-			if glist != [] :
-				print "subscribe to :", glist
 
 		glist1 = list(self.regSet.difference(newRegSet))
 		self.unsubscribe(glist1)
-		if self.debug == 1 :
-			if glist1 != [] :
-				print "unsubscribe from :", glist1
 
 		self.regSet = newRegSet
 		self.avaSet = self.avaSet.union(avaSetCandi)
 		self.mySubs = self.regSet.union(self.avaSet)
 
 		if self.debug == 1 and (glist != [] or glist1 != []) :
-			print "regSet:", list(self.regSet)
-			avID = e-(self.limit/REGION_WIDTH)**2
-			print "avaSet:", [fadr2string(avID) for e in list(self.avaSet)]
-			print "mySubs:", list(self.mySubs)
+			print "new regSet:", list(self.regSet)
+			newAva = [e-self.numRegions for e in list(self.avaSet)]
+			print "new avaSet:", [fadr2string(e) for e in newAva]
 	
 
 	def updateNearby(self, p) :
@@ -569,9 +581,9 @@ class Net :
 			# no need to update based on region multicase
 			# (and if we do, it's likely to cause choppy animation)
 			if peerMulAdr in self.avaSet and \
-			   -p.dstAdr <= (self.limit/REGION_WIDTH)**2 :
+			   -p.dstAdr <= self.numRegions :
 				if self.debug == 1 :
-					avID = peerMulAdr-(self.limit/REGION_WIDTH)**2
+					avID = peerMulAdr-self.numRegions
 					print "skip update from region multicast:" ,\
 						 fadr2string(avID)
 				return
@@ -623,15 +635,17 @@ class Net :
 			del self.nearRemotes[avId]
 			self.pWorld.removeRemote(avId)
 
-		unsubList = [e+(self.limit/REGION_WIDTH)**2 for e in dropList]
+		# Reminder: avId is defined to be forest adr,
+		# and avatar multicast is defined to be forest adr plus
+		# the total number of regions in our world partition.
+		# That's why we do the following transformation when
+		# determining the multicast adrs to be unsubscribed.
+		unsubList = [e+self.numRegions for e in dropList]
 		self.unsubscribe(unsubList)
 
 		self.avaSet = self.avaSet.difference(set(unsubList))
 		self.mySubs = self.regSet.difference(set(unsubList))
-		
+
 		if self.debug == 1 and dropList != [] :
-			print "--- pruning ---"
-			print "unsubscribe from :", unsubList
-			print "avaSet:", [fadr2string(e) for e in list(self.avaSet)]
-			print "mySubs:", list(self.mySubs)
-			print "---------------"
+			newAva = [e-self.numRegions for e in list(self.avaSet)]
+			print "new avaSet:", [fadr2string(e) for e in newAva]
