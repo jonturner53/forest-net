@@ -41,7 +41,7 @@ cliMgrIp = gethostbyname(sys.argv[2])
 myComtree = int(sys.argv[3])
 
 auto = False; debugAI = False
-debug = 0; botNum = 10
+debug = 0; botNum = 1
 for i in range(4,len(sys.argv)) :
 	if sys.argv[i] == "debug" : debug = 1
 	elif sys.argv[i] == "debugg" : debug = 2
