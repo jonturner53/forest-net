@@ -12,11 +12,18 @@ from direct.task import Task
 
 UPDATE_PERIOD = .05 	# number of seconds between status updates
 STATUS_REPORT = 1 	# code for status report packets
-#NUM_ITEMS = 10		# number of items in status report #Chao: unused for now
+#NUM_ITEMS = 10		# number of items in status report
 GRID = 10000  		# xy extent of one grid square
 MAXNEAR = 1000		# max # of nearby avatars
 REGION_WIDTH = 40	# width of an area for region multicast (in meters)
 VIS_RANGE = 20		# visible range (in meters)
+
+TIME_SCALE = 10000	# extent of one second; used in timestamp.
+					# Note: from python documentation, call of
+					# time() returns the time in seconds since the epoch
+					# as a floating point number. Therefore, the scaling
+					# trick will not work on systems that provide time
+					# with a precision no better than one second.
 
 # speeds below are the amount avatar moves during an update period
 # making them all equal for now, to avoid funky animation
@@ -24,6 +31,24 @@ STOPPED =   0		# not moving
 SLOW    = 50    	# slow avatar speed
 MEDIUM  = 50    	# medium avatar speed
 FAST    = 50    	# fast avatar speed
+
+"""
+ some spec:
+	1. avId = srcAdr of the avatar who sent the packet
+	2. avatar's multicast address
+			= its forest address +
+				the total number of regions in the virtual world
+			= adId + (# of regions)
+	3. format of STATUS REPORT
+			= [STATUS REPORT, time stamp, x, y, direction,
+				speed, multicast adr of the sender, numNear]
+	4. format of nearRemotes list
+			= [x, y, direction, dx, dy, count]
+				where the last field counts the total number of
+				status reports we've missed
+				since last call of pruneNearby()
+	5. when filling a packet, we negate any multicast address
+"""
 
 class Net :
 	""" Net support.
@@ -319,8 +344,8 @@ class Net :
 	
 		numNear = len(self.nearRemotes)
 		p.payload = struct.pack('!8I', \
-					STATUS_REPORT, self.now, \
-					int(self.x*GRID), int(self.y*GRID), \
+					STATUS_REPORT, self.now*TIME_SCALE, \
+					self.x*GRID, self.y*GRID, \
 					self.direction, self.speed, \
 					self.myMulAdr, numNear)
 		self.send(p)
@@ -338,8 +363,8 @@ class Net :
 	
 		numNear = len(self.nearRemotes)
 		p.payload = struct.pack('!8I', \
-					STATUS_REPORT, self.now, \
-					int(self.x*GRID), int(self.y*GRID), \
+					STATUS_REPORT, self.now*TIME_SCALE, \
+					self.x*GRID, self.y*GRID, \
 					self.direction, self.speed, \
 					self.myMulAdr, numNear)
 		self.send(p)
@@ -576,6 +601,12 @@ class Net :
 		# See multiSend() in RouterCore.cpp
 
 		if avId in self.nearRemotes :
+
+	#		if -p.dstAdr <= self.numRegions :
+	#			print "report received: REGION REPORT"
+	#		else :
+	#			print "report received: AVA REPORT"
+	#		print (tuple[1]+0.0)/TIME_SCALE
 
 			# Since we've subscribed to its avatar multicast,
 			# no need to update based on region multicase
