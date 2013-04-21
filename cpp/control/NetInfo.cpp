@@ -28,7 +28,7 @@ NetInfo::NetInfo(int maxNode1, int maxLink1, int maxRtr1, int maxCtl1)
 	nameNodeMap = new map<string,int>;
 	adrNodeMap = new map<fAdr_t,int>;
 	controllers = new set<int>();
-	defaultLinkRates.set(50,500,25,250); // default for access link rates
+	defaultLeafRates.set(50,500,25,250); // default for access link rates
 
 	link = new LinkInfo[maxLink+1];
 	locLnk2lnk = new HashMap(2*min(maxLink,maxRtr*(maxRtr-1)/2)+1);
@@ -157,9 +157,8 @@ int NetInfo::addLink(int u, int v, int uln, int vln) {
 		}
 		setRightLLnum(lnk,vln);
 	}
-	RateSpec rs(Forest::MINBITRATE,Forest::MINBITRATE,
-		    Forest::MINPKTRATE,Forest::MINPKTRATE);
-	setLinkRates(lnk,rs);
+	getLinkRates(lnk).set(Forest::MINBITRATE,Forest::MINBITRATE,
+		    	      Forest::MINPKTRATE,Forest::MINPKTRATE);
 	return lnk;
 }
 
@@ -279,13 +278,13 @@ bool NetInfo::read(istream& in) {
 				     << endl;
 				return false;
 			}
-			setLinkRates(lnk, cLink.rates);
+			getLinkRates(lnk) = cLink.rates;
 			cLink.rates.scale(.9);
-			setAvailRates(lnk, cLink.rates);
+			getAvailRates(lnk) = cLink.rates;
 			setLinkLength(lnk, cLink.length);
 			linkNum++;
-		} else if (s == "defaultLinkRates") {
-			if (!readRateSpec(in,defaultLinkRates)) {
+		} else if (s == "defaultLeafRates") {
+			if (!readRateSpec(in,defaultLeafRates)) {
 				cerr << "NetInfo::read: can't read default "
 				    	"rates for links\n";
 				return false;
@@ -550,7 +549,7 @@ bool NetInfo::readLink(istream& in, LinkDesc& link, string& errMsg) {
 		return false;
 	}
 	if (Util::verify(in,')',20)) { // omitted rate spec
-		rs = defaultLinkRates;
+		rs = defaultLeafRates;
 	} else {
 		if (!Util::verify(in,',',20) || !readRateSpec(in,rs)) {
 			errMsg = "could not read rate specification";
@@ -795,25 +794,16 @@ bool NetInfo::checkLeafNodes() const {
  */
 bool NetInfo::checkLinkRates() const {
 	bool status = true;
+	RateSpec minRates(Forest::MINBITRATE,Forest::MINBITRATE,
+			  Forest::MINPKTRATE,Forest::MINPKTRATE);
+	RateSpec maxRates(Forest::MAXBITRATE,Forest::MAXBITRATE,
+			  Forest::MAXPKTRATE,Forest::MAXPKTRATE);
 	for (int lnk = firstLink(); lnk != 0; lnk = nextLink(lnk)) {
-		RateSpec rs; getLinkRates(lnk,rs);
-		if (rs.bitRateUp < Forest::MINBITRATE ||
-		    rs.bitRateUp > Forest::MAXBITRATE ||
-		    rs.bitRateDown < Forest::MINBITRATE ||
-		    rs.bitRateDown > Forest::MAXBITRATE) {
+		if (!minRates.leq(getLinkRates(lnk)) ||
+		    !getLinkRates(lnk).leq(maxRates)) {
 			string s;
 			cerr << "NetInfo::check: detected a link "
-			     << link2string(lnk,s) << " with bit rate "
-				"outside the allowed range\n";
-			status = false;
-		}
-		if (rs.pktRateUp < Forest::MINPKTRATE ||
-		    rs.pktRateUp > Forest::MAXPKTRATE ||
-		    rs.pktRateDown < Forest::MINPKTRATE ||
-		    rs.pktRateDown > Forest::MAXPKTRATE) {
-			string s;
-			cerr << "NetInfo::check: detected a link "
-			     << link2string(lnk,s) << " with packet rate "
+			     << link2string(lnk,s) << " with rates "
 				"outside the allowed range\n";
 			status = false;
 		}
@@ -827,27 +817,19 @@ bool NetInfo::checkLinkRates() const {
  */
 bool NetInfo::checkRtrRates() const {
 	bool status =true;
+	RateSpec minRates(Forest::MINBITRATE,Forest::MINBITRATE,
+			  Forest::MINPKTRATE,Forest::MINPKTRATE);
+	RateSpec maxRates(Forest::MAXBITRATE,Forest::MAXBITRATE,
+			  Forest::MAXPKTRATE,Forest::MAXPKTRATE);
 	for (int r = firstRouter(); r != 0; r = nextRouter(r)) {
 		// check all interfaces at r
 		for (int i = 1; i <= getNumIf(r); i++) {
 			if (!validIf(r,i)) continue;
-			RateSpec rs; getIfRates(r,i,rs);
-			if (rs.bitRateUp < Forest::MINBITRATE ||
-			    rs.bitRateUp >Forest::MAXBITRATE ||
-			    rs.bitRateDown < Forest::MINBITRATE ||
-			    rs.bitRateDown >Forest::MAXBITRATE) {
+			if (!minRates.leq(getIfRates(r,i)) ||
+			    !getIfRates(r,i).leq(maxRates)) {
 				cerr << "NetInfo::checkRtrRates: interface "
-				     << i << "at router " << r << " has bit "
-					"rate outside the allowed range\n";
-				status = false;
-			}
-			if (rs.pktRateUp < Forest::MINPKTRATE ||
-			    rs.pktRateUp >Forest::MAXPKTRATE ||
-			    rs.pktRateDown < Forest::MINPKTRATE ||
-			    rs.pktRateDown >Forest::MAXPKTRATE) {
-				cerr << "NetInfo::checkRtrRates: interface "
-				     << i << "at router " << r << " has packet "
-					"rate outside the allowed range\n";
+				     << i << "at router " << r << " has "
+					"rates outside the allowed range\n";
 				status = false;
 			}
 		}
@@ -859,14 +841,13 @@ bool NetInfo::checkRtrRates() const {
 			 lnk = nextLinkAt(r,lnk)) {
 			int llnk = getLLnum(lnk,r);
 			int iface = getIface(llnk,r);
-			RateSpec rs; getLinkRates(lnk,rs);
+			RateSpec rs = getLinkRates(lnk);
 			if (r == getLeft(lnk)) rs.flip();
 			ifrates[iface].add(rs);
 		}
 		for (int i = 0; i <= getNumIf(r); i++) {
 			if (!validIf(r,i)) continue;
-			RateSpec ifrs; getIfRates(r,i,ifrs);
-			if (!ifrates[i].leq(ifrs)) {
+			if (!ifrates[i].leq(getIfRates(r,i))) {
 				string s;
 				cerr << "NetInfo::check: links at interface "
 				     << i << " of router " << getNodeName(r,s)
@@ -910,7 +891,7 @@ string& NetInfo::linkProps2string(int lnk, string& s) const {
 	ss << "," << getNodeName(right,s1);
 	if (getNodeType(right) == ROUTER) ss << "." << getRightLLnum(lnk);
 	ss << "," << getLinkLength(lnk) << ",";
-	RateSpec rs; getLinkRates(lnk,rs); ss << rs.toString(s1) << ")";
+	ss << getLinkRates(lnk).toString(s1) << ")";
 	s = ss.str();
 	return s;
 }
@@ -929,8 +910,8 @@ string& NetInfo::linkState2string(int lnk, string& s) const {
 	ss << "," << getNodeName(right,s1);
 	if (getNodeType(right) == ROUTER)  ss << "." << getRightLLnum(lnk);
 	ss << "," << getLinkLength(lnk) << ",";
-	RateSpec rs; getLinkRates(lnk,rs); ss << rs.toString(s1);
-	getAvailRates(lnk,rs); ss << "," << rs.toString(s1) << ")";
+	ss << getLinkRates(lnk).toString(s1);
+	ss << "," << getAvailRates(lnk).toString(s1) << ")";
 	s = ss.str();
 	return s;
 }
@@ -961,7 +942,7 @@ string& NetInfo::toString(string& s) const {
 	}
 
 	// and finally, the default link rates
-	s += "defaultLinkRates" + (defaultLinkRates.toString(s1)) + "\n";
+	s += "defaultLeafRates" + (defaultLeafRates.toString(s1)) + "\n";
 
 	s += ";\n"; return s;
 }
@@ -993,8 +974,7 @@ string& NetInfo::rtr2string(int rtr, string& s) const {
 		} else {
 			ss << links.first << "-" << links.second << ", ";
 		}
-		RateSpec rs; getIfRates(rtr,i,rs);
-		ss << rs.toString(s1) << " ]";
+		ss << getIfRates(rtr,i).toString(s1) << " ]";
 	}
 	ss << "\n)\n";
 	s = ss.str();

@@ -212,46 +212,45 @@ void* run(void* finTimeSec) {
 				cerr << "run: thread pool is exhausted\n";
 		} 
 		// check for packets from the Forest net
-		int p = rcvFromForest();
-		if (p != 0) {
-			// send p to a thread, possibly assigning one
-			PacketHeader& h = ps->getHeader(p);
-			if (h.getPtype() == CLIENT_SIG || 
-			    h.getPtype() == NET_SIG) {
-				CtlPkt cp; 
-				cp.unpack(ps->getPayload(p),
-					  h.getLength()-Forest::OVERHEAD);
+		pktx px = rcvFromForest();
+		if (px != 0) {
+			// send px to a thread, possibly assigning one
+			Packet& p = ps->getPacket(px);
+			if (p.type == CLIENT_SIG || p.type == NET_SIG) {
+				CtlPkt cp(p.payload(),
+					  p.length-Forest::OVERHEAD);
+				cp.unpack();
 				int t;
-				if (cp.getRrType() == REQUEST) {
+				if (cp.mode == CtlPkt::REQUEST) {
 					t = threads->firstOut();
-					uint64_t key = h.getSrcAdr();
-					key <<= 32; key += cp.getSeqNum();
+					uint64_t key = p.srcAdr;
+					key <<= 32; key += cp.seqNum;
 					if (reqMap->validKey(key)) {
 						// in this case, we've got an
 						// active thread handling this
 						// request, so discard duplicate
-						ps->free(p);
+						ps->free(px);
 					} else if (t != 0) {
 						threads->swap(t);
 						pool[t].seqNum = 0;
-						pool[t].qp.in.enq(p);
+						pool[t].qp.in.enq(px);
 					} else {
 						cerr << "run: thread "
 							"pool is exhausted\n";
-						ps->free(p);
+						ps->free(px);
 					}
 				} else {
-					t = tMap->getId(cp.getSeqNum());
+					t = tMap->getId(cp.seqNum);
 					if (t != 0) {
-						tMap->dropPair(cp.getSeqNum());
+						tMap->dropPair(cp.seqNum);
 						pool[t].seqNum = 0;
-						pool[t].qp.in.enq(p);
+						pool[t].qp.in.enq(px);
 					} else {
-						ps->free(p);
+						ps->free(px);
 					}
 				}
 			} else {
-				ps->free(p);
+				ps->free(px);
 			}
 			nothing2do = false;
 		}
@@ -260,45 +259,44 @@ void* run(void* finTimeSec) {
 		for (int t = threads->firstIn(); t != 0;
 			 t = threads->nextIn(t)) {
 			if (pool[t].qp.out.empty()) continue;
-			int p1 = pool[t].qp.out.deq();
-			if (p1 == 0) { // means thread is done
+			int px1 = pool[t].qp.out.deq();
+			if (px1 == 0) { // means thread is done
 				reqMap->dropPair(reqMap->getKey(t));
 				pool[t].qp.in.reset();
 				threads->swap(t);
 				continue;
 			}
 			nothing2do = false;
-			PacketHeader& h1 = ps->getHeader(p1);
-			CtlPkt cp1; 
-			cp1.unpack(ps->getPayload(p1),
-				   h1.getLength()-Forest::OVERHEAD);
-			if (cp1.getRrType() == REQUEST) {
-				if (cp1.getSeqNum() == 1) {
+			Packet& p1 = ps->getPacket(px1);
+			CtlPkt cp1(p1.payload(),p1.length-Forest::OVERHEAD);
+			cp1.unpack();
+			if (cp1.mode == CtlPkt::REQUEST) {
+				if (cp1.seqNum == 1) {
 					// means this is a repeat of a pending
 					// outgoing request
 					if (tMap->validId(t)) {
-						cp1.setSeqNum(tMap->getKey(t));
+						cp1.seqNum = tMap->getKey(t);
 					} else {
 						// in this case, reply has
 						// arrived but was not yet seen
 						// by thread so, suppress
 						// duplicate request
-						ps->free(p1); continue;
+						ps->free(px1); continue;
 					}
 				} else {
 					if (tMap->validId(t))
 						tMap->dropPair(tMap->getKey(t));
 					tMap->addPair(seqNum,t);
-					cp1.setSeqNum(seqNum++);
+					cp1.seqNum = seqNum++;
 				}
-				cp1.pack(ps->getPayload(p1));
-				h1.payErrUpdate(ps->getBuffer(p1));
+				cp1.pack();
+				p1.payErrUpdate();
 				pool[t].seqNum = seqNum;
 				pool[t].ts = now + 2000000000; // 2 sec timeout
 				seqNum++;
-				sendToForest(p1);
+				sendToForest(px1);
 			} else {
-				sendToForest(p1);
+				sendToForest(px1);
 			}
 		}
 
@@ -336,60 +334,58 @@ void* run(void* finTimeSec) {
  *  handler, the other is its output queue
  */
 void* handler(void *qp) {
-	Queue& inQ  = ((QueuePair *) qp)->in;
-	Queue& outQ = ((QueuePair *) qp)->out;
+	Queue& inq  = ((QueuePair *) qp)->in;
+	Queue& outq = ((QueuePair *) qp)->out;
+	CpHandler cph(&inq, &outq, myAdr, &logger, ps);
 
 	while (true) {
-		int p = inQ.deq();
+		pktx px = inq.deq();
 		bool success = false;
-		if (p < 0) {
+		if (px < 0) {
 			// in this case, p is really a negated socket number
 			// for a remote comtree display module
-			int sock = -p;
-			success = handleComtreeDisplay(sock,inQ,outQ);
+			int sock = -px;
+			success = handleComtreeDisplay(sock);
 		} else {
-			PacketHeader& h = ps->getHeader(p);
-			CtlPkt cp; 
-			cp.unpack(ps->getPayload(p),
-				  h.getLength()-Forest::OVERHEAD);
-			switch (cp.getCpType()) {
-			case CLIENT_ADD_COMTREE:
-				success = handleAddComtReq(p,cp,inQ,outQ);
+			Packet& p = ps->getPacket(px);
+			CtlPkt cp(p.payload(),p.length - Forest::OVERHEAD);; 
+			cp.unpack();
+			switch (cp.type) {
+			case CtlPkt::CLIENT_ADD_COMTREE:
+				success = handleAddComtReq(px,cp,cph);
 				break;
-			case CLIENT_DROP_COMTREE:
-				success = handleDropComtReq(p,cp,inQ,outQ);
+			case CtlPkt::CLIENT_DROP_COMTREE:
+				success = handleDropComtReq(px,cp,cph);
 				break;
-			case CLIENT_JOIN_COMTREE:
-				success = handleJoinComtReq(p,cp,inQ,outQ);
+			case CtlPkt::CLIENT_JOIN_COMTREE:
+				success = handleJoinComtReq(px,cp,cph);
 				break;
-			case CLIENT_LEAVE_COMTREE:
-				success = handleLeaveComtReq(p,cp,inQ,outQ);
+			case CtlPkt::CLIENT_LEAVE_COMTREE:
+				success = handleLeaveComtReq(px,cp,cph);
 				break;
 			default:
-				errReply(p,cp,outQ,"invalid control packet "
+				cph.errReply(px,cp,"invalid control packet "
 						   "type for ComtCtl");
 				break;
 			}
 			if (!success) {
 				string s;
 				cerr << "handler: operation failed\n"
-				     << h.toString(ps->getBuffer(p),s);
+				     << p.toString(s);
 			}
 		}
-		ps->free(p); // release p now that we're done
-		outQ.enq(0); // signal completion to main thread
+		ps->free(px); // release px now that we're done
+		outq.enq(0); // signal completion to main thread
 	}
 }
 
 /** Handle a connection to a remote comtree display module.
  *  @param sock is an open stream socket
- *  @param inQ is the queue coming from the main thread
- *  @param outQ is the queue going back to the main thread
  *  @return true if the interaction proceeds normally, followed
  *  by a normal close; return false if an error occurs
  */
 
-bool handleComtreeDisplay(int sock, Queue& inQ, Queue& outQ) {
+bool handleComtreeDisplay(int sock) {
 	const int BLEN = 100;
 	char buf[BLEN+1]; int i;
 	string savs = "";
@@ -415,7 +411,6 @@ bool handleComtreeDisplay(int sock, Queue& inQ, Queue& outQ) {
 			if (nbytes < 0) {
 /* not sure why this is not working, but comment out for now
 				if (errno != EINTR) {
-cerr << "error errno=" << errno << "\n";
 					cerr << "handleComtreeDisplay: unable "
 						"to receive comtree number "
 						"from remote display\n";
@@ -438,7 +433,6 @@ cerr << "error errno=" << errno << "\n";
 		uint32_t comt = 0;
 		if (word.compare("getNet") == 0) {
 			string netString; net->toString(netString);
-cerr << "sending netString\n" << netString;
 			if (Np4d::sendString(sock,netString) < 0) {
 				cerr << "handleComtreeDisplay: unable to send "
 					"network topology to display\n";
@@ -492,15 +486,13 @@ cerr << "sending netString\n" << netString;
 /** Handle an add comtree request.
  *  @param p is the packet number of the request packet
  *  @param cp is the control packet structure for p (already unpacked)
- *  @param inQ is the queue coming from the main thread
- *  @param outQ is the queue going back to the main thread
  *  @return true if the operation was completed successfully,
  *  otherwise false; an error reply is considered a successful
  *  completion; the operation can fail if it cannot allocate
  *  packets, or if one of the routers that must be configured
  *  fails to respond.
  */
-bool handleAddComtReq(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
+bool handleAddComtReq(pktx px, CtlPkt& cp, CpHandler& cph) {
 // Hmmm. This method can produce orphan comtrees.
 // If a comtree is added, but the reply to the user is lost,
 // the user will try again, leading to an additional comtree
@@ -525,18 +517,18 @@ bool handleAddComtReq(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 // Maybe just keep a list of up to 1000 pending comtrees and
 // every time we add a new one, we recycle one of the old ones,
 // if the list is full.
-	PacketHeader& h = ps->getHeader(p);
-	if (!cp.isSet(ROOT_ZIP)) {
-		errReply(p,cp,outQ,"missing required attribute");
+	Packet& p = ps->getPacket(px);
+	if (cp.zipCode != 0) {
+		cph.errReply(px,cp,"missing required attribute");
 		return true;
 	}
-	int rootZip = cp.getAttr(ROOT_ZIP);
+	int rootZip = cp.zipCode;
 
 	pthread_mutex_lock(&allComtLock);
 	int comt = comtSet->firstOut();
 	if (comt == 0) {
 		pthread_mutex_unlock(&allComtLock);
-		errReply(p,cp,outQ,"no comtrees available to satisfy request");
+		cph.errReply(px,cp,"no comtrees available to satisfy request");
 		return true;
 	}
 	comtSet->swap(comt);
@@ -545,7 +537,7 @@ bool handleAddComtReq(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 		comt -= (firstComt - 1);
 		comtSet->swap(comt);
 		pthread_mutex_unlock(&allComtLock);
-		errReply(p,cp,outQ,"internal error prevents adding new "
+		cph.errReply(px,cp,"internal error prevents adding new "
 				   "comtree");
 		cerr << "handleAddComt: addComtree() failed due to program "
 			"error\n";
@@ -573,7 +565,7 @@ bool handleAddComtReq(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 		comtSet->swap(comt);
 		pthread_mutex_unlock(&allComtLock);
 		pthread_mutex_unlock(&comtLock[ctx]);
-		errReply(p,cp,outQ,"network contains no router with specified "
+		cph.errReply(px,cp,"network contains no router with specified "
 				   "zip code");
 		return true;
 	}
@@ -581,79 +573,48 @@ bool handleAddComtReq(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 	fAdr_t rootAdr = net->getNodeAdr(rootRtr);
 	
 	// configure root router to add comtree
-	CtlPkt reqCp(ADD_COMTREE, REQUEST, 0);
-	reqCp.setAttr(COMTREE_NUM,comt);
-	int reply = sendCtlPkt(reqCp,rootAdr,inQ,outQ);
-	CtlPkt repCp; string s1;
-	string noRstr = "handleAddComt: add comtree request to "
-			+ net->getNodeName(rootRtr,s1);
-	string negRstr = noRstr;
-	bool success = handleReply(reply,repCp,noRstr,negRstr);
-	if (reply == NORESPONSE) {
+	int reply = cph.addComtree(rtrAdr,comt);
+	CtlPkt repCp;
+	if (reply == 0 || !cph.getCp(reply,repCp)) {
 		pthread_mutex_lock(&allComtLock);
 		comtrees->removeComtree(ctx);
 		comt -= (firstComt - 1);
 		comtSet->swap(comt);
 		pthread_mutex_unlock(&allComtLock);
 		pthread_mutex_unlock(&comtLock[ctx]);
-		errReply(p,cp,outQ,"root router never replied");
-		return false;
-	} else if (!success) {
-		pthread_mutex_lock(&allComtLock);
-		comtrees->removeComtree(ctx);
-		comt -= (firstComt - 1);
-		comtSet->swap(comt);
-		pthread_mutex_unlock(&allComtLock);
-		pthread_mutex_unlock(&comtLock[ctx]);
-		errReply(p,cp,outQ,"root router could not add comtree");
+		if (reply == 0)
+		cph.errReply(px,cp,(reply == 0 ?
+				"root router never replied" :
+				"root router could not add comtree"));
 		return false;
 	}
 	
-	// modify comtree to set global attributes
-	reqCp.reset(MOD_COMTREE, REQUEST, 0);
-	reqCp.setAttr(COMTREE_NUM,comt);
-	reqCp.setAttr(CORE_FLAG,true);
-	reqCp.setAttr(PARENT_LINK,0);
-	reply = sendCtlPkt(reqCp,rootAdr,inQ,outQ);
-	noRstr = "handleAddComt: mod comtree request to "
-		 + net->getNodeName(rootRtr,s1);
-	negRstr = noRstr;
-	success = handleReply(reply,repCp,noRstr,negRstr);
-	if (reply == NORESPONSE) {
+	// modify comtree
+	reply = cph.modComtree(rtrAdr,comt,0,1);
+	if (reply == 0 || !cph.getCp(reply,repCp)) {
 		pthread_mutex_lock(&allComtLock);
 		comtrees->removeComtree(ctx);
 		comt -= (firstComt - 1);
 		comtSet->swap(comt);
 		pthread_mutex_unlock(&allComtLock);
 		pthread_mutex_unlock(&comtLock[ctx]);
-		errReply(p,cp,outQ,"root router never replied");
-		return false;
-	} else if (!success) {
-		pthread_mutex_lock(&allComtLock);
-		comtrees->removeComtree(ctx);
-		comt -= (firstComt - 1);
-		comtSet->swap(comt);
-		pthread_mutex_unlock(&allComtLock);
-		pthread_mutex_unlock(&comtLock[ctx]);
-		// arguably, should send message to router to drop comtree
-		// at this point, but since a negative reply shouldn't happen,
-		// there's no reason to think that the drop comtree would
-		// succeed
-		errReply(p,cp,outQ,"root router could not modify comtree");
+		cph.errReply(px,cp,(reply == 0 ?
+				"root router never replied" :
+				"root router could not modify comtree"));
 		return false;
 	}
-
+	
 	// now update local data structure to reflect addition
 	comtrees->addNode(ctx,rootAdr);
 	comtrees->addCoreNode(ctx,rootAdr);
 	comtrees->setRoot(ctx,rootAdr);
-	fAdr_t cliAdr = h.getSrcAdr();
+	fAdr_t cliAdr = p.srcAdr;
 	comtrees->setOwner(ctx,cliAdr);
 	pthread_mutex_unlock(&comtLock[ctx]);
 
 	// send positive reply back to client
-	repCp.reset(cp.getCpType(), POS_REPLY, cp.getSeqNum()); 
-	sendCtlPkt(repCp,h.getSrcAdr(),inQ,outQ);
+	repCp.reset(cp.type, CtlPkt::POS_REPLY, cp.seqNum); 
+	cph.sendCtlPkt(repCp,p.srcAdr);
 
 	return true;
 }
@@ -669,43 +630,41 @@ time, say ten minutes or more.
 /** Handle a drop comtree request.
  *  @param p is the packet number of the request packet
  *  @param cp is the control packet structure for p (already unpacked)
- *  @param inQ is the queue coming from the main thread
- *  @param outQ is the queue going back to the main thread
  *  @return true if the operation was completed successfully,
  *  otherwise false; an error reply is considered a successful
  *  completion; the operation can fail if it cannot allocate
  *  packets, or if one of the routers that must be configured
  *  fails to respond.
  */
-bool handleDropComtReq(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
-	PacketHeader& h = ps->getHeader(p);
-	if (!cp.isSet(COMTREE_NUM)) {
-		errReply(p,cp,outQ,"missing required attribute");
+bool handleDropComtReq(pktx px, CtlPkt& cp, CpHandler& cph) {
+	Packet& p = ps->getPacket(px);
+	if (cp.comtree == 0) {
+		cph.errReply(px,cp,"missing required attribute");
 		return true;
 	}
-	int comt = cp.getAttr(COMTREE_NUM);
-	fAdr_t cliAdr = h.getSrcAdr();
+	int comt = cp.comtree;
+	fAdr_t cliAdr = p.srcAdr;
 	
 	pthread_mutex_lock(&allComtLock);
 	int ctx = comtrees->getComtIndex(comt);
 	pthread_mutex_unlock(&allComtLock);
 	pthread_mutex_lock(&comtLock[ctx]);
 	if (ctx == 0) { // treat this case as a success
-		CtlPkt repCp(cp.getCpType(),POS_REPLY,cp.getSeqNum());
-		sendCtlPkt(cp,cliAdr,inQ,outQ);
+		CtlPkt repCp(cp.type,CtlPkt::POS_REPLY,cp.seqNum);
+		cph.sendCtlPkt(cp,cliAdr);
 		return true;
 	}
 	if (cliAdr != comtrees->getOwner(ctx)) {
 		// eventually should base this decision on actual owner
 		// name not just address
-		errReply(p,cp,outQ,"only the owner can drop a comtree");
+		cph.errReply(px,cp,"only the owner can drop a comtree");
 		return true;
 	}
 	
 	// first, teardown comtrees at all routers
 	for (fAdr_t rtr = comtrees->firstRouter(ctx); rtr != 0;
 		    rtr = comtrees->nextRouter(ctx,rtr)) {
-		teardownComtNode(ctx,rtr,inQ,outQ);
+		teardownComtNode(ctx,rtr,cph);
 	}
 
 	// next, unprovision and remove
@@ -719,34 +678,28 @@ bool handleDropComtReq(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 	pthread_mutex_unlock(&allComtLock);
 
 	// send positive reply to client
-	CtlPkt repCp(cp.getCpType(),POS_REPLY,cp.getSeqNum());
-	sendCtlPkt(cp,h.getSrcAdr(),inQ,outQ);
+	CtlPkt repCp(cp.type,CtlPkt::POS_REPLY,cp.seqNum);
+	cph.sendCtlPkt(cp,p.srcAdr);
 	return true;
 }
+
+static int cnt = 0;
 
 /** Handle a join comtree request.
  *  This requires selecting a path from the client's access router
  *  to the comtree and allocating link bandwidth along that path.
  *  @param p is the packet number of the request packet
  *  @param cp is the control packet structure for p (already unpacked)
- *  @param inQ is the queue coming from the main thread
- *  @param outQ is the queue going back to the main thread
  *  @return true if the operation is completed successfully;
  *  sending an error reply is considered a success; the operation
  *  fails if it cannot allocate required packets, or if no path
  *  can be found between the client's access router and the comtree.
  */
-bool handleJoinComtReq(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
-	PacketHeader& h = ps->getHeader(p);
-	if (!cp.isSet(COMTREE_NUM) || !cp.isSet(CLIENT_IP) ||
-	    !cp.isSet(CLIENT_PORT)) {
-		errReply(p,cp,outQ,"required attribute is missing");
-		return true;
-	}
-	fAdr_t cliAdr = h.getSrcAdr();
-	comt_t comt = cp.getAttr(COMTREE_NUM);
-	ipa_t cliIp = cp.getAttr(CLIENT_IP);
-	ipp_t cliPort = cp.getAttr(CLIENT_PORT);
+bool handleJoinComtReq(pktx px, CtlPkt& cp, CpHandler& cph) {
+	Packet& p = ps->getPacket(px);
+	fAdr_t cliAdr = p.srcAdr;
+	comt_t comt = cp.comtree;
+	ipa_t cliIp = cp.ip1; ipp_t cliPort = cp.port1;
 
 	// find the client's router, based on its forest address
 	int cliRtr;
@@ -760,9 +713,7 @@ bool handleJoinComtReq(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 		// configurations with more than 50 routers
 	}
 	if (cliRtr == 0) {
-		errReply(p,cp,outQ,"can't find client's access router");
-		cerr << "handleJoinComt: cannot find client's access router "
-			"in network topology\n";
+		cph.errReply(px,cp,"can't find client's access router");
 		return false;
 	}
 	fAdr_t cliRtrAdr = net->getNodeAdr(cliRtr);
@@ -773,33 +724,25 @@ bool handleJoinComtReq(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 	int ctx = comtrees->getComtIndex(comt);
 	pthread_mutex_unlock(&allComtLock);
 	if (ctx == 0) {
-		errReply(p,cp,outQ,"no such comtree");
+		cph.errReply(px,cp,"no such comtree");
 		return true;
 	}
 	pthread_mutex_lock(&comtLock[ctx]);
-cerr << "starting join" << endl;
-string s;
-cerr << comtrees->comtStatus22string(ctx,s) << endl;
-for (int lnk = net->firstLink(); lnk != 0; lnk = net->nextLink(lnk)) {
-	int u = net->getLeft(lnk); int v = net->getRight(lnk);
-	if (net->isRouter(u) && net->isRouter(v)) {
-		cerr << net->linkState2string(lnk,s) << endl;
-	}
-}
 
 	if (comtrees->isComtLeaf(ctx,cliAdr)) {
 		// if client already in comtree, this is probably a
 		// second attempt, caused by a lost acknowledgment
 		pthread_mutex_unlock(&comtLock[ctx]);
-		CtlPkt repCp(cp.getCpType(),POS_REPLY, cp.getSeqNum());
-		sendCtlPkt(repCp,cliAdr,inQ,outQ);
+		CtlPkt repCp(cp.type,CtlPkt::POS_REPLY,cp.seqNum);
+		cph.sendCtlPkt(repCp,cliAdr);
 		return true;
 	}
 
 	list<LinkMod> path; // for new path added to comtree
 	list<LinkMod> modList; // for link modifications in rest of comtree
 	RateSpec bbDefRates, leafDefRates;
-	comtrees->getDefRates(ctx,bbDefRates,leafDefRates);
+	leafDefRates = comtrees->getDefLeafRates(ctx);
+	bbDefRates = comtrees->getDefBbRates(ctx);
 	bool autoConfig = comtrees->getConfigMode(ctx);
 	RateSpec pathRates = (autoConfig ?  leafDefRates : bbDefRates);
 	int tryCount = 1; int branchRtr = 0;
@@ -810,7 +753,7 @@ for (int lnk = net->firstLink(); lnk != 0; lnk = net->nextLink(lnk)) {
 		if (branchRtr == 0 || tryCount++ > 3) {
 			pthread_mutex_unlock(&rateLock);
 			pthread_mutex_unlock(&comtLock[ctx]);
-			errReply(p,cp,outQ,"cannot find path to comtree");
+			cph.errReply(px,cp,"cannot find path to comtree");
 			return true;
 		}
 		comtrees->addPath(ctx,path);
@@ -826,7 +769,7 @@ for (int lnk = net->firstLink(); lnk != 0; lnk = net->nextLink(lnk)) {
 				comtrees->removePath(ctx,path);
 				pthread_mutex_unlock(&rateLock);
 				pthread_mutex_unlock(&comtLock[ctx]);
-				errReply(p,cp,outQ,"cannot add required "
+				cph.errReply(px,cp,"cannot add required "
 					 "capacity to comtree backbone");
 				return true;
 			}
@@ -836,9 +779,9 @@ for (int lnk = net->firstLink(); lnk != 0; lnk = net->nextLink(lnk)) {
 		// so no other thread can interfere with completion
 	
 		// now configure routers on path and exit loop if successful
-		if (!setupPath(ctx,path,inQ,outQ)) {
+		if (!setupPath(ctx,path,cph)) {
 			// could not configure path at some router
-			teardownPath(ctx,path,inQ,outQ);
+			teardownPath(ctx,path,cph);
 			pthread_mutex_lock(&rateLock);
 			if (autoConfig) comtrees->unprovision(ctx,modList);
 			leafDefRates.negate();
@@ -848,11 +791,11 @@ for (int lnk = net->firstLink(); lnk != 0; lnk = net->nextLink(lnk)) {
 			comtrees->removePath(ctx,path);
 			pthread_mutex_unlock(&rateLock);
 		} else if (autoConfig &&
-			   !modComtRates(ctx,modList,false,inQ,outQ)) {
+			   !modComtRates(ctx,modList,false,cph)) {
 			pthread_mutex_lock(&rateLock);
 				comtrees->unprovision(ctx,modList);
 			pthread_mutex_unlock(&rateLock);
-			modComtRates(ctx,modList,true,inQ,outQ);
+			modComtRates(ctx,modList,true,cph);
 			pthread_mutex_lock(&rateLock);
 				leafDefRates.negate();
 				comtrees->adjustSubtreeRates(
@@ -860,7 +803,7 @@ for (int lnk = net->firstLink(); lnk != 0; lnk = net->nextLink(lnk)) {
 				leafDefRates.negate();
 				comtrees->removePath(ctx,path);
 			pthread_mutex_unlock(&rateLock);
-			teardownPath(ctx,path,inQ,outQ);
+			teardownPath(ctx,path,cph);
 		} else { // all routers successfully configured
 			break;
 		}
@@ -868,18 +811,18 @@ for (int lnk = net->firstLink(); lnk != 0; lnk = net->nextLink(lnk)) {
 	}
 
 	// now add client to comtree
-	int llnk = setupClientLink(ctx,cliIp,cliPort,cliRtr,inQ,outQ);
+	int llnk = setupClientLink(ctx,cliIp,cliPort,cliRtr,cph);
 	comtrees->addNode(ctx,cliAdr);
 	comtrees->setParent(ctx,cliAdr,cliRtrAdr,llnk);
-	comtrees->setLinkRates(ctx,cliAdr,leafDefRates);
+	comtrees->getLinkRates(ctx,cliAdr) = leafDefRates;
 
-	if (llnk == 0 || !setComtLeafRates(ctx,cliAdr,inQ,outQ)) {
+	if (llnk == 0 || !setComtLeafRates(ctx,cliAdr,cph)) {
 		// tear it all down and fail
 		comtrees->removeNode(ctx,cliAdr);
 		pthread_mutex_lock(&rateLock);
 			comtrees->unprovision(ctx,modList);
 		pthread_mutex_unlock(&rateLock);
-		modComtRates(ctx,modList,true,inQ,outQ);
+		modComtRates(ctx,modList,true,cph);
 		pthread_mutex_lock(&rateLock);
 			leafDefRates.negate();
 			comtrees->adjustSubtreeRates(
@@ -888,38 +831,29 @@ for (int lnk = net->firstLink(); lnk != 0; lnk = net->nextLink(lnk)) {
 			leafDefRates.negate();
 		pthread_mutex_unlock(&rateLock);
 		pthread_mutex_unlock(&comtLock[ctx]);
-		teardownPath(ctx,path,inQ,outQ);
-		errReply(p,cp,outQ,"cannot configure leaf node");
+		teardownPath(ctx,path,cph);
+		cph.errReply(px,cp,"cannot configure leaf node");
 		return true;
 	}
 	pthread_mutex_unlock(&comtLock[ctx]);
 
 	// finally, send positive reply to client and return
-	CtlPkt repCp(cp.getCpType(),POS_REPLY, cp.getSeqNum());
-	sendCtlPkt(repCp,cliAdr,inQ,outQ);
+	CtlPkt repCp(cp.type,CtlPkt::POS_REPLY, cp.seqNum);
+	cph.sendCtlPkt(repCp,cliAdr);
 	return true;
 }
 
 /** Handle a request by a client to leave a comtree.
  *  @param p is the packet number of the request packet
  *  @param cp is the control packet structure for p (already unpacked)
- *  @param inQ is the queue coming from the main thread
- *  @param outQ is the queue going back to the main thread
  *  @return true if the operation is completed successfully;
- *  sending an error reply is considered a success; the operation
- *  fails if it ...
+ *  sending an error reply is considered a success
  */
-bool handleLeaveComtReq(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
-	PacketHeader& h = ps->getHeader(p);
-	if (!cp.isSet(COMTREE_NUM) || !cp.isSet(CLIENT_IP) ||
-	    !cp.isSet(CLIENT_PORT)) {
-		errReply(p,cp,outQ,"required attribute is missing");
-		return true;
-	}
-	fAdr_t cliAdr = h.getSrcAdr();
-	comt_t comt = cp.getAttr(COMTREE_NUM);
-	ipa_t cliIp = cp.getAttr(CLIENT_IP);
-	ipp_t cliPort = cp.getAttr(CLIENT_PORT);
+bool handleLeaveComtReq(pktx px, CtlPkt& cp, CpHandler& cph) {
+	Packet& p = ps->getPacket(px);
+	fAdr_t cliAdr = p.srcAdr;
+	comt_t comt = cp.comtree;
+	ipa_t cliIp = cp.ip1; ipp_t cliPort = cp.port1;
 
 	// find the client's router, based on its forest address
 	int cliRtr;
@@ -930,9 +864,9 @@ bool handleLeaveComtReq(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 			break;
 	}
 	if (cliRtr == 0) {
-		errReply(p,cp,outQ,"can't find client's access router");
-		cerr << "handleLeaveComt: cannot find client's access router "
-			"in network topology\n";
+		cph.errReply(px,cp,"can't find client's access router");
+		logger.log("handleLeaveComt: cannot find client's access "
+			   "router in network topology\n",2,p);
 		return false;
 	}
 	fAdr_t cliRtrAdr = net->getNodeAdr(cliRtr);
@@ -942,7 +876,7 @@ bool handleLeaveComtReq(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 		int ctx = comtrees->getComtIndex(comt);
 	pthread_mutex_unlock(&allComtLock);
 	if (ctx == 0) {
-		errReply(p,cp,outQ,"no such comtree");
+		cph.errReply(px,cp,"no such comtree");
 		return true;
 	}
 	pthread_mutex_lock(&comtLock[ctx]);
@@ -951,16 +885,16 @@ bool handleLeaveComtReq(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 		// if client is not in comtree, this is probably a
 		// second attempt, caused by a lost acknowledgment
 		pthread_mutex_unlock(&comtLock[ctx]);
-		CtlPkt repCp(cp.getCpType(),POS_REPLY, cp.getSeqNum());
-		sendCtlPkt(repCp,cliAdr,inQ,outQ);
+		CtlPkt repCp(cp.type,CtlPkt::POS_REPLY,cp.seqNum);
+		cph.sendCtlPkt(repCp,cliAdr);
 		return true;
 	}
-	teardownClientLink(ctx,cliIp,cliPort,cliRtr,inQ,outQ);
+	teardownClientLink(ctx,cliIp,cliPort,cliRtr,cph);
 
 	// reduce subtree rates in response to dropped client
 	// then remove client from comtrees
 	RateSpec rs;
-	comtrees->getLinkRates(ctx,cliAdr,rs); rs.negate();
+	rs = comtrees->getLinkRates(ctx,cliAdr); rs.negate();
 	comtrees->adjustSubtreeRates(ctx,cliRtrAdr,rs);
 	comtrees->removeNode(ctx,cliAdr);
 
@@ -974,7 +908,7 @@ bool handleLeaveComtReq(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 			comtrees->computeMods(ctx,modList);
 			comtrees->provision(ctx,modList);
 		pthread_mutex_unlock(&rateLock);
-		modComtRates(ctx,modList,true,inQ,outQ);
+		modComtRates(ctx,modList,true,cph);
 	}
 
 	// now, find path used only to support this client
@@ -987,7 +921,7 @@ bool handleLeaveComtReq(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 		if (plnk == 0 || (rtrAdr == cliRtrAdr && lnkCnt > 1) ||
 		    		 (rtrAdr != cliRtrAdr && lnkCnt > 2))
 			break;
-		RateSpec rs; comtrees->getLinkRates(ctx,rtrAdr,rs);
+		RateSpec rs = comtrees->getLinkRates(ctx,rtrAdr);
 		path.push_back(LinkMod(plnk,rtr,rs));
 		rtr = net->getPeer(rtr,plnk);
 		rtrAdr = net->getNodeAdr(rtr);
@@ -998,12 +932,12 @@ bool handleLeaveComtReq(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 	pthread_mutex_lock(&rateLock);
 		comtrees->removePath(ctx,path);
 	pthread_mutex_unlock(&rateLock);
-	teardownPath(ctx,path,inQ,outQ);
+	teardownPath(ctx,path,cph);
 	pthread_mutex_unlock(&comtLock[ctx]);
 	
 	// send positive reply and return
-	CtlPkt repCp(cp.getCpType(),POS_REPLY,cp.getSeqNum());
-	sendCtlPkt(repCp,cliAdr,inQ,outQ);
+	CtlPkt repCp(cp.type,CtlPkt::POS_REPLY,cp.seqNum);
+	cph.sendCtlPkt(repCp,cliAdr);
 	return true;
 }
 
@@ -1015,16 +949,14 @@ bool handleLeaveComtReq(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
  *  @param modList is a list of links that belong to the comtree for
  *  which the rate has been changed with the last link on the path incident
  *  to a node in the comtree
- *  @param inQ is the queue from the main thread
- *  @param outQ is the queue going back to the main thread
  *  @return false if any router fails to respond or rejects a configuration
  *  request
  */
-bool setupPath(int ctx, list<LinkMod>& path, Queue& inQ, Queue& outQ) {
+bool setupPath(int ctx, list<LinkMod>& path, CpHandler& cph) {
 	// First, configure all routers on the path to add the comtree
 	list<LinkMod>::iterator pp;
 	for (pp = path.begin(); pp != path.end(); pp++) {
-		if (!setupComtNode(ctx,pp->child,inQ,outQ)) {
+		if (!setupComtNode(ctx,pp->child,cph)) {
 			return false;
 		}
 	}
@@ -1032,19 +964,19 @@ bool setupPath(int ctx, list<LinkMod>& path, Queue& inQ, Queue& outQ) {
 	// Next, add link at all routers and configure comtree attributes
 	for (pp = path.begin(); pp != path.end(); pp++) {
 		int parent = net->getPeer(pp->child,pp->lnk);
-		if (!setupComtLink(ctx,pp->lnk,pp->child,inQ,outQ)) {
+		if (!setupComtLink(ctx,pp->lnk,pp->child,cph)) {
 			return false;
 		}
-		if (!setupComtLink(ctx,pp->lnk,parent,inQ,outQ)) {
+		if (!setupComtLink(ctx,pp->lnk,parent,cph)) {
 			return false;
 		}
-		if (!setupComtAttrs(ctx,pp->child,inQ,outQ)) {
+		if (!setupComtAttrs(ctx,pp->child,cph)) {
 			return false;
 		}
-		if (!setComtLinkRates(ctx,pp->lnk,pp->child,inQ,outQ)) {
+		if (!setComtLinkRates(ctx,pp->lnk,pp->child,cph)) {
 			return false;
 		}
-		if (!setComtLinkRates(ctx,pp->lnk,parent,inQ,outQ)) {
+		if (!setComtLinkRates(ctx,pp->lnk,parent,cph)) {
 			return false;
 		}
 	}
@@ -1057,16 +989,14 @@ bool setupPath(int ctx, list<LinkMod>& path, Queue& inQ, Queue& outQ) {
  *  a drop comtree message is sent to the "child" node. 
  *  @param path is a list of Link objects that specifies specifies the
  *  path in bottom-up order
- *  @param inQ is a reference to the thread's input queue
- *  @param outQ is a reference to the thread's output queue
  *  @return true if all routers are successfully reconfigured,
  *  else false
  */
-bool teardownPath(int ctx, list<LinkMod>& path, Queue& inQ, Queue& outQ) {
+bool teardownPath(int ctx, list<LinkMod>& path, CpHandler& cph) {
 	list<LinkMod>::iterator lp;
 	bool status = true;
 	for (lp = path.begin(); lp != path.end(); lp++) {
-		if (!teardownComtNode(ctx,lp->child,inQ,outQ))
+		if (!teardownComtNode(ctx,lp->child,cph))
 			status = false;
 	}
 	return status;
@@ -1076,72 +1006,41 @@ bool teardownPath(int ctx, list<LinkMod>& path, Queue& inQ, Queue& outQ) {
 /** Configure a comtree at a router.
  *  @param ctx is a valid comtree index
  *  @param rtr is a node number for a router
- *  @param inQ is the queue from the main thread
- *  @param outQ is the queue going back to the main thread
  *  @return true on success, false on failure
  */
-bool setupComtNode(int ctx, int rtr, Queue& inQ, Queue& outQ) {
-	int comt = comtrees->getComtree(ctx);
-	fAdr_t rtrAdr = net->getNodeAdr(rtr);
-	CtlPkt reqCp(ADD_COMTREE,REQUEST,0);
-	reqCp.setAttr(COMTREE_NUM,comt);
-	int reply = sendCtlPkt(reqCp,rtrAdr,inQ,outQ);
-	string s1,s2;
-	string noRstr = "setupComtNode: add comtree request to "
-	 	 	+ net->getNodeName(rtr,s1) + " for comtree "
-	       	 	+ Util::num2string(comt,s2);
+bool setupComtNode(int ctx, int rtr, CpHandler& cph) {
+	int reply = cph.addComtree(net->getNodeAdr(rtr),
+				   comtrees->getComtree(ctx));
 	CtlPkt repCp;
-	string negRstr = "";
-	return handleReply(reply,repCp,noRstr,negRstr);
+	return cph.getCp(reply,repCp);
 } 
 
 /** Remove a comtree at a router
  *  @param ctx is a valid comtree index
  *  @param rtr is a node number for a router
- *  @param inQ is the queue from the main thread
- *  @param outQ is the queue going back to the main thread
  *  @return true on success, false on failure
  */
-bool teardownComtNode(int ctx, int rtr, Queue& inQ, Queue& outQ) {
-	int comt = comtrees->getComtree(ctx);
-	fAdr_t rtrAdr = net->getNodeAdr(rtr);
-	CtlPkt reqCp(DROP_COMTREE,REQUEST,0);
-	reqCp.setAttr(COMTREE_NUM,comt);
-	int reply = sendCtlPkt(reqCp,rtrAdr,inQ,outQ);
-	string s1,s2;
-	string noRstr = "teardownComtNode: drop comtree request to "
-	 	 	+ net->getNodeName(rtr,s1) + " for comtree "
-	       	 	+ Util::num2string(comt,s2);
-	string negRstr = "";
+bool teardownComtNode(int ctx, int rtr, CpHandler& cph) {
+	int reply = cph.dropComtree(net->getNodeAdr(rtr),
+				    comtrees->getComtree(ctx));
 	CtlPkt repCp;
-	return handleReply(reply,repCp,noRstr,negRstr);
+	return cph.getCp(reply,repCp);
 } 
 
 /** Configure a comtree link at a router.
  *  @param ctx is a valid comtree index
  *  @param link is a link number for a link in the comtree
  *  @param rtr is a node number for a router
- *  @param inQ is the queue from the main thread
- *  @param outQ is the queue going back to the main thread
  *  @return true on success, false on failure
  */
-bool setupComtLink(int ctx, int lnk, int rtr, Queue& inQ, Queue& outQ) {
-	comt_t comt = comtrees->getComtree(ctx);
-	fAdr_t rtrAdr = net->getNodeAdr(rtr);
+bool setupComtLink(int ctx, int lnk, int rtr, CpHandler& cph) {
 	int parent = net->getPeer(rtr,lnk);
-
-	CtlPkt reqCp(ADD_COMTREE_LINK,REQUEST,0);
-	reqCp.setAttr(COMTREE_NUM,comt);
-	reqCp.setAttr(LINK_NUM,net->getLLnum(lnk,rtr));
-	reqCp.setAttr(PEER_CORE_FLAG,comtrees->isCoreNode(ctx,parent));
-	int reply = sendCtlPkt(reqCp,rtrAdr,inQ,outQ);
+	int reply = cph.addComtreeLink(net->getNodeAdr(rtr),
+				   	comtrees->getComtree(ctx),
+				   	net->getLLnum(lnk,rtr),
+				   	comtrees->isCoreNode(ctx,parent));
 	CtlPkt repCp;
-	string s1, s2;
-	string noRstr = "setupComtLink: add comtree link request to "
-	 	 + net->getNodeName(rtr,s1) + " for comtree "
-	       	 + Util::num2string(comt,s2);
-	string negRstr = noRstr;
-	return handleReply(reply,repCp,noRstr,negRstr);
+	return cph.getCp(reply,repCp);
 } 
 
 /** Configure a comtree link to a client at a router.
@@ -1149,29 +1048,20 @@ bool setupComtLink(int ctx, int lnk, int rtr, Queue& inQ, Queue& outQ) {
  *  @param cliIp is the IP address of the client
  *  @param cliPort is the port number of the client
  *  @param rtr is a node number for a router
- *  @param inQ is the queue from the main thread
- *  @param outQ is the queue going back to the main thread
  *  @return the local link number assigned by the router on success,
  *  0 on failure
  */
 int setupClientLink(int ctx, ipa_t cliIp, ipp_t cliPort, int rtr,
-		     Queue& inQ, Queue& outQ) {
-	comt_t comt = comtrees->getComtree(ctx);
-	fAdr_t rtrAdr = net->getNodeAdr(rtr);
-
-	CtlPkt reqCp(ADD_COMTREE_LINK,REQUEST,0);
-	reqCp.setAttr(COMTREE_NUM,comt);
-	reqCp.setAttr(PEER_IP,cliIp);
-	reqCp.setAttr(PEER_PORT,cliPort);
-	int reply = sendCtlPkt(reqCp,rtrAdr,inQ,outQ);
+		    CpHandler& cph) {
+	pktx reply = cph.addComtreeLink( net->getNodeAdr(rtr),
+					comtrees->getComtree(ctx),
+				   	cliIp, cliPort);
 	CtlPkt repCp;
-	string s1, s2;
-	string noRstr = "setupComtLink: add comtree link request to "
-	 	 + net->getNodeName(rtr,s1) + " for comtree "
-	       	 + Util::num2string(comt,s2);
-	string negRstr = noRstr;
-	if (!handleReply(reply,repCp,noRstr,negRstr)) return 0;
-	else return repCp.getAttr(LINK_NUM);
+	cph.getCp(reply,repCp);
+	if (repCp.mode != CtlPkt::POS_REPLY) {
+		return 0;
+	}
+	return repCp.link;
 } 
 
 /** Teardown a comtree link to a client at a router.
@@ -1179,56 +1069,30 @@ int setupClientLink(int ctx, ipa_t cliIp, ipp_t cliPort, int rtr,
  *  @param cliIp is the IP address of the client
  *  @param cliPort is the port number of the client
  *  @param rtr is a node number for the client's access router
- *  @param inQ is the queue from the main thread
- *  @param outQ is the queue going back to the main thread
  *  @return the true on success, false on failure
  */
 bool teardownClientLink(int ctx, ipa_t cliIp, ipp_t cliPort, int rtr,
-		     Queue& inQ, Queue& outQ) {
-	comt_t comt = comtrees->getComtree(ctx);
-	fAdr_t rtrAdr = net->getNodeAdr(rtr);
-
-	CtlPkt reqCp(DROP_COMTREE_LINK,REQUEST,0);
-	reqCp.setAttr(COMTREE_NUM,comt);
-	reqCp.setAttr(PEER_IP,cliIp);
-	reqCp.setAttr(PEER_PORT,cliPort);
-	int reply = sendCtlPkt(reqCp,rtrAdr,inQ,outQ);
-	CtlPkt repCp; string s1, s2, s3, s4;
-	string noRstr = "handleLeaveComt: drop comtree link request to "
-		 	 + net->getNodeName(rtr,s1) + " for comtree "
-	       		 + Util::num2string((int) comt,s2) + " client "
-			 + Np4d::ip2string(cliIp,s3) + " port "
-			 + Util::num2string(cliPort,s4);
-	string negRstr = noRstr;
-	if (!handleReply(reply,repCp,noRstr,negRstr)) { 
-		return false;
-	}
-	return true;
+			CpHandler& cph) {
+	int reply = cph.dropComtreeLink(net->getNodeAdr(rtr),
+					comtrees->getComtree(ctx),
+				   	cliIp, cliPort);
+	CtlPkt repCp;
+	return cph.getCp(reply,repCp);
 } 
 
 /** Configure comtree attributes at a router.
  *  @param ctx is a valid comtree index
  *  @param rtr is a node number for a router
- *  @param inQ is the queue from the main thread
- *  @param outQ is the queue going back to the main thread
  *  @return true on success, false on failure
  */
-bool setupComtAttrs(int ctx, int rtr, Queue& inQ, Queue& outQ) {
-	comt_t comt = comtrees->getComtree(ctx);
+bool setupComtAttrs(int ctx, int rtr, CpHandler& cph) {
 	fAdr_t rtrAdr = net->getNodeAdr(rtr);
-	int lnk = comtrees->getPlink(ctx,rtrAdr);
-
-	CtlPkt reqCp(MOD_COMTREE,REQUEST,0);
-	reqCp.setAttr(COMTREE_NUM,comt);
-	reqCp.setAttr(PARENT_LINK,net->getLLnum(lnk,rtr));
-	reqCp.setAttr(CORE_FLAG,comtrees->isCoreNode(ctx,rtrAdr));
-	int reply = sendCtlPkt(reqCp,rtrAdr,inQ,outQ);
-	CtlPkt repCp; string s1,s2;
-	string noRstr = "setupComtAttrs: mod comtree request to "
-	 	 	+ net->getNodeName(rtr,s1) + " for comtree "
-	       	 	+ Util::num2string(comt,s2);
-	string negRstr = noRstr;
-	return handleReply(reply,repCp,noRstr,negRstr);
+	int llnk = net->getLLnum(comtrees->getPlink(ctx,rtrAdr),rtr);
+	int reply = cph.modComtree(rtrAdr, comtrees->getComtree(ctx),
+				   llnk, comtrees->isCoreNode(ctx,rtrAdr));
+	CtlPkt repCp;
+	bool status = cph.getCp(reply,repCp);
+	return status;
 }
 
 /** Set the comtree link rates at a router
@@ -1236,74 +1100,38 @@ bool setupComtAttrs(int ctx, int rtr, Queue& inQ, Queue& outQ) {
  *  @param lnk is the link whose rate is to be configured
  *  @param rtr is a node number of the router at which the rate is to be
  *  configured
- *  @param inQ is the queue from the main thread
- *  @param outQ is the queue going back to the main thread
  *  @return true on success, false on failure
  */
-bool setComtLinkRates(int ctx, int lnk, int rtr, Queue& inQ, Queue& outQ) {
-	comt_t comt = comtrees->getComtree(ctx);
+bool setComtLinkRates(int ctx, int lnk, int rtr, CpHandler& cph) {
 	fAdr_t rtrAdr = net->getNodeAdr(rtr);
-	int peer = net->getPeer(rtr,lnk);
-	fAdr_t peerAdr = net->getNodeAdr(peer);
+	fAdr_t peerAdr = net->getNodeAdr(net->getPeer(rtr,lnk));
 	RateSpec rs;
 	if (rtrAdr == comtrees->getChild(ctx,lnk)) {
-		comtrees->getLinkRates(ctx,rtrAdr,rs);
+		rs = comtrees->getLinkRates(ctx,rtrAdr);
+		rs.flip(); // make up in comtree ratespec match input at rtr
 	} else {
-		comtrees->getLinkRates(ctx,peerAdr,rs);
+		rs = comtrees->getLinkRates(ctx,peerAdr);
 	}
-	if (rtr != net->getLeft(lnk)) rs.flip();
-
-	CtlPkt reqCp(MOD_COMTREE_LINK,REQUEST,0);
-	reqCp.setAttr(COMTREE_NUM,comt);
-	reqCp.setAttr(LINK_NUM,net->getLLnum(lnk,rtr));
-	reqCp.setAttr(BIT_RATE_IN,rs.bitRateDown);
-	reqCp.setAttr(BIT_RATE_OUT,rs.bitRateUp);
-	reqCp.setAttr(PKT_RATE_IN,rs.pktRateDown);
-	reqCp.setAttr(PKT_RATE_OUT,rs.pktRateUp);
-	int reply = sendCtlPkt(reqCp,rtrAdr,inQ,outQ);
-	CtlPkt repCp; string s1, s2;
-	string noRstr = "setComtLinkRates: mod comtree link request to "
-	 	 + net->getNodeName(rtr,s1) + " for comtree "
-	       	 + Util::num2string(comt,s2);
-	noRstr += " link " + Util::num2string(net->getLLnum(lnk,rtr),s1)
-		  + " with rateSpec " + rs.toString(s2);
-	string negRstr = noRstr;
-	bool success = handleReply(reply,repCp,noRstr,negRstr);
-	if (reply == NORESPONSE) return false;
-	else if (success) return true;
+	int reply = cph.modComtreeLink( rtrAdr,
+				   	comtrees->getComtree(ctx),
+					net->getLLnum(lnk,rtr),rs);
+	CtlPkt repCp;
+	if (reply == 0) return false;
+	if (cph.getCp(reply,repCp)) return true;
 
 	// router rejected, probably because available rate at router
 	// is different from information stored in comtrees object;
 	// such differences can occur, when we have multiple comtree
 	// controllers; request available rate at router and use it
 	// to update local information
-	reqCp.reset(GET_LINK,REQUEST,0);
-	reqCp.setAttr(LINK_NUM,net->getLLnum(lnk,rtr));
-	reply = sendCtlPkt(reqCp,rtrAdr,inQ,outQ);
-	if (reply != NORESPONSE) {
-		CtlPkt repCp;
-		repCp.unpack(ps->getPayload(reply),
- 				(ps->getHeader(reply)).getLength()
-			 	 - Forest::OVERHEAD);
-		if (repCp.getRrType() == POS_REPLY) {
-			pthread_mutex_lock(&rateLock);
-			RateSpec avail;
-			net->getAvailRates(lnk,avail);
-			if (rtr == net->getLeft(lnk)) {
-				avail.bitRateUp =
-					repCp.getAttr(AVAIL_BIT_RATE_OUT);
-				avail.pktRateUp =
-					repCp.getAttr(AVAIL_PKT_RATE_OUT);
-			} else {
-				avail.bitRateDown =
-					repCp.getAttr(AVAIL_BIT_RATE_OUT);
-				avail.pktRateDown =
-					repCp.getAttr(AVAIL_PKT_RATE_OUT);
-			}
-			net->setAvailRates(lnk,avail);
-			pthread_mutex_unlock(&rateLock);
-		}
+	reply = cph.getLink(rtrAdr,net->getLLnum(lnk,rtr));
+	if (reply == 0 || !cph.getCp(reply,repCp)) return false;
+	pthread_mutex_lock(&rateLock);
+	if (repCp.rspec2.isSet()) {
+		if (rtr == net->getLeft(lnk)) repCp.rspec2.flip();
+		net->getAvailRates(lnk) = repCp.rspec2;
 	}
+	pthread_mutex_unlock(&rateLock);
 	return false;
 }
 
@@ -1311,36 +1139,16 @@ bool setComtLinkRates(int ctx, int lnk, int rtr, Queue& inQ, Queue& outQ) {
  *  @param ctx is a valid comtree index
  *  @param leafAdr is the forest address of a leaf whose rate is to be
  *  configured
- *  @param inQ is the queue from the main thread
- *  @param outQ is the queue going back to the main thread
  *  @return true on success, false on failure
  */
-bool setComtLeafRates(int ctx, fAdr_t leafAdr, Queue& inQ, Queue& outQ) {
-	comt_t comt = comtrees->getComtree(ctx);
-	fAdr_t rtrAdr = comtrees->getParent(ctx, leafAdr);
-	int rtr = net->getNodeNum(rtrAdr);
-	RateSpec rs; comtrees->getLinkRates(ctx,leafAdr,rs);
-
-	CtlPkt reqCp(MOD_COMTREE_LINK,REQUEST,0);
-	reqCp.setAttr(COMTREE_NUM,comt);
-	int llnk = comtrees->getPlink(ctx,leafAdr);
-	reqCp.setAttr(LINK_NUM,llnk);
-	reqCp.setAttr(BIT_RATE_IN,rs.bitRateUp);
-	reqCp.setAttr(BIT_RATE_OUT,rs.bitRateDown);
-	reqCp.setAttr(PKT_RATE_IN,rs.pktRateUp);
-	reqCp.setAttr(PKT_RATE_OUT,rs.pktRateDown);
-	int reply = sendCtlPkt(reqCp,rtrAdr,inQ,outQ);
-	CtlPkt repCp; string s1, s2;
-	string noRstr = "setComtLeafRates: mod comtree link request to "
-	 	 	+ net->getNodeName(rtr,s1) + " for comtree "
-	       	 	+ Util::num2string(comt,s2);
-	noRstr += " link " + Util::num2string(llnk,s1)
-		+ " with rateSpec " + rs.toString(s2);
-	string negRstr = noRstr;
-	bool success = handleReply(reply,repCp,noRstr,negRstr);
-	if (reply == NORESPONSE) return false;
-	else if (success) return true;
-	return false;
+bool setComtLeafRates(int ctx, fAdr_t leafAdr, CpHandler& cph) {
+	int reply = cph.modComtreeLink( comtrees->getParent(ctx, leafAdr),
+				   	comtrees->getComtree(ctx),
+				   	comtrees->getPlink(ctx,leafAdr),
+					comtrees->getLinkRates(ctx,leafAdr));
+	CtlPkt repCp;
+	bool status = cph.getCp(reply,repCp);
+	return status;
 }
 
 /** Modify rates in a comtree.
@@ -1350,235 +1158,72 @@ bool setComtLeafRates(int ctx, fAdr_t leafAdr, Queue& inQ, Queue& outQ) {
  *  @param nostop is true if the method should attempt to set the rates of
  *  all links, even if some routers fail to respond or refuse the request;
  *  when nostop is false, this method returns on the first failed request
- *  @param inQ is the queue from the main thread
- *  @param outQ is the queue going back to the main thread
  *  @return true on success, false on failure
  */
 bool modComtRates(int ctx, list<LinkMod>& modList, bool nostop,
-		  Queue& inQ, Queue& outQ) {
+		  CpHandler& cph) {
 	list<LinkMod>::iterator pp;
 	for (pp = modList.begin(); pp != modList.end(); pp++) {
 		if (!nostop &&
-		    !setComtLinkRates(ctx,pp->lnk,pp->child,inQ,outQ))
+		    !setComtLinkRates(ctx,pp->lnk,pp->child,cph))
 			return false;
 		int parent = net->getPeer(pp->child,pp->lnk);
 		if (!nostop &&
-		    !setComtLinkRates(ctx,pp->lnk,parent,inQ,outQ))
+		    !setComtLinkRates(ctx,pp->lnk,parent,cph))
 			return false;
 	}
 	return true;
-}
-
-
-/** Send a control packet back through the main thread.
- *  The control packet object is assumed to be already initialized.
- *  If it is a reply packet, it is packed into a packet object whose index is
- *  then placed in the outQ. If it is a request packet, it is sent similarly
- *  and then the method waits for a reply. If the reply is not received
- *  after one second, it tries again. After three attempts, it gives up.
- *  @param cp is the pre-formatted control packet
- *  @param dest is the destination address to which it is to be sent
- *  @param inQ is the thread's input queue from the main thread
- *  @param outQ is the thread's output queue back to the main thread
- *  @return the packet number of the reply, when there is one, and 0
- *  on on error, or if there is no reply.
- */
-int sendCtlPkt(CtlPkt& cp, fAdr_t dest, Queue& inQ, Queue& outQ) {
-	int p = ps->alloc();
-	if (p == 0) {
-		cerr << "sendCtlPkt: no packets left in packet store\n";
-		return 0;
-	}
-	// set default seq# for requests - tells main thread to use "next" seq#
-	if (cp.getRrType() == REQUEST) cp.setSeqNum(0);
-	int plen = cp.pack(ps->getPayload(p));
-	if (plen == 0) {
-		string s;
-		cerr << "sendCtlPkt: packing error\n" << cp.toString(s);
-		ps->free(p);
-		return 0;
-	}
-	PacketHeader& h = ps->getHeader(p);
-	h.setLength(plen + Forest::OVERHEAD);
-	if (cp.getCpType() < CLIENT_NET_SIG_SEP) {
-		h.setPtype(CLIENT_SIG);
-		h.setComtree(Forest::CLIENT_SIG_COMT);
-	} else {
-		h.setPtype(NET_SIG);
-		h.setComtree(Forest::NET_SIG_COMT);
-	}
-	h.setFlags(0);
-	h.setDstAdr(dest);
-	h.setSrcAdr(myAdr);
-	h.pack(ps->getBuffer(p));
-
-	if (cp.getRrType() != REQUEST) {
-		outQ.enq(p); return 0;
-	}
-	int reply = sendAndWait(p,cp,inQ,outQ);
-	ps->free(p);
-	return reply;
-}
-
-/** Send a control request packet multiple times before giving up.
- *  This method makes a copy of the original and sends the copy
- *  back to the main thread. If no reply is received after 1 second,
- *  it tries again; it makes a total of three attempts before giving up.
- *  @param p is the packet number of the packet to be sent; the header
- *  for p is assumed to be unpacked
- *  @param cp is the control packet structure for p (already unpacked)
- *  @param inQ is the queue coming from the main thread
- *  @param outQ is the queue going back to the main thread
- *  @return the packet number for the reply packet, or 0 if there
- *  was an error or no reply
- */
-int sendAndWait(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
-	PacketHeader& h = ps->getHeader(p);
-	h.setSrcAdr(myAdr); ps->pack(p);
-
-	// make copy of packet and send the copy
-	int copy = ps->fullCopy(p);
-	if (copy == 0) {
-		cerr << "sendAndWait: no packets left in packet store\n";
-		return NORESPONSE;
-	}
-
-	outQ.enq(copy);
-
-	for (int i = 1; i < 3; i++) {
-		int reply = inQ.deq(1000000000); // 1 sec timeout
-		if (reply == Queue::TIMEOUT) {
-			// no reply, make new copy and send
-			int retry = ps->fullCopy(p);
-			if (retry == 0) {
-				cerr << "sendAndWait: no packets "
-					"left in packet store\n";
-				return NORESPONSE;
-			}
-			cp.setSeqNum(1);	// tag retry as a repeat
-			cp.pack(ps->getPayload(retry));
-			PacketHeader& hr = ps->getHeader(retry);
-			hr.payErrUpdate(ps->getBuffer(retry));
-			outQ.enq(retry);
-		} else {
-			return reply;
-		}
-	}
-	return NORESPONSE;
-}
-
-/** Handle common chores for reply packets.
- *  @param reply is a packet number for a reply to a control packet
- *  @param repCp is a reference to a CtlPkt object in which the reply
- *  information is returned
- *  @param noRstr is a string to be written to cerr if no reply is
- *  received; it will be preceded by a generic message indicating that
- *  no reply was received and followed by a new line. If noRstr has
- *  zero loength, then nothing is written
- *  @param negRstr is a string to be written to cerr if a negative reply is
- *  received; it will be preceded by a generic message indicating that
- *  a negative reply was received and followed by the error message
- *  returned as part of the reply packet. If negRstr has zero length,
- *  then nothing is written
- */
-bool handleReply(int reply, CtlPkt& repCp, string& noRstr, string& negRstr) {
-	if (reply == NORESPONSE) {
-		if (noRstr.length() != 0)
-			cerr << "handleReply: no reply to control packet:\n"
-			     << noRstr << endl;
-		return false;
-	}
-	repCp.reset();
-	repCp.unpack(ps->getPayload(reply),
-		     (ps->getHeader(reply)).getLength() - Forest::OVERHEAD);
-	if (repCp.getRrType() == NEG_REPLY) {
-		if (negRstr.length() != 0)
-			cerr << "handleReply: negative reply received:\n"
-		     	     << negRstr << "\n("
-			     << repCp.getErrMsg() << ")" << endl;
-		ps->free(reply);
-		return false;
-	}
-	ps->free(reply);
-	return true;
-}
-
-/** Build and send error reply packet for p.
- *  @param p is the packet number of the request packet
- *  @param cp is the control packet structure for p (already unpacked)
- *  @param outQ is the queue going back to the main thread
- *  @param msg is the error message to be sent.
- */
-void errReply(int p, CtlPkt& cp, Queue& outQ, const char* msg) {
-	PacketHeader& h = ps->getHeader(p);
-
-	int p1 = ps->fullCopy(p);
-	PacketHeader& h1 = ps->getHeader(p1);
-	CtlPkt cp1;
-	cp1.unpack(ps->getPayload(p1),h1.getLength()-Forest::OVERHEAD);
-
-	cp1.setRrType(NEG_REPLY);
-	cp1.setErrMsg(msg);
-	int plen = cp1.pack(ps->getPayload(p1));
-
-	h1.setLength(Forest::OVERHEAD + plen);
-	h1.setDstAdr(h.getSrcAdr());
-	h1.setSrcAdr(myAdr);
-	h1.pack(ps->getBuffer(p1));
-
-	outQ.enq(p1);
 }
 
 /** Check for next packet from the Forest network.
  *  @return next packet or 0, if no report has been received.
  */
-int rcvFromForest() { 
-	int p = ps->alloc();
-	if (p == 0) return 0;
-	buffer_t& b = ps->getBuffer(p);
+pktx rcvFromForest() { 
+	pktx px = ps->alloc();
+	if (px == 0) return 0;
+	Packet& p = ps->getPacket(px);
 
-	int nbytes = Np4d::recv4d(intSock,&b[0],1500);
-	if (nbytes < 0) { ps->free(p); return 0; }
-	ps->unpack(p);
+	int nbytes = Np4d::recv4d(intSock,p.buffer,1500);
+	if (nbytes < 0) { ps->free(px); return 0; }
+	p.unpack();
 
-	return p;
+	return px;
 }
 
 /** Send packet to Forest router.
  */
-void sendToForest(int p) {
-	buffer_t& buf = ps->getBuffer(p);
-	int leng = ps->getHeader(p).getLength();
-	ps->pack(p);
-	int rv = Np4d::sendto4d(intSock,(void *) &buf,leng,
+void sendToForest(pktx px) {
+	Packet p = ps->getPacket(px);
+	p.pack();
+	int rv = Np4d::sendto4d(intSock,(void *) p.buffer, p.length,
 		    	      	rtrIp,Forest::ROUTER_PORT);
 	if (rv == -1) fatal("sendToForest: failure in sendto");
-	ps->free(p);
+	ps->free(px);
 }
 
 /** Send initial connect packet to forest router
  *  Uses comtree 1, which is for user signalling.
  */
 void connect() {
-	packet p = ps->alloc();
-	PacketHeader& h = ps->getHeader(p);
+	pktx px = ps->alloc();
+	Packet& p = ps->getPacket(px);
 
-	h.setLength(4*(5+1)); h.setPtype(CONNECT); h.setFlags(0);
-	h.setComtree(Forest::CLIENT_CON_COMT);
-	h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
+	p.length = 4*(5+1); p.type = CONNECT; p.flags = 0;
+	p.comtree = Forest::CLIENT_CON_COMT;
+	p.srcAdr = myAdr; p.dstAdr = rtrAdr;
 
-	sendToForest(p);
+	sendToForest(px);
 }
 
 /** Send final disconnect packet to forest router.
  */
 void disconnect() {
-	packet p = ps->alloc();
-	PacketHeader& h = ps->getHeader(p);
+	pktx px = ps->alloc();
+	Packet& p = ps->getPacket(px);
 
-	h.setLength(4*(5+1)); h.setPtype(DISCONNECT); h.setFlags(0);
-	h.setComtree(Forest::CLIENT_CON_COMT);
-	h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
+	p.length = 4*(5+1); p.type = DISCONNECT; p.flags = 0;
+	p.comtree = Forest::CLIENT_CON_COMT;
+	p.srcAdr = myAdr; p.dstAdr = rtrAdr;
 
-	sendToForest(p);
+	sendToForest(px);
 }

@@ -1,11 +1,12 @@
 JAVAROOT = ${BIN}/java
-ALGOLIBROOT = ../../algolib-jst
+ALGOLIBROOT = ../../../algolib-jst
+BIN = ~/bin
 FLIB = ../lib/lib-forest.a
 LIBS = ${FLIB} ${ALGOLIBROOT}/lib/lib-ds.a ${ALGOLIBROOT}/lib/lib-util.a
 CXXFLAGS = -Wall -O2 -m64 -I ../include -I ${ALGOLIBROOT}/include -I /usr/include/mysql
 
-LIBFILES = NetInfo.o ComtInfo.o
-XFILES = NetMgr CliMgr CliMgr-v0 ComtCtl Console BuildRtables #SqlProxy
+LIBFILES = NetInfo.o ComtInfo.o CpHandler.o
+XFILES = NetMgr CliMgr-v0 ComtCtl BuildRtables #Console CliMgr SqlProxy
 
 %.o: %.cpp %.h stdinc.h
 	${CXX} ${CXXFLAGS} -c $<
