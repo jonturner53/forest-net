@@ -13,6 +13,9 @@
 #include "stdinc.h"
 #include "Util.h"
 
+namespace forest {
+
+
 /** This class implements a simple thread-safe queue for communication
  *  among threads.
  */
@@ -46,5 +49,8 @@ private:
  *  @return true if the queue is empty, else false
  */
 inline bool Queue::empty() const { return count == 0; }
+
+} // ends namespace
+
 
 #endif

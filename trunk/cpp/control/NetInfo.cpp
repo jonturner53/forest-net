@@ -8,6 +8,9 @@
 
 #include "NetInfo.h"
 
+namespace forest {
+
+
 /** Constructor for NetInfo, allocates space and initializes private data.
  *  @param maxNode1 is the maximum number of nodes in this NetInfo object
  *  @param maxLink1 is the maximum number of links in this NetInfo object
@@ -998,3 +1001,6 @@ string& NetInfo::leaf2string(int leaf, string& s) const {
 	s = ss.str();
 	return s;
 }
+
+} // ends namespace
+

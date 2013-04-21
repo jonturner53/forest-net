@@ -8,6 +8,9 @@
 
 #include "PacketStoreTs.h"
 
+namespace forest {
+
+
 /** Constructor allocates space and initializes free list.
  *  @param N1 is number of packets to allocate space for
  */
@@ -75,4 +78,7 @@ pktx PacketStoreTs::fullCopy(pktx px) {
         for (int i = 0; i < len; i++) buf1[i] = buf[i];
         return px1;
 }
+
+
+} // ends namespace
 

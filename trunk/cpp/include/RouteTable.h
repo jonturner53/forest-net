@@ -14,6 +14,9 @@
 #include "IdMap.h"
 #include "ComtreeTable.h"
 
+namespace forest {
+
+
 typedef set<int>::iterator RteLink; 
 
 /** Maintains a set of routes. A unicast route is a triple
@@ -229,5 +232,8 @@ inline uint64_t RouteTable::key(comt_t comt, fAdr_t adr) const {
 	}
 	return (uint64_t(comt) << 32) | (uint64_t(adr) & 0xffffffff);
 }
+
+} // ends namespace
+
 
 #endif

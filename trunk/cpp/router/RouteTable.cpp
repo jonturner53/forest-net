@@ -8,6 +8,9 @@
 
 #include "RouteTable.h"
 
+namespace forest {
+
+
 /** Constructor for RouteTable, allocates space and initializes table.
  *  @param maxRtx1 is the maximum number of entries in the table
  *  @param myAdr1 is the forest of the address of the router
@@ -183,3 +186,6 @@ string& RouteTable::toString(string& s) const {
 	s = ss.str();
 	return s;
 }
+
+} // ends namespace
+

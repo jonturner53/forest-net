@@ -8,6 +8,9 @@
 
 #include "Queue.h"
 
+namespace forest {
+
+
 Queue::Queue(int qMax1) {
 	qMax = qMax1;
 	count = head = tail = 0;
@@ -116,3 +119,6 @@ int Queue::deq(uint32_t timeout) {
 	pthread_cond_signal(&fullQ);
 	return retVal;
 }
+
+} // ends namespace
+

@@ -11,6 +11,9 @@
 
 #include "Forest.h"
 
+namespace forest {
+
+
 /** This class stores bit rates and packet rates for links in
  *  both directions. Directions are referred to as "up" and "down"
  *  to relate easily to usage in comtrees.
@@ -113,5 +116,8 @@ public:
 	bool read(istream&);
 	string& toString(string& s) const;
 };
+
+} // ends namespace
+
 
 #endif

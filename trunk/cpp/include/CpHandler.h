@@ -16,6 +16,9 @@
 #include "Queue.h"
 #include "PacketStoreTs.h"
 
+namespace forest {
+
+
 /** This class is designed for use with multi-threaded controllers
  *  (NetMgr, ComtCtl, etc) that use control packets to communicate
  *  with routers and other components. It handles retransmission
@@ -92,5 +95,8 @@ private:
 inline void CpHandler::setTunnel(ipa_t ip, ipp_t port) {
 	tunIp = ip; tunPort = port;
 }
+
+} // ends namespace
+
 
 #endif

@@ -11,6 +11,9 @@
 #include "PacketHeader.h"
 #include "CtlPkt.h"
 
+namespace forest {
+
+
 const short NM_PORT = 30122; 		///< server port# for NetMgr
 
 // various helper routines
@@ -408,3 +411,6 @@ void processTokenList(list<string> tokenList, fAdr_t& target,
 		}
 	}
 }
+
+} // ends namespace
+

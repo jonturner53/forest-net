@@ -12,6 +12,9 @@
 #include "Avatar.h"
 #include <string>
 #include <algorithm>
+
+using namespace forest;
+
 /** usage:
  *       Avatar myIpAdr cliMgrIpAdr walls firstComt lastComt uname pword finTime
  * 
@@ -54,6 +57,8 @@ int main(int argc, char *argv[]) {
 		fatal("Avatar:: initialization failure");
 	avatar.run(1000000*finTime);
 }
+
+namespace forest {
 
 /** Constructor allocates space and initializes private data.
  * 
@@ -1245,3 +1250,6 @@ void Avatar::updateNearby(pktx px) {
 void Avatar::updateVisSet() {
 	computeVisSet(groupNum(x,y),*myVisSet);
 }
+
+} // ends namespace
+

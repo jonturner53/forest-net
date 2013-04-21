@@ -8,6 +8,9 @@
 
 #include "HeapSet.h"
 
+namespace forest {
+
+
 /*
 Implementation notes
 
@@ -213,3 +216,6 @@ string& HeapSet::toString(int h, string& s) const {
 	if (cnt != 0) s += "\n";
 	return s;
 }
+
+} // ends namespace
+

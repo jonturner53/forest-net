@@ -11,7 +11,7 @@
 
 #include <pthread.h>
 #include "Forest.h"
-#include "PacketHeader.h"
+#include "Packet.h"
 #include "PacketStoreTs.h"
 #include "NetInfo.h"
 #include "ComtInfo.h"
@@ -22,6 +22,9 @@
 #include "Logger.h"
 #include "CpHandler.h"
 #include <map>
+
+namespace forest {
+
 
 /** ComtCtl manages a set of comtrees in a forest network.
  *  It receives signalling requests from clients and configures
@@ -124,4 +127,7 @@ int	recvFromRemote();
 
 void	sendToForest(int);
 int 	rcvFromForest();
+
+} // ends namespace
+
 #endif

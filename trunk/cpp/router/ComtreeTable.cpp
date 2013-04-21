@@ -8,6 +8,9 @@
 
 #include "ComtreeTable.h"
 
+namespace forest {
+
+
 /** Constructor for ComtreeTable, allocates space and initializes table. */
 ComtreeTable::ComtreeTable(int maxCtx1, int maxComtLink1, LinkTable *lt1)
 			   : maxCtx(maxCtx1), maxComtLink(maxComtLink1),
@@ -289,3 +292,6 @@ string& ComtreeTable::toString(string& s) const {
 	s = ss.str();
 	return s;
 }
+
+} // ends namespace
+

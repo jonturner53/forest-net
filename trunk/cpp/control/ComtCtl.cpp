@@ -8,6 +8,8 @@
 
 #include "ComtCtl.h"
 
+using namespace forest;
+
 /** usage:
  *       ComtCtl extIp topoFile firstComt lastComt finTime
  * 
@@ -47,6 +49,7 @@ int main(int argc, char *argv[]) {
 	exit(0);
 }
 
+namespace forest {
 
 /** Initialization of ComtCtl.
  *  Involves setting up thread pool to handle client signalling packets
@@ -1227,3 +1230,6 @@ void disconnect() {
 
 	sendToForest(px);
 }
+
+} // ends namespace
+

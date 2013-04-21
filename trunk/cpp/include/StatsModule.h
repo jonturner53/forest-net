@@ -6,6 +6,9 @@
 #include "Forest.h"
 #include "ComtreeTable.h"
 
+namespace forest {
+
+
 class StatsModule {
 public:
 		StatsModule(int, int, int, ComtreeTable*);
@@ -194,5 +197,8 @@ inline void StatsModule::decQlen(int qid, int lnk, int len) {
 		qCnts[qid].bytLen -= len; qCnts[qid].pktLen--;
 	}
 }
+
+} // ends namespace
+
 
 #endif

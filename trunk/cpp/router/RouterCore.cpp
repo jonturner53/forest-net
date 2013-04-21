@@ -8,6 +8,8 @@
 
 #include "RouterCore.h"
 
+using namespace forest;
+
 /** Process command line arguments for starting a forest router.
  *  All arguments are strings of the form "name=value".
  *  @param argc is the number of arguments (including the command name)
@@ -82,7 +84,6 @@ bool processArgs(int argc, char *argv[], RouterInfo& args) {
 	return true;
 }
 
-
 /** Main program for starting a forest router.
  */
 int main(int argc, char *argv[]) {
@@ -104,6 +105,8 @@ int main(int argc, char *argv[]) {
 	cout << endl;
     return 0;
 }
+
+namespace forest {
 
 /** Constructor for RouterCore, initializes key parameters and allocates space.
  *  @param config is a RouterInfo structure which has been initialized to
@@ -1922,3 +1925,5 @@ void RouterCore::returnToSender(pktx px, CtlPkt& cp) {
 	int qn = ctt->getLinkQ(cLnk);
 	if (!qm->enq(px,qn,now)) { ps->free(px); }
 }
+
+} // ends namespace

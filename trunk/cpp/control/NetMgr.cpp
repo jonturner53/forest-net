@@ -9,6 +9,9 @@
 #include "NetMgr.h"
 #include "CpHandler.h"
 
+using namespace forest;
+
+
 /** usage:
  *       NetMgr extIp topoFile clientInfo finTime
  * 
@@ -47,6 +50,7 @@ int main(int argc, char *argv[]) {
 	exit(0);
 }
 
+namespace forest {
 
 /** Initialization of NetMgr.
  *  Involves setting up thread pool to handle control packets
@@ -854,3 +858,6 @@ void disconnect() {
 
 	sendToForest(px);
 }
+
+} // ends namespace
+

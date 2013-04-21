@@ -13,6 +13,9 @@
 #include "Util.h"
 #include "Misc.h"
 
+namespace forest {
+
+
 // shorthands for internet address/port types
 typedef in_addr_t ipa_t;
 typedef in_port_t ipp_t;
@@ -73,5 +76,8 @@ public:
 	static int  sendBufBlock(int, char*, int);
 	static int  sendString(int, string&);
 };
+
+} // ends namespace
+
 
 #endif

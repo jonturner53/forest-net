@@ -13,6 +13,9 @@
 #include "RateSpec.h"
 #include "UiSetPair.h"
 
+namespace forest {
+
+
 class IfaceTable {
 public:
 		IfaceTable(int);
@@ -137,5 +140,8 @@ inline RateSpec& IfaceTable::getAvailRates(int i) const {
 inline void IfaceTable::setDefaultIface(int iface) {
 	if (valid(iface)) defaultIf = iface;
 }
+
+} // ends namespace
+
 
 #endif

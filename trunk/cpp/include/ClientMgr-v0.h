@@ -2,13 +2,15 @@
 #define CLIENTMGR_H
 
 #include "Forest.h"
-#include "PacketHeader.h"
+#include "Packet.h"
 #include "PacketStoreTs.h"
 #include "Queue.h"
 #include "IdMap.h"
 #include "UiSetPair.h"
 #include <pthread.h> 
 #include <map>
+
+namespace forest {
 
 void* run(void *);		///< main run method, takes in finTime
 bool init(fAdr_t,ipa_t,fAdr_t,fAdr_t,ipa_t,ipa_t,fAdr_t,char*,char*); ///< initialize sockets
@@ -92,5 +94,7 @@ void connect();		///< connect to forest network
 void disconnect();	///< disconnect from forest network
 void readUsernames();	///< read filenames and store
 void initializeAvatar();///< try to connect to and initialize ClientAvatar
-;
+
+} // ends namespace
+
 #endif

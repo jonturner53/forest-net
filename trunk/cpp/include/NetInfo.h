@@ -20,6 +20,9 @@
 #include "Wgraph.h"
 #include "RateSpec.h"
 
+namespace forest {
+
+
 /** Maintains information about an entire Forest network.
  *  The NetInfo data structure is intended for use by network
  *  control elements that require a global view of the network.
@@ -838,5 +841,8 @@ inline bool NetInfo::setLinkLength(int lnk, int len) {
 inline uint64_t NetInfo::ll2l_key(int r, int llnk) const {
 	return (uint64_t(r) << 32) | (uint64_t(llnk) & 0xffffffff);
 }
+
+} // ends namespace
+
 
 #endif

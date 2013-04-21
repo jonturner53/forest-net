@@ -12,6 +12,9 @@
 #include "Avatar.h"
 #include <string>
 #include <algorithm>
+
+namespace forest {
+
 /** usage:
  *       Avatar myIpAdr cliMgrIpAdr walls firstComt lastComt uname pword finTime
  * 
@@ -1443,3 +1446,6 @@ void Avatar::updateNearby(int p) {
 void Avatar::updateVisSet() {
 	computeVisSet(groupNum(x,y),*myVisSet);
 }
+
+} // ends namespace
+

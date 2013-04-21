@@ -14,6 +14,9 @@
 #include "IdMap.h"
 #include "LinkTable.h"
 
+namespace forest {
+
+
 /** Class that implements a table of information on comtrees.
  *
  *  Table entries are accessed using a "comtree index", which
@@ -445,5 +448,8 @@ inline uint64_t ComtreeTable::key(comt_t comt) const {
 inline uint64_t ComtreeTable::key(comt_t comt, int lnk) const {
         return (uint64_t(comt) << 32) | lnk;
 }
+
+} // ends namespace
+
 
 #endif

@@ -8,6 +8,9 @@
 
 #include "IfaceTable.h"
 
+namespace forest {
+
+
 /** Constructor for IfaceTable, allocates space and initializes private data.
  */
 IfaceTable::IfaceTable(int maxIf1) : maxIf(maxIf1) {
@@ -124,3 +127,6 @@ string& IfaceTable::toString(string& s) const {
 	s = ss.str();
 	return s;
 }
+
+} // ends namespace
+

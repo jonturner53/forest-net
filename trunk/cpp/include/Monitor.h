@@ -12,10 +12,13 @@
 #include <set>
 #include <list>
 #include "Forest.h"
-#include "PacketHeader.h"
+#include "Packet.h"
 #include "PacketStore.h"
 #include "UiHashTbl.h"
 #include "Avatar.h"
+
+namespace forest {
+
 
 /** Monitor observes status reports sent by Avatars in a virtual
  *  world and reports them to a remote client that implements
@@ -95,5 +98,8 @@ private:
 	void	subscribe(list<int>&);
 	void	unsubscribe(list<int>&);
 };
+
+} // ends namespace
+
 
 #endif

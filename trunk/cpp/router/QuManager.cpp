@@ -31,6 +31,9 @@ packet scheduler.
 
 #include "QuManager.h"
 
+namespace forest {
+
+
 // Constructor for QuManager, allocates space and initializes everything.
 QuManager::QuManager(int nL1, int nP1, int nQ1, int maxppl1,
 		     PacketStore *ps1, StatsModule *sm1)
@@ -218,3 +221,6 @@ int QuManager::deq(int& lnk, uint64_t now) {
 	
 	return px;
 }
+
+} // ends namespace
+

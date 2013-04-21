@@ -16,6 +16,9 @@
 #include "PacketStore.h"
 #include "StatsModule.h"
 
+namespace forest {
+
+
 /** The QuManager class, manages a set of queues for each of the
  *  links in a router.
  *  
@@ -117,5 +120,8 @@ inline bool QuManager::setQLimits(int qid, int np, int nb) {
 	quInfo[qid].byteLim = nb;
 	return true;
 }
+
+} // ends namespace
+
 
 #endif

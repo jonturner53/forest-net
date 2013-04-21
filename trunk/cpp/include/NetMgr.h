@@ -11,7 +11,7 @@
 
 #include <pthread.h>
 #include "Forest.h"
-#include "PacketHeader.h"
+#include "Packet.h"
 #include "PacketStoreTs.h"
 #include "NetInfo.h"
 #include "ComtInfo.h"
@@ -21,6 +21,9 @@
 #include "CpHandler.h"
 #include "Logger.h"
 #include <map>
+
+namespace forest {
+
 
 /** NetMgr manages a Forest network.
  *  It relays control packets from a remote Console and
@@ -107,5 +110,8 @@ void	sendToForest(int);
 int 	rcvFromForest();
 
 bool	findCliRtr(ipa_t,fAdr_t&); ///< gives the rtrAdr of the prefix
+
+} // ends namespace
+
 
 #endif

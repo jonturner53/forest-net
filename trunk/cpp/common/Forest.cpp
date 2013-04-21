@@ -1,4 +1,4 @@
-/** @file CommonDefs.cpp 
+/** @file Forest.cpp 
  *
  *  @author Jon Turner
  *  @date 2011
@@ -7,6 +7,9 @@
  */
 
 #include "Forest.h"
+
+namespace forest {
+
 
 /** Read a forest address.
  *  @param in is an open input stream
@@ -46,4 +49,7 @@ ntyp_t Forest::getNodeType(string& s) {
 	if (s.compare("controller") == 0) return CONTROLLER;
 	return UNDEF_NODE;
 }
+
+
+} // ends namespace
 

@@ -23,6 +23,9 @@
 
 #include "CtlPkt.h"
 
+namespace forest {
+
+
 /** Constructor for CtlPkt with no initialization.
  */
 CtlPkt::CtlPkt() { reset(); }
@@ -1134,3 +1137,6 @@ string& CtlPkt::toString(string& s) {
 	s = ss.str();
 	return s;
 }
+
+} // ends namespace
+

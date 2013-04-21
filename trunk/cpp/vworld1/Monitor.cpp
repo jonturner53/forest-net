@@ -7,6 +7,9 @@
  */
 
 #include "Monitor.h"
+
+using namespace forest;
+
 /** usage:
  *       Monitor extIp intIp rtrIp myAdr rtrAdr worldSize finTime [logfile]
  * 
@@ -62,6 +65,8 @@ int main(int argc, char *argv[]) {
 	mon.run(1000000*(finTime-1)); // -1 to compensate for delay in init
 	exit(0);
 }
+
+namespace forest {
 
 // Constructor for Monitor, allocates space and initializes private data
 Monitor::Monitor(ipa_t xipa, ipa_t iipa, ipa_t ripa, fAdr_t ma,
@@ -582,3 +587,6 @@ void Monitor::disconnect() {
 
 	send2router(px); ps->free(px);
 }
+
+} // ends namespace
+

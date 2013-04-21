@@ -11,6 +11,9 @@
 
 #include "stdinc.h"
 
+namespace forest {
+
+
 class Misc {
 public:
 	// basic io helper functions
@@ -132,5 +135,8 @@ inline string& Misc::node2string(int u, int n, string& s) {
         else num2string(u,s);
 	return s;
 }
+
+} // ends namespace
+
 
 #endif

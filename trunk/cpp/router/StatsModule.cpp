@@ -8,6 +8,9 @@
 
 #include "StatsModule.h"
 
+namespace forest {
+
+
 StatsModule::StatsModule(int maxStats1, int maxLnk1, int maxQ1,
 			 ComtreeTable* ctt1)
 		         : maxStats(maxStats1), maxLnk(maxLnk1), maxQ(maxQ1),
@@ -239,3 +242,6 @@ string& StatsModule::toString(string& s) const {
 	for (int i = 1; i <= n; i++) s += stat2string(i,s1);
 	return s;
 }
+
+} // ends namespace
+

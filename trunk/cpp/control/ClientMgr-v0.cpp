@@ -15,6 +15,9 @@
 #include <fstream>
 #include <sstream>
 
+using namespace forest;
+
+
 /** usage:
  *  ClientMgr netMgrAdr rtrAdr ccAdr rtrIp intIp extIp myAdr finTime
  *  usersFile acctFile prefixFile
@@ -65,6 +68,8 @@ int main(int argc, char ** argv) {
 	pthread_join(run_thread,NULL);
 	return 0;
 }
+
+namespace forest {
 
 /** Initializes sockets, and acts as a psuedo-constructor
  *  @param nma is the netMgr forest address
@@ -626,4 +631,7 @@ int sendCtlPkt(CtlPkt& cp, comt_t comt, fAdr_t dest, Queue& inQ, Queue& outQ) {
         ps->free(px);
         return reply;
 }
+
+
+} // ends namespace
 

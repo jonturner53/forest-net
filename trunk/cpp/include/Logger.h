@@ -12,6 +12,9 @@
 #include <pthread.h>
 #include "Packet.h"
 
+namespace forest {
+
+
 /** This is a very simple logger class to control the
  *  logging of error messages.
  */
@@ -50,5 +53,8 @@ private:
 	void logit(const string& s, int severity, Packet& p);
 	void logit(const string& s, int severity, CtlPkt& cp);
 };
+
+} // ends namespace
+
 
 #endif

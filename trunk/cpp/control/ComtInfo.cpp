@@ -8,6 +8,9 @@
 
 #include "ComtInfo.h"
 
+namespace forest {
+
+
 /** Constructor for ComtInfo, allocates space and initializes private data.
  *  @param maxNode1 is the maximum number of nodes in this ComtInfo object
  *  @param maxLink1 is the maximum number of links in this ComtInfo object
@@ -1321,3 +1324,6 @@ string& ComtInfo::comtStatus22string(int ctx, string& s) const {
 	s = ss.str();
 	return s;
 }
+
+} // ends namespace
+

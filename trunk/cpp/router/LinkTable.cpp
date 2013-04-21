@@ -8,6 +8,9 @@
 
 #include "LinkTable.h"
 
+namespace forest {
+
+
 /** Constructor for LinkTable, allocates space and initializes table. */
 LinkTable::LinkTable(int maxLnk1) : maxLnk(maxLnk1) {
 	lnkTbl = new LinkInfo[maxLnk+1];
@@ -193,3 +196,6 @@ string& LinkTable::toString(string& s) const {
 	s = ss.str();
 	return s;
 }
+
+} // ends namespace
+

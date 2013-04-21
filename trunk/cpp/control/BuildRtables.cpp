@@ -18,6 +18,8 @@
 #include "LinkTable.h"
 #include "ComtreeTable.h"
 
+using namespace forest;
+
 /** usage:
  *       BuildRtables <netConfigFile 
  * 
@@ -234,3 +236,4 @@ bool buildComtTable(int r, const NetInfo& net, const ComtInfo& comtrees,
 	} 
 	return true;
 }
+

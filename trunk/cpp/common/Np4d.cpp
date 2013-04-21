@@ -8,6 +8,9 @@
 
 #include "Np4d.h"
 
+namespace forest {
+
+
 /** Return the IP address for the string pointed to by ips.
  *  Return 0 if string does not represent a valid IP address
  */
@@ -477,3 +480,6 @@ int Np4d::sendString(int sock, string& s) {
 	}
 	return s.size();
 }
+
+} // ends namespace
+

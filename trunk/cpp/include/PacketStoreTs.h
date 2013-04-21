@@ -13,6 +13,9 @@
 #include "UiList.h"
 #include "Packet.h"
 
+namespace forest {
+
+
 typedef int pktx;
 
 /** Maintains a set of packets with selected header fields and a
@@ -129,5 +132,8 @@ inline void PacketStoreTs::payErrUpdate(pktx px) {
 	getHeader(p).payErrUpdate(getBuffer(p));
 }
  */
+
+
+} // ends namespace
 
 #endif

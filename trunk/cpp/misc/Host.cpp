@@ -9,6 +9,9 @@
 #include "stdinc.h"
 #include "Host.h"
 
+using namespace forest;
+
+
 /**
  *  usage:
  *       fHost myIpAdr rtrIpAdr repeatFlag delta finTime
@@ -67,6 +70,8 @@ int main(int argc, char *argv[]) {
 	if (!host.init()) fatal("Host:: initialization failure");
 	host.run((repeatFlag ? true : false), delta, 1000000*finTime);
 }
+
+namespace forest {
 
 // Constructor for Host, allocates space and initializes private data
 Host::Host(ipa_t mipa, ipa_t ripa) : myIpAdr(mipa) , rtrIpAdr(ripa) {
@@ -266,3 +271,6 @@ int Host::receive() {
 
         return px;
 }
+
+} // ends namespace
+
