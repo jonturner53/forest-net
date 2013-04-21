@@ -9,7 +9,7 @@
 #ifndef PACKETHEADER_H
 #define PACKETHEADER_H
 
-#include "CommonDefs.h"
+#include "Forest.h"
 #include "CtlPkt.h"
 
 class PacketHeader {

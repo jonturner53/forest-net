@@ -1,7 +1,7 @@
 #ifndef CLIPROXY_H
 #define CLIPROXY_H
 
-#include "CommonDefs.h"
+#include "Forest.h"
 #include "PacketHeader.h"
 #include "PacketStore.h"
 class ClientProxy {

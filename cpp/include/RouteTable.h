@@ -10,7 +10,7 @@
 #define ROUTETABLE_H
 
 #include <set>
-#include "CommonDefs.h"
+#include "Forest.h"
 #include "IdMap.h"
 #include "ComtreeTable.h"
 

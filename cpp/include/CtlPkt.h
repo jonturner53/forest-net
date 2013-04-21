@@ -9,205 +9,138 @@
 #ifndef CTLPKT_H
 #define CTLPKT_H
 
-#include "CommonDefs.h"
+#include "Forest.h"
 #include "CpType.h"
-//#include "PacketStore.h"
-
-enum CpRrType { REQUEST=1, POS_REPLY=2, NEG_REPLY=3 };
+#include "RateSpec.h"
 
 /** This class provides a mechanism for handling forest signalling packets.
  *  Signalling packets have a packet type of CLIENT_SIG or NET_SIG in the
  *  first word of the forest head. The payload identifies the specific
  *  type of packet. Every control packet includes the following three fields.
  *
- *  request/response type	specifies that this is a request packet,
- *				a positive reply, or a negative reply
  *  control packet type		identifies the specific type of packet
+ *  mode 			specifies that this is a request packet,
+ *				a positive reply, or a negative reply
  *  sequence number		this field is set by the originator of any
  *				request packet, and the same value is returned
  *				in the reply packet; this allows the requestor
- *				to match repies with earlier requests; the
- *				target of the request does not use or interpret
- *				the value, so the requestor can use it however
- *				it finds most convenient
+ *				to match repies with earlier requests
  *
  *  The remainder of a control packet payload consists of (attribute,value)
- *  pairs. Each attribute is identified by a 32 bit code and each value
- *  is a 32 bit integer.
- *
- *  To format a control packet, a requestor creates a new control packet
- *  object, sets the three fields listed above using the provided
- *  set methods, and sets the appropriate attriutes using the setAttr()
- *  method. For any specific control packets, some attributes are
- *  required, others are optional. Once the control packet object has
- *  been initialized, the information is transferred to a packet using
- *  the pack() method; the argument to the pack method is a pointer to
- *  the start of the packet payload.
- *
- *  To extract information from a control packet, the receiver first
- *  uses the unpack() method to transfer the information from the packet
- *  payload to a control packet object. The provided get methods can then
- *  be used to extract field values and attributes from the control packet.
- *
- *  There are two support classes used by CtlPkt: CpType and CpAttr.
- *  CpType defines all the control packet types. For each type, it defines
- *  four quantities, an index, a code, a command phrase and an abbreviation.
- *  Control packet indices are sequential integers and are generally used
- *  with programs to access type information. The control packet code is the
- *  value that is actually sent in a control packet to identify what type
- *  of packet it is. The command phrase is a descriptive phrase such as
- *  "get comtree" or "modify route" and the abbreviation is a corresponding
- *  short form (gc for "get comtree" for example).
- *
- *  The CpAttr class is similar. For each attribute it defines an index
- *  a code and a name.
+ *  pairs. Each attribute is identified by a 32 bit code and the size
+ *  and type of the values is determined by the attribute code. Currently,
+ *  most attributes are 32 bit integers. Some are RateSpecs.
+ *  The control packet object contains fields for each of the possible
+ *  attribute values and these fields can be directly read or written.
+ *  Pack and unpack methods are provided to packet these fields into
+ *  a payload of a packet buffer, or unpack attribute values from a
+ *  packet buffer.
  */
 class CtlPkt {
 public:
+	/** Control packet types */
+	enum CpType {
+		UNDEF_CPTYPE = 0,
+
+		CLIENT_ADD_COMTREE = 10, CLIENT_DROP_COMTREE = 11,
+		CLIENT_GET_COMTREE = 12, CLIENT_MOD_COMTREE = 13,
+		CLIENT_JOIN_COMTREE = 14, CLIENT_LEAVE_COMTREE = 15,
+		CLIENT_RESIZE_COMTREE = 16,
+		CLIENT_GET_LEAF_RATE = 17, CLIENT_MOD_LEAF_RATE = 18,
+
+		CLIENT_NET_SIG_SEP = 29,
+
+		ADD_IFACE = 30, DROP_IFACE = 31,
+		GET_IFACE = 32, MOD_IFACE = 33,
+
+		ADD_LINK = 40, DROP_LINK = 41,
+		GET_LINK = 42, MOD_LINK = 43,
+
+		ADD_COMTREE = 50, DROP_COMTREE = 51,
+		GET_COMTREE = 52, MOD_COMTREE = 53,
+
+		ADD_COMTREE_LINK = 54, DROP_COMTREE_LINK = 55,
+		MOD_COMTREE_LINK = 56, GET_COMTREE_LINK = 57,
+
+		ADD_ROUTE = 70, DROP_ROUTE = 71,
+		GET_ROUTE = 72, MOD_ROUTE = 73,
+		ADD_ROUTE_LINK = 74, DROP_ROUTE_LINK = 75,
+
+		NEW_CLIENT = 100, CLIENT_CONNECT = 101, CLIENT_DISCONNECT = 102,
+
+		BOOT_REQUEST = 120, BOOT_COMPLETE = 121, BOOT_ABORT = 122
+	};
+
+	// Control packet attribute types
+	enum CpAttr {
+		UNDEF_ATTR = 0,
+		ADR1 = 1, ADR2 = 2,
+		IP1 = 5, IP2 = 6,
+		PORT1 = 9, PORT2 = 10,
+		RSPEC1 = 13, RSPEC2 = 14,
+		CORE_FLAG = 20,
+		IFACE = 21,
+		LINK = 22,
+		NODE_TYPE = 23,
+		COMTREE = 50,
+		COMTREE_OWNER = 51,
+		COUNT = 70,
+		QUEUE = 71,
+		ZIPCODE = 72,
+		ERRMSG = 100
+	};
+	static const int MAX_STRING = 200;
+
+	/** Control packet modes */
+	enum CpMode {
+		UNDEF_MODE = 0, REQUEST = 1, POS_REPLY = 2, NEG_REPLY = 3
+	};
+
+	// constructors/destructor
 		CtlPkt();
-		CtlPkt(CpTypeIndex,CpRrType,uint64_t);
+		CtlPkt(uint32_t*,int);
+		CtlPkt(CpType,CpMode,uint64_t);
+		CtlPkt(CpType,CpMode,uint64_t,uint32_t*);
 		~CtlPkt();
 
+	// resetting control packet
 	void	reset();
-	void	reset(CpTypeIndex,CpRrType,uint64_t);
-	int	pack(uint32_t*);	
-	bool	unpack(uint32_t*, int);	
-	/** predicates */
-	bool	isSet(CpAttrIndex); 	
+	void	reset(uint32_t*, int);
+	void	reset(CpType,CpMode,uint64_t);
+	void	reset(CpType,CpMode,uint64_t,uint32_t*);
 
-	/** getters */
-	CpTypeIndex getCpType();
-	CpRrType    getRrType();
-	int64_t     getSeqNum();
-	int32_t	    getAttr(CpAttrIndex);
-	char*	    getErrMsg();	
+	int	pack();	
+	bool	unpack();	
 
-	/** setters */
-	void	setCpType(CpTypeIndex);
-	void	setCpCode(int);
-	void	setRrType(CpRrType);
-	void	setSeqNum(int64_t);
-	void	setAttr(CpAttrIndex, int32_t);
-	void	setErrMsg(const char*);	
-
-	/** input/output */
-	string&	avPair2string(CpAttrIndex, string&); 
+	string& typeName(string&);
+	string& modeName(string&);
+	string&	avPair2string(CpAttr, string&); 
 	string&	toString(string&); 
-private:
-	CpTypeIndex cpType;		///< control packet type index
-	CpRrType rrType;		///< request/return type
+
+	CpType	type;			///< control packet type 
+	CpMode	mode;			///< request/return type
 	int64_t seqNum;			///< sequence number
 
-	int32_t aVal[CPA_END+1];	///< array of attribute values
-	bool 	aSet[CPA_END+1];	///< mark attributes that have been set
+	fAdr_t	adr1, adr2;		///< forest address fields
+	ipa_t	ip1, ip2;		///< ip address fields
+	ipp_t	port1, port2;		///< ip port number fields
+	RateSpec rspec1, rspec2;	///< rate specs
+	int8_t	coreFlag;		///< comtree core flag
+	int	iface;			///< interface number
+	int	link;			///< link number
+	ntyp_t	nodeType;		///< type of a node
+	comt_t	comtree;		///< comtree number
+	fAdr_t	comtreeOwner;		///< comtree owner
+	int	count;			///< count field
+	int	queue;			///< queue number
+	int	zipCode;		///< zip code
 
 	uint32_t* payload;		///< pointer to start of packet payload
-	int	pp;			///< index in payload used by pack/unpack
+	int	paylen;			///< payload length in bytes
 
-	static const int MAX_MSG_LEN=500; ///< bound on error message length
-	char	errMsg[MAX_MSG_LEN+1];	///< buffer for error messages
+	string	errMsg;			///< buffer for error messages
 
-	// helper methods
-	void	packAttr(CpAttrIndex);
-	void	packAttrCond(CpAttrIndex);
-	CpAttrIndex unpackAttr();
+private:
 };
-
-/** Check if specified attribute is set.
- *  @param i index of desired attribute
- *  @return true if i is a valid attribute index and attribute has been set
- */
-inline bool CtlPkt::isSet(CpAttrIndex i) {
-	return CpAttr::validIndex(i) && aSet[i];
-}
-
-/** Get the type index of a control packet.
- *  @return true the type index.
- */
-inline CpTypeIndex CtlPkt::getCpType() { return cpType; }
-
-/** Get the request/return type of the packet.
- *  @return true the request/return type
- */
-inline CpRrType CtlPkt::getRrType() { return rrType; }
-
-/** Get the sequence number of the packet.
- *  @return true the sequence number
- */
-inline int64_t CtlPkt::getSeqNum() { return seqNum; }
-
-/** Get value of specified attribute
- *  @param i index of desired attribute
- *  @return corresponding value
- *  Assumes that specified attribute has a valid value.
- */
-inline int32_t CtlPkt::getAttr(CpAttrIndex i) {
-	return (isSet(i) ? aVal[i] : 0);
-}
-
-/** Set value of specified attribute
- *  @param i index of desired attribute
- *  @param val desired value for attribute
- */
-inline void CtlPkt::setAttr(CpAttrIndex i, int32_t val) {
-	if (!CpAttr::validIndex(i)) return;
-	aVal[i] = val; aSet[i] = true;
-}
-
-/** Set the type index of a control packet.
- *  @param t is the specified type index
- */
-inline void CtlPkt::setCpType(CpTypeIndex t) { cpType = t; }
-
-/** Set the type request/return type of a control packet.
- *  @param rr is the specified request/return type 
- */
-inline void CtlPkt::setRrType(CpRrType rr) { rrType = rr; }
-
-/** Set the type sequence number of a control packet.
- *  @param s is the specified sequence number
- */
-inline void CtlPkt::setSeqNum(int64_t s) { seqNum = s; }
-
-/** Packs a single (attribute_code, value) pair starting at word i in payload.
- *  @param attr attribute code for the pair
- *  @param val value part of the pair
- *  @returns index of next available word
- */
-inline void CtlPkt::packAttr(CpAttrIndex i) {
-        payload[pp++] = htonl(CpAttr::getCode(i));
-	payload[pp++] = htonl(aVal[i]);
-}
-
-/** Packs a single (attribute_code, value) conditionally.
- *  If the val parameter is non-zero, pack the pair.
- *  @param attr attribute code for the pair
- *  @param val value part of the pair
- *  @returns index of next available word
- */
-inline void CtlPkt::packAttrCond(CpAttrIndex i) {
-        if (aSet[i]) packAttr(i);
-}
-
-/** Unpacks a single (attribute, value) pair starting at word pp in payload.
- *  The unpacked value is stored in the CtlPkt object and can
- *  be retrieved using the getAttr() method.
- *  @returns attribute index of unpacked pair, or 0 for invalid index
- */
-inline CpAttrIndex CtlPkt::unpackAttr() {
-        CpAttrIndex i = CpAttr::getIndexByCode(ntohl(payload[pp]));
-	if (!CpAttr::validIndex(i)) return CPA_START; // =0
-	pp++;
-	setAttr(i,ntohl(payload[pp++]));
-	return i;
-}
-
-/** Returns pointer to error message */
-inline char* CtlPkt::getErrMsg() { return errMsg; }
-
-/** Set the error message for a negative reply */
-inline void CtlPkt::setErrMsg(const char* s) {
-	strncpy(errMsg,s,MAX_MSG_LEN);errMsg[MAX_MSG_LEN] = 0;
-}
 
 #endif

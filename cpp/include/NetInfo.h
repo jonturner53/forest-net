@@ -13,7 +13,7 @@
 #include <map>
 #include <set>
 #include <queue>
-#include "CommonDefs.h"
+#include "Forest.h"
 #include "HashMap.h"
 #include "IdMap.h"
 #include "UiSetPair.h"
@@ -95,14 +95,14 @@ public:
 	int	getNumIf(int) const;
 	bool	getLeafRange(int,pair<fAdr_t,fAdr_t>&) const;
 	ipa_t	getIfIpAdr(int,int) const;
-	bool	getIfRates(int,int,RateSpec&) const;
+	RateSpec& getIfRates(int,int) const;
 	bool	getIfLinks(int,int,pair<int,int>&) const;
 	// add/modify routers
 	int	addRouter(const string&);
 	bool	addInterfaces(int, int);
 	bool	setLeafRange(int,pair<int,int>&);
 	bool	setIfIpAdr(int,int,ipa_t);
-	bool	setIfRates(int,int,RateSpec&);
+	//bool	setIfRates(int,int);
 	bool	setIfLinks(int,int,pair<int,int>&);
 
 	// methods for working with links
@@ -118,9 +118,9 @@ public:
 	int	getLeft(int) const;
 	int	getRight(int) const;
 	int	getPeer(int,int) const;
-	bool	getLinkRates(int,RateSpec&) const;
-	bool	getAvailRates(int,RateSpec&) const;
-	void	getDefLeafRates(RateSpec&) const;
+	RateSpec& getLinkRates(int) const;
+	RateSpec& getAvailRates(int) const;
+	RateSpec& getDefLeafRates();
 	int	getLinkLength(int) const;
 	int	getLinkNum(int,int) const;
 	int	getLLnum(int,int) const;
@@ -130,8 +130,8 @@ public:
 	int	addLink(int,int,int,int);
 	bool	setLeftLLnum(int,int);
 	bool	setRightLLnum(int,int);
-	bool	setLinkRates(int,RateSpec&);
-	bool	setAvailRates(int,RateSpec&);
+	//bool	setLinkRates(int,RateSpec&);
+	//bool	setAvailRates(int,RateSpec&);
 	bool	setLinkLength(int,int);
 
 	// io routines
@@ -208,7 +208,7 @@ private:
 	};
 	LinkInfo *link;
 
-	RateSpec defaultLinkRates;	///< default link rates
+	RateSpec defaultLeafRates;	///< default link rates
 
 	// helper methods for reading a NetInfo file
 	bool	readRouter(istream&, RtrNodeInfo&, IfInfo*, string&);
@@ -548,13 +548,10 @@ inline ipa_t NetInfo::getIfIpAdr(int n, int iface) const {
 /** Get the RateSpec for a router interface.
  *  @param r is the node number of a router in the network
  *  @param iface is an interface number for r
- *  @param rs is a reference to a RateSpec in which result is returned
- *  @return true on success, else false
+ *  @return a reference to the RateSpec for the specified router interface
  */
-inline bool NetInfo::getIfRates(int r, int iface, RateSpec& rs) const {
-	if (!validIf(r,iface)) return false;
-	rs = rtr[r].iface[iface].rates;
-	return true;
+inline RateSpec& NetInfo::getIfRates(int r, int iface) const {
+	return rtr[r].iface[iface].rates;
 }
 
 /** Get the range of link numbers assigned to an interface.
@@ -587,12 +584,12 @@ inline bool NetInfo::setLeafRange(int r, pair<fAdr_t,fAdr_t>& range) {
  *  @param iface is an interface number for r
  *  @param rs is a reference to a RateSpec
  *  @return true on success, else false
- */
 inline bool NetInfo::setIfRates(int r, int iface, RateSpec& rs) {
 	if (!validIf(r,iface)) return false;
 	rtr[r].iface[iface].rates = rs;
 	return true;
 }
+ */
 
 /** Set the range of links defined for a router interface.
  *  Each router interface is assigned a consecutive range of link numbers
@@ -735,31 +732,25 @@ inline int NetInfo::getRightLLnum(int lnk) const {
 
 /** Get the RateSpec of a link in the Forest network.
  *  @param lnk is a link number
- *  @param rs is a reference to a RateSpec in which result is returned
- *  @return true on success, false on failure
+ *  @return a reference to the link rate spec
  */
-inline bool NetInfo::getLinkRates(int lnk, RateSpec& rs) const {
-	if (!validLink(lnk)) return false;
-	rs = link[lnk].rates;
-	return true;
+inline RateSpec& NetInfo::getLinkRates(int lnk) const {
+	return link[lnk].rates;
 }
 
 /** Get the available rates of a link in the Forest network.
  *  @param lnk is a link number
- *  @param rs is a reference to a RateSpec in which result is returned
- *  @return true on success, false on failure
+ *  @return a reference to the available rate spec
  */
-inline bool NetInfo::getAvailRates(int lnk, RateSpec& rs) const {
-	if (!validLink(lnk)) return false;
-	rs = link[lnk].availRates;
-	return true;
+inline RateSpec& NetInfo::getAvailRates(int lnk) const {
+	return link[lnk].availRates;
 }
 
 /** Get the default rates for leaf nodes in a Forest network.
- *  @param rs is a reference to a RateSpec
+ *  @return a reference to RateSpec for leaf rates
  */
-inline void NetInfo::getDefLeafRates(RateSpec& rs) const {
-	rs = defaultLinkRates;
+inline RateSpec& NetInfo::getDefLeafRates() {
+	return defaultLeafRates;
 }
 
 /** Get the length of a link in the Forest network.
@@ -811,22 +802,22 @@ inline bool NetInfo::setRightLLnum(int lnk, int loc) {
  *  @param lnk is a link number
  *  @param rs is the new RateSpec for the link
  *  @return true on success, false on failure
- */
 inline bool NetInfo::setLinkRates(int lnk, RateSpec& rs) {
 	if (!validLink(lnk)) return false;
 	link[lnk].rates = rs;
 	return true;
 }
+ */
 
 /** Set the available capacity of a link.
  *  @param lnk is a link number
  *  @param rs is a RateSpec
- */
 inline bool NetInfo::setAvailRates(int lnk, RateSpec& rs) {
 	if (!validLink(lnk)) return false;
 	link[lnk].availRates = rs;
 	return true;
 }
+ */
 
 /** Set the length of a link.
  *  @param lnk is a "global" link number

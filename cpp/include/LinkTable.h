@@ -10,7 +10,7 @@
 #define LINKTABLE_H
 
 #include <set>
-#include "CommonDefs.h"
+#include "Forest.h"
 #include "PacketHeader.h"
 #include "UiSetPair.h"
 #include "UiHashTbl.h"
@@ -37,12 +37,8 @@ public:
 	int	getIface(int) const;	
 	ntyp_t	getPeerType(int) const;	
 	fAdr_t 	getPeerAdr(int) const;	
-	int	getBitRate(int) const;	
-	int	getPktRate(int) const;	
-	int	getAvailInBitRate(int) const;	
-	int	getAvailInPktRate(int) const;	
-	int	getAvailOutBitRate(int) const;	
-	int	getAvailOutPktRate(int) const;	
+	RateSpec& getRates(int) const;	
+	RateSpec& getAvailRates(int) const;	
 	set<int>& getComtSet(int) const;
 
 	// modifiers
@@ -52,16 +48,6 @@ public:
 	void 	setIface(int, int);	
 	void	setPeerType(int, ntyp_t);	
 	void	setPeerAdr(int, fAdr_t);	
-	void	setBitRate(int, int);	
-	void	setPktRate(int, int);	
-	bool	setAvailInBitRate(int, int);	
-	bool	setAvailInPktRate(int, int);	
-	bool	setAvailOutBitRate(int, int);	
-	bool	setAvailOutPktRate(int, int);	
-	bool	addAvailInBitRate(int, int);	
-	bool	addAvailInPktRate(int, int);	
-	bool	addAvailOutBitRate(int, int);	
-	bool	addAvailOutPktRate(int, int);	
 	bool	registerComt(int,int);
 	bool	deregisterComt(int,int);
 
@@ -78,12 +64,8 @@ private:
 	ipp_t	peerPort;		///< peer port number
 	ntyp_t	peerType;		///< node type of peer
 	fAdr_t	peerAdr;		///< peer's forest address
-	int	bitRate;		///< max bit rate of link (MAC level)
-	int	pktRate;		///< maximum packet rate of link
-	int	avInBitRate;		///< available input bit rate of link
-	int	avInPktRate;		///< available input packet rate
-	int	avOutBitRate;		///< available output bit rate
-	int	avOutPktRate;		///< available output packet rate
+	RateSpec rates;			///< rate spec for link rates
+	RateSpec availRates;		///< rate spec for available rates
 	set<int> *comtSet;		///< set of comtrees containing link
 	};
 	LinkInfo *lnkTbl;		///< lnkTbl[i] is link info for link i
@@ -163,52 +145,23 @@ inline fAdr_t LinkTable::getPeerAdr(int lnk) const {
 	return lnkTbl[lnk].peerAdr;
 }
 
-/** Get the bit rate of a given link.
+/** Get the rates for a given link.
  *  @param lnk is a valid link number
- *  @return the bit rate for the link
+ *  @return a reference to the rate spec for the link;
+ *  currently links are symmetric and up and down fields must
+ *  be set to identical values; treat "up" as input, "down" as output
  */
-inline int LinkTable::getBitRate(int lnk) const {
-	return lnkTbl[lnk].bitRate;
+inline RateSpec& LinkTable::getRates(int lnk) const {
+	return lnkTbl[lnk].rates;
 }
 
-/** Get the packet rate of a given link.
+/** Get the available rates for a given link.
  *  @param lnk is a valid link number
- *  @return the packet rate for the link
+ *  @return a reference to the available rate spec for the link;
+ *  the "up" fields correspond to input, "down" fields to output
  */
-inline int LinkTable::getPktRate(int lnk) const {
-	return lnkTbl[lnk].pktRate;
-}
-
-/** Get the available incoming bit rate of a given link.
- *  @param lnk is a valid link number
- *  @return the available incoming bit rate for the link
- */
-inline int LinkTable::getAvailInBitRate(int lnk) const {
-	return lnkTbl[lnk].avInBitRate;
-}
-
-/** Get the available incoming packet rate of a given link.
- *  @param lnk is a valid link number
- *  @return the available incoming packet rate for the link
- */
-inline int LinkTable::getAvailInPktRate(int lnk) const {
-	return lnkTbl[lnk].avInPktRate;
-}
-
-/** Get the available outcoming bit rate of a given link.
- *  @param lnk is a valid link number
- *  @return the available outcoming bit rate for the link
- */
-inline int LinkTable::getAvailOutBitRate(int lnk) const {
-	return lnkTbl[lnk].avOutBitRate;
-}
-
-/** Get the available outcoming bit rate of a given link.
- *  @param lnk is a valid link number
- *  @return the available outcoming bit rate for the link
- */
-inline int LinkTable::getAvailOutPktRate(int lnk) const {
-	return lnkTbl[lnk].avOutPktRate;
+inline RateSpec& LinkTable::getAvailRates(int lnk) const {
+	return lnkTbl[lnk].availRates;
 }
 
 /** Get the set of comtrees registered for a link.
@@ -244,130 +197,6 @@ inline void LinkTable::setPeerType(int lnk, ntyp_t nt) {
  */
 inline void LinkTable::setPeerAdr(int lnk, fAdr_t adr) {
 	if (valid(lnk)) lnkTbl[lnk].peerAdr =adr;
-}
-
-/** Set the bit rate for a given link.
- *  If the specified rate is outside the allowed range, it is set
- *  to the endpoint of the range.
- *  @param lnk is a valid link number
- *  @param br is the new bit rate
- */
-inline void LinkTable::setBitRate(int lnk, int br) {
-	if (valid(lnk))
-		lnkTbl[lnk].bitRate = min(Forest::MAXBITRATE,
-				      max(Forest::MINBITRATE,br));
-}
-
-/** Set the packet rate for a given link.
- *  If the specified rate is outside the allowed range, it is set
- *  to the endpoint of the range.
- *  @param lnk is a valid link number
- *  @param pr is the new packet rate
- */
-inline void LinkTable::setPktRate(int lnk, int pr) {
-	if (valid(lnk))
-		lnkTbl[lnk].pktRate = min(Forest::MAXPKTRATE,
-				      max(Forest::MINPKTRATE,pr));
-}
-
-/** Set the available incoming bit rate for a link.
- *  @param lnk is a valid link number
- *  @param br is the new available bit rate in the input direction
- *  @return true on success, false on failure
- */
-inline bool LinkTable::setAvailInBitRate(int lnk, int br) {
-	if (!valid(lnk) || br > lnkTbl[lnk].bitRate) return false;
-	lnkTbl[lnk].avInBitRate = max(0,br);
-	return true;
-}
-
-/** Set the available incoming packet rate for a link.
- *  @param lnk is a valid link number
- *  @param br is the new available packet rate in the input direction
- *  @return true on success, false on failure
- */
-inline bool LinkTable::setAvailInPktRate(int lnk, int pr) {
-	if (!valid(lnk) || pr > lnkTbl[lnk].pktRate) return false;
-	lnkTbl[lnk].avInPktRate = max(0,pr);
-	return true;
-}
-
-/** Set the available outgoing bit rate for a link.
- *  @param lnk is a valid link number
- *  @param br is the new available bit rate in the output direction
- *  @return true on success, false on failure
- */
-inline bool LinkTable::setAvailOutBitRate(int lnk, int br) {
-	if (!valid(lnk) || br > lnkTbl[lnk].bitRate) return false;
-	lnkTbl[lnk].avOutBitRate = max(0,br);
-	return true;
-}
-
-/** Set the available outgoing packet rate for a link.
- *  @param lnk is a valid link number
- *  @param pr is the new available packet rate in the output direction
- *  @return true on success, false on failure
- */
-inline bool LinkTable::setAvailOutPktRate(int lnk, int pr) {
-	if (!valid(lnk) || pr > lnkTbl[lnk].pktRate) return false;
-	lnkTbl[lnk].avOutPktRate = max(0,pr);
-	return true;
-}
-
-/** Add to the available incoming bit rate for a link.
- *  @param lnk is a valid link number
- *  @param br is the amount to be added to the available bit rate
- *  in the input direction
- *  @return true on success, false on failure
- */
-inline bool LinkTable::addAvailInBitRate(int lnk, int br) {
-	if (!valid(lnk)) return false;
-	int s = br + lnkTbl[lnk].avInBitRate;
-	if (s < 0 || s > lnkTbl[lnk].bitRate) return false;
-	lnkTbl[lnk].avInBitRate = s;
-	return true;
-}
-
-/** Add to the available incoming packet rate for a link.
- *  @param lnk is a valid link number
- *  @param pr is the amount to be added to the available packet rate
- *  in the output direction
- *  @return true on success, false on failure
- */
-inline bool LinkTable::addAvailInPktRate(int lnk, int pr) {
-	if (!valid(lnk)) return false;
-	int s = pr + lnkTbl[lnk].avInPktRate;
-	if (s < 0 || s > lnkTbl[lnk].pktRate) return false;
-	lnkTbl[lnk].avInPktRate = s;
-	return true;
-}
-
-/** Add to the available outgoing bit rate for a link.
- *  @param lnk is a valid link number
- *  @param br is the amount to be added to the available bit rate
- *  in the input direction
- *  @return true on success, false on failure
- */
-inline bool LinkTable::addAvailOutBitRate(int lnk, int br) {
-	if (!valid(lnk)) return false;
-	int s = br + lnkTbl[lnk].avOutBitRate;
-	if (s < 0 || s > lnkTbl[lnk].bitRate) return false;
-	lnkTbl[lnk].avOutBitRate = s;
-	return true;
-}
-
-/** Add to the available outgoing packet rate for a link.
- *  @param lnk is a valid link number
- *  @param br is the amount to be added to the available packet rate
- *  in the output direction
- *  @return true on success, false on failure
- */
-inline bool LinkTable::addAvailOutPktRate(int lnk, int pr) {
-	if (!valid(lnk)) return false;
-	int s = pr + lnkTbl[lnk].avOutPktRate;
-	if (s < 0 || s > lnkTbl[lnk].pktRate) return false;
-	lnkTbl[lnk].avOutPktRate = s;
-	return true;
 }
 
 inline bool LinkTable::registerComt(int lnk, int ctx) {

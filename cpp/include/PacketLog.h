@@ -9,7 +9,7 @@
 #ifndef PACKETLOG_H
 #define PACKETLOG_H
 
-#include "CommonDefs.h"
+#include "Forest.h"
 #include "Misc.h"
 #include "PacketStore.h"
 #include "PacketHeader.h"
@@ -31,7 +31,7 @@ private:
 	uint64_t dumpTime;		///< # time of last dump
 
 	struct EventStruct {
-	int pkt;
+	pktx px;
         int sendFlag;
 	int link;
 	uint64_t time;

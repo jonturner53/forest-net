@@ -9,7 +9,7 @@
 #ifndef IOPROCESSOR_H
 #define IOPROCESSOR_H
 
-#include "CommonDefs.h"
+#include "Forest.h"
 #include "IfaceTable.h"
 #include "LinkTable.h"
 #include "PacketStore.h"

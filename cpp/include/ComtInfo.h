@@ -56,20 +56,21 @@ public:
 	fAdr_t	getOwner(int) const;
 	fAdr_t	getRoot(int) const;
 	bool	getConfigMode(int) const;
-	void 	getDefRates(int,RateSpec&,RateSpec&) const;
+	RateSpec& getDefLeafRates(int);
+	RateSpec& getDefBbRates(int);
 	fAdr_t	getChild(int,int) const;
 	int	getPlink(int,fAdr_t) const;
 	fAdr_t	getParent(int,fAdr_t) const;
 	int	getLinkCnt(int,fAdr_t) const;
 	bool	isFrozen(int,fAdr_t) const;
-	bool 	getLinkRates(int,int,RateSpec&) const;
+	RateSpec& getLinkRates(int,int) const;
 	// add/remove/modify comtrees
 	int	addComtree(int);
 	bool	removeComtree(int);
 	bool	setRoot(int,fAdr_t);
 	bool	setOwner(int,fAdr_t);
 	void	setConfigMode(int,bool);
-	void	setDefRates(int,RateSpec&,RateSpec&);
+	//void	setDefRates(int,RateSpec&,RateSpec&);
 	bool	addNode(int,fAdr_t);
 	bool	removeNode(int,fAdr_t);
 	bool	addCoreNode(int,fAdr_t);
@@ -78,7 +79,7 @@ public:
 	bool	setParent(int,fAdr_t,fAdr_t,int);
 	void	freeze(int,fAdr_t);
 	void	thaw(int,fAdr_t);
-	bool 	setLinkRates(int,fAdr_t,RateSpec&);
+	//bool 	setLinkRates(int,fAdr_t,RateSpec&);
 	// compute rates and provision network capacity
 	bool	setAllComtRates();
 	bool	setComtRates(int);
@@ -422,17 +423,20 @@ inline int ComtInfo::getLinkCnt(int ctx, fAdr_t rtr) const {
         return rp->second.lnkCnt;
 }
 
-/** Get the default RateSpecs for a comtree.
+/** Get the default RateSpecs for access links in a comtree.
  *  @param ctx is a valid comtree index
- *  @param bbRates is a reference to a RateSpec in which the default
- *  backbone rates are returned
- *  @param leafRates is a reference to a RateSpec in which the default
- *  leaf rates are returned
+ *  @return a reference to the default rate spec for access links
  */
-inline void ComtInfo::getDefRates(int ctx, RateSpec& bbRates,
-				      RateSpec& leafRates) const {
-	bbRates   = comtree[ctx].bbDefRates;
-	leafRates = comtree[ctx].leafDefRates;
+inline RateSpec& ComtInfo::getDefLeafRates(int ctx) {
+	return comtree[ctx].leafDefRates;
+}
+
+/** Get the default RateSpecs for backbone links in a comtree.
+ *  @param ctx is a valid comtree index
+ *  @return a reference to the default rate spec for backbone links
+ */
+inline RateSpec& ComtInfo::getDefBbRates(int ctx) {
+	return comtree[ctx].bbDefRates;
 }
 
 /** Determine if the rates for a comtree backbone link are frozen.
@@ -452,22 +456,17 @@ inline bool ComtInfo::isFrozen(int ctx, fAdr_t rtr) const {
  *  this link, given the subtree rates and the backbone configuration mode.
  *  @param ctx is a valid comtree index
  *  @param fa is a forest address for a node in the comtree
- *  @param rates is a reference to a rateSpec in which the rates for the
- *  link from fa to its parent are returned
+ *  @return a reference to a rateSpec in for the
+ *  link from fa to its parent
  *  @return true on success, false on failure
  */
-inline bool ComtInfo::getLinkRates(int ctx, fAdr_t fa, RateSpec& rates) const {
+inline RateSpec& ComtInfo::getLinkRates(int ctx, fAdr_t fa) const {
 	map<fAdr_t,ComtRtrInfo>::iterator rp;
 	rp = comtree[ctx].rtrMap->find(fa);
-	if (rp != comtree[ctx].rtrMap->end()) {
-		if (rp->second.plnk == 0) return false;
-		rates = rp->second.plnkRates;
-		return true;
-	}
+	if (rp != comtree[ctx].rtrMap->end()) return rp->second.plnkRates;
 	map<fAdr_t,ComtLeafInfo>::iterator lp;
 	lp = comtree[ctx].leafMap->find(fa);
-	rates = lp->second.plnkRates;
-	return true;
+	return lp->second.plnkRates;
 }
 
 /** Add a new comtree.
@@ -612,12 +611,12 @@ inline void ComtInfo::setConfigMode(int ctx, bool autoConfig) {
  *  backbone rates
  *  @param leafRates is a reference to a RateSpec for the new
  *  leaf rates
- */
 inline void ComtInfo::setDefRates(int ctx, RateSpec& bbRates,
 					      RateSpec& leafRates) {
 	comtree[ctx].bbDefRates   = bbRates;
 	comtree[ctx].leafDefRates = leafRates;
 }
+ */
 
 /** Add a new core node to a comtree.
  *  The new node is required to be a router and if it is
@@ -712,7 +711,6 @@ inline void ComtInfo::thaw(int ctx, fAdr_t rtr) {
  *  sets the rates for the parent link at fa
  *  @param newRates is the new allocated RateSpec for the link
  *  @return true on success, false on failure (if node has no parent link)
- */
 inline bool ComtInfo::setLinkRates(int ctx, fAdr_t fa, RateSpec& newRates) {
 	map<fAdr_t,ComtRtrInfo>::iterator rp;
 	rp = comtree[ctx].rtrMap->find(fa);
@@ -726,5 +724,6 @@ inline bool ComtInfo::setLinkRates(int ctx, fAdr_t fa, RateSpec& newRates) {
 	lp->second.plnkRates = newRates;
 	return true;
 }
+ */
 
 #endif

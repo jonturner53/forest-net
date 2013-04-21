@@ -9,7 +9,7 @@
 #ifndef CPTYPE_H
 #define CPTYPE_H
 
-#include "CommonDefs.h"
+#include "Forest.h"
 #include "CpAttr.h"
 
 /** Control packet types indices.

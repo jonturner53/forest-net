@@ -9,7 +9,7 @@
 #ifndef CPATTR_H
 #define CPATTR_H
 
-#include "CommonDefs.h"
+#include "Forest.h"
 
 /** Control packet attribute indices.
  *  Each attribute has an integer index used within programs to access

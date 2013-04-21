@@ -1,7 +1,7 @@
 #ifndef CLIENTMGR_H
 #define CLIENTMGR_H
 
-#include "CommonDefs.h"
+#include "Forest.h"
 #include <mysql++/mysql++.h>
 #include <mysql++/ssqls.h>
 class SqlProxy {

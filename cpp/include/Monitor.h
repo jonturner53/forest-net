@@ -11,7 +11,7 @@
 
 #include <set>
 #include <list>
-#include "CommonDefs.h"
+#include "Forest.h"
 #include "PacketHeader.h"
 #include "PacketStore.h"
 #include "UiHashTbl.h"
@@ -85,8 +85,8 @@ private:
 	void	send2router(int);
 
 	void	startComtSwitch(comt_t, uint32_t);
-	bool	completeComtSwitch(packet, uint32_t);
-	void	send2comtCtl(CpTypeIndex,bool=false);
+	bool	completeComtSwitch(pktx, uint32_t);
+	void	send2comtCtl(CtlPkt::CpType,bool=false);
 
 	void	switchComtrees(int);
 	void	updateSubs();

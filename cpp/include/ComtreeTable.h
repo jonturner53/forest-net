@@ -10,7 +10,7 @@
 #define COMTREETABLE_H
 
 #include <set>
-#include "CommonDefs.h"
+#include "Forest.h"
 #include "IdMap.h"
 #include "LinkTable.h"
 
@@ -57,10 +57,7 @@ public:
 	int	getPCLink(int) const;
 	int	getLinkQ(int) const;
 	fAdr_t	getDest(int) const;
-	int	getInBitRate(int) const;
-	int	getInPktRate(int) const;
-	int	getOutBitRate(int) const;
-	int	getOutPktRate(int) const;
+	RateSpec& getRates(int) const;
 	set<int>& getLinks(int) const;
 	set<int>& getRtrLinks(int) const;
 	set<int>& getCoreLinks(int) const;
@@ -74,10 +71,6 @@ public:
 	void	setCoreFlag(int, bool);
 	void	setPlink(int, int);
 	void	setLinkQ(int, int);
-	void	setInBitRate(int, int);
-	void	setInPktRate(int, int);
-	void	setOutBitRate(int, int);
-	void	setOutPktRate(int, int);
 	void	registerRte(int,int);
 	void	deregisterRte(int,int);
 
@@ -106,10 +99,7 @@ private:
 	int	lnk;			///< actual link # for this comtLink
 	fAdr_t	dest;			///< if non-zero, allowed dest address
 	int	qnum;			///< queue number used by comtree
-	int	inBitRate;		///< max incoming bit rate
-	int	inPktRate;		///< max incoming packet rate
-	int	outBitRate;		///< max outgoing bit rate
-	int	outPktRate;		///< max outgoing packet rate
+	RateSpec rates;			///< rate spec for link (up=in,down=out)
 	set<int> *rteSet;		///< set of routes that map to this link
 	};
 	ComtLinkInfo *clTbl;		///< cLnkTbl[cl] has info on comtLink cl
@@ -302,36 +292,12 @@ inline fAdr_t ComtreeTable::getDest(int cLnk) const {
 	return clTbl[cLnk].dest;
 }
 
-/** Get the incoming bit rate for a given comtree link.
+/** Get the rate spec for a given comtree link.
  *  @param cLnk is a comtree link number
- *  @return the incoming bit rate for cLnk
+ *  @return a reference to the rate spec for cLnk
  */
-inline int ComtreeTable::getInBitRate(int cLnk) const {
-	return clTbl[cLnk].inBitRate;
-}
-
-/** Get the incoming packet rate for a given comtree link.
- *  @param cLnk is a comtree link number
- *  @return the incoming packet rate for cLnk
- */
-inline int ComtreeTable::getInPktRate(int cLnk) const {
-	return clTbl[cLnk].inPktRate;
-}
-
-/** Get the outgoing bit rate for a given comtree link.
- *  @param cLnk is a comtree link number
- *  @return the outgoing bit rate for cLnk
- */
-inline int ComtreeTable::getOutBitRate(int cLnk) const {
-	return clTbl[cLnk].outBitRate;
-}
-
-/** Get the outgoing packet rate for a given comtree link.
- *  @param cLnk is a comtree link number
- *  @return the outgoing packet rate for cLnk
- */
-inline int ComtreeTable::getOutPktRate(int cLnk) const {
-	return clTbl[cLnk].outPktRate;
+inline RateSpec& ComtreeTable::getRates(int cLnk) const {
+	return clTbl[cLnk].rates;
 }
 
 /** Get a reference to the set of comtree links for a comtree.
@@ -418,26 +384,26 @@ inline void ComtreeTable::setLinkQ(int cLnk, int q) {
 /** Set the incoming bit rate for a comtree link.
  *  @param cLnk is a comtree link number
  *  @param br is a bit rate
- */
 inline void ComtreeTable::setInBitRate(int cLnk, int br) {
 	if (validComtLink(cLnk)) clTbl[cLnk].inBitRate = br;
 }
+ */
 
 /** Set the incoming packet rate for a comtree link.
  *  @param cLnk is a comtree link number
  *  @param pr is a packet rate
- */
 inline void ComtreeTable::setInPktRate(int cLnk, int pr) {
 	if (validComtLink(cLnk)) clTbl[cLnk].inPktRate = pr;
 }
+ */
 
 /** Set the outgoing bit rate for a comtree link.
  *  @param cLnk is a comtree link number
  *  @param br is a bit rate
- */
 inline void ComtreeTable::setOutBitRate(int cLnk, int br) {
 	if (validComtLink(cLnk)) clTbl[cLnk].outBitRate = br;
 }
+ */
 
 /** Register a route with a given comtree link.
  *  @param cLnk is a valid comtree link number
@@ -458,10 +424,10 @@ inline void ComtreeTable::deregisterRte(int cLnk, int rtx) {
 /** Set the outgoing packet rate for a comtree link.
  *  @param cLnk is a comtree link number
  *  @param pr is a packet rate
- */
 inline void ComtreeTable::setOutPktRate(int cLnk, int pr) {
 	if (validComtLink(cLnk)) clTbl[cLnk].outPktRate = pr;
 }
+ */
 
 /** Compute key for use with comtMap.
  *  @param comt is a comtree number

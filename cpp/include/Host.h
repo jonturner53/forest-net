@@ -9,7 +9,7 @@
 #ifndef HOST_H
 #define HOST_H
 
-#include "CommonDefs.h"
+#include "Forest.h"
 #include "PacketHeader.h"
 #include "PacketStore.h"
 
