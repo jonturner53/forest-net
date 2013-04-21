@@ -7,6 +7,7 @@
  */
 
 #include "NetMgr.h"
+#include "CpHandler.h"
 
 /** usage:
  *       NetMgr extIp topoFile clientInfo finTime
@@ -168,54 +169,54 @@ void* run(void* finTimeSec) {
 		nothing2do = true;
 
 		// check for packets
-		int p = recvFromCons();
-		if (p != 0) {
+		pktx px = recvFromCons();
+		if (px != 0) {
 			// let handler know this is from remote console
-			ps->getHeader(p).setSrcAdr(0);
+			ps->getPacket(px).srcAdr = 0;
 		} else {
-			p = rcvFromForest();
+			px = rcvFromForest();
 		}
-		if (p != 0) {
-			// send p to a thread, possibly assigning one
-			PacketHeader& h = ps->getHeader(p);
-			if (h.getPtype() == NET_SIG) {
-				CtlPkt cp; 
-				cp.unpack(ps->getPayload(p),
-					  h.getLength()-Forest::OVERHEAD);
+		if (px != 0) {
+			// send pto a thread, possibly assigning one
+			Packet& p = ps->getPacket(px);
+			if (p.type == NET_SIG) {
+				CtlPkt cp(p.payload(),
+					  p.length-Forest::OVERHEAD);
+				cp.unpack();
 				int t;
-				fAdr_t srcAdr = h.getSrcAdr();
-				if (cp.getRrType() == REQUEST) {
+				fAdr_t srcAdr = p.srcAdr;
+				if (cp.mode == CtlPkt::REQUEST) {
 					// first make sure this is not a repeat
 					// of a request we're already working on
 					t = threads->firstOut();
-					uint64_t key = h.getSrcAdr();
-					key <<= 32; key += cp.getSeqNum();
+					uint64_t key = p.srcAdr;
+					key <<= 32; key += cp.seqNum;
 					if (reqMap->validKey(key)) {
 						// in this case, we've got an
 						// active thread handling this
 						// request, so discard duplicate
-						ps->free(p);
+						ps->free(px);
 					} else if (t != 0) {
 						threads->swap(t);
 						reqMap->addPair(key,t);
 						pool[t].seqNum = 0;
-						pool[t].qp.in.enq(p);
+						pool[t].qp.in.enq(px);
 					} else {
 						cerr << "run: thread pool is "
 							"exhausted\n";
-						ps->free(p);
+						ps->free(px);
 					}
 				} else if (booting &&
-					    cp.getCpType() == BOOT_COMPLETE &&
-					    cp.getRrType() == POS_REPLY) {
+					    cp.type == CtlPkt::BOOT_COMPLETE &&
+					    cp.mode == CtlPkt::POS_REPLY) {
 					doneBooting.insert(srcAdr);
-					t = tMap->getId(cp.getSeqNum());
+					t = tMap->getId(cp.seqNum);
 					if (t != 0) {
-						tMap->dropPair(cp.getSeqNum());
+						tMap->dropPair(cp.seqNum);
 						pool[t].seqNum = 0;
-						pool[t].qp.in.enq(p);
+						pool[t].qp.in.enq(px);
 					} else {
-						ps->free(p);
+						ps->free(px);
 					}
 					if ((int) doneBooting.size() ==
 					     numRouters) {
@@ -230,8 +231,8 @@ void* run(void* finTimeSec) {
 						// allows time for NAT
 					}
 				} else if (booting &&
-					    cp.getCpType() == BOOT_COMPLETE &&
-					    cp.getRrType() == NEG_REPLY) {
+					    cp.type == CtlPkt::BOOT_COMPLETE &&
+					    cp.mode == CtlPkt::NEG_REPLY) {
 					string s;
 					cerr << "router at address "
 					     << Forest::fAdr2string(srcAdr,s)
@@ -239,17 +240,17 @@ void* run(void* finTimeSec) {
 					pthread_exit(NULL);
 				} else {
 					// normal case of a reply
-					t = tMap->getId(cp.getSeqNum());
+					t = tMap->getId(cp.seqNum);
 					if (t != 0) {
-						tMap->dropPair(cp.getSeqNum());
+						tMap->dropPair(cp.seqNum);
 						pool[t].seqNum = 0;
-						pool[t].qp.in.enq(p);
+						pool[t].qp.in.enq(px);
 					} else {
-						ps->free(p);
+						ps->free(px);
 					}
 				}
 			} else {
-				ps->free(p);
+				ps->free(px);
 			}
 			nothing2do = false;
 		}
@@ -258,52 +259,52 @@ void* run(void* finTimeSec) {
 		for (int t = threads->firstIn(); t != 0;
 			 t = threads->nextIn(t)) {
 			if (pool[t].qp.out.empty()) continue;
-			int p1 = pool[t].qp.out.deq();
-			if (p1 == 0) { // means thread is done
+			pktx px1 = pool[t].qp.out.deq();
+			if (px1 == 0) { // means thread is done
 				pool[t].qp.in.reset();
 				reqMap->dropPair(reqMap->getKey(t));
 				threads->swap(t);
 				continue;
 			}
 			nothing2do = false;
-			PacketHeader& h1 = ps->getHeader(p1);
-			CtlPkt cp1; 
-			cp1.unpack(ps->getPayload(p1),
-				   h1.getLength()-Forest::OVERHEAD);
-			if (h1.getDstAdr() == 0) {
-				sendToCons(p1);
-			} else if (cp1.getRrType() == REQUEST) {
+			Packet& p1 = ps->getPacket(px1);
+			CtlPkt cp1(p1.payload(),
+				   p1.length-Forest::OVERHEAD);
+			cp1.unpack();
+			if (p1.dstAdr == 0) {
+				sendToCons(px1);
+			} else if (cp1.mode == CtlPkt::REQUEST) {
 				// this is to catch race condition that can
-				// trigger spurious BOOT_COMPLETE
-				if (cp1.getCpType() == BOOT_COMPLETE &&
+				// trigger spurious CtlPkt::BOOT_COMPLETE
+				if (cp1.type == CtlPkt::BOOT_COMPLETE &&
 				    !booting) {
-					ps->free(p1); continue;
+					ps->free(px1); continue;
 				}
-				if (cp1.getSeqNum() == 1) {
+				if (cp1.seqNum == 1) {
 					// means this is a repeat of a pending
 					// outgoing request
 					if (tMap->validId(t)) {
-						cp1.setSeqNum(tMap->getKey(t));
+						cp1.seqNum = tMap->getKey(t);
 					} else {
 						// in this case, reply has 
 						// arrived but was not yet seen
 						// by thread so, suppress 
 						// duplicate request
-						ps->free(p1); continue;
+						ps->free(px1); continue;
 					}
 				} else {
 					if (tMap->validId(t)) 
 						tMap->dropPair(tMap->getKey(t));
 					tMap->addPair(seqNum,t);
-					cp1.setSeqNum(seqNum++);
+					cp1.seqNum = seqNum++;
 				}
-				cp1.pack(ps->getPayload(p1));
-				h1.payErrUpdate(ps->getBuffer(p1));
-				pool[t].seqNum = cp1.getSeqNum();
+				cp1.pack();
+				p1.payErrUpdate();
+				pool[t].seqNum = cp1.seqNum;
 				pool[t].ts = now + 2000000000; // 2 sec timeout
-				sendToForest(p1);
+				sendToForest(px1);
 			} else {
-				sendToForest(p1);
+				sendToForest(px1);
 			}
 		}
 
@@ -323,7 +324,7 @@ void* run(void* finTimeSec) {
 	pthread_exit(NULL);
 }
 
-/** Control packet handler.
+/** Main handler for thread.
  *  This method is run as a separate thread and does not terminate
  *  until the process does. It communicates with the main thread
  *  through a pair of queues, passing packet numbers back and forth
@@ -338,31 +339,34 @@ void* run(void* finTimeSec) {
  *  handler, the other is its output queue
  */
 void* handler(void *qp) {
-	Queue& inQ  = ((QueuePair *) qp)->in;
-	Queue& outQ = ((QueuePair *) qp)->out;
+	Queue& inq = ((QueuePair *) qp)->in;
+	Queue& outq = ((QueuePair *) qp)->out;
+	CpHandler cph(&inq, &outq, myAdr, &logger, ps);
 
 	while (true) {
-		int p = inQ.deq();
-		PacketHeader& h = ps->getHeader(p);
-		CtlPkt cp; 
-		cp.unpack(ps->getPayload(p),h.getLength()-Forest::OVERHEAD);
+		pktx px = inq.deq();
+		Packet& p = ps->getPacket(px);
+		CtlPkt cp(p.payload(),p.length-Forest::OVERHEAD);
+		cp.unpack();
 		bool success = false;
-		if (h.getSrcAdr() == 0) {
-			success = handleConsReq(p, cp, inQ, outQ);
+		if (p.srcAdr == 0) {
+			success = handleConsReq(px, cp, cph);
 		} else {
-			switch (cp.getCpType()) {
-			case CLIENT_CONNECT:
-			case CLIENT_DISCONNECT:
-				success = handleConDisc(p,cp,inQ,outQ);
+			switch (cp.type) {
+			case CtlPkt::CLIENT_CONNECT:
+			case CtlPkt::CLIENT_DISCONNECT:
+				success = handleConDisc(px,cp,cph);
 				break;
-			case NEW_CLIENT:
-				success = handleNewClient(p,cp,inQ,outQ);
+			case CtlPkt::NEW_CLIENT:
+				success = handleNewClient(px,cp,cph);
 				break;
-			case BOOT_REQUEST:
-				success = handleBootRequest(p,cp,inQ,outQ);
+			case CtlPkt::BOOT_REQUEST:
+				cph.setTunnel(p.tunIp,p.tunPort);
+				success = handleBootRequest(px,cp,cph);
+				cph.setTunnel(0,0);
 				break;
 			default:
-				errReply(p,cp,outQ,"invalid control packet "
+				cph.errReply(px,cp,"invalid control packet "
 						   "type for NetMgr");
 				break;
 			}
@@ -370,79 +374,51 @@ void* handler(void *qp) {
 		if (!success) {
 			string s;
 			cerr << "handler: operation failed\n"
-			     << h.toString(ps->getBuffer(p),s);
+			     << p.toString(s);
 		}
-		ps->free(p); // release p now that we're done
-		outQ.enq(0); // signal completion to main thread
+		ps->free(px); // release p now that we're done
+		outq.enq(0); // signal completion to main thread
 	}
 }
 
 /** Handle a request packet from the remote console.
  *  This involves forwarding the packet to a remote router.
- *  @param p is the packet number of the request packet
+ *  @param px is the packet number of the request packet
  *  @param cp is the control packet structure for p (already unpacked)
- *  @param inQ is the queue coming from the main thread
- *  @param outQ is the queue going back to the main thread
  *  @param return true on successful completion, else false
  */
-bool handleConsReq(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
-	int reply = sendAndWait(p,cp,inQ,outQ);
-	if (reply != NORESPONSE) {
-		PacketHeader& h = ps->getHeader(reply);
-		// use 0 destination address to tell main thread to send
-		// this packet to remote console
-		h.setDstAdr(0); ps->pack(reply);
-		outQ.enq(reply);
-		return true;
-	}
+bool handleConsReq(pktx px, CtlPkt& cp, CpHandler& cph) {
+	
+	// rework this using TCP connection and new text protocol
 	return false;
 }
 
 /** Handle a connection/disconnection notification from a router.
  *  The request is acknowledged and then forwarded to the
  *  client manager.
- *  @param p is the packet number of the request packet
+ *  @param px is the packet number of the request packet
  *  @param cp is the control packet structure for p (already unpacked)
- *  @param inQ is the queue coming from the main thread
- *  @param outQ is the queue going back to the main thread
+ *  @param cph is the control packet handler for this thread
  *  @return true if the operation was completed successfully,
  *  otherwise false; an error reply is considered a successful
  *  completion; the operation can fail if it cannot allocate
  *  packets, or if the client manager never acknowledges the
  *  notification.
  */
-bool handleConDisc(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
-	PacketHeader& h = ps->getHeader(p);
-	if (!cp.isSet(CLIENT_ADR)) {
-		errReply(p,cp,outQ,"missing required attribute");
-		return true;
-	}
+bool handleConDisc(pktx px, CtlPkt& cp, CpHandler& cph) {
+	Packet& p = ps->getPacket(px);
 
 	// send positive reply back to router
-	CtlPkt repCp(cp.getCpType(), POS_REPLY, cp.getSeqNum()); 
-	sendCtlPkt(repCp,h.getSrcAdr(),inQ,outQ);
+	CtlPkt repCp(cp.type, CtlPkt::POS_REPLY, cp.seqNum); 
+	cph.sendCtlPkt(repCp,p.srcAdr);
 
 	// now, send notification to client manager
-	CtlPkt reqCp(cp.getCpType(), REQUEST, 0);
-	reqCp.setAttr(CLIENT_ADR,cp.getAttr(CLIENT_ADR));
-	reqCp.setAttr(RTR_ADR,h.getSrcAdr());
-	int reply = sendCtlPkt(reqCp,cliMgrAdr,inQ,outQ);
-	if (reply == NORESPONSE) {
-		cerr << "handleConDisc: no reply from client manager\n";
-		cerr.flush();
-		errReply(p,cp,outQ,"client manager never replied");
-		return false;
-	}
-	repCp.reset();
-	repCp.unpack(ps->getPayload(reply),
-		     (ps->getHeader(reply)).getLength()-Forest::OVERHEAD);
-	if (repCp.getRrType() == NEG_REPLY) {
-		errReply(p,cp,outQ,"negative reply from client manager");
-		cerr << "handleConDisc: negative reply from client manager "
-			"manager\n";
-		ps->free(reply);
-		return false;
-	}
+	pktx reply;
+	if (cp.type == CtlPkt::CLIENT_CONNECT)
+		reply = cph.clientConnect(cliMgrAdr,cp.adr1,p.srcAdr);
+	else
+		reply = cph.clientDisconnect(cliMgrAdr,cp.adr1,p.srcAdr);
+	if (reply == 0) return false;
 	ps->free(reply);
 	return true;
 }
@@ -456,183 +432,100 @@ bool handleConDisc(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
  *  The operation can fail for a variety of reasons, at different
  *  points in the process. Any failure causes a negative reply
  *  to be sent back to the original requestor.
- *  @param p is the packet number of the request packet
+ *  @param px is the packet number of the request packet
  *  @param cp is the control packet structure for p (already unpacked)
- *  @param inQ is the queue coming from the main thread
- *  @param outQ is the queue going back to the main thread
+ *  @param cph is the control packet handler for this thread
  *  @return true if the operation is completed successfully;
  *  sending an error reply is considered a success; the operation
  *  fails if it cannot allocate required packets, or if the
  *  router fails to respond to either of the control messages
  *  sent to it.
  */
-bool handleNewClient(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
-	PacketHeader& h = ps->getHeader(p);
-	if (!cp.isSet(CLIENT_IP) || !cp.isSet(CLIENT_PORT)) {
-		errReply(p,cp,outQ,"client IP or port attribute is missing");
-		return true;
-	}
+bool handleNewClient(pktx px, CtlPkt& cp, CpHandler& cph) {
+	Packet& p = ps->getPacket(px);
 	// determine which router to use
 	fAdr_t rtrAdr;
-	if (!findCliRtr(cp.getAttr(CLIENT_IP),rtrAdr)) {
-		errReply(p,cp,outQ,"No router assigned to client's IP");
+	if (!findCliRtr(cp.ip1,rtrAdr)) {
+		cph.errReply(px,cp,"No router assigned to client's IP");
 		return true;
 	}
-	int rtr = net->getNodeNum(rtrAdr);
 
-	// send add link packet to router and extract info from reply
-	CtlPkt reqCp(ADD_LINK,REQUEST,0);
-	reqCp.setAttr(PEER_IP,cp.getAttr(CLIENT_IP));
-        reqCp.setAttr(PEER_PORT,cp.getAttr(CLIENT_PORT));
-        reqCp.setAttr(PEER_TYPE,CLIENT);
-	int reply = sendCtlPkt(reqCp,rtrAdr,inQ,outQ);
-	if (reply == NORESPONSE) {
-		errReply(p,cp,outQ,"router did not reply to add link");
-		cerr << "handleNewClient: no reply from router to add link\n";
+	pktx reply = cph.addLink(rtrAdr,CLIENT,cp.ip1,cp.port1,0,0,0);
+	if (reply == 0) {
+		cph.errReply(px,cp,"router did not reply to add link");
 		return false;
 	}
-
-	CtlPkt repCp;
-	repCp.unpack(ps->getPayload(reply),
-		     (ps->getHeader(reply)).getLength()-Forest::OVERHEAD);
-	if (repCp.getRrType() == NEG_REPLY) {
-		errReply(p,cp,outQ,"router failed to allocate link");
-		cerr << "handleNewClient: router failed to allocate link\n";
+	CtlPkt repCp; 
+	if (!cph.getCp(reply,repCp)) {
+		cph.errReply(px,cp,"router failed to allocate link");
 		ps->free(reply);
 		return false;
 	}
-	int clientLink = repCp.getAttr(LINK_NUM);
-
-	fAdr_t clientAdr = repCp.getAttr(PEER_ADR);
-	ipa_t clientRtrIp = repCp.getAttr(RTR_IP);
+	int clientLink = repCp.link;
+	fAdr_t clientAdr = repCp.adr1;
+	ipa_t clientRtrIp = repCp.ip1;
 	ps->free(reply);
 
-	// now set rates on new link
-	reqCp.reset(MOD_LINK,REQUEST,0);
-	reqCp.setAttr(LINK_NUM,clientLink);
-	RateSpec rs; net->getDefLeafRates(rs);
-	reqCp.setAttr(BIT_RATE,rs.bitRateDown);
-	reqCp.setAttr(PKT_RATE,rs.pktRateDown); 
-	reply = sendCtlPkt(reqCp,rtrAdr,inQ,outQ);
-	if (reply == NORESPONSE) {
-		errReply(p,cp,outQ,"no reply from router to modify link");
-		cerr << "handleNewClient: no reply from router to modify"
-			"link\n";
+	reply = cph.modLink(rtrAdr,clientLink,net->getDefLeafRates());
+	if (reply == 0) {
+		cph.errReply(px,cp,"no reply from router to modify link");
 		return false;
 	}
-	repCp.reset();
-	repCp.unpack(ps->getPayload(reply),
-		     (ps->getHeader(reply)).getLength() - Forest::OVERHEAD);
-	if (repCp.getRrType() == NEG_REPLY) {
-		errReply(p,cp,outQ,"router could not set link rates");
-		cerr << "handleNewClient: router could not add set link rates "
-		   	" for new client link\n";
+	if (!cph.getCp(reply,repCp)) {
+		cph.errReply(px,cp,"router could not set link rates");
 		ps->free(reply);
 		return false;
 	}
 	ps->free(reply);
 
 	// now add the new client to the client connection comtree
-	reqCp.reset(ADD_COMTREE_LINK,REQUEST,0);
-	reqCp.setAttr(COMTREE_NUM,Forest::CLIENT_CON_COMT);
-	reqCp.setAttr(LINK_NUM,clientLink);
-	reply = sendCtlPkt(reqCp,rtrAdr,inQ,outQ);
-	if (reply == NORESPONSE) {
-		errReply(p,cp,outQ,"no reply from router to add comtree link");
-		cerr << "handleNewClient: no reply from router to add comtree "
-			"link\n";
+	reply = cph.addComtreeLink(rtrAdr,Forest::CLIENT_CON_COMT,
+				   clientLink,-1);
+	if (reply == 0) {
+		cph.errReply(px,cp,"no reply from router to add comtree link");
 		return false;
 	}
-	repCp.reset();
-	repCp.unpack(ps->getPayload(reply),
-		     (ps->getHeader(reply)).getLength() - Forest::OVERHEAD);
-	if (repCp.getRrType() == NEG_REPLY) {
-		errReply(p,cp,outQ,"router could not add client to signalling "
-				   "comtree");
-		cerr << "handleNewClient: router could not add client to "
-			"signalling comtree";
+	if (!cph.getCp(reply,repCp)) {
+		cph.errReply(px,cp,"router could not add client to connection "
+				    "comtree");
 		ps->free(reply);
 		return false;
 	}
 	ps->free(reply);
 
 	// Now modify comtree link rate
-	reqCp.reset(MOD_COMTREE_LINK,REQUEST,0);
-	reqCp.setAttr(COMTREE_NUM,Forest::CLIENT_CON_COMT);
-	reqCp.setAttr(LINK_NUM,clientLink);
-
 	int ctx = comtrees->getComtIndex(Forest::CLIENT_CON_COMT);
-	RateSpec bbRates, leafRates;
-	comtrees->getDefRates(ctx,bbRates,leafRates);
-	reqCp.setAttr(BIT_RATE_IN,leafRates.bitRateUp);
-	reqCp.setAttr(BIT_RATE_OUT,leafRates.bitRateDown);
-	reqCp.setAttr(PKT_RATE_IN,leafRates.pktRateUp);
-	reqCp.setAttr(PKT_RATE_OUT,leafRates.pktRateDown);
-
-	reply = sendCtlPkt(reqCp,rtrAdr,inQ,outQ);
-	if (reply == NORESPONSE) {
-		cerr << "handleNewClient: no reply from router " << rtr
-		     << " to modify comtree link message for comtree "
-		     << Forest::CLIENT_CON_COMT << " link "
-		     << clientLink << "\n";
-		ps->free(reply);
-		return false;
-	}
+	reply = cph.modComtreeLink(rtrAdr,Forest::CLIENT_CON_COMT,clientLink,
+				   comtrees->getDefLeafRates(ctx));
+	if (reply == 0) { ps->free(reply); return false; }
 	ps->free(reply);
 
 	// now add the new client to the client signaling comtree
-	reqCp.reset(ADD_COMTREE_LINK,REQUEST,0);
-	reqCp.setAttr(COMTREE_NUM,Forest::CLIENT_SIG_COMT);
-	reqCp.setAttr(LINK_NUM,clientLink);
-	reply = sendCtlPkt(reqCp,rtrAdr,inQ,outQ);
-	if (reply == NORESPONSE) {
-		errReply(p,cp,outQ,"no reply from router to add comtree link");
-		cerr << "handleNewClient: no reply from router to add comtree "
-			"link\n";
+	reply = cph.addComtreeLink(rtrAdr,Forest::CLIENT_SIG_COMT,
+				   clientLink,-1);
+	if (reply == 0) {
+		cph.errReply(px,cp,"no reply from router to add comtree link");
 		return false;
 	}
-	repCp.reset();
-	repCp.unpack(ps->getPayload(reply),
-		     (ps->getHeader(reply)).getLength() - Forest::OVERHEAD);
-	if (repCp.getRrType() == NEG_REPLY) {
-		errReply(p,cp,outQ,"router could not add client to signalling "
+	if (!cph.getCp(reply,repCp)) {
+		cph.errReply(px,cp,"router could not add client to signalling "
 				   "comtree");
-		cerr << "handleNewClient: router could not add client to "
-			"signalling comtree";
 		ps->free(reply);
 		return false;
 	}
 	ps->free(reply);
 
-	// and modify comtree link rate for this one
-	reqCp.reset(MOD_COMTREE_LINK,REQUEST,0);
-	reqCp.setAttr(COMTREE_NUM,Forest::CLIENT_SIG_COMT);
-	reqCp.setAttr(LINK_NUM,clientLink);
-
+	// Now modify comtree link rate
 	ctx = comtrees->getComtIndex(Forest::CLIENT_SIG_COMT);
-	comtrees->getDefRates(ctx,bbRates,leafRates);
-	reqCp.setAttr(BIT_RATE_IN,leafRates.bitRateUp);
-	reqCp.setAttr(BIT_RATE_OUT,leafRates.bitRateDown);
-	reqCp.setAttr(PKT_RATE_IN,leafRates.pktRateUp);
-	reqCp.setAttr(PKT_RATE_OUT,leafRates.pktRateDown);
-
-	reply = sendCtlPkt(reqCp,rtrAdr,inQ,outQ);
-	if (reply == NORESPONSE) {
-		cerr << "handleNewClient: no reply from router " << rtr
-		     << " to modify comtree link message for comtree "
-		     << Forest::CLIENT_SIG_COMT << " link "
-		     << clientLink << "\n";
-		ps->free(reply);
-		return false;
-	}
+	reply = cph.modComtreeLink(rtrAdr,Forest::CLIENT_SIG_COMT,clientLink,
+				   comtrees->getDefLeafRates(ctx));
+	if (reply == 0) { ps->free(reply); return false; }
 	ps->free(reply);
 
 	// send final reply back to client manager
-	repCp.reset(NEW_CLIENT,POS_REPLY,cp.getSeqNum());
-        repCp.setAttr(CLIENT_ADR,clientAdr);
-        repCp.setAttr(RTR_IP,clientRtrIp);
-        repCp.setAttr(RTR_ADR,rtrAdr);
-	sendCtlPkt(repCp,h.getSrcAdr(),inQ,outQ);
+	repCp.reset(CtlPkt::NEW_CLIENT,CtlPkt::POS_REPLY,cp.seqNum);
+        repCp.adr1 = clientAdr; repCp.ip1 = clientRtrIp; repCp.adr2 = rtrAdr;
+	cph.sendCtlPkt(repCp,p.srcAdr);
 	return true;
 }
 
@@ -644,71 +537,46 @@ bool handleNewClient(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
  *  The operation can fail for a variety of reasons, at different
  *  points in the process. Any failure causes a negative reply
  *  to be sent back to the original requestor.
- *  @param p is the packet number of the request packet
+ *  @param px is the packet number of the request packet
  *  @param cp is the control packet structure for p (already unpacked)
- *  @param inQ is the queue coming from the main thread
- *  @param outQ is the queue going back to the main thread
+ *  @param cph is the control packet handler for this thread
  *  @return true if the operation is completed successfully;
  *  sending an error reply is considered a success; the operation
  *  fails if it cannot allocate required packets, or if the
  *  router fails to respond to either of the control messages
  *  sent to it.
  */
-bool handleBootRequest(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
-	PacketHeader& h = ps->getHeader(p);
-	fAdr_t rtrAdr = h.getSrcAdr();
-	ipa_t rtrIp = h.getTunSrcIp();
-	ipa_t rtrPort = h.getTunSrcPort();
+bool handleBootRequest(pktx px, CtlPkt& cp, CpHandler& cph) {
+	Packet& p = ps->getPacket(px);
+	fAdr_t rtrAdr = p.srcAdr;
 	int rtr;
 	for (rtr = net->firstRouter(); rtr != 0; rtr = net->nextRouter(rtr)) {
 		if (net->getNodeAdr(rtr) == rtrAdr) break;
 	}
 	if (rtr == 0) {
-		errReply(p,cp,outQ,"boot request from unknown router "
+		cph.errReply(px,cp,"boot request from unknown router "
 				   "rejected\n");
-		cerr << "handleBootRequest: received boot request from unknown "
-			"router\n";
+		logger.log("handleBootRequest: received boot request from "
+			   "unknown router\n",2,p);
 		return true;
 	}
 	// first send reply, acknowledging request and supplying
 	// leaf address range
-	string tempstr;
-	cout << "received boot request from "
-	     << Forest::fAdr2string(rtrAdr,tempstr) << endl;
-	CtlPkt repCp(BOOT_REQUEST,POS_REPLY,cp.getSeqNum());
+	CtlPkt repCp(CtlPkt::BOOT_REQUEST,CtlPkt::POS_REPLY,cp.seqNum);
 	pair<fAdr_t,fAdr_t> leafRange; net->getLeafRange(rtr,leafRange);
-        repCp.setAttr(FIRST_LEAF_ADR,leafRange.first);
-        repCp.setAttr(LAST_LEAF_ADR,leafRange.second);
-	sendCtlPkt(repCp,rtrAdr,rtrIp,rtrPort,inQ,outQ);
+        repCp.adr1 = leafRange.first;
+        repCp.adr2 = leafRange.second;
+	cph.sendCtlPkt(repCp,rtrAdr);
 
 	// add/configure interfaces
 	// for each interface in table, do an add iface
 	for (int i = 1; i <= net->getNumIf(rtr); i++) {
 		if (!net->validIf(rtr,i)) continue;
-		CtlPkt reqCp(ADD_IFACE,REQUEST,0);
-		reqCp.setAttr(IFACE_NUM,i);
-		reqCp.setAttr(LOCAL_IP,net->getIfIpAdr(rtr,i));
-		RateSpec rs; net->getIfRates(rtr,i,rs);
-		reqCp.setAttr(MAX_BIT_RATE,rs.bitRateDown);
-		reqCp.setAttr(MAX_PKT_RATE,rs.pktRateDown);
-		int reply = sendCtlPkt(reqCp,rtrAdr,rtrIp,rtrPort,inQ,outQ);
-		if (reply == NORESPONSE) {
-			cerr << "handleBootRequest: no reply from router to "
-				"add interface message for "
-				"interface " << i << "\n";
-			ps->free(reply);
-			return false;
-		}
-		CtlPkt repCp;
-		repCp.unpack(ps->getPayload(reply),
-			 (ps->getHeader(reply)).getLength() - Forest::OVERHEAD);
-		if (repCp.getRrType() == NEG_REPLY) {
-			CtlPkt acp(BOOT_ABORT,REQUEST,0);
-			int aRep = sendCtlPkt(acp,rtrAdr,rtrIp,rtrPort,
-						inQ,outQ);
-			if (aRep != NORESPONSE) ps->free(aRep); // ignore reply
-			cerr << "handleBootRequest: router could not add "
-				"interface";
+		int reply = cph.addIface(rtrAdr,i,net->getIfIpAdr(rtr,i),
+				         net->getIfRates(rtr,i));
+		if (reply == 0) return false;
+		if (!cph.getCp(reply,repCp)) {
+			cph.bootAbort(rtrAdr);
 			ps->free(reply);
 			return false;
 		}
@@ -723,9 +591,10 @@ bool handleBootRequest(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 		int llnk = net->getLLnum(lnk,rtr);
 		int iface = net->getIface(llnk,rtr);
 		int peer = net->getPeer(rtr,lnk);
+		ntyp_t peerType = net->getNodeType(peer);
 		int plnk = net->getLLnum(lnk,peer);
 		ipa_t peerIp; ipp_t peerPort;
-		if (net->getNodeType(peer) == ROUTER) {
+		if (peerType == ROUTER) {
 			int i = net->getIface(plnk,peer);
 			peerIp = net->getIfIpAdr(peer,i);
 			peerPort = Forest::ROUTER_PORT;
@@ -733,66 +602,23 @@ bool handleBootRequest(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 			peerIp = net->getLeafIpAdr(peer);
 			peerPort = 0;
 		}
-		CtlPkt reqCp(ADD_LINK,REQUEST,0);
-		reqCp.setAttr(LINK_NUM,llnk);
-		reqCp.setAttr(IFACE_NUM,iface);
-		reqCp.setAttr(PEER_TYPE,net->getNodeType(peer));
-		reqCp.setAttr(PEER_IP,peerIp);
-		reqCp.setAttr(PEER_PORT,peerPort);
-		reqCp.setAttr(PEER_ADR,net->getNodeAdr(peer));
-		int reply = sendCtlPkt(reqCp,rtrAdr,rtrIp,rtrPort,inQ,outQ);
-		if (reply == NORESPONSE) {
-			cerr << "handleBootRequest: no reply from router "
-			     << rtr << " to add link message for "
-				"local link " << llnk << "\n";
-			ps->free(reply);
-			return false;
-		}
-		CtlPkt repCp;
-		repCp.unpack(ps->getPayload(reply),
-			 (ps->getHeader(reply)).getLength() - Forest::OVERHEAD);
-		if (repCp.getRrType() == NEG_REPLY) {
-			CtlPkt acp(BOOT_ABORT,REQUEST,0);
-			int aRep = sendCtlPkt(acp,rtrAdr,rtrIp,rtrPort,
-						inQ,outQ);
-			if (aRep != NORESPONSE) ps->free(aRep); // ignore reply
-			cerr << "handleBootRequest: router " << rtr << " could "
-				"not add local link " << llnk << endl;
+
+		// first, add the link
+		int reply = cph.addLink(rtrAdr,peerType,peerIp,peerPort,
+					iface,llnk,net->getNodeAdr(peer));
+		if (reply == 0) return false;
+		if (!cph.getCp(reply,repCp)) {
+			cph.bootAbort(rtrAdr);
 			ps->free(reply);
 			return false;
 		}
 		ps->free(reply);
 
 		// now, send modify link message, to set data rates
-		reqCp.reset(MOD_LINK,REQUEST,0);
-		reqCp.setAttr(LINK_NUM,llnk);
-		RateSpec rs; net->getLinkRates(lnk,rs);
-		if (rtr == net->getLeft(lnk)) {
-			reqCp.setAttr(BIT_RATE,rs.bitRateUp);
-			reqCp.setAttr(PKT_RATE,rs.pktRateUp);
-		} else {
-			reqCp.setAttr(BIT_RATE,rs.bitRateDown);
-			reqCp.setAttr(PKT_RATE,rs.pktRateDown);
-		}
-
-		reply = sendCtlPkt(reqCp,rtrAdr,rtrIp,rtrPort,inQ,outQ);
-		if (reply == NORESPONSE) {
-			cerr << "handleBootRequest: no reply from router "
-			     << rtr << " to modify link message for local link"
-			     << llnk << "\n";
-			ps->free(reply);
-			return false;
-		}
-		repCp.reset();
-		repCp.unpack(ps->getPayload(reply),
-			 (ps->getHeader(reply)).getLength() - Forest::OVERHEAD);
-		if (repCp.getRrType() == NEG_REPLY) {
-			CtlPkt acp(BOOT_ABORT,REQUEST,0);
-			int aRep = sendCtlPkt(acp,rtrAdr,rtrIp,rtrPort,
-						inQ,outQ);
-			if (aRep != NORESPONSE) ps->free(aRep); // ignore reply
-			cerr << "handleBootRequest: router " << rtr << " could "
-				"not set link rates for link " << llnk << endl;
+		reply = cph.modLink(rtrAdr,llnk,net->getLinkRates(lnk));
+		if (reply == 0) return false;
+		if (!cph.getCp(reply,repCp)) {
+			cph.bootAbort(rtrAdr);
 			ps->free(reply);
 			return false;
 		}
@@ -809,35 +635,17 @@ bool handleBootRequest(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 		comt_t comt = comtrees->getComtree(ctx);
 
 		// first step is to add comtree at router
-		CtlPkt reqCp(ADD_COMTREE,REQUEST,0);
-		reqCp.setAttr(COMTREE_NUM,comt);
-		int reply = sendCtlPkt(reqCp,rtrAdr,rtrIp,rtrPort,
-					inQ,outQ);
-		if (reply == NORESPONSE) {
-			cerr << "handleBootRequest: no reply from router "
-			     << rtr << " to add comtree message for comtree "
-			     << comt << "\n";
-			ps->free(reply);
-			return false;
-		}
-		CtlPkt repCp;
-		repCp.unpack(ps->getPayload(reply),
-			 (ps->getHeader(reply)).getLength() - Forest::OVERHEAD);
-		if (repCp.getRrType() == NEG_REPLY) {
-			CtlPkt acp(BOOT_ABORT,REQUEST,0);
-			int aRep = sendCtlPkt(acp,rtrAdr,rtrIp,rtrPort,
-						inQ,outQ);
-			if (aRep != NORESPONSE) ps->free(aRep); // ignore reply
-			cerr << "handleBootRequest: router " << rtr << " could "
-				"not add comtree " << comt << endl;
-			ps->free(reply);
-			return false;
+		int reply = cph.addComtree(rtrAdr,comt);
+		if (reply == 0) return false;
+		if (!cph.getCp(reply,repCp)) {
+			cph.bootAbort(rtrAdr);
+			ps->free(reply); return false;
 		}
 		ps->free(reply);
 
+		// next, add links to the comtree and set their data rates
 		int plnk = comtrees->getPlink(ctx,rtrAdr);
 		int parent = net->getPeer(rtr,plnk);
-		// next, add links to the comtree and set their data rates
 		for (int lnk = net->firstLinkAt(rtr); lnk != 0;
 			 lnk = net->nextLinkAt(rtr,lnk)) {
 			if (!comtrees->isComtLink(ctx,lnk)) continue;
@@ -849,263 +657,49 @@ bool handleBootRequest(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 			bool peerCoreFlag = comtrees->isCoreNode(ctx,peerAdr);
 
 			// first, add comtree link
-			CtlPkt reqCp(ADD_COMTREE_LINK,REQUEST,0);
-			reqCp.setAttr(COMTREE_NUM,comt);
-			reqCp.setAttr(LINK_NUM,llnk);
-			reqCp.setAttr(PEER_CORE_FLAG,peerCoreFlag);
-			int reply = sendCtlPkt(reqCp,rtrAdr,rtrIp,rtrPort,
-							inQ,outQ);
-			if (reply == NORESPONSE) {
-				cerr << "handleBootRequest: no reply from "
-				     << "router " << rtr << " to add comtree "
-				     << "link message for comtree " << comt
-				     << " link " << llnk << "\n";
-				ps->free(reply);
-				return false;
-			}
-			CtlPkt repCp;
-			repCp.unpack(ps->getPayload(reply),
-				 	(ps->getHeader(reply)).getLength()
-					- Forest::OVERHEAD);
-			if (repCp.getRrType() == NEG_REPLY) {
-				CtlPkt acp(BOOT_ABORT,REQUEST,0);
-				int aRep = sendCtlPkt(acp,rtrAdr,rtrIp,rtrPort,
-							inQ,outQ);
-				if (aRep != NORESPONSE)
-					ps->free(aRep); // ignore reply
-				cerr << "handleBootRequest: router "
-				     << rtr << " could not add comtree link for"
-				     << " comtree " << comt << " link "
-				     << llnk << "\n";
-				ps->free(reply);
-				return false;
+			reply = cph.addComtreeLink(rtrAdr,comt,llnk,
+						   peerCoreFlag);
+			if (reply == 0) return false;
+			if (!cph.getCp(reply,repCp)) {
+				cph.bootAbort(rtrAdr);
+				ps->free(reply); return false;
 			}
 			ps->free(reply);
 
-			reqCp.reset(MOD_COMTREE_LINK,REQUEST,0);
-			reqCp.setAttr(COMTREE_NUM,comt);
-			reqCp.setAttr(LINK_NUM,llnk);
-			RateSpec rs;
-			if (peer == parent) {
-				comtrees->getLinkRates(ctx,rtrAdr,rs);
-				reqCp.setAttr(BIT_RATE_IN,rs.bitRateDown);
-				reqCp.setAttr(BIT_RATE_OUT,rs.bitRateUp);
-				reqCp.setAttr(PKT_RATE_IN,rs.pktRateDown);
-				reqCp.setAttr(PKT_RATE_OUT,rs.pktRateUp);
-			} else {
-				comtrees->getLinkRates(ctx,peerAdr,rs);
-				reqCp.setAttr(BIT_RATE_IN,rs.bitRateUp);
-				reqCp.setAttr(BIT_RATE_OUT,rs.bitRateDown);
-				reqCp.setAttr(PKT_RATE_IN,rs.pktRateUp);
-				reqCp.setAttr(PKT_RATE_OUT,rs.pktRateDown);
-			}
-			reply = sendCtlPkt(reqCp,rtrAdr,rtrIp,rtrPort,inQ,outQ);
-			if (reply == NORESPONSE) {
-				cerr << "handleBootRequest: no reply from "
-				     << "router " << rtr << " to modify "
-				     << "comtree link message for comtree "
-				     << comt << " link " << llnk << "\n";
-				ps->free(reply);
-				return false;
-			}
-			repCp.reset();
-			repCp.unpack(ps->getPayload(reply),
-				 	(ps->getHeader(reply)).getLength()
-					 - Forest::OVERHEAD);
-			if (repCp.getRrType() == NEG_REPLY) {
-				CtlPkt acp(BOOT_ABORT,REQUEST,0);
-				int aRep = sendCtlPkt(acp,rtrAdr,rtrIp,rtrPort,
-							inQ,outQ);
-				if (aRep != NORESPONSE)
-					ps->free(aRep); // ignore reply
-				cerr << "handleBootRequest: router " << rtr
-				     << " could not set comtree link rates for "
-				     << "comtree " << comt << " link "
-				     << llnk << "\n";
-				ps->free(reply);
-				return false;
+			// now, set link rates
+			RateSpec rs = comtrees->getLinkRates(ctx,rtrAdr);
+			if (peer == parent) rs.flip();
+			reply = cph.modComtreeLink(rtrAdr,comt,llnk,rs);
+			if (reply == 0) return false;
+			if (!cph.getCp(reply,repCp)) {
+				cph.bootAbort(rtrAdr);
+				ps->free(reply); return false;
 			}
 			ps->free(reply);
 		}
-
 		// finally, we need to modify overall comtree attributes
-		reqCp.reset(MOD_COMTREE,REQUEST,0);
-		reqCp.setAttr(COMTREE_NUM,comt);
-		reqCp.setAttr(CORE_FLAG,comtrees->isCoreNode(ctx,rtrAdr));
-		reqCp.setAttr(PARENT_LINK,net->getLLnum(plnk,rtr));
-		reply = sendCtlPkt(reqCp,rtrAdr,rtrIp,rtrPort,inQ,outQ);
-		if (reply == NORESPONSE) {
-			cerr << "handleBootRequest: no reply from router "
-			     << rtr << " to modify comtree message for comtree "
-			     << comt << "\n";
-			ps->free(reply);
-			return false;
-		}
-		repCp.reset();
-		repCp.unpack(ps->getPayload(reply),
-			 (ps->getHeader(reply)).getLength() - Forest::OVERHEAD);
-		if (repCp.getRrType() == NEG_REPLY) {
-			CtlPkt acp(BOOT_ABORT,REQUEST,0);
-			int aRep = sendCtlPkt(acp,rtrAdr,rtrIp,rtrPort,
-						inQ,outQ);
-			if (aRep != NORESPONSE) ps->free(aRep); // ignore reply
-			cerr << "handleBootRequest: router " << rtr << " could "
-				"not add comtree " << comt << endl;
-			ps->free(reply);
-			return false;
+		reply = cph.modComtree(rtrAdr,comt,net->getLLnum(plnk,rtr),
+					comtrees->isCoreNode(ctx,rtrAdr));
+		if (reply == 0) return false;
+		if (!cph.getCp(reply,repCp)) {
+			cph.bootAbort(rtrAdr);
+			ps->free(reply); return false;
 		}
 		ps->free(reply);
 	}
 	// finally, send the boot complete message to the router
-	CtlPkt reqCp(BOOT_COMPLETE,REQUEST,0);
-	int reply = sendCtlPkt(reqCp,rtrAdr,rtrIp,rtrPort,inQ,outQ);
-	if (reply == NORESPONSE) {
-		cerr << "handleBootRequest: no reply from router " << rtr <<
-			" to boot complete message\n";
-		ps->free(reply);
-		return false;
+	int reply = cph.bootComplete(rtrAdr);
+	if (reply == 0) return false;
+	if (!cph.getCp(reply,repCp)) {
+		cph.bootAbort(rtrAdr);
+		ps->free(reply); return false;
 	}
-	repCp.reset();
-	repCp.unpack(ps->getPayload(reply),
-		 (ps->getHeader(reply)).getLength() - Forest::OVERHEAD);
-	if (repCp.getRrType() == NEG_REPLY) {
-		cerr << "handleBootRequest: router " << rtr <<
-			" sent negative reply to boot complete message\n";
-		ps->free(reply);
-		return false;
-	}
-	cout << "completed boot request for "
-	     << Forest::fAdr2string(rtrAdr,tempstr) << endl;
 	ps->free(reply);
+
+	logger.log("completed boot request",0,p);
 	return true;
 }
 	
-
-/** Send a control packet back through the main thread.
- *  The control packet object is assumed to be already initialized.
- *  If it is a reply packet, it is packed into a packet object whose index is
- *  then placed in the outQ. If it is a request packet, it is sent similarly
- *  and then the method waits for a reply. If the reply is not received
- *  after one second, it tries again. After three attempts, it gives up.
- *  @param cp is the pre-formatted control packet
- *  @param dest is the destination address to which it is to be sent
- *  @param inQ is the thread's input queue from the main thread
- *  @param outQ is the thread's output queue back to the main thread
- *  @return the packet number of the reply, when there is one, and 0
- *  on on error, or if there is no reply.
- */
-int sendCtlPkt(CtlPkt& cp, fAdr_t dest, ipa_t destIp, ipp_t destPort,
-		Queue& inQ, Queue& outQ) {
-	int p = ps->alloc();
-	if (p == 0) {
-		cerr << "sendCtlPkt: no packets left in packet store\n";
-		return 0;
-	}
-	// set default seq# for requests - tells main thread to use "next" seq#
-	if (cp.getRrType() == REQUEST) cp.setSeqNum(0);
-	int plen = cp.pack(ps->getPayload(p));
-	if (plen == 0) {
-		string s;
-		cerr << "sendCtlPkt: packing error for packet:\n"
-		     << cp.toString(s);
-		ps->free(p);
-		return 0;
-	}
-	PacketHeader& h = ps->getHeader(p);
-	h.setLength(plen + Forest::OVERHEAD);
-	h.setPtype(NET_SIG);
-	h.setFlags(0);
-	h.setComtree(Forest::NET_SIG_COMT);
-	h.setDstAdr(dest); h.setSrcAdr(myAdr);
-	h.setTunSrcIp(destIp); h.setTunSrcPort(destPort);
-	h.pack(ps->getBuffer(p));
-
-	if (cp.getRrType() != REQUEST) {
-		outQ.enq(p); return 0;
-	}
-	int reply = sendAndWait(p,cp,inQ,outQ);
-	ps->free(p);
-	return reply;
-}
-
-int sendCtlPkt(CtlPkt& cp, fAdr_t dest, Queue& inQ, Queue& outQ) {
-	return sendCtlPkt(cp, dest, 0, 0, inQ, outQ);
-}
-
-
-/** Send a control request packet multiple times before giving up.
- *  This method makes a copy of the original and sends the copy
- *  back to the main thread. If no reply is received after 1 second,
- *  it tries again; it makes a total of three attempts before giving up.
- *  @param p is the packet number of the packet to be sent; the header
- *  for p is assumed to be unpacked
- *  @param cp is the control packet structure for p (already unpacked)
- *  @param inQ is the queue coming from the main thread
- *  @param outQ is the queue going back to the main thread
- *  @return the packet number for the reply packet, or 0 if there
- *  was an error or no reply
- */
-int sendAndWait(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
-	PacketHeader& h = ps->getHeader(p);
-	h.setSrcAdr(myAdr); ps->pack(p);
-
-	// make copy of packet and send the copy
-	int copy = ps->fullCopy(p);
-	if (copy == 0) {
-		cerr << "sendAndWait: no packets left in packet store\n";
-		return NORESPONSE;
-	}
-
-	outQ.enq(copy);
-
-	for (int i = 1; i < 3; i++) {
-		int reply = inQ.deq(1000000000); // 1 sec timeout
-		if (reply == Queue::TIMEOUT) { // timeout
-			// no reply, make new copy and send
-			int retry = ps->fullCopy(p);
-			if (retry == 0) {
-				cerr << "sendAndWait: no packets "
-					"left in packet store\n";
-				return NORESPONSE;
-			}
-			cp.setSeqNum(1); 	// tag retry as a repeat
-			cp.pack(ps->getPayload(retry));
-			PacketHeader& hr = ps->getHeader(retry);
-			hr.payErrUpdate(ps->getBuffer(retry));
-			outQ.enq(retry);
-		} else {
-			return reply;
-		}
-	}
-	return NORESPONSE;
-}
-
-/** Build and send error reply packet for p.
- *  @param p is the packet number of the request packet
- *  @param cp is the control packet structure for p (already unpacked)
- *  @param outQ is the queue going back to the main thread
- *  @param msg is the error message to be sent.
- */
-void errReply(int p, CtlPkt& cp, Queue& outQ, const char* msg) {
-	PacketHeader& h = ps->getHeader(p);
-
-	int p1 = ps->fullCopy(p);
-	PacketHeader& h1 = ps->getHeader(p1);
-	CtlPkt cp1;
-	cp1.unpack(ps->getPayload(p1),h1.getLength()-Forest::OVERHEAD);
-
-	cp1.setRrType(NEG_REPLY);
-	cp1.setErrMsg(msg);
-	int plen = cp1.pack(ps->getPayload(p1));
-
-	h1.setLength(Forest::OVERHEAD + plen);
-	h1.setDstAdr(h.getSrcAdr());
-	h1.setSrcAdr(myAdr);
-	h1.pack(ps->getBuffer(p1));
-
-	outQ.enq(p1);
-}
-
 /** Finds the router address of the router based on IP prefix
  *  @param cliIp is the ip of the client
  *  @param rtrAdr is the address of the router associated with this IP prefix
@@ -1171,97 +765,92 @@ int recvFromCons() {
 		if (connSock < 0) return 0;
 		if (!Np4d::nonblock(connSock))
 			fatal("can't make connection socket nonblocking");
-//cerr << "connection socket established, connSock=" << connSock << endl;
 	}
 
-	int p = ps->alloc();
-	if (p == 0) return 0;
-	PacketHeader& h = ps->getHeader(p);
-	buffer_t& b = ps->getBuffer(p);
+	int px = ps->alloc();
+	if (px == 0) return 0;
+	Packet& p = ps->getPacket(px);
 	
-	int nbytes = Np4d::recvBuf(connSock, (char *) &b, Forest::BUF_SIZ);
-	if (nbytes == -1) { ps->free(p); return 0; }
+	int nbytes = Np4d::recvBuf(connSock, (char *) p.buffer,Forest::BUF_SIZ);
+	if (nbytes == -1) { ps->free(px); return 0; }
 	if (nbytes < Forest::HDR_LENG)
 		fatal(" recvFromCons: misformatted packet from console");
-	h.unpack(b);
-	if (h.getVersion() != 1 || h.getLength() != nbytes ||
-	    (h.getPtype() != CLIENT_SIG && h.getPtype() != NET_SIG))
+	p.unpack();
+	if (p.version != 1 || p.length != nbytes ||
+	    (p.type != CLIENT_SIG && p.type != NET_SIG))
 		fatal(" recvFromCons: misformatted packet from console");
-        return p;
+        return px;
 }
 
 /** Write a packet to the socket for the user interface.
- *  @param p is the packet to be sent to the CLI
+ *  @param px is the packet to be sent to the CLI
  */
-void sendToCons(int p) {
+void sendToCons(pktx px) {
 	if (connSock >= 0) {
-		buffer_t& buf = ps->getBuffer(p);
-		int length = ps->getHeader(p).getLength();
-		ps->pack(p);
-		Np4d::sendBuf(connSock, (char *) &buf, length);
+		Packet& p = ps->getPacket(px);
+		p.pack();
+		Np4d::sendBuf(connSock, (char *) p.buffer, p.length);
 	}
-	ps->free(p);
+	ps->free(px);
 }
 
 /** Check for next packet from the Forest network.
  *  @return next packet or 0, if no report has been received.
  */
-int rcvFromForest() { 
-	int p = ps->alloc();
-	if (p == 0) return 0;
-        buffer_t& b = ps->getBuffer(p);
+pktx rcvFromForest() { 
+	pktx px = ps->alloc();
+	if (px == 0) return 0;
+	Packet& p = ps->getPacket(px);
 	ipa_t srcIp; ipp_t srcPort;
-        int nbytes = Np4d::recvfrom4d(intSock,&b[0],1500,srcIp,srcPort);
-        if (nbytes < 0) { ps->free(p); return 0; }
-	ps->unpack(p);
-	PacketHeader& h = ps->getHeader(p);
-	h.setTunSrcIp(srcIp); h.setTunSrcPort(srcPort);
-        return p;
+        int nbytes = Np4d::recvfrom4d(intSock,p.buffer,1500,srcIp,srcPort);
+        if (nbytes < 0) { ps->free(px); return 0; }
+	p.unpack();
+	p.tunIp = srcIp; p.tunPort = srcPort;
+        return px;
 }
 
 /** Send packet to Forest router.
  *  During the initialization phase, we must send directly to the target router.
  *  The handleBootRequest handler inserts the router's IP address and port in
- *  the tunSrcIp and tunSrcPort fields of all packets it sends.
+ *  the tunIp and tunPort fields of all packets it sends.
  */
-void sendToForest(int p) {
-	buffer_t& buf = ps->getBuffer(p);
-	PacketHeader h = ps->getHeader(p);
-	int leng = h.getLength();
-	ps->pack(p);
+void sendToForest(int px) {
+	Packet p = ps->getPacket(px);
+	p.pack();
 	ipa_t destIp; ipp_t destPort;
-	if (booting) { destIp = h.getTunSrcIp(); destPort = h.getTunSrcPort(); }
+	if (booting) { destIp = p.tunIp; destPort = p.tunPort; }
 	else	     { destIp = rtrIp; destPort = Forest::ROUTER_PORT; }
-	int rv = Np4d::sendto4d(intSock,(void *) &buf,leng, destIp, destPort);
+	int rv = Np4d::sendto4d(intSock,(void *) p.buffer,p.length,
+				destIp, destPort);
 	if (rv == -1) {
 		fatal("sendToForest: failure in sendto");
 	}
-	ps->free(p);
+	ps->free(px);
 }
 
 /** Send initial connect packet to forest router
  *  Uses comtree 1, which is for user signalling.
  */
 void connect() {
-	packet p = ps->alloc();
-	PacketHeader& h = ps->getHeader(p);
+	pktx px = ps->alloc();
+	Packet& p = ps->getPacket(px);
 
-	h.setLength(4*(5+1)); h.setPtype(CONNECT); h.setFlags(0);
-	h.setComtree(Forest::CLIENT_CON_COMT);
-	h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
+	p.length = Forest::OVERHEAD; p.type = CONNECT; p.flags = 0;
+	p.comtree = Forest::CLIENT_CON_COMT;
+	p.srcAdr = myAdr; p.dstAdr = rtrAdr;
 
-	sendToForest(p);
+	sendToForest(px);
 }
 
 /** Send final disconnect packet to forest router.
  */
 void disconnect() {
-	packet p = ps->alloc();
-	PacketHeader& h = ps->getHeader(p);
+	pktx px = ps->alloc();
+	Packet& p = ps->getPacket(px);
 
-	h.setLength(4*(5+1)); h.setPtype(DISCONNECT); h.setFlags(0);
-	h.setComtree(Forest::CLIENT_CON_COMT);
-	h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
+	p.length = Forest::OVERHEAD; p.type = DISCONNECT; p.flags = 0;
+	p.comtree = Forest::CLIENT_CON_COMT;
+	p.srcAdr = myAdr; p.dstAdr = rtrAdr;
 
-	sendToForest(p);
+	sendToForest(px);
 }

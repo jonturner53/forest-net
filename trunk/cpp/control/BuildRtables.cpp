@@ -10,7 +10,7 @@
 #include <string>
 #include <queue>
 #include "stdinc.h"
-#include "CommonDefs.h"
+#include "Forest.h"
 #include "NetInfo.h"
 #include "ComtInfo.h"
 #include "IfaceTable.h"
@@ -102,9 +102,8 @@ int main() {
 bool buildIfaceTable(int r, const NetInfo& net, IfaceTable& ift) {
 	for (int i = 1; i <= net.getNumIf(r); i++) {
 		if (!net.validIf(r,i)) continue;
-		RateSpec rs; net.getIfRates(r,i,rs);
-		ift.addEntry(i,	net.getIfIpAdr(r,i),
-				rs.bitRateDown, rs.pktRateDown);
+		RateSpec rs = net.getIfRates(r,i);
+		ift.addEntry(i,	net.getIfIpAdr(r,i), rs);
 	}
 	return true;
 }
@@ -147,9 +146,7 @@ bool buildLinkTable(int r, const NetInfo& net, LinkTable& lt) {
 		lt.setIface(llnk,iface);
 		lt.setPeerType(llnk,net.getNodeType(peer));
 		lt.setPeerAdr(llnk,net.getNodeAdr(peer));
-		RateSpec rs; net.getLinkRates(lnk,rs);
-		lt.setBitRate(llnk,rs.bitRateDown);
-		lt.setPktRate(llnk,rs.pktRateDown);
+		lt.getRates(llnk) = net.getLinkRates(lnk);
 	}
 
 	return true;

@@ -6,7 +6,7 @@
  *
  */
 #include "ClientMgr-v0.h"
-#include "CommonDefs.h"
+#include "Forest.h"
 #include "stdinc.h"
 #include "Np4d.h"
 #include <string>
@@ -14,6 +14,7 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
+
 /** usage:
  *  ClientMgr netMgrAdr rtrAdr ccAdr rtrIp intIp extIp myAdr finTime
  *  usersFile acctFile prefixFile
@@ -139,23 +140,23 @@ bool init(fAdr_t nma, ipa_t ri, fAdr_t ra, fAdr_t cca,
 void writeToAcctFile(CtlPkt cp) {
 	if(acctFileStream.good()) {
 		string s;
-		if(cp.getCpType() ==NEW_CLIENT && cp.getRrType() == POS_REPLY) {
+		if(cp.type == CtlPkt::NEW_CLIENT && cp.mode == CtlPkt::POS_REPLY) {
 			acctFileStream << Misc::getTimeNs() << " Client "
-			  << Forest::fAdr2string(cp.getAttr(CLIENT_ADR),s);
+			  << Forest::fAdr2string(cp.adr1,s);
 			acctFileStream << " added to router "
-			  << Forest::fAdr2string(cp.getAttr(RTR_ADR),s);
+			  << Forest::fAdr2string(cp.adr2,s);
 			acctFileStream << endl;
-		} else if(cp.getCpType() == CLIENT_CONNECT) {
+		} else if(cp.type == CtlPkt::CLIENT_CONNECT) {
 			acctFileStream << Misc::getTimeNs() << " Client "
-			  << Forest::fAdr2string(cp.getAttr(CLIENT_ADR),s);
+			  << Forest::fAdr2string(cp.adr1,s);
 			acctFileStream << " connected to router "
-			  << Forest::fAdr2string(cp.getAttr(RTR_ADR),s);
+			  << Forest::fAdr2string(cp.adr2,s);
 			acctFileStream << endl;
-		} else if(cp.getCpType() == CLIENT_DISCONNECT) {
+		} else if(cp.type == CtlPkt::CLIENT_DISCONNECT) {
 			acctFileStream << Misc::getTimeNs() << " Client "
-			  << Forest::fAdr2string(cp.getAttr(CLIENT_ADR),s);
+			  << Forest::fAdr2string(cp.adr1,s);
 			acctFileStream << " disconnected from router "
-			  << Forest::fAdr2string(cp.getAttr(RTR_ADR),s);
+			  << Forest::fAdr2string(cp.adr2,s);
 			acctFileStream << endl;
 		} else {
 			acctFileStream << "Unrecognized control packet" << endl;
@@ -183,13 +184,13 @@ void readUsernames() {
 		fatal("Could not read usernames file");
 }
 
-void send(int p) {
-	int length = ps->getHeader(p).getLength();
-	ps->pack(p);
-	int rv = Np4d::sendto4d(sock,(void *) ps->getBuffer(p),length,
-		rtrIp, Forest::ROUTER_PORT);
+void send(pktx px) {
+	Packet& p = ps->getPacket(px);
+	p.pack();
+	int rv = Np4d::sendto4d(sock,(void *) p.buffer, p.length,
+				rtrIp, Forest::ROUTER_PORT);
 	if (rv == -1) fatal("send: failure in sendto");
-	ps->free(p);
+	ps->free(px);
 }
 
 /** Finds the router address of the router based on IP prefix
@@ -200,25 +201,20 @@ void send(int p) {
 bool findCliRtr(ipa_t cliIp, fAdr_t& rtrAdr, ipa_t& rtrIp) {
 	string cip;
 	Np4d::ip2string(cliIp,cip);
-cerr << "findCliRtr cip=" << cip << endl;
 	for(unsigned int i = 0; i < (unsigned int) numPrefixes; ++i) {
 		string ip = prefixes[i].prefix;
-cerr << prefixes[i].prefix << endl;
 		unsigned int j = 0;
 		while (j < ip.size() && j < cip.size()) {
 			if (ip[j] != '*' && cip[j] != ip[j]) break;
 			if (ip[j] == '*' ||
-			    j+1 == ip.size() && j+1 == cip.size()) {
+			    (j+1 == ip.size() && j+1 == cip.size())) {
 				rtrAdr = prefixes[i].rtrAdr;
 				rtrIp  = prefixes[i].rtrIp;
-string s;
-cerr << "returning true " << Forest::fAdr2string(rtrAdr,s) << "\n";
 				return true;
 			}
 			j++;
 		}
 	}
-cerr << "findCliRtr returns false\n";
 	return false;
 }
 
@@ -274,11 +270,11 @@ void* run(void* finishTime) {
 		}
 		//first receieve packets and send to threads
 		string proxyString;
-		int p = recvFromForest(proxyString);
-		if (p > 0) {
+		pktx px = recvFromForest(proxyString);
+		if (px > 0) {
 			nothing2do = false;
-			handleIncoming(p);	
-		} else if(p < 0) {
+			handleIncoming(px);	
+		} else if (px < 0) {
 			//message from proxy
 			istringstream iss(proxyString);
 			string ipStr;
@@ -305,43 +301,42 @@ void* run(void* finishTime) {
 			//send that buf
 			Np4d::sendto4d(sock,(void*)buf.c_str(),buf.size()+1,proxIp,proxUdp);
 		} else {
-			ps->free(p);
+			ps->free(px);
 		}
 		//now do some sending
 		for (int t = threads->firstIn(); t != 0;
 			t = threads->nextIn(t)) {
 			if(pool[t].qp.out.empty()) continue;
 			nothing2do = false;
-			int p1 = pool[t].qp.out.deq();
-			if (p1 == 0) { //thread is done
+			pktx px1 = pool[t].qp.out.deq();
+			if (px1 == 0) { //thread is done
 				pool[t].qp.in.reset();
 				threads->swap(t);
 				close(pool[t].sock);
 				continue;
 			}
-			PacketHeader& h1 = ps->getHeader(p1);
-			CtlPkt cp1;
-			cp1.unpack(ps->getPayload(p1),
-				   h1.getLength()-Forest::OVERHEAD);
-			if (cp1.getSeqNum() == 1) {
+			Packet& p1 = ps->getPacket(px1);
+			CtlPkt cp1(p1.payload(),p1.length-Forest::OVERHEAD);
+			cp1.unpack();
+			if (cp1.seqNum == 1) {
 				// means this is a repeat of a pending
 				// outgoing request
 				if (tMap->validId(t)) {
-					cp1.setSeqNum(tMap->getKey(t));
+					cp1.seqNum = tMap->getKey(t);
 		 		} else {
 					// in this case, reply has arrived
 					// so, suppress duplicate request
-					ps->free(p1); continue;
+					ps->free(px1); continue;
 				}
 			} else {
 				if (tMap->validId(t))
 					tMap->dropPair(tMap->getKey(t));
 				tMap->addPair(seqNum,t);
-				cp1.setSeqNum(seqNum++);
+				cp1.seqNum = seqNum++;
 			}
-			cp1.pack(ps->getPayload(p1));
-			h1.payErrUpdate(ps->getBuffer(p1));
-			send(p1);
+			cp1.pack();
+			p1.payErrUpdate();
+			send(px1);
 		}
 		if(nothing2do && threads->firstIn() == 0) usleep(1000);
 		now = Misc::getTimeNs();
@@ -350,39 +345,39 @@ void* run(void* finishTime) {
 	pthread_exit(NULL);
 }
 
-void handleIncoming(int p) {
-	PacketHeader& h = ps->getHeader(p);
-	if(h.getPtype() == NET_SIG) {
-		CtlPkt cp;
-		cp.unpack(ps->getPayload(p),
-			h.getLength()-Forest::OVERHEAD);
-		if (cp.getCpType() == NEW_CLIENT) {
+void handleIncoming(pktx px) {
+	Packet& p = ps->getPacket(px);
+	if (p.type == NET_SIG) {
+		CtlPkt cp(p.payload(), p.length-Forest::OVERHEAD);
+		cp.unpack();
+		if (cp.type == CtlPkt::NEW_CLIENT) {
 			writeToAcctFile(cp);
-			int t = tMap->getId(cp.getSeqNum());
+			int t = tMap->getId(cp.seqNum);
 			if (t != 0) {
 				pool[t].seqNum = 0;
-				pool[t].qp.in.enq(p);
+				pool[t].qp.in.enq(px);
 // might want to print error message in this case
-			} else ps->free(p);
+			} else ps->free(px);
 		} 
-		else if(cp.getRrType() == REQUEST &&
-		    (cp.getCpType() == CLIENT_CONNECT ||
-		     cp.getCpType() == CLIENT_DISCONNECT)) {
+		else if(cp.mode == CtlPkt::REQUEST &&
+		    (cp.type == CtlPkt::CLIENT_CONNECT ||
+		     cp.type == CtlPkt::CLIENT_DISCONNECT)) {
 			writeToAcctFile(cp);
-			CtlPkt cp2(cp.getCpType(),POS_REPLY,cp.getSeqNum());
-			int p1 = ps->alloc();
-			if (p1 == 0) fatal("packetstore out of packets!");
-			PacketHeader & h1 = ps->getHeader(p1);
-			h1.setDstAdr(h.getSrcAdr());
-			h1.setSrcAdr(h.getDstAdr());
-			h1.setFlags(0); h1.setComtree(Forest::NET_SIG_COMT);
-			int len = cp2.pack(ps->getPayload(p1));
-			h1.setLength(Forest::OVERHEAD + len);
-			h1.setPtype(NET_SIG);
-			h1.pack(ps->getBuffer(p1));
-			send(p1);
-		/*} else if(cp.getRrType() == NEG_REPLY &&
-			    h.getSrcAdr()==netMgrAdr) {
+			int px1 = ps->alloc();
+			if (px1 == 0) fatal("packetstore out of packets!");
+			Packet& p1 = ps->getPacket(px1);
+			p1.dstAdr = p.srcAdr;
+			p1.srcAdr = p.dstAdr;
+			p1.flags = 0; p1.comtree = Forest::NET_SIG_COMT;
+			CtlPkt cp2(cp.type,CtlPkt::POS_REPLY,
+				   cp.seqNum,p1.payload());
+			int len = cp2.pack();
+			p1.length = Forest::OVERHEAD + len;
+			p1.type = NET_SIG;
+			p1.pack();
+			send(px1);
+		/*} else if(cp.mode == CtlPkt::NEG_REPLY &&
+			    p.srcAdr()==netMgrAdr) {
 			string s;
 			cerr << "Negative reply from NetMgr:" << endl
 			     << cp.toString(s);
@@ -390,12 +385,13 @@ void handleIncoming(int p) {
 			string s;
 			cerr << "unrecognized ctl pkt\n" << endl
 			     << cp.toString(s);
-			ps->free(p);
+			ps->free(px);
 		}
 	} else {
-		ps->free(p);
+		ps->free(px);
 	}
 }
+
 /*Thread dispatcher method
  * @param tp is the threadpool struct for this specific thread/avatar
  */
@@ -404,11 +400,11 @@ void* handler(void * tp) {
 	Queue& outQ = (((ThreadPool *) tp)->qp).out;
 
 	while (true) {
-		int start = inQ.deq();
-		if (start != 1) {
+		pktx px = inQ.deq();
+		if (px != 1) {
 			string s;
-			PacketHeader& h = ps->getHeader(start);
-			cerr << h.toString(ps->getBuffer(start),s)
+			Packet& p = ps->getPacket(px);
+			cerr << p.toString(s)
 			     << "handler: Thread synchronization error, "
 				"abandoning this attempt\n";
 			outQ.enq(0); //signal completion to main thread
@@ -425,7 +421,7 @@ void* handler(void * tp) {
 		string uname, pword, proxy;
 		iss >> uname >> pword >> port >> proxy;
 		bool needProxy = (proxy=="proxy");
-		CtlPkt cp2(NEW_CLIENT,REQUEST,seqNum);
+		CtlPkt cp2(CtlPkt::NEW_CLIENT,CtlPkt::REQUEST,seqNum);
 		fAdr_t rtrAdr; ipa_t rtrIp;
 		if(!findCliRtr(aip,rtrAdr,rtrIp)) {
 			rtrAdr = prefixes[0].rtrAdr;
@@ -436,9 +432,9 @@ void* handler(void * tp) {
 			int proxyIndex = ((proxyQueues->find(rtrAdr))->second)->deq();
 			pro = proxies[proxyIndex];
 		}
-		cp2.setAttr(CLIENT_IP,(needProxy ? pro.pip : aip));
-		cp2.setAttr(CLIENT_PORT,(needProxy ? pro.udpPort : (ipp_t)port));
-		int reply = sendCtlPkt(cp2,Forest::NET_SIG_COMT,
+		cp2.ip1 = (needProxy ? pro.pip : aip);
+		cp2.port1 = (needProxy ? pro.udpPort : (ipp_t)port);
+		pktx reply = sendCtlPkt(cp2,Forest::NET_SIG_COMT,
 					netMgrAdr,inQ,outQ);
 		if (reply == NORESPONSE) {
 			// abandon this attempt
@@ -451,15 +447,14 @@ void* handler(void * tp) {
 			continue;
 		}
 		//get response
-		PacketHeader &h3 = ps->getHeader(reply);
-		CtlPkt cp3;
-		cp3.unpack(ps->getPayload(reply),
-			   h3.getLength()-Forest::OVERHEAD);
-		if(cp3.getCpType() == NEW_CLIENT &&
-		    cp3.getRrType() == POS_REPLY) {
-			fAdr_t rtrAdr = cp3.getAttr(RTR_ADR);
-			ipa_t rtrIp = cp3.getAttr(RTR_IP);
-			fAdr_t cliAdr = cp3.getAttr(CLIENT_ADR);
+		Packet& p3 = ps->getPacket(reply);
+		CtlPkt cp3(p3.payload(), p3.length-Forest::OVERHEAD);
+		cp3.unpack();
+		if(cp3.type == CtlPkt::NEW_CLIENT &&
+		   cp3.mode == CtlPkt::POS_REPLY) {
+			fAdr_t cliAdr = cp3.adr1;
+			fAdr_t rtrAdr = cp3.adr2;
+			ipa_t rtrIp = cp3.ip1;
 			//send via TCP
 			Np4d::sendInt(avaSock,rtrAdr);
 			Np4d::sendInt(avaSock,cliAdr);
@@ -472,14 +467,14 @@ void* handler(void * tp) {
 				Np4d::sendInt(avaSock,rtrIp);
 				Np4d::sendInt(avaSock,CC_Adr);
 			}
-		} else if(cp3.getCpType() == NEW_CLIENT &&
-		    	  cp3.getRrType() == NEG_REPLY) { //send -1 to client
-			cerr << "Client could not connect:" << cp3.getErrMsg()
+		} else if(cp3.type == CtlPkt::NEW_CLIENT &&
+		    	  cp3.mode == CtlPkt::NEG_REPLY) { //send -1 to client
+			cerr << "Client could not connect:" << cp3.errMsg
 			     << endl;
 			Np4d::sendInt(avaSock,-1);
 		} else {
 			string s;
-			cerr << h3.toString(ps->getBuffer(reply),s);
+			cerr << p3.toString(s);
 			cerr << cp3.toString(s);
 			cerr << "handler: unrecognized ctl pkt\n";
 		}
@@ -493,69 +488,69 @@ void* handler(void * tp) {
  *  Uses comtree 1, which is for user signalling.
  */
 void connect() {
-        packet p = ps->alloc();
-	if(p == 0) fatal("Couldn't allocate space");
-        PacketHeader& h = ps->getHeader(p);
-        h.setLength(4*(5+1)); h.setPtype(CONNECT); h.setFlags(0);
-        h.setComtree(Forest::CLIENT_CON_COMT);
-	h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
-        send(p);
-	ps->free(p);
+        pktx px = ps->alloc();
+	if (px == 0) fatal("Couldn't allocate space");
+        Packet& p = ps->getPacket(px);
+
+        p.length = 4*(5+1); p.type = CONNECT; p.flags = 0;
+        p.comtree = Forest::CLIENT_CON_COMT;
+	p.srcAdr = myAdr; p.dstAdr = rtrAdr;
+
+        send(px);
+	ps->free(px);
 }
 /** Send final disconnect packet to forest router
  */
 void disconnect() {
-        packet p = ps->alloc();
-        PacketHeader& h = ps->getHeader(p);
+        pktx px = ps->alloc();
+	if (px == 0) fatal("Couldn't allocate space");
+        Packet& p = ps->getPacket(px);
 
-        h.setLength(4*(5+1)); h.setPtype(DISCONNECT); h.setFlags(0);
-        h.setComtree(Forest::CLIENT_CON_COMT);
-	h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
+        p.length = 4*(5+1); p.type = DISCONNECT; p.flags = 0;
+        p.comtree = Forest::CLIENT_CON_COMT;
+	p.srcAdr = myAdr; p.dstAdr = rtrAdr;
 
-        send(p);
-	ps->free(p);
+        send(px);
+	ps->free(px);
 }
 /**
  * Receives information over the forest socket
  *
- *@return 0 if nothing is received, a packet otherwise
+ * @return 0 if nothing is received, a packet index otherwise
  */
-int recvFromForest(string& proxyString) {
-        int p = ps->alloc();
-        if (p == 0) return 0;
-        buffer_t& b = ps->getBuffer(p);
-        int nbytes = Np4d::recv4d(sock,&b[0],1500);
-        if (nbytes < 0) { ps->free(p); return 0; }
-	if(b[0] == 0) {//not a forest pkt, but a proxy pkt
-		proxyString = (string)((char *) (&b[1]));
-		ps->free(p);
+pktx recvFromForest(string& proxyString) {
+        pktx px = ps->alloc();
+        if (px == 0) return 0;
+        Packet& p = ps->getPacket(px);
+        int nbytes = Np4d::recv4d(sock,p.buffer,1500);
+        if (nbytes < 0) { ps->free(px); return 0; }
+	if((*p.buffer)[0] == 0) {//not a forest pkt, but a proxy pkt
+		proxyString = (string)((char *) (&(*p.buffer)[1]));
+		ps->free(px);
 		return -1;
 	}
-        ps->unpack(p);
-        PacketHeader& h = ps->getHeader(p);
-        CtlPkt cp;
-        cp.unpack(ps->getPayload(p), h.getLength() - (Forest::OVERHEAD));
-	return p;
+        p.unpack();
+	return px;
 }
 
 /** Send a control packet multiple times before giving up.
  *  This method makes a copy of the original and sends the copy
  *  back to the main thread. If no reply is received after 1 second,
  *  it tries again; it makes a total of three attempts before giving up.
- *  @param p is the packet number of the packet to be sent; the header
- *  for p is assumed to be unpacked
- *  @param cp is the control packet structure for p (already unpacked)
+ *  @param px is the packet number of the packet to be sent; the packet
+ *  for px is assumed to be unpacked
+ *  @param cp is the control packet structure for px (already unpacked)
  *  @param inQ is the queue coming from the main thread
  *  @param outQ is the queue going back to the main thread
  *  @return the packet number for the reply packet, or -1 if there
  *  was no reply
  */
-int sendAndWait(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
-	PacketHeader& h = ps->getHeader(p);
-	h.setSrcAdr(myAdr); ps->pack(p);
+int sendAndWait(pktx px, CtlPkt& cp, Queue& inQ, Queue& outQ) {
+	Packet& p = ps->getPacket(px);
+	p.srcAdr = myAdr; p.pack();
 
 	// make copy of packet and send the copy
-	int copy = ps->fullCopy(p);
+	pktx copy = ps->fullCopy(px);
 	if (copy == 0) {
 		cerr << "sendAndWait: no packets left in packet store\n";
 		return NORESPONSE;
@@ -566,16 +561,17 @@ int sendAndWait(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
 		int reply = inQ.deq(2000000000); // 2 sec timeout
 		if (reply == Queue::TIMEOUT) {
 			// no reply, make new copy and send
-			int retry = ps->fullCopy(p);
+			pktx retry = ps->fullCopy(px);
 			if (retry == 0) {
 				cerr << "sendAndWait: no packets "
 					"left in packet store\n";
 				return NORESPONSE;
 			}
-			cp.setSeqNum(1);        // tag retry as a repeat
-                        cp.pack(ps->getPayload(retry));
-                        PacketHeader& hr = ps->getHeader(retry);
-                        hr.payErrUpdate(ps->getBuffer(retry));
+                        Packet& pr = ps->getPacket(retry);
+			cp.seqNum = 1;        // tag retry as a repeat
+			cp.payload = pr.payload();
+                        cp.pack();
+                        pr.payErrUpdate();
 			outQ.enq(retry);
 		} else {
 			return reply;
@@ -599,34 +595,35 @@ int sendAndWait(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
  *  on on error, or if there is no reply.
  */
 int sendCtlPkt(CtlPkt& cp, comt_t comt, fAdr_t dest, Queue& inQ, Queue& outQ) {
-        int p = ps->alloc();
-        if (p == 0) {
+        pktx px = ps->alloc();
+        if (px == 0) {
                 cerr << "sendCtlPkt: no packets left in packet store\n";
                 return 0;
         }
+        Packet& p = ps->getPacket(px);
 	// set default seq# for requests, tells main thread to use "next" seq#
-	if (cp.getRrType() == REQUEST) cp.setSeqNum(0);
-        int plen = cp.pack(ps->getPayload(p));
+	if (cp.mode == CtlPkt::REQUEST) cp.seqNum = 0;
+	cp.payload = p.payload();
+        int plen = cp.pack();
         if (plen == 0) {
 		string s;
                 cerr << "sendCtlPkt: packing error\n" << cp.toString(s);
-                ps->free(p);
+                ps->free(px);
                 return 0;
         }
-        PacketHeader& h = ps->getHeader(p);
-        h.setLength(plen + Forest::OVERHEAD);
-        h.setPtype(NET_SIG);
-        h.setFlags(0);
-        h.setComtree(comt);
-        h.setDstAdr(dest);
-        h.setSrcAdr(myAdr);
-        h.pack(ps->getBuffer(p));
+        p.length = plen + Forest::OVERHEAD;
+        p.type = NET_SIG;
+        p.flags = 0;
+        p.comtree = comt;
+        p.dstAdr = dest;
+        p.srcAdr = myAdr;
+        p.pack();
 
-        if (cp.getRrType() != REQUEST) {
-                outQ.enq(p); return 0;
+        if (cp.mode != CtlPkt::REQUEST) {
+                outQ.enq(px); return 0;
         }
-        int reply = sendAndWait(p,cp,inQ,outQ);
-        ps->free(p);
+        int reply = sendAndWait(px,cp,inQ,outQ);
+        ps->free(px);
         return reply;
 }
 

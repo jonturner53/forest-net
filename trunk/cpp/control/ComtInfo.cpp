@@ -242,7 +242,8 @@ comt_t ComtInfo::readComtree(istream& in, string& errMsg) {
 		return 0;
 	}
 	setConfigMode(ctx,autoConfig);
-	setDefRates(ctx,bbRates,leafRates);
+	getDefLeafRates(ctx) = leafRates;
+	getDefBbRates(ctx) = bbRates;
 
 	if (!addNode(ctx,rootAdr) || !addCoreNode(ctx,rootAdr)) {
 		errMsg = "could not add root to comtree";
@@ -505,8 +506,6 @@ bool ComtInfo::checkLinkCounts(int ctx) {
 	for (int i = 1; i <= n; i++) lnkCounts[i] = 0;
 
 	int comt = getComtree(ctx);
-	fAdr_t rootAdr = getRoot(ctx);
-	int root = net->getNodeNum(rootAdr);
 
 	// first count links from leaf nodes
 	map<fAdr_t,ComtLeafInfo>::iterator lp;
@@ -610,7 +609,6 @@ bool ComtInfo::checkLinkRates(int ctx) {
 	bool status = true;
 	int comt = getComtree(ctx);
 	fAdr_t rootAdr = getRoot(ctx);
-	int root = net->getNodeNum(rootAdr);
 	
 	map<fAdr_t,ComtRtrInfo>::iterator rp;
 	rp = comtree[ctx].rtrMap->find(rootAdr);
@@ -721,11 +719,11 @@ bool ComtInfo::checkComtRates(int ctx) {
 	for (rp  = comtree[ctx].rtrMap->begin();
 	     rp != comtree[ctx].rtrMap->end(); rp++) {
 		fAdr_t rtr = rp->first; int lnk = rp->second.plnk;
+		if (lnk == 0) continue;
 		RateSpec rs = rp->second.plnkRates;
 		if (rtr != net->getLeft(lnk)) rs.flip();
-		RateSpec availRates;
-		net->getAvailRates(lnk,availRates);
-		if (!rs.leq(availRates)) return false;
+		RateSpec availRates = net->getAvailRates(lnk);
+		if (!rs.leq(availRates)) { return false; }
 	}
 	// then check access links, for static leaf nodes
 	map<fAdr_t,ComtLeafInfo>::iterator lp;
@@ -737,9 +735,8 @@ bool ComtInfo::checkComtRates(int ctx) {
 		int lnk = net->firstLinkAt(leaf);
 		RateSpec rs = lp->second.plnkRates;
 		if (leaf != net->getLeft(lnk)) rs.flip();
-		RateSpec availRates;
-		net->getAvailRates(lnk,availRates);
-		if (!rs.leq(availRates)) return false;
+		RateSpec availRates = net->getAvailRates(lnk);
+		if (!rs.leq(availRates)) { return false; }
 	}
 	return true;
 }
@@ -758,10 +755,7 @@ void ComtInfo::provision(int ctx) {
 		if (lnk == 0) continue;
 		RateSpec rs = rp->second.plnkRates;
 		if (rtr != net->getLeft(lnk)) rs.flip();
-		RateSpec availRates;
-		net->getAvailRates(lnk,availRates);
-		availRates.subtract(rs);
-		net->setAvailRates(lnk,availRates);
+		net->getAvailRates(lnk).subtract(rs);
 	}
 	// provision statically configured leaf nodes
 	map<fAdr_t,ComtLeafInfo>::iterator lp;
@@ -773,10 +767,7 @@ void ComtInfo::provision(int ctx) {
 		int lnk = net->firstLinkAt(leaf);
 		RateSpec rs = lp->second.plnkRates;
 		if (leaf != net->getLeft(lnk)) rs.flip();
-		RateSpec availRates;
-		net->getAvailRates(lnk,availRates);
-		availRates.subtract(rs);
-		net->setAvailRates(lnk,availRates);
+		net->getAvailRates(lnk).subtract(rs);
 	}
 }
 
@@ -792,10 +783,7 @@ void ComtInfo::unprovision(int ctx) {
 		if (lnk == 0) continue;
 		RateSpec rs = rp->second.plnkRates;
 		if (rtr != net->getLeft(lnk)) rs.flip();
-		RateSpec availRates;
-		net->getAvailRates(lnk,availRates);
-		availRates.add(rs);
-		net->setAvailRates(lnk,availRates);
+		net->getAvailRates(lnk).add(rs);
 	}
 	map<fAdr_t,ComtLeafInfo>::iterator lp;
 	for (lp  = comtree[ctx].leafMap->begin();
@@ -806,10 +794,7 @@ void ComtInfo::unprovision(int ctx) {
 		int lnk = net->firstLinkAt(leaf);
 		RateSpec rs = lp->second.plnkRates;
 		if (leaf != net->getLeft(lnk)) rs.flip();
-		RateSpec availRates;
-		net->getAvailRates(lnk,availRates);
-		availRates.add(rs);
-		net->setAvailRates(lnk,availRates);
+		net->getAvailRates(lnk).add(rs);
 	}
 }
 
@@ -853,7 +838,7 @@ int ComtInfo::findPath(int ctx, int src, RateSpec& rs, list<LinkMod>& path) {
 			if (!net->isRouter(peer)) continue;
 			// if this link cannot take the default backbone
 			// rate for this comtree, ignore it
-			net->getAvailRates(lnk,availRates);
+			availRates = net->getAvailRates(lnk);
 			if (r != net->getLeft(lnk)) availRates.flip();
 			if (!rs.leq(availRates)) continue;
 			if (isComtNode(ctx,net->getNodeAdr(peer))) { // done
@@ -899,12 +884,9 @@ void ComtInfo::addPath(int ctx, list<LinkMod>& path) {
 		fAdr_t parentAdr = net->getNodeAdr(parent);
 		addNode(ctx,childAdr); addNode(ctx,parentAdr);
 		setPlink(ctx,childAdr,lnk); thaw(ctx,childAdr);
-		setLinkRates(ctx,childAdr,rs);
+		getLinkRates(ctx,childAdr) = rs;
 		if (child != net->getLeft(lnk)) rs.flip();
-		RateSpec availRates;
-		net->getAvailRates(lnk,availRates);
-		availRates.subtract(rs);
-		net->setAvailRates(lnk,availRates);
+		net->getAvailRates(lnk).subtract(rs);
 	}
 	return;
 }
@@ -920,12 +902,9 @@ void ComtInfo::removePath(int ctx, list<LinkMod>& path) {
 	list<LinkMod>::iterator pp;
 	for (pp = path.begin(); pp != path.end(); pp++) {
 		fAdr_t childAdr = net->getNodeAdr(pp->child);
-		RateSpec rs; getLinkRates(ctx,childAdr,rs);
+		RateSpec rs = getLinkRates(ctx,childAdr);
 		if (pp->child != net->getLeft(pp->lnk)) rs.flip();
-		RateSpec availRates;
-		net->getAvailRates(pp->lnk,availRates);
-		availRates.add(rs);
-		net->setAvailRates(pp->lnk,availRates);
+		net->getAvailRates(pp->lnk).add(rs);
 		removeNode(ctx,childAdr);
 	}
 	return;
@@ -975,7 +954,7 @@ bool ComtInfo::computeMods(int ctx, fAdr_t radr, RateSpec& rootRates,
 		}
 		nuMod.rs.subtract(rp->second.plnkRates);
 		if (nuMod.rs.isZero()) return true; // no change needed
-		RateSpec availRates; net->getAvailRates(plnk,availRates);
+		RateSpec availRates = net->getAvailRates(plnk);
 		if (rnum != net->getLeft(plnk)) availRates.flip();
 		if (!nuMod.rs.leq(availRates)) return false;
 		modList.push_back(nuMod);
@@ -1003,17 +982,15 @@ bool ComtInfo::computeMods(int ctx, fAdr_t radr, RateSpec& rootRates,
  */
 void ComtInfo::provision(int ctx, list<LinkMod>& modList) {
 	list<LinkMod>::iterator mlp;
-	RateSpec delta, availRates;
+	RateSpec delta;
 	for (mlp = modList.begin(); mlp != modList.end(); mlp++) {
 		int rtr = mlp->child; fAdr_t rtrAdr = net->getNodeAdr(rtr);
 		int plnk = mlp->lnk; delta = mlp->rs;
 		map<fAdr_t,ComtRtrInfo>::iterator rp;
 		rp = comtree[ctx].rtrMap->find(rtrAdr);
 		rp->second.plnkRates.add(delta);
-		net->getAvailRates(plnk,availRates);
 		if (rtr != net->getLeft(plnk)) delta.flip();
-		availRates.subtract(delta);
-		net->setAvailRates(plnk,availRates);
+		net->getAvailRates(plnk).subtract(delta);
 	}
 }
 
@@ -1025,17 +1002,15 @@ void ComtInfo::provision(int ctx, list<LinkMod>& modList) {
  */
 void ComtInfo::unprovision(int ctx, list<LinkMod>& modList) {
 	list<LinkMod>::iterator mlp;
-	RateSpec delta, availRates;
+	RateSpec delta;
 	for (mlp = modList.begin(); mlp != modList.end(); mlp++) {
 		int rtr = mlp->child; fAdr_t rtrAdr = net->getNodeAdr(rtr);
 		int plnk = mlp->lnk; delta = mlp->rs;
 		map<fAdr_t,ComtRtrInfo>::iterator rp;
 		rp = comtree[ctx].rtrMap->find(rtrAdr);
 		rp->second.plnkRates.add(delta);
-		net->getAvailRates(plnk,availRates);
 		if (rtr != net->getLeft(plnk)) delta.flip();
-		availRates.add(delta);
-		net->setAvailRates(plnk,availRates);
+		net->getAvailRates(plnk).add(delta);
 	}
 }
 
