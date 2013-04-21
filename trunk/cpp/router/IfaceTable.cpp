@@ -22,18 +22,15 @@ IfaceTable::~IfaceTable() { delete [] ift; delete ifaces; }
 /** Allocate and initialize a new interface table entry.
  *  @param iface is an interface number for an unused interface
  *  @param ipa is the IP address to be associated with the interface
- *  @param brate is the bitrate of the interface
- *  @param prate is the packet rate of the interface
- *  Return true on success, false on failure
+ *  @param rs is the rate spec for the interface (up corresponds to in)
  */
-bool IfaceTable::addEntry(int iface, ipa_t ipa, int brate, int prate) {
+bool IfaceTable::addEntry(int iface, ipa_t ipa, RateSpec& rs) {
 	if (!ifaces->isOut(iface)) return false;
 	if (ifaces->firstIn() == 0) // this is the first iface
 		defaultIf = iface;
 	ifaces->swap(iface);
 	ift[iface].ipa = ipa;
-	ift[iface].maxbitrate = brate; ift[iface].maxpktrate = prate;
-	ift[iface].avbitrate = brate; ift[iface].avpktrate = prate;
+	ift[iface].rates = ift[iface].availRates = rs;
 	return true;
 }
 
@@ -61,16 +58,16 @@ void IfaceTable::removeEntry(int iface) {
  *  @return the number of the new interface or 0, if the operation failed
  */ 
 int IfaceTable::readEntry(istream& in) {
-	int ifnum, brate, prate; ipa_t ipa;
+	int ifnum; ipa_t ipa; RateSpec rs;
 
 	Misc::skipBlank(in);
-	if ( !Misc::readNum(in,ifnum) || !Np4d::readIpAdr(in,ipa) ||
-	     !Misc::readNum(in,brate) || !Misc::readNum(in,prate)) {
+	if (!Misc::readNum(in,ifnum) || !Np4d::readIpAdr(in,ipa) ||
+	    !rs.read(in)) {
 		return 0;
 	}
 	Misc::cflush(in,'\n');
 
-	if (!addEntry(ifnum,ipa,brate,prate)) return 0;
+	if (!addEntry(ifnum,ipa,rs)) return 0;
 	return ifnum;
 }
 
@@ -107,10 +104,8 @@ bool IfaceTable::read(istream& in) {
 string& IfaceTable::entry2string(int iface, string& s) const {
 	stringstream ss;
 	ss << setw(5) << iface << "   "
-	   << Np4d::ip2string(ift[iface].ipa,s)
-	   << setw(9) << ift[iface].maxbitrate
-	   << setw(9) << ift[iface].maxpktrate
-	   << endl;
+	   << Np4d::ip2string(ift[iface].ipa,s) << " ";
+	ss << ift[iface].rates.toString(s) << endl;
 	s = ss.str();
 	return s;
 }

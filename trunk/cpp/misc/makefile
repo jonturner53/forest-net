@@ -1,6 +1,7 @@
-ALGOLIBROOT = ../../algolib-jst
+ALGOLIBROOT = ../../../algolib-jst
 FLIB = ../lib/lib-forest.a
 LIBS = ${FLIB} ${ALGOLIBROOT}/lib/lib-util.a ${ALGOLIBROOT}/lib/lib-ds.a
+BIN = ~/bin
 CXXFLAGS = -Wall -O2 -m64 -I ../include -I ${ALGOLIBROOT}/include
 
 %.o: %.cpp %.h stdinc.h

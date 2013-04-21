@@ -36,12 +36,10 @@ int LinkTable::addEntry(int lnk, ipa_t peerIp, ipp_t peerPort) {
 	lnkTbl[lnk].peerPort = peerPort;
 	setIface(lnk,0);
 	setPeerAdr(lnk,0); setPeerType(lnk,UNDEF_NODE);
-	setBitRate(lnk,Forest::MINBITRATE);
-	setPktRate(lnk,Forest::MINPKTRATE);
-	setAvailInBitRate(lnk,Forest::MINBITRATE);
-	setAvailInPktRate(lnk,Forest::MINPKTRATE);
-	setAvailOutBitRate(lnk,Forest::MINBITRATE);
-	setAvailOutPktRate(lnk,Forest::MINPKTRATE);
+	getRates(lnk).set(Forest::MINBITRATE,Forest::MINBITRATE,
+			  Forest::MINPKTRATE,Forest::MINPKTRATE);
+	getAvailRates(lnk).set(	Forest::MINBITRATE,Forest::MINBITRATE,
+			 	Forest::MINPKTRATE,Forest::MINPKTRATE);
 	lnkTbl[lnk].comtSet = new set<int>();
         return lnk;
 }
@@ -106,7 +104,7 @@ bool LinkTable::checkEntry(int lnk) {
  *  @return the link number of the entry, or 0 if the operation fails
  */
 int LinkTable::readEntry(istream& in) {
-	int lnk, iface, bRate, pRate;
+	int lnk, iface; RateSpec rs;
 	ipa_t peerIp; ipp_t peerPort;
 	ntyp_t peerType; int peerAdr;
 	string typStr;
@@ -118,7 +116,7 @@ int LinkTable::readEntry(istream& in) {
              !Misc::readNum(in,peerPort) ||
 	     !Misc::readWord(in,typStr) ||
 	     !Forest::readForestAdr(in,peerAdr) ||
-	     !Misc::readNum(in,bRate) || !Misc::readNum(in,pRate)) {
+	     !rs.read(in)) {
 		return 0;
 	}
 	Misc::cflush(in,'\n');
@@ -130,7 +128,7 @@ int LinkTable::readEntry(istream& in) {
 	setIface(lnk,iface); 
         setPeerType(lnk, peerType);
 	setPeerAdr(lnk, peerAdr);
-	setBitRate(lnk,bRate); setPktRate(lnk,pRate);
+	getRates(lnk) = rs; getAvailRates(lnk) = rs;
 
 	if (!checkEntry(lnk)) { removeEntry(lnk); return 0; }
 
@@ -175,11 +173,8 @@ string& LinkTable::entry2string(int lnk, string& s) const {
 	ss << setw(12) << Np4d::ip2string(getPeerIpAdr(lnk),s)
 	   << ":" << setw(5) << left << getPeerPort(lnk) << "  ";
 	ss << setw(10) << left << Forest::nodeType2string(getPeerType(lnk),s);
-
 	ss << " " << setw(10) << left <<Forest::fAdr2string(getPeerAdr(lnk),s);
-	
-	ss << " " << setw(6) << right << getBitRate(lnk)
-	   << " " << setw(6) << right << getPktRate(lnk) << endl;
+	ss << " " << getRates(lnk).toString(s) << endl;
 	s = ss.str();
 	return s;
 }

@@ -116,34 +116,31 @@ bool Monitor::init() {
  *  Print a record of all avatar's status, once per second. 
  */
 void Monitor::run(uint32_t finishTime) {
-	int p;
+	pktx px;
 	uint32_t now;    	// free-running microsecond time
 	uint32_t nextTime;	// time of next operational cycle
 	now = nextTime = Misc::getTime(); 
 
 	bool waiting4switch = false;
-int cnt = 0;
 	while (now <= finishTime) {
 		comt_t newComt = check4command();
 		if (newComt != 0 && newComt != comt) {
 			startComtSwitch(newComt,now);
 			waiting4switch = true;
 		}
-		while ((p = receiveReport()) != 0) {
-if (cnt++ < 25) cerr << "got packet\n";
+		while ((px = receiveReport()) != 0) {
+			Packet& p = ps->getPacket(px);
 			if (!waiting4switch) {
-if (cnt++ < 25) cerr << "sending report\n";
-				forwardReport(p,now);
-				ps->free(p); continue;
+				forwardReport(px,now);
+				ps->free(px); continue;
 			}
 			// discard non-signalling packets and pass
 			// signalling packets to completeComtSwitch
-			if (ps->getHeader(p).getPtype() == CLIENT_DATA) {
-				ps->free(p); continue;
+			if (p.type == CLIENT_DATA) {
+				ps->free(px); continue;
 			}
-			waiting4switch = !completeComtSwitch(p,now);
-cerr << "completed join\n";
-			ps->free(p);
+			waiting4switch = !completeComtSwitch(px,now);
+			ps->free(px);
 		}
 		// check for timeout
 		waiting4switch = !completeComtSwitch(0,now);
@@ -168,12 +165,12 @@ void Monitor::startComtSwitch(comt_t newComt, uint32_t now) {
 	nextComt = newComt;
 	if (comt != 0) {
 		unsubscribeAll();
-		send2comtCtl(CLIENT_LEAVE_COMTREE);
+		send2comtCtl(CtlPkt::CLIENT_LEAVE_COMTREE);
 		switchState = LEAVING;
 		switchTimer = now; switchCnt = 1;
 	} else {
 		comt = nextComt;
-		send2comtCtl(CLIENT_JOIN_COMTREE);
+		send2comtCtl(CtlPkt::CLIENT_JOIN_COMTREE);
 		switchState = JOINING;
 		switchTimer = now; switchCnt = 1;
 	}
@@ -190,55 +187,55 @@ void Monitor::startComtSwitch(comt_t newComt, uint32_t now) {
  *  because it never responded after repeated attempts); otherwise,
  *  return false
  */
-bool Monitor::completeComtSwitch(packet p, uint32_t now) {
+bool Monitor::completeComtSwitch(pktx px, uint32_t now) {
 	if (switchState == IDLE) return true;
-	if (p == 0 && now - switchTimer < SWITCH_TIMEOUT)
+	if (px == 0 && now - switchTimer < SWITCH_TIMEOUT)
 		return false; // nothing to do in this case
 	switch (switchState) {
 	case LEAVING: {
-		if (p == 0) {
+		if (px == 0) {
 			if (switchCnt > 3) { // give up
 				switchState = IDLE; return true;
 			}
 			// try again
-			send2comtCtl(CLIENT_LEAVE_COMTREE,RETRY);
+			send2comtCtl(CtlPkt::CLIENT_LEAVE_COMTREE,RETRY);
 			switchTimer = now; switchCnt++;
 			return false;
 		}
-		PacketHeader& h = ps->getHeader(p); 
-		CtlPkt cp;
-		cp.unpack(ps->getPayload(p),h.getLength() - Forest::OVERHEAD);
-		if (cp.getCpType() == CLIENT_LEAVE_COMTREE) {
-			if (cp.getRrType() == POS_REPLY) {
+		Packet& p = ps->getPacket(px); 
+		CtlPkt cp(p.payload(),p.length - Forest::OVERHEAD);
+		cp.unpack();
+		if (cp.type == CtlPkt::CLIENT_LEAVE_COMTREE) {
+			if (cp.mode == CtlPkt::POS_REPLY) {
 				comt = nextComt;
-				send2comtCtl(CLIENT_JOIN_COMTREE);
+				send2comtCtl(CtlPkt::CLIENT_JOIN_COMTREE);
 				switchState = JOINING;
 				switchTimer = now; switchCnt = 1;
 				return false;
-			} else if (cp.getRrType() == NEG_REPLY) { // give up
+			} else if (cp.mode == CtlPkt::NEG_REPLY) { // give up
 				switchState = IDLE; return true;
 			} 
 		}
 		return false; // ignore anything else
 	}
 	case JOINING: {
-		if (p == 0) {
+		if (px == 0) {
 			if (switchCnt > 3) { // give up
 				switchState = IDLE; return true;
 			}
 			// try again
-			send2comtCtl(CLIENT_JOIN_COMTREE,RETRY);
+			send2comtCtl(CtlPkt::CLIENT_JOIN_COMTREE,RETRY);
 			switchTimer = now; switchCnt++;
 			return false;
 		}
-		PacketHeader& h = ps->getHeader(p); 
-		CtlPkt cp;
-		cp.unpack(ps->getPayload(p),h.getLength() - Forest::OVERHEAD);
-		if (cp.getCpType() == CLIENT_JOIN_COMTREE) {
-			if (cp.getRrType() == POS_REPLY) {
+		Packet& p = ps->getPacket(px); 
+		CtlPkt cp(p.payload(),p.length - Forest::OVERHEAD);
+		cp.unpack();
+		if (cp.type == CtlPkt::CLIENT_JOIN_COMTREE) {
+			if (cp.mode == CtlPkt::POS_REPLY) {
 				subscribeAll();
 				switchState = IDLE; return true;
-			} else if (cp.getRrType() == NEG_REPLY) { // give up
+			} else if (cp.mode == CtlPkt::NEG_REPLY) { // give up
 				switchState = IDLE; return true;
 			} 
 		}
@@ -250,36 +247,36 @@ bool Monitor::completeComtSwitch(packet p, uint32_t now) {
 }
 
 /** Send join or leave packet packet to the ComtreeController.
- *  @param cpx is either CLIENT_JOIN_COMTREE or CLIENT_LEAVE_COMTREE,
+ *  @param joinLeave is either CLIENT_JOIN_COMTREE or CLIENT_LEAVE_COMTREE,
  *  depending on whether we want to join or leave the comtree
  */
-void Monitor::send2comtCtl(CpTypeIndex cpx, bool retry) {
-        packet p = ps->alloc();
-        if (p == 0)
+void Monitor::send2comtCtl(CtlPkt::CpType joinLeave, bool retry) {
+        pktx px = ps->alloc();
+        if (px == 0)
 		fatal("Monitor::send2comtCtl: no packets left to allocate");
 	if (!retry) seqNum++;
-        CtlPkt cp(cpx,REQUEST,seqNum);;
-        cp.setAttr(COMTREE_NUM,comt);
-        cp.setAttr(CLIENT_IP,intIp);
-        cp.setAttr(CLIENT_PORT,Np4d::getSockPort(intSock));
-        int len = cp.pack(ps->getPayload(p));
+        Packet& p = ps->getPacket(px);
+        CtlPkt cp(joinLeave,CtlPkt::REQUEST,seqNum,p.payload());
+        cp.comtree = comt;
+        cp.ip1 = intIp;
+        cp.port1 = Np4d::getSockPort(intSock);
+        int len = cp.pack();
 	if (len == 0) 
 		fatal("Monitor::send2comtCtl: control packet packing error");
-        PacketHeader& h = ps->getHeader(p);
-	h.setLength(Forest::OVERHEAD + len);
-        h.setPtype(CLIENT_SIG); h.setFlags(0);
-        h.setComtree(Forest::CLIENT_SIG_COMT);
-	h.setSrcAdr(myAdr); h.setDstAdr(comtCtlAdr);
-        h.pack(ps->getBuffer(p));
-	send2router(p);
+	p.length = Forest::OVERHEAD + len;
+        p.type = CLIENT_SIG; p.flags = 0;
+        p.comtree = Forest::CLIENT_SIG_COMT;
+	p.srcAdr = myAdr; p.dstAdr = comtCtlAdr;
+        p.pack();
+	send2router(px);
 }
 
 /** Send packet to Forest router (connect, disconnect, sub_unsub).
  */
-void Monitor::send2router(int p) {
-	int leng = ps->getHeader(p).getLength();
-	ps->pack(p);
-	int rv = Np4d::sendto4d(intSock,(void *) ps->getBuffer(p),leng,
+void Monitor::send2router(pktx px) {
+	Packet& p = ps->getPacket(px);
+	p.pack();
+	int rv = Np4d::sendto4d(intSock,(void *) p.buffer,p.length,
 		    	      	rtrIp,Forest::ROUTER_PORT);
 	if (rv == -1) fatal("Monitor::send2router: failure in sendto");
 }
@@ -288,15 +285,15 @@ void Monitor::send2router(int p) {
  *  @return next report packet or 0, if no report has been received.
  */
 int Monitor::receiveReport() { 
-	int p = ps->alloc();
-	if (p == 0) return 0;
-        buffer_t& b = ps->getBuffer(p);
+	pktx px = ps->alloc();
+	if (px == 0) return 0;
+        Packet& p = ps->getPacket(px);
 
-        int nbytes = Np4d::recv4d(intSock,&b[0],1500);
-        if (nbytes < 0) { ps->free(p); return 0; }
+        int nbytes = Np4d::recv4d(intSock,p.buffer,1500);
+        if (nbytes < 0) { ps->free(px); return 0; }
 
-	ps->unpack(p);
-        return p;
+	p.unpack();
+        return px;
 }
 
 /** Check for a new command from remote display program.
@@ -424,9 +421,9 @@ void Monitor::unsubscribeAll() {
 void Monitor::subscribe(list<int>& glist) {
 	if (glist.size() == 0) return;
 
-	packet p = ps->alloc();
-	PacketHeader& h = ps->getHeader(p);
-	uint32_t *pp = ps->getPayload(p);
+	pktx px = ps->alloc();
+	Packet& p = ps->getPacket(px);
+	uint32_t *pp = p.payload();
 
 	int nsub = 0;
 	list<int>::iterator gp;
@@ -434,22 +431,23 @@ void Monitor::subscribe(list<int>& glist) {
 		int g = *gp; nsub++;
 		if (nsub > 350) {
 			pp[0] = htonl(nsub-1); pp[nsub] = 0;
-			h.setLength(Forest::OVERHEAD + 4*(2+nsub));
-			h.setPtype(SUB_UNSUB); h.setFlags(0);
-			h.setComtree(comt);
-			h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
-			send2router(p);
+			p.length = Forest::OVERHEAD + 4*(2+nsub);
+			p.type = SUB_UNSUB; p.flags = 0;
+			p.comtree = comt;
+			p.srcAdr = myAdr; p.dstAdr = rtrAdr;
+			send2router(px);
 			nsub = 1;
 		}
 		pp[nsub] = htonl(-g);
 	}
 	pp[0] = htonl(nsub); pp[nsub+1] = 0;
 
-	h.setLength(Forest::OVERHEAD + 4*(2+nsub));
-	h.setPtype(SUB_UNSUB); h.setFlags(0);
-	h.setComtree(comt); h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
-	send2router(p);
-	ps->free(p);
+	p.length = Forest::OVERHEAD + 4*(2+nsub);
+	p.type = SUB_UNSUB; p.flags = 0; p.comtree = comt;
+	p.srcAdr = myAdr; p.dstAdr = rtrAdr;
+	send2router(px);
+
+	ps->free(px);
 }
 
 /** Unsubscribe from a list of multicast groups.
@@ -458,9 +456,9 @@ void Monitor::subscribe(list<int>& glist) {
 void Monitor::unsubscribe(list<int>& glist) {
 	if (glist.size() == 0) return;
 
-	packet p = ps->alloc();
-	PacketHeader& h = ps->getHeader(p);
-	uint32_t *pp = ps->getPayload(p);
+	pktx px = ps->alloc();
+	Packet& p = ps->getPacket(px);
+	uint32_t *pp = p.payload();
 
 	int nunsub = 0;
 	list<int>::iterator gp;
@@ -468,22 +466,23 @@ void Monitor::unsubscribe(list<int>& glist) {
 		int g = *gp; nunsub++;
 		if (nunsub > 350) {
 			pp[0] = 0; pp[1] = htonl(nunsub-1);
-			h.setLength(Forest::OVERHEAD + 4*(2+nunsub));
-			h.setPtype(SUB_UNSUB); h.setFlags(0);
-			h.setComtree(comt);
-			h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
-			send2router(p);
+			p.length = Forest::OVERHEAD + 4*(2+nunsub);
+			p.type = SUB_UNSUB; p.flags = 0;
+			p.comtree = comt;
+			p.srcAdr = myAdr; p.dstAdr = rtrAdr;
+			send2router(px);
 			nunsub = 1;
 		}
 		pp[nunsub+1] = htonl(-g);
 	}
 	pp[0] = 0; pp[1] = htonl(nunsub);
 
-	h.setLength(Forest::OVERHEAD + 4*(2+nunsub));
-	h.setPtype(SUB_UNSUB); h.setFlags(0);
-	h.setComtree(comt); h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
-	send2router(p);
-	ps->free(p);
+	p.length = Forest::OVERHEAD + 4*(2+nunsub);
+	p.type = SUB_UNSUB; p.flags = 0; p.comtree = comt;
+	p.srcAdr = myAdr; p.dstAdr = rtrAdr;
+	send2router(px);
+
+	ps->free(px);
 }
 
 /** Update subscriptions without changing comtrees.
@@ -530,21 +529,21 @@ void Monitor::updateSubs() {
  *  @param p is the packet number for a packet from the Forest network
  *  @param now is the current time
  */
-void Monitor::forwardReport(int p, int now) {
+void Monitor::forwardReport(pktx px, int now) {
 	if (comt == 0 || connSock == -1) return;
 
-	PacketHeader& h = ps->getHeader(p);
-	uint32_t *pp = ps->getPayload(p);
+	Packet& p = ps->getPacket(px);
+	uint32_t *pp = p.payload();
 
-	if (h.getComtree() != comt || h.getPtype() != CLIENT_DATA ||
+	if (p.comtree != comt || p.type != CLIENT_DATA ||
 	    ntohl(pp[0]) != (uint32_t) Avatar::STATUS_REPORT) {
 		// ignore packets for other comtrees, or that are not
 		// avatar status reports
-		ps->free(p); return;
+		ps->free(px); return;
 	}
 	uint32_t buf[NUMITEMS];
 	for (int i = 0; i < NUMITEMS; i++) buf[i] = pp[i];
-	buf[0] = htonl(now); buf[1] = htonl(h.getSrcAdr());
+	buf[0] = htonl(now); buf[1] = htonl(p.srcAdr);
 	buf[8] = htonl(comt);
 
 	int nbytes = NUMITEMS*sizeof(uint32_t);
@@ -554,32 +553,32 @@ void Monitor::forwardReport(int p, int now) {
 		if (n < 0) break;
 		bp += n; nbytes -= n;
 	}
-	ps->free(p); return;
+	ps->free(px); return;
 }
 
 /** Send initial connect packet to forest router
  *  Uses comtree 1, which is for user signalling.
  */
 void Monitor::connect() {
-	packet p = ps->alloc();
+	pktx px = ps->alloc();
 
-	PacketHeader& h = ps->getHeader(p);
-	h.setLength(4*(5+1)); h.setPtype(CONNECT); h.setFlags(0);
-	h.setComtree(Forest::CLIENT_CON_COMT);
-	h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
+	Packet& p = ps->getPacket(px);
+	p.length = 4*(5+1); p.type = CONNECT; p.flags = 0;
+	p.comtree = Forest::CLIENT_CON_COMT;
+	p.srcAdr = myAdr; p.dstAdr = rtrAdr;
 
-	send2router(p); ps->free(p);
+	send2router(px); ps->free(px);
 }
 
 /** Send final disconnect packet to forest router, after unsubscribing.
  */
 void Monitor::disconnect() {
-	packet p = ps->alloc();
-	PacketHeader& h = ps->getHeader(p);
+	pktx px = ps->alloc();
 
-	h.setLength(4*(5+1)); h.setPtype(DISCONNECT); h.setFlags(0);
-	h.setComtree(Forest::CLIENT_CON_COMT);
-	h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
+	Packet& p = ps->getPacket(px);
+	p.length = 4*(5+1); p.type = DISCONNECT; p.flags = 0;
+	p.comtree = Forest::CLIENT_CON_COMT;
+	p.srcAdr = myAdr; p.dstAdr = rtrAdr;
 
-	send2router(p); ps->free(p);
+	send2router(px); ps->free(px);
 }

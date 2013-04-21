@@ -8,7 +8,7 @@
  */
 
 #include "stdinc.h"
-#include "CommonDefs.h"
+#include "Forest.h"
 #include "Avatar.h"
 #include <string>
 #include <algorithm>
@@ -382,32 +382,32 @@ void Avatar::run(uint32_t finishTime) {
 		}
 
 		now = Misc::getTime();
-		int p;
-		while ((p = receive()) != 0) {
-			PacketHeader& h = ps->getHeader(p);
-			ptyp_t ptyp = h.getPtype();
+		pktx px;
+		while ((px = receive()) != 0) {
+			Packet& p = ps->getPacket(px);
+			ptyp_t ptyp = p.type;
 			if (waiting4switch) {
 				// pass client signalling packets to
 				// completeComtSwitch and discard all others
 				if (ptyp == CLIENT_SIG) {
 					waiting4switch =
-						!completeComtSwitch(p,now);
+						!completeComtSwitch(px,now);
 				}
-				ps->free(p); continue;
+				ps->free(px); continue;
 			}
 			if (ptyp != CLIENT_DATA) { // ignore other packets
-				ps->free(p); continue;
+				ps->free(px); continue;
 			}
 			// process status reports from other avatars
 			// and forward to driver for this avatar
-			updateNearby(p);
+			updateNearby(px);
 			if (connSock >= 0) {
-				uint64_t key = h.getSrcAdr();
-				key = (key << 32) | h.getSrcAdr();
+				uint64_t key = p.srcAdr;
+				key = (key << 32) | p.srcAdr;
 				bool isVis = visibleAvatars-> member(key);
-				forwardReport(now, (isVis ? 2 : 3), p);
+				forwardReport(now, (isVis ? 2 : 3), px);
 			}
-			ps->free(p);
+			ps->free(px);
 		}
 		// check for timeout
 		waiting4switch = !completeComtSwitch(0,now);
@@ -453,12 +453,12 @@ void Avatar::startComtSwitch(comt_t newComt, uint32_t now) {
 	nextComt = newComt;
 	if (comt != 0) {
 		unsubscribeAll();
-		send2comtCtl(CLIENT_LEAVE_COMTREE);
+		send2comtCtl(CtlPkt::CLIENT_LEAVE_COMTREE);
 		switchState = LEAVING;
 		switchTimer = now; switchCnt = 1;
 	} else {
 		comt = nextComt;
-		send2comtCtl(CLIENT_JOIN_COMTREE);
+		send2comtCtl(CtlPkt::CLIENT_JOIN_COMTREE);
 		switchState = JOINING;
 		switchTimer = now; switchCnt = 1;
 	}
@@ -476,13 +476,13 @@ void Avatar::startComtSwitch(comt_t newComt, uint32_t now) {
  *  never responded after repeated attempts); in the latter case,
  *  set comt to 0
  */
-bool Avatar::completeComtSwitch(packet p, uint32_t now) {
+bool Avatar::completeComtSwitch(pktx px, uint32_t now) {
 	if (switchState == IDLE) return true;
-	if (p == 0 && now - switchTimer < SWITCH_TIMEOUT)
+	if (px == 0 && now - switchTimer < SWITCH_TIMEOUT)
 		return false; // nothing to do in this case
 	switch (switchState) {
 	case LEAVING: {
-		if (p == 0) {
+		if (px== 0) {
 			if (switchCnt > 3) { // give up
 				cerr << "completeSwitch: failed while "
 					"attempting to leave " << comt
@@ -490,21 +490,21 @@ bool Avatar::completeComtSwitch(packet p, uint32_t now) {
 				comt = 0; switchState = IDLE; return true;
 			}
 			// try again
-			send2comtCtl(CLIENT_LEAVE_COMTREE,RETRY);
+			send2comtCtl(CtlPkt::CLIENT_LEAVE_COMTREE,RETRY);
 			switchTimer = now; switchCnt++;
 			return false;
 		}
-		PacketHeader& h = ps->getHeader(p); 
-		CtlPkt cp;
-		cp.unpack(ps->getPayload(p),h.getLength() - Forest::OVERHEAD);
-		if (cp.getCpType() == CLIENT_LEAVE_COMTREE) {
-			if (cp.getRrType() == POS_REPLY) {
+		Packet& p = ps->getPacket(px); 
+		CtlPkt cp(p.payload(),p.length - Forest::OVERHEAD);
+		cp.unpack();
+		if (cp.type == CtlPkt::CLIENT_LEAVE_COMTREE) {
+			if (cp.mode == CtlPkt::POS_REPLY) {
 				comt = nextComt;
-				send2comtCtl(CLIENT_JOIN_COMTREE);
+				send2comtCtl(CtlPkt::CLIENT_JOIN_COMTREE);
 				switchState = JOINING;
 				switchTimer = now; switchCnt = 1;
 				return false;
-			} else if (cp.getRrType() == NEG_REPLY) { // give up
+			} else if (cp.mode == CtlPkt::NEG_REPLY) { // give up
 				cerr << "completeSwitch: failed while "
 					"attempting to leave " << comt
 				     << " (request rejected)" << endl;
@@ -514,7 +514,7 @@ bool Avatar::completeComtSwitch(packet p, uint32_t now) {
 		return false; // ignore anything else
 	}
 	case JOINING: {
-		if (p == 0) {
+		if (px == 0) {
 			if (switchCnt > 3) { // give up
 				cerr << "completeSwitch: failed while "
 					"attempting to join " << comt
@@ -522,18 +522,18 @@ bool Avatar::completeComtSwitch(packet p, uint32_t now) {
 				comt = 0; switchState = IDLE; return true;
 			}
 			// try again
-			send2comtCtl(CLIENT_JOIN_COMTREE,RETRY);
+			send2comtCtl(CtlPkt::CLIENT_JOIN_COMTREE,RETRY);
 			switchTimer = now; switchCnt++;
 			return false;
 		}
-		PacketHeader& h = ps->getHeader(p); 
-		CtlPkt cp;
-		cp.unpack(ps->getPayload(p),h.getLength() - Forest::OVERHEAD);
-		if (cp.getCpType() == CLIENT_JOIN_COMTREE) {
-			if (cp.getRrType() == POS_REPLY) {
+		Packet& p = ps->getPacket(px); 
+		CtlPkt cp(p.payload(),p.length - Forest::OVERHEAD);
+		cp.unpack();
+		if (cp.type == CtlPkt::CLIENT_JOIN_COMTREE) {
+			if (cp.mode == CtlPkt::POS_REPLY) {
 				subscribeAll();
 				switchState = IDLE; return true;
-			} else if (cp.getRrType() == NEG_REPLY) { // give up
+			} else if (cp.mode == CtlPkt::NEG_REPLY) { // give up
 				cerr << "completeSwitch: failed while "
 					"attempting to join " << comt
 				     << " (request rejected)" << endl;
@@ -553,12 +553,12 @@ bool Avatar::completeComtSwitch(packet p, uint32_t now) {
  */
 void Avatar::sendStatus(int now) {
 	if (comt == 0) return;
-	packet p = ps->alloc();
-	PacketHeader& h = ps->getHeader(p);
-	h.setLength(4*(5+8)); h.setPtype(CLIENT_DATA); h.setFlags(0);
-	h.setComtree(comt); h.setSrcAdr(myAdr); h.setDstAdr(-groupNum(x,y));
+	pktx px = ps->alloc();
+	Packet& p = ps->getPacket(px);
+	p.length = 4*(5+8); p.type = CLIENT_DATA; p.flags = 0;
+	p.comtree = comt; p.srcAdr = myAdr; p.dstAdr = -groupNum(x,y);
 
-	uint32_t *pp = ps->getPayload(p);
+	uint32_t *pp = p.payload();
 	pp[0] = htonl(STATUS_REPORT);
 	pp[1] = htonl(now);
 	pp[2] = htonl(x);
@@ -567,7 +567,7 @@ void Avatar::sendStatus(int now) {
 	pp[5] = htonl((uint32_t) speed);
 	pp[6] = htonl(numVisible);
 	pp[7] = htonl(numNear);
-	send(p);
+	send(px);
 }
 
 /** Send a status report to the remote controller for this avatar.
@@ -578,7 +578,7 @@ void Avatar::sendStatus(int now) {
  *  @param p is an optional packet number; if present and non-zero,
  *  its payload is unpacked to produce the report to send to the avatar
  */
-void Avatar::forwardReport(uint32_t now, int avType, int p) {
+void Avatar::forwardReport(uint32_t now, int avType, pktx px) {
 	if (comt == 0) return;
 	uint32_t buf[10];
 	buf[0] = htonl((uint32_t) now);
@@ -592,12 +592,12 @@ void Avatar::forwardReport(uint32_t now, int avType, int p) {
 		buf[5] = htonl((uint32_t) speed);
 		buf[6] = htonl((uint32_t) numVisible);
 		buf[7] = htonl((uint32_t) numNear);
-	} else if (p != 0) {
-		PacketHeader& h = ps->getHeader(p);
-		uint32_t *pp = ps->getPayload(p);
-		if (h.getComtree() != comt) return;
+	} else if (px != 0) {
+		Packet& p = ps->getPacket(px);
+		uint32_t *pp = p.payload();
+		if (p.comtree != comt) return;
 
-		buf[1] = htonl(h.getSrcAdr());
+		buf[1] = htonl(p.srcAdr);
 		buf[2] = pp[2];
 		buf[3] = pp[3];
 		buf[4] = pp[4];
@@ -617,28 +617,31 @@ void Avatar::forwardReport(uint32_t now, int avType, int p) {
 }
 
 /** Send join or leave packet packet to the ComtreeController.
- *  @param cpx is either CLIENT_JOIN_COMTREE or CLIENT_LEAVE_COMTREE,
+ *  @param joinLeave is either CLIENT_JOIN_COMTREE or CLIENT_LEAVE_COMTREE,
  *  depending on whether we want to join or leave the comtree
  */
-void Avatar::send2comtCtl(CpTypeIndex cpx, bool retry) {
-        packet p = ps->alloc();
-        if (p == 0)
+void Avatar::send2comtCtl(CtlPkt::CpType joinLeave, bool retry) {
+        pktx px = ps->alloc();
+        if (px == 0)
 		fatal("Avatar::send2comtCtl: no packets left to allocate");
+        Packet& p = ps->getPacket(px);
 	if (!retry) seqNum++;
-        CtlPkt cp(cpx,REQUEST,seqNum);;
-        cp.setAttr(COMTREE_NUM,comt);
-        cp.setAttr(CLIENT_IP,myIpAdr);
-        cp.setAttr(CLIENT_PORT,Np4d::getSockPort(sock));
-        int len = cp.pack(ps->getPayload(p));
+        CtlPkt cp(joinLeave,CtlPkt::REQUEST,seqNum,p.payload());
+        cp.comtree = comt;
+        cp.ip1 = myIpAdr;
+        cp.port1 = Np4d::getSockPort(sock);
+cerr << "join port=" << cp.port1 << " sock=" << sock << endl;
+        int len = cp.pack();
 	if (len == 0) 
 		fatal("Avatar::send2comtCtl: control packet packing error");
-        PacketHeader& h = ps->getHeader(p);
-	h.setLength(Forest::OVERHEAD + len);
-        h.setPtype(CLIENT_SIG); h.setFlags(0);
-        h.setComtree(Forest::CLIENT_SIG_COMT);
-	h.setSrcAdr(myAdr); h.setDstAdr(comtCtlAdr);
-        h.pack(ps->getBuffer(p));
-	send(p);
+	p.length = Forest::OVERHEAD + len;
+        p.type = CLIENT_SIG; p.flags = 0;
+        p.comtree = Forest::CLIENT_SIG_COMT;
+	p.srcAdr = myAdr; p.dstAdr = comtCtlAdr;
+        p.pack();
+string s;
+cerr << p.toString(s) << endl;
+	send(px);
 }
 
 /** Check for a new command from remote display program.
@@ -712,70 +715,69 @@ comt_t Avatar::check4command() {
 /** Send initial connect packet, using comtree 1 (the signalling comtree).
  */
 void Avatar::connect() {
-	packet p = ps->alloc();
-	PacketHeader& h = ps->getHeader(p);
+	pktx px = ps->alloc();
+	Packet& p = ps->getPacket(px);
 
-	h.setLength(4*(5+1)); h.setPtype(CONNECT); h.setFlags(0);
-	h.setComtree(Forest::CLIENT_CON_COMT);
-	h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
+	p.length = 4*(5+1); p.type = CONNECT; p.flags = 0;
+	p.comtree = Forest::CLIENT_CON_COMT;
+	p.srcAdr = myAdr; p.dstAdr = rtrAdr;
 
-	send(p);
+	send(px);
 }
 
 
 /** Send final disconnect packet.
  */
 void Avatar::disconnect() {
-	packet p = ps->alloc();
-	PacketHeader& h = ps->getHeader(p);
+	pktx px = ps->alloc();
+	Packet& p = ps->getPacket(px);
 
-	h.setLength(4*(5+1)); h.setPtype(DISCONNECT); h.setFlags(0);
-	h.setComtree(Forest::CLIENT_CON_COMT);
-	h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
+	p.length = 4*(5+1); p.type = DISCONNECT; p.flags = 0;
+	p.comtree = Forest::CLIENT_CON_COMT;
+	p.srcAdr = myAdr; p.dstAdr = rtrAdr;
 
-	send(p);
+	send(px);
 }
 
 /** Send packet to forest router and recycle storage.
  */
-void Avatar::send(int p) {
-	int length = ps->getHeader(p).getLength();
-	ps->pack(p);
-	int rv = Np4d::sendto4d(sock,(void *) ps->getBuffer(p),length,
+void Avatar::send(pktx px) {
+	Packet& p = ps->getPacket(px);
+	p.pack();
+	int rv = Np4d::sendto4d(sock,(void *) p.buffer, p.length,
 		    		rtrIpAdr, Forest::ROUTER_PORT);
 	if (rv == -1) fatal("Avatar::send: failure in sendto");
-	ps->free(p);
+	ps->free(px);
 }
 
 /** Return next waiting packet or 0 if there is none. 
  */
 int Avatar::receive() { 
-	int p = ps->alloc();
-	if (p == 0) return 0;
-	PacketHeader& h = ps->getHeader(p);
-        buffer_t& b = ps->getBuffer(p);
+	pktx px = ps->alloc();
+	if (px == 0) return 0;
+	Packet& p = ps->getPacket(px);
 
 	ipa_t remoteIp; ipp_t remotePort;
-        int nbytes = Np4d::recvfrom4d(sock, &b[0], 1500,
+        int nbytes = Np4d::recvfrom4d(sock, p.buffer, 1500,
 				      remoteIp, remotePort);
         if (nbytes < 0) {
                 if (errno == EWOULDBLOCK) {
-                        ps->free(p); return 0;
+                        ps->free(px); return 0;
                 }
                 fatal("Avatar::receive: error in recvfrom call");
         }
-	ps->unpack(p);
-	if ((h.getPtype() == CLIENT_SIG &&
-	     h.getComtree() != Forest::CLIENT_SIG_COMT) &&
-	    h.getComtree() != comt) {
-		ps->free(p);
+	p.unpack();
+	if ((p.type == CLIENT_SIG &&
+	     p.comtree != Forest::CLIENT_SIG_COMT) &&
+	     p.comtree != comt) {
+		ps->free(px);
 		return 0;
 	}
-        h.setIoBytes(nbytes);
-        h.setTunSrcIp(remoteIp);
-        h.setTunSrcPort(remotePort);
+        p.bufferLen = nbytes;
+        p.tunIp = remoteIp;
+        p.tunPort = remotePort;
 
-        return p;
+        return px;
 }
 
 /** Update status of avatar based on passage of time.
@@ -878,18 +880,18 @@ bool Avatar::separated(int c0, int c1) {
 	else if (c0%worldSize == c1%worldSize) // same column
 		return walls[c0]&2;
 	else if (c0%worldSize > c1%worldSize) { // se/nw diagonal
-		if (walls[c0]&3 == 3 ||
-		    (walls[c0]&1 and walls[c1+1]&1) ||
-		    (walls[c0]&2 and walls[c0-1]&2) ||
-		    (walls[c1+1]&1 and walls[c0-1]&2))
+		if ((walls[c0]&3) == 3 ||
+		    (walls[c0]&1 && walls[c1+1]&1) ||
+		    (walls[c0]&2 && walls[c0-1]&2) ||
+		    (walls[c1+1]&1 && walls[c0-1]&2))
 			return true;
 		else 
 			return false;
 	} else { // sw/ne diagonal
-		if ((walls[c0]&2 and walls[c0+1]&1) ||
-		    (walls[c0+1]&1 and walls[c1]&1) ||
-		    (walls[c0]&2 and walls[c0+1]&2) ||
-		    (walls[c0+1]&2 and walls[c1]&1))
+		if ((walls[c0]&2 && walls[c0+1]&1) ||
+		    (walls[c0+1]&1 && walls[c1]&1) ||
+		    (walls[c0]&2 && walls[c0+1]&2) ||
+		    (walls[c0+1]&2 && walls[c1]&1))
 			return true;
 		else 
 			return false;
@@ -1033,9 +1035,9 @@ bool Avatar::linesIntersect(double ax, double ay, double bx, double by,
 
 void Avatar::subscribe(list<int>& glist) {
 	if (comt == 0 || glist.size() == 0) return;
-	packet p = ps->alloc();
-	PacketHeader& h = ps->getHeader(p);
-	uint32_t *pp = ps->getPayload(p);
+	pktx px = ps->alloc();
+	Packet& p = ps->getPacket(px);
+	uint32_t *pp = p.payload();
 
 	int nsub = 0;
 	list<int>::iterator gp;
@@ -1043,22 +1045,22 @@ void Avatar::subscribe(list<int>& glist) {
 		int g = *gp; nsub++;
 		if (nsub > 350) {
 			pp[0] = htonl(nsub-1); pp[nsub] = 0;
-			h.setLength(Forest::OVERHEAD + 4*(2+nsub));
-			h.setPtype(SUB_UNSUB); h.setFlags(0);
-			h.setComtree(comt);
-			h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
-			send(p);
+			p.length = Forest::OVERHEAD + 4*(2+nsub);
+			p.type = SUB_UNSUB; p.flags = 0;
+			p.comtree = comt;
+			p.srcAdr = myAdr; p.dstAdr = rtrAdr;
+			send(px);
 			nsub = 1;
 		}
 		pp[nsub] = htonl(-g);
 	}
 	pp[0] = htonl(nsub); pp[nsub+1] = 0;
-
-	h.setLength(Forest::OVERHEAD + 4*(2+nsub));
-	h.setPtype(SUB_UNSUB); h.setFlags(0);
-	h.setComtree(comt); h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
-	send(p);
-	ps->free(p);
+	p.length = Forest::OVERHEAD + 4*(2+nsub);
+	p.type = SUB_UNSUB; p.flags = 0;
+	p.comtree = comt;
+	p.srcAdr = myAdr; p.dstAdr = rtrAdr;
+	send(px);
+	ps->free(px);
 }
 
 /** Unsubscribe from a list of multicast groups.
@@ -1066,9 +1068,9 @@ void Avatar::subscribe(list<int>& glist) {
  */
 void Avatar::unsubscribe(list<int>& glist) {
 	if (comt == 0 || glist.size() == 0) return;
-	packet p = ps->alloc();
-	PacketHeader& h = ps->getHeader(p);
-	uint32_t *pp = ps->getPayload(p);
+	pktx px = ps->alloc();
+	Packet& p = ps->getPacket(px);
+	uint32_t *pp = p.payload();
 
 	int nunsub = 0;
 	list<int>::iterator gp;
@@ -1076,22 +1078,21 @@ void Avatar::unsubscribe(list<int>& glist) {
 		int g = *gp; nunsub++;
 		if (nunsub > 350) {
 			pp[0] = 0; pp[1] = htonl(nunsub-1);
-			h.setLength(Forest::OVERHEAD + 4*(2+nunsub));
-			h.setPtype(SUB_UNSUB); h.setFlags(0);
-			h.setComtree(comt);
-			h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
-			send(p);
+			p.length = Forest::OVERHEAD + 4*(2+nunsub);
+			p.type = SUB_UNSUB; p.flags = 0;
+			p.comtree = comt;
+			p.srcAdr = myAdr; p.dstAdr = rtrAdr;
+			send(px);
 			nunsub = 1;
 		}
 		pp[nunsub+1] = htonl(-g);
 	}
 	pp[0] = 0; pp[1] = htonl(nunsub);
-
-	h.setLength(Forest::OVERHEAD + 4*(2+nunsub));
-	h.setPtype(SUB_UNSUB); h.setFlags(0);
-	h.setComtree(comt); h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
-	send(p);
-	ps->free(p);
+	p.length = Forest::OVERHEAD + 4*(2+nunsub);
+	p.type = SUB_UNSUB; p.flags = 0; p.comtree = comt;
+	p.srcAdr = myAdr; p.dstAdr = rtrAdr;
+	send(px);
+	ps->free(px);
 }
 
 /** Subscribe to all multicasts for regions that are currently visible
@@ -1162,14 +1163,14 @@ void Avatar::updateSubs() {
  *  are such that we will get at least one report from a newly
  *  invisible avatar.
  */
-void Avatar::updateNearby(int p) {
-	ps->unpack(p);
-	PacketHeader& h = ps->getHeader(p);
-	uint32_t *pp = ps->getPayload(p);
+void Avatar::updateNearby(pktx px) {
+	Packet& p = ps->getPacket(px);
+	p.unpack();
+	uint32_t *pp = p.payload();
 	if (ntohl(pp[0]) != (int) STATUS_REPORT) return;
 
 	// add the Avatar that sent this status report to the nearAvatars set
-	uint64_t avId = h.getSrcAdr(); avId = (avId << 32) | h.getSrcAdr();
+	uint64_t avId = p.srcAdr; avId = (avId << 32) | p.srcAdr;
 	if (nearAvatars->size() < MAXNEAR)
 		nearAvatars->insert(avId);
 
