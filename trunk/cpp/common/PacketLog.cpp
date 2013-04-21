@@ -26,18 +26,18 @@ PacketLog::~PacketLog() { delete [] events; }
  *  @param sendFlag is true if the packet is being sent; else it is false
  *  @param now is the time at which the packet is being sent/received
  */
-void PacketLog::log(int p, int lnk, bool sendFlag, uint64_t now) {
-        PacketHeader& h = ps->getHeader(p);
+void PacketLog::log(pktx px, int lnk, bool sendFlag, uint64_t now) {
+        Packet& p = ps->getPacket(px);
         if (numPkts < maxPkts &&
-            (h.getPtype() != CLIENT_DATA || numData <= maxData)) {
-                int p1 = (h.getPtype() == CLIENT_DATA ?
-                          ps->clone(p) : ps->fullCopy(p));
-                events[numPkts].pkt = p1;
+            (p.type != CLIENT_DATA || numData <= maxData)) {
+                int px1 = (p.type == CLIENT_DATA ?
+                          ps->clone(px) : ps->fullCopy(px));
+                events[numPkts].px = px1;
                 events[numPkts].sendFlag = sendFlag;
                 events[numPkts].link = lnk;
                 events[numPkts].time = now;
                 numPkts++;
-                if (h.getPtype() == CLIENT_DATA) numData++;
+                if (p.type == CLIENT_DATA) numData++;
         }
 	if (now < dumpTime + 1000000000) return;
 	dumpTime = now;
@@ -61,8 +61,8 @@ void PacketLog::write(ostream& out) const {
 		else 			out << "recv link ";
 		out << setw(2) << events[i].link << " at "
 		     << Misc::nstime2string(events[i].time,s) << " ";
-		int p = events[i].pkt;
-		out << (ps->getHeader(p)).toString(ps->getBuffer(p),s);
+		pktx px = events[i].px;
+		out << ps->getPacket(px).toString(s);
 	}
 	out.flush();
 }
