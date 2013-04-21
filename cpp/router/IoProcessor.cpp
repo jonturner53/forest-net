@@ -83,46 +83,34 @@ void IoProcessor::closeBootSock() {
 	close(bootSock); bootSock = -1;
 }
 
-int IoProcessor::receive() { 
-    #ifdef PROFILING
-    timer_receive->start();
-    #endif
 // Return next waiting packet or 0 if there is none. 
+pktx IoProcessor::receive() { 
 	if (bootSock >= 0) {
 		int nbytes;	  	// number of bytes in received packet
 	
-		packet p = ps->alloc();
-	        if (p == 0) { return 0; }
-	        PacketHeader& h = ps->getHeader(p);
-	        buffer_t& b = ps->getBuffer(p);
+		pktx px = ps->alloc();
+	        if (px == 0) { return 0; }
+	        Packet& p = ps->getPacket(px);
+	        buffer_t& b = *p.buffer;
 	
 		ipa_t sIpAdr; ipp_t sPort;
-		#ifdef PROFILING
-        timer_np4d_recvfrom4d->start();
-        #endif
 		nbytes = Np4d::recvfrom4d(bootSock, (void *) &b[0], 1500,
 					  sIpAdr, sPort);
-		#ifdef PROFILING
-        timer_np4d_recvfrom4d->stop();
-        #endif
-		h.setIoBytes(nbytes);
+		p.bufferLen = nbytes;
 		if (nbytes < 0) {
 			if (errno == EAGAIN) {
-				ps->free(p); return 0;
+				ps->free(px); return 0;
 			}
 			fatal("IoProcessor::receive: error in recvfrom call");
 		}
 		if (sIpAdr != nmIp || sPort != Forest::NM_PORT) {
-			ps->free(p); return 0;
+			ps->free(px); return 0;
 		}
-		ps->unpack(p);
-	        if (!ps->hdrErrCheck(p)) { ps->free(p); return 0; }
-        	h.setTunSrcIp(sIpAdr); h.setTunSrcPort(sPort);
-		h.setInLink(0); h.setIoBytes(nbytes);
-		#ifdef PROFILING // MAH
-        timer_receive->stop();
-        #endif
-		return p;
+		p.unpack();
+	        if (!p.hdrErrCheck()) { ps->free(px); return 0; }
+        	p.tunIp = sIpAdr; p.tunPort = sPort;
+		p.inLink = 0;
+		return px;
 	}
 	// proceed to normal case, when we're not booting
 	if (nRdy == 0) { // if no ready interface check for new arrivals
@@ -157,112 +145,73 @@ int IoProcessor::receive() {
 	int nbytes;	  	// number of bytes in received packet
 	int lnk;	  	// # of link on which packet received
 
-	packet p = ps->alloc();
-        if (p == 0) return 0;
-        PacketHeader& h = ps->getHeader(p);
-        buffer_t& b = ps->getBuffer(p);
+	pktx px = ps->alloc();
+        if (px == 0) return 0;
+        Packet& p = ps->getPacket(px);
+        buffer_t& b = *p.buffer;
 
 	ipa_t sIpAdr; ipp_t sPort;
-	#ifdef PROFILING
-    timer_np4d_recvfrom4d->start();
-    #endif
 	nbytes = Np4d::recvfrom4d(sock[cIf], (void *) &b[0], 1500,
 				  sIpAdr, sPort);
-	#ifdef PROFILING
-    timer_np4d_recvfrom4d->stop();
-    #endif
 	if (nbytes < 0) fatal("IoProcessor::receive: error in recvfrom call");
 
-	ps->unpack(p);
-        if (!ps->hdrErrCheck(p)) { ps->free(p); return 0; }
+	p.unpack();
+        if (!p.hdrErrCheck()) { ps->free(px); return 0; }
 	lnk = lt->lookup(sIpAdr, sPort);
-	if (lnk == 0 && h.getPtype() == CONNECT)
+	if (lnk == 0 && p.type == CONNECT)
 		lnk = lt->lookup(sIpAdr, 0); // check for "startup" entry
         if (lnk == 0 || cIf != lt->getIface(lnk) ||
 	    (sPort == Forest::ROUTER_PORT && lt->getPeerType(lnk) != ROUTER) ||
 	    (sPort != Forest::ROUTER_PORT && lt->getPeerType(lnk) == ROUTER)) {
 		string s;
 		cerr << "IoProcessor::receive: bad packet: lnk=" << lnk << " "
-		     << h.toString(ps->getBuffer(p),s) << endl;
+		     << p.toString(s) << endl;
 		cerr << "sender (" << Np4d::ip2string(sIpAdr,s) << ","
 		     << sPort << ")\n";
-		ps->free(p); return 0;
+		ps->free(px); return 0;
 	}
         
-        h.setInLink(lnk); h.setIoBytes(nbytes);
-        h.setTunSrcIp(sIpAdr); h.setTunSrcPort(sPort);
+        p.inLink = lnk; p.bufferLen = nbytes;
+        p.tunIp = sIpAdr; p.tunPort = sPort;
 
         sm->cntInLink(lnk,Forest::truPktLeng(nbytes),
 		      (lt->getPeerType(lnk) == ROUTER));
-		#ifdef PROFILING // MAH
-        timer_receive->stop();
-        #endif
-        return p;
+        return px;
 }
 
+void IoProcessor::send(pktx px, int lnk) {
 // Send packet on specified link and recycle storage.
-void IoProcessor::send(int p, int lnk) {
-    #ifdef PROFILING
-    timer_send->start();
-    #endif
+	Packet p = ps->getPacket(px);
 	if (bootSock >= 0) {
 		int rv, lim = 0;
-		int length = ps->getHeader(p).getLength();
 		do {
-		    #ifdef PROFILING
-            timer_np4d_sendto4d->start();
-            #endif
 			rv = Np4d::sendto4d(bootSock,
-				(void *) ps->getBuffer(p), length,
+				(void *) p.buffer, p.length,
 				nmIp, Forest::NM_PORT);
-			#ifdef PROFILING
-			timer_np4d_sendto4d->stop();
-			#endif
 		} while (rv == -1 && errno == EAGAIN && lim++ < 10);
 		if (rv == -1) {
 			fatal("IoProcessor:: send: failure in sendto");
 		}
-		ps->free(p);
-	    #ifdef PROFILING
-	    timer_send->stop();
-	    #endif
+		ps->free(px);
 		return;
 	}
 	ipp_t farPort = lt->getPeerPort(lnk);
-	#ifdef PROFILING
-	if (farPort == 0) {
-	     ps->free(p); 
-         timer_send->stop();
-         return;
-    }
-    #else
-	if (farPort == 0) { ps->free(p); return; }
-    #endif
+	if (farPort == 0) { ps->free(px); return; }
 
 	ipa_t farIp = lt->getPeerIpAdr(lnk);
-	int length = ps->getHeader(p).getLength();
 
 	int rv, lim = 0;
 	do {
-		#ifdef PROFILING
-		timer_np4d_sendto4d->start();
-		#endif
 		rv = Np4d::sendto4d(sock[lt->getIface(lnk)],
-			(void *) ps->getBuffer(p), length,
+			(void *) p.buffer, p.length,
 			farIp, farPort);
-		#ifdef PROFILING
-	    timer_np4d_sendto4d->stop();
-		#endif
 	} while (rv == -1 && errno == EAGAIN && lim++ < 10);
 	if (rv == -1) {
 		cerr << "IoProcessor:: send: failure in sendto (errno="
 		     << errno << ")\n";
 		exit(1);
 	}
-	sm->cntOutLink(lnk,Forest::truPktLeng(length),
+	sm->cntOutLink(lnk,Forest::truPktLeng(p.length),
 		       (lt->getPeerType(lnk) == ROUTER));
-	ps->free(p);
-	#ifdef PROFILING
-	timer_send->stop();
-	#endif
+	ps->free(px);
 }

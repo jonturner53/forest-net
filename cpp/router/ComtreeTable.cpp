@@ -208,10 +208,8 @@ bool ComtreeTable::readEntry(istream& in) {
 		if (coreFlag && !rtrFlag) return false;
 		if (!addLink(ctx,lnk,rtrFlag,coreFlag)) return false;
 		int cLnk = getComtLink(ct,lnk);
-		setInBitRate(cLnk,Forest::MINBITRATE);
-		setInPktRate(cLnk,Forest::MINPKTRATE);
-		setOutBitRate(cLnk,Forest::MINBITRATE);
-		setOutPktRate(cLnk,Forest::MINPKTRATE);
+		getRates(cLnk).set(Forest::MINBITRATE,Forest::MINBITRATE,
+				   Forest::MINPKTRATE,Forest::MINPKTRATE);
 	}
 	setPlink(ctx,plnk); // must be done after links are defined
 
@@ -267,8 +265,7 @@ string& ComtreeTable::entry2string(int ctx,string& s) const {
 	ss << "   ";
 	set<int>& coreLinks = *tbl[ctx].coreLinks;
 	p = coreLinks.begin();
-	if (p == coreLinks.end())
-		ss << "0";
+	if (p == coreLinks.end()) ss << "0";
 	while (p != coreLinks.end()) {
 		ss << getLink(*p++);
 		if (p != coreLinks.end()) ss << ",";

@@ -43,9 +43,10 @@ QuManager::QuManager(int nL1, int nP1, int nQ1, int maxppl1,
 	lnkInfo = new LinkInfo[nL+1]; 
 	hset = new HeapSet(nQ,nL);
 
+	RateSpec rs(Forest::MINBITRATE,Forest::MINBITRATE,
+		    Forest::MINPKTRATE,Forest::MINPKTRATE);
 	for (int lnk = 1; lnk <= nL; lnk++) {
-		lnkInfo[lnk].vt = 0; 
-		setLinkRates(lnk, Forest::MINBITRATE, Forest::MINPKTRATE);
+		lnkInfo[lnk].vt = 0; setLinkRates(lnk, rs);
 	}
 
 	// build free list of queues using lnk field
@@ -109,12 +110,8 @@ void QuManager::freeQ(int qid) {
  *  if the qid is invalid, if the queue is already full, or the link
  *  is at its limit for packets queued
  */
-bool QuManager::enq(int p, int qid, uint64_t now) {
-    // MAH
-    #ifdef PROFILING
-    enq_timer->start();
-    #endif
-	int pleng = Forest::truPktLeng((ps->getHeader(p)).getLength());
+bool QuManager::enq(int px, int qid, uint64_t now) {
+	int pleng = Forest::truPktLeng((ps->getPacket(px)).length);
 	QuInfo& q = quInfo[qid]; int lnk = q.lnk;
 
 	// don't queue it if too many packets for link
@@ -122,10 +119,6 @@ bool QuManager::enq(int p, int qid, uint64_t now) {
 	if (sm->getLinkQlen(lnk) >= maxppl ||
 	    sm->getQlen(qid) >= q.pktLim ||
 	    sm->getQbytes(qid) + pleng > q.byteLim) {
-        // MAH
-	    #ifdef PROFILING
-        enq_timer->stop();
-	    #endif
 		return false;
 	}
 
@@ -158,12 +151,8 @@ bool QuManager::enq(int p, int qid, uint64_t now) {
 	} 
 
 	// add packet to queue
-	queues->addLast(p,qid);
+	queues->addLast(px,qid);
 	sm->incQlen(qid,lnk,pleng);
-	// MAH
-	#ifdef PROFILING
-	enq_timer->stop();
-	#endif
 	return true;
 }
 
@@ -175,9 +164,6 @@ bool QuManager::enq(int p, int qid, uint64_t now) {
  *  are no links that are ready to send a packet
  */
 int QuManager::deq(int& lnk, uint64_t now) {
-    #ifdef PROFILING // MAH
-    deq_timer->start();
-    #endif
 	// first process virtually active links that should now be idle
 	//
 	int vl = vactive->findmin(); uint64_t d = vactive->key(vl);
@@ -185,21 +171,15 @@ int QuManager::deq(int& lnk, uint64_t now) {
 		vactive->remove(vl);
 		vl = vactive->findmin(); d = vactive->key(vl);
 	}
-#ifdef PROFILING
-    if (active->empty()) { deq_timer->stop(); return 0; }
-    lnk = active->findmin(); d = active->key(lnk);
-    if (now < d) { deq_timer->stop(); return 0; }
-#else
 	// determine next active link that is ready to send
 	if (active->empty()) return 0;
 	lnk = active->findmin(); d = active->key(lnk);
 	if (now < d) return 0;
-#endif
 
 	// dequeue packet and update statistics
 	int qid = hset->findMin(lnk);
-	int p = queues->removeFirst(qid);
-	int pleng = Forest::truPktLeng(ps->getHeader(p).getLength());
+	pktx px = queues->removeFirst(qid);
+	int pleng = Forest::truPktLeng(ps->getPacket(px).length);
 	sm->decQlen(qid,lnk,pleng);
 
 	// and update scheduling heap and virtual time of lnk
@@ -212,8 +192,9 @@ int QuManager::deq(int& lnk, uint64_t now) {
 			q.lnk = free; free = qid; qCnt--;
 		}
 	} else {
-		int np = queues->first(qid);
-		int npleng = Forest::truPktLeng(ps->getHeader(np).getLength());
+		int npx = queues->first(qid);
+		Packet& np = ps->getPacket(npx);
+		int npleng = Forest::truPktLeng(np.length);
 		uint64_t d = q.nsPerByte; d *= npleng;
 		if (q.minDelta > d) d = q.minDelta;
 		q.vft += d;
@@ -235,8 +216,5 @@ int QuManager::deq(int& lnk, uint64_t now) {
 		active->changekey(lnk,t);
 	}
 	
-	#ifdef PROFILING // MAH
-	deq_timer->stop();
-	#endif
-	return p;
+	return px;
 }

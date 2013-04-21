@@ -1,8 +1,9 @@
-ALGOLIBROOT = ../../algolib-jst
+ALGOLIBROOT = ../../../algolib-jst
+BIN = ~/bin
 JAVAC=/usr/java/latest/bin/javac
 FLIB = ../lib/lib-forest.a
 LIBS = ${FLIB} ${ALGOLIBROOT}/lib/lib-util.a ${ALGOLIBROOT}/lib/lib-ds.a
-XFILES = Avatar Avatar-v0 Monitor genWalls cliProxy
+XFILES = Avatar-v0 Monitor genWalls # Avatar cliProxy
 CXXFLAGS = -Wall -O2 -m64 -I ../include -I ${ALGOLIBROOT}/include
 
 %.o: %.cpp %.h stdinc.h

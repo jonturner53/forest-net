@@ -93,7 +93,8 @@ void Host::run(bool repeatFlag, uint32_t delta, uint32_t finishTime) {
 // are ignored. Delta is the minimum time between packets.
 // FinishTime and delta are expressed in microseconds.
 
-	int i, pause, cnt, p, np;
+	int i, pause, cnt, np;
+	pktx px;
 	const int MAXEVENTS = 200;
 	struct { bool sendFlag; uint32_t time; int pkt;} events[MAXEVENTS];
 	int evCnt = 0;
@@ -104,18 +105,18 @@ void Host::run(bool repeatFlag, uint32_t delta, uint32_t finishTime) {
 	// read packets from file into packetStore
 	np = 0;
 	while (np < nPkts) {
-		p = ps->alloc();
-		if (p == Null) fatal("Host::run: too many packets");
-		if (!readPacket(p,pause,cnt)) break;
+		px = ps->alloc();
+		if (px == Null) fatal("Host::run: too many packets");
+		if (!readPacket(px,pause,cnt)) break;
 		pkt[np].pause = pause;
 		if (pause >= 0) {
-			pkt[np++].p = p;
+			pkt[np++].p = px;
 		} else if (repeatFlag) {
 			if (pause + np < 0) pause = -np;
 			pkt[np].cnt = cnt; pkt[np++].iter = cnt;
-			ps->free(p);
+			ps->free(px);
 		} else {
-			ps->free(p);
+			ps->free(px);
 		}
 	}
 	if (np == 0) return;
@@ -131,18 +132,19 @@ void Host::run(bool repeatFlag, uint32_t delta, uint32_t finishTime) {
 		// receive packet if any and record statistics
 		didNothing = true;
 		// input processing
-		p = receive();
-		if (p != Null) {
+		px = receive();
+		Packet& p = ps->getPacket(px);
+		if (px != Null) {
 			didNothing = false;
 			nRcvd++;
-			ps->unpack(p);
+			p.unpack();
 			if (evCnt < MAXEVENTS) {
 				events[evCnt].sendFlag = false;
 				events[evCnt].time = now;
-				events[evCnt].pkt = p;
+				events[evCnt].pkt = px;
 				evCnt++;
 			} else {
-				ps->free(p);
+				ps->free(px);
 			}
 		}
 
@@ -152,10 +154,10 @@ void Host::run(bool repeatFlag, uint32_t delta, uint32_t finishTime) {
 			didNothing = false;
 			nSent++;
 			if (evCnt < MAXEVENTS) {
-				int p1 = ps->clone(pkt[i].p);
+				pktx px1 = ps->clone(pkt[i].p);
 				events[evCnt].sendFlag = true;
 				events[evCnt].time = now;
-				events[evCnt].pkt = p1;
+				events[evCnt].pkt = px1;
 				evCnt++;
 			}
 			i++;
@@ -208,15 +210,16 @@ void Host::run(bool repeatFlag, uint32_t delta, uint32_t finishTime) {
 		else
 			cout << "recv[";
 		cout << setw(2) << setw(8) << events[i].time << "] ";
-		p = events[i].pkt;
+		px = events[i].pkt;
 		string s;
-		cout << ps->getHeader(p).toString(ps->getBuffer(p),s);
+		Packet& p = ps->getPacket(px);
+		cout << p.toString(s);
 	}
 	cout << endl;
 	cout << nRcvd << " packets received, " << nSent << " packets sent, "; 
 }
 
-bool Host::readPacket(packet p, int& pause, int& cnt) {
+bool Host::readPacket(pktx px, int& pause, int& cnt) {
 // Read an input packet from stdin and return it in p.
         Misc::skipBlank(cin);
         if (!Misc::readNum(cin,pause)) return false;
@@ -225,16 +228,16 @@ bool Host::readPacket(packet p, int& pause, int& cnt) {
                 Misc::cflush(cin,'\n');
                 return true;
         }
-        PacketHeader& h = ps->getHeader(p);
-        bool success = h.read(cin,ps->getBuffer(p));
+        Packet& p = ps->getPacket(px);
+        bool success = p.read(cin);
         Misc::cflush(cin,'\n');
         return success;
 }
 
-void Host::send(int p) {
+void Host::send(pktx px) {
 // Send packet and recycle storage.
-	int length = ps->getHeader(p).getLength();
-	int rv = Np4d::sendto4d(sock,(void *) ps->getBuffer(p),length,
+	Packet& p = ps->getPacket(px);
+	int rv = Np4d::sendto4d(sock,(void *) p.buffer, p.length,
 		    		rtrIpAdr, Forest::ROUTER_PORT);
 	if (rv == -1) fatal("Host::send: failure in sendto");
 }
@@ -243,24 +246,23 @@ int Host::receive() {
 // Return next waiting packet or Null if there is none. 
 	int nbytes;	  // number of bytes in received packet
 
-	int p = ps->alloc();
-	if (p == Null) return Null;
-	PacketHeader& h = ps->getHeader(p);
-        buffer_t& b = ps->getBuffer(p);
+	pktx px = ps->alloc();
+	if (px == Null) return Null;
+	Packet& p = ps->getPacket(px);
 
 	ipa_t remoteIp; ipp_t remotePort;
-        nbytes = Np4d::recvfrom4d(sock, &b[0], 1500,
+        nbytes = Np4d::recvfrom4d(sock, p.buffer, 1500,
                           	  remoteIp, remotePort);
         if (nbytes < 0) {
                 if (errno == EWOULDBLOCK) {
-                        ps->free(p); return Null;
+                        ps->free(px); return Null;
                 }
                 fatal("Host::receive: error in recvfrom call");
         }
 
-        h.setIoBytes(nbytes);
-        h.setTunSrcIp(remoteIp);
-        h.setTunSrcPort(remotePort);
+        p.bufferLen = nbytes;
+        p.tunIp = remoteIp;
+        p.tunPort = remotePort;
 
-        return p;
+        return px;
 }
