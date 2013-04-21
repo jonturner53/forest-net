@@ -3,7 +3,7 @@
 #ifndef STATSMODULE_H
 #define STATSMODULE_H
 
-#include "CommonDefs.h"
+#include "Forest.h"
 #include "ComtreeTable.h"
 
 class StatsModule {

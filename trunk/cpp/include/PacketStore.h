@@ -9,16 +9,18 @@
 #ifndef PACKETSTORE_H
 #define PACKETSTORE_H
 
-#include "CommonDefs.h"
+#include "Forest.h"
 #include "UiList.h"
-#include "PacketHeader.h"
+#include "Packet.h"
 
-typedef int packet;
+typedef int pktx;
 
 /** Maintains a set of packets with selected header fields and a
  *  separate set of buffers. Each packet is associated with some
  *  buffer, but a buffer may be associated with several packets
  *  (to support multicast).
+ *  
+ *  Packets are identified by an integer index.
  */
 class PacketStore {
 public:
@@ -26,28 +28,18 @@ public:
                 ~PacketStore();
 
 	// getters 
-        PacketHeader& getHeader(packet) const;
-        buffer_t& getBuffer(packet) const;      
-        uint32_t* getPayload(packet) const;    
+        Packet& getPacket(pktx) const;
+        //buffer_t& getBuffer(pktx) const;      
+        //uint32_t* getPayload(pktx) const;    
 
 	// setters 
-        void setHeader(packet, const PacketHeader&);
+        //void setPacket(pktx, const Packet&);
 
 	// allocate/free packets 
-        packet  alloc();           
-        void    free(packet);     
-        packet  clone(packet);   
-        packet  fullCopy(packet);   
-
-        // pack/unpack header fields to/from buffer 
-        void    unpack(packet);         
-        void    pack(packet);        
-
-        // error checking 
-        bool    hdrErrCheck(packet); 
-        bool    payErrCheck(packet);
-        void    hdrErrUpdate(packet);    
-        void    payErrUpdate(packet);   
+        pktx  alloc();           
+        void  free(pktx);     
+        pktx  clone(pktx);   
+        pktx  fullCopy(pktx);   
 
 private:
         int     N;                      ///< number of packets we have room for
@@ -55,7 +47,7 @@ private:
         int     n;                      ///< number of packets in use
         int     m;                      ///< number of buffers in use
 
-        PacketHeader *phdr;             ///< phdr[i] = header for packet i
+        Packet	*pkt;             	///< hkt[i] = packet with index i
         int     *pb;                    ///< pb[i] = index of packet i's buffer
 
         buffer_t *buff;                 ///< array of packet buffers
@@ -66,81 +58,37 @@ private:
 };
 
 /** Get reference to packet header.
- *  @param p is a packet number
- *  @return a reference to the packet header for p
+ *  @param px is a packet index
+ *  @return a reference to the packet for px
  */
-inline PacketHeader& PacketStore::getHeader(packet p) const {
-	return phdr[p];
+inline Packet& PacketStore::getPacket(pktx px) const {
+	return pkt[px];
 }
 
 /** Get reference to packet buffer.
- *  @param p is a packet number
+ *  @param px is a packet index
  *  @return a reference to the buffer for packet p
- */
-inline buffer_t& PacketStore::getBuffer(packet p) const {
-	return buff[pb[p]];
+inline buffer_t& PacketStore::getBuffer(pktx px) const {
+	return *(pkt[px].buffer); //buff[pb[px]];
 }
+ */
 
 /** Get pointer to start of a packet payload.
- *  @param p is a packet number
+ *  @param px is a packet index
  *  @return a pointer to first word of the payload for p
- */
-inline uint32_t* PacketStore::getPayload(packet p) const {
-	return &buff[pb[p]][Forest::HDR_LENG/sizeof(uint32_t)];
+inline uint32_t* PacketStore::getPayload(pktx px) const {
+	return pkt[px].payload();
+	//return &buff[pb[px]][Forest::HDR_LENG/sizeof(uint32_t)];
 }
+ */
 
-/** Set the header fields for a packet.
- *  @param p is the packet whose header is to be updated
- *  @param h is a reference to another header whose value is to be
- *  copied into the header for p
- */
-inline void PacketStore::setHeader(packet p, const PacketHeader& h) {
-	phdr[p] = h;
+/** Set the fields in a packet.
+ *  @param px is the packet whose header is to be updated
+ *  @param p is a reference to a header whose value is to be
+ *  copied into the header for px
+inline void PacketStore::setPacket(pktx px, const Packet& p) {
+	pkt[px] = p;
 }
-
-/** Unpack the header fields for a packet from its buffer.
- *  @param p is the packet whose header fields are to be unpacked
- */
-inline void PacketStore::unpack(packet p) {
-	getHeader(p).unpack(getBuffer(p));
-}
-
-/** Pack header fields into a packet's buffer.
- *  @param p is the packet whose buffer is to be packed from its header
- */
-inline void PacketStore::pack(packet p) {
-	getHeader(p).pack(getBuffer(p));
-}
-
-/** Check the header error check field of a packet.
- *  @param p is a packet number
- */
-inline bool PacketStore::hdrErrCheck(packet p) {
-	return getHeader(p).hdrErrCheck(getBuffer(p));
-}
-
-/** Check the payload error check field of a packet.
- *  @param p is a packet number
- */
-inline bool PacketStore::payErrCheck(packet p) {
-	return getHeader(p).payErrCheck(getBuffer(p));
-}
-
-/** Update the header error check field of a packet.
- *  Computes error check over the header fields as they appear
- *  in the packet buffer.
- *  @param p is a packet number
- */
-inline void PacketStore::hdrErrUpdate(packet p) {
-	getHeader(p).hdrErrUpdate(getBuffer(p));
-}
-
-/** Update the payload error check field of a packet.
- *  Computes error check over the entire packet payload.
- *  @param p is a packet number
- */
-inline void PacketStore::payErrUpdate(packet p) {
-	getHeader(p).payErrUpdate(getBuffer(p));
-}
+*/
 
 #endif

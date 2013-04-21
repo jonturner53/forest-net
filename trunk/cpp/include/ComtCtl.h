@@ -10,7 +10,7 @@
 #define COMTCTL_H
 
 #include <pthread.h>
-#include "CommonDefs.h"
+#include "Forest.h"
 #include "PacketHeader.h"
 #include "PacketStoreTs.h"
 #include "NetInfo.h"
@@ -19,6 +19,8 @@
 #include "IdMap.h"
 #include "Heap.h"
 #include "Queue.h"
+#include "Logger.h"
+#include "CpHandler.h"
 #include <map>
 
 /** ComtCtl manages a set of comtrees in a forest network.
@@ -39,6 +41,8 @@ PacketStoreTs *ps;		///< pointer to packet store
 
 NetInfo *net;			///< global view of net topology
 ComtInfo *comtrees;		///< definition of all comtrees
+
+Logger logger;			///< error message logger
 
 int	maxComtree;		///< max# of comtrees
 int 	firstComt, lastComt;	///< defines range of comtrees controlled
@@ -94,29 +98,23 @@ void*	run(void*);
 
 // handlers for various operations
 void* 	handler(void *);
-bool 	handleComtreeDisplay(int, Queue&, Queue&);
-bool 	handleAddComtReq(int,CtlPkt&, Queue&, Queue&);
-bool 	handleDropComtReq(int,CtlPkt&, Queue&, Queue&);
-bool 	handleJoinComtReq(int,CtlPkt&, Queue&, Queue&);
-bool 	handleLeaveComtReq(int,CtlPkt&, Queue&, Queue&);
+bool 	handleComtreeDisplay(int);
+bool 	handleAddComtReq(int,CtlPkt&, CpHandler&);
+bool 	handleDropComtReq(int,CtlPkt&, CpHandler&);
+bool 	handleJoinComtReq(int,CtlPkt&, CpHandler&);
+bool 	handleLeaveComtReq(int,CtlPkt&, CpHandler&);
 // helper funnctions for coniguring routers to add/remove paths to comtrees
-bool	setupPath(int, list<LinkMod>&, Queue&, Queue&);
-bool	teardownPath(int, list<LinkMod>&, Queue&, Queue&);
-bool	setupComtNode(int, int, Queue&, Queue&);
-bool	teardownComtNode(int, int, Queue&, Queue&);
-bool	setupComtLink(int, int, int, Queue&, Queue&);
-int	setupClientLink(int, ipa_t, ipp_t, int, Queue&, Queue&);
-bool	teardownClientLink(int, ipa_t, ipp_t, int, Queue&, Queue&);
-bool	setupComtAttrs(int, int, Queue&, Queue&);
-bool	setComtLinkRates(int, int, int, Queue&, Queue&);
-bool	setComtLeafRates(int, fAdr_t, Queue&, Queue&);
-bool	modComtRates(int, list<LinkMod>&, bool, Queue&, Queue&);
-
-// helper functions for sending control packets from threads
-int	sendCtlPkt(CtlPkt&, fAdr_t, Queue&, Queue&);
-int 	sendAndWait(int,CtlPkt&,Queue&,Queue&);
-bool	handleReply(int,CtlPkt&,string&,string&);
-void 	errReply(int,CtlPkt&,Queue&, const char*);
+bool	setupPath(int, list<LinkMod>&, CpHandler&);
+bool	teardownPath(int, list<LinkMod>&, CpHandler&);
+bool	setupComtNode(int, int, CpHandler&);
+bool	teardownComtNode(int, int, CpHandler&);
+bool	setupComtLink(int, int, int, CpHandler&);
+int	setupClientLink(int, ipa_t, ipp_t, int, CpHandler&);
+bool	teardownClientLink(int, ipa_t, ipp_t, int, CpHandler&);
+bool	setupComtAttrs(int, int, CpHandler&);
+bool	setComtLinkRates(int, int, int, CpHandler&);
+bool	setComtLeafRates(int, fAdr_t, CpHandler&);
+bool	modComtRates(int, list<LinkMod>&, bool, CpHandler&);
 
 void	connect();		
 void	disconnect();	

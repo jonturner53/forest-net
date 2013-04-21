@@ -13,7 +13,7 @@
 #include <map>
 
 #include "stdinc.h"
-#include "CommonDefs.h"
+#include "Forest.h"
 
 #include "IfaceTable.h"
 #include "LinkTable.h"
@@ -75,7 +75,7 @@ private:
 					///< addresses
 
 	struct CpInfo {			///< info on outgoing control packets
-	int	p;			///< packet number of retained copy
+	pktx	px;			///< packet number of retained copy
 	int	nSent;			///< number of times we've sent packet
 	uint64_t timestamp;		///< time when we last sent a request
 	};
@@ -114,53 +114,53 @@ private:
 	bool	isFreeLeafAdr(fAdr_t) const;
 
 	// basic forwarding 
-	void 	forward(int,int);
-	bool	pktCheck(int,int);
-	void	multiSend(int,int,int);
+	void 	forward(pktx,int);
+	bool	pktCheck(pktx,int);
+	void	multiSend(pktx,int,int);
 
 	// inband control
-	void 	handleConnDisc(int);
-	void 	handleRteReply(int, int);
-	void	sendRteReply(int,int);	
-	void	subUnsub(int,int);
+	void 	handleConnDisc(pktx);
+	void 	handleRteReply(pktx, int);
+	void	sendRteReply(pktx,int);	
+	void	subUnsub(pktx,int);
 
 	// signalling packets
-	void	handleCtlPkt(int);
+	void	handleCtlPkt(pktx);
 
-	bool	addIface(int, CtlPkt&, CtlPkt&);
-	bool	dropIface(int, CtlPkt&, CtlPkt&);
-	bool	getIface(int, CtlPkt&, CtlPkt&);
-	bool	modIface(int, CtlPkt&, CtlPkt&);
+	bool	addIface(CtlPkt&, CtlPkt&);
+	bool	dropIface(CtlPkt&, CtlPkt&);
+	bool	getIface(CtlPkt&, CtlPkt&);
+	bool	modIface(CtlPkt&, CtlPkt&);
 
-	bool	addLink(int, CtlPkt&, CtlPkt&);
-	bool	dropLink(int, CtlPkt&, CtlPkt&);
+	bool	addLink(CtlPkt&, CtlPkt&);
+	bool	dropLink(CtlPkt&, CtlPkt&);
 	void	dropLink(int);
-	bool	getLink(int, CtlPkt&, CtlPkt&);
-	bool	modLink(int, CtlPkt&, CtlPkt&);
+	bool	getLink(CtlPkt&, CtlPkt&);
+	bool	modLink(CtlPkt&, CtlPkt&);
 
-	bool	addComtree(int, CtlPkt&, CtlPkt&);
-	bool	dropComtree(int, CtlPkt&, CtlPkt&);
-	bool	getComtree(int, CtlPkt&, CtlPkt&);
-	bool	modComtree(int, CtlPkt&, CtlPkt&);
-	bool	addComtreeLink(int, CtlPkt&, CtlPkt&);
-	bool	dropComtreeLink(int, CtlPkt&, CtlPkt&);
+	bool	addComtree(CtlPkt&, CtlPkt&);
+	bool	dropComtree(CtlPkt&, CtlPkt&);
+	bool	getComtree(CtlPkt&, CtlPkt&);
+	bool	modComtree(CtlPkt&, CtlPkt&);
+	bool	addComtreeLink(CtlPkt&, CtlPkt&);
+	bool	dropComtreeLink(CtlPkt&, CtlPkt&);
 	void	dropComtreeLink(int, int, int);
-	bool	modComtreeLink(int, CtlPkt&, CtlPkt&);
-	bool	getComtreeLink(int, CtlPkt&, CtlPkt&);
+	bool	modComtreeLink(CtlPkt&, CtlPkt&);
+	bool	getComtreeLink(CtlPkt&, CtlPkt&);
 
-	bool	addRoute(int, CtlPkt&, CtlPkt&);
-	bool	dropRoute(int, CtlPkt&, CtlPkt&);
-	bool	getRoute(int, CtlPkt&, CtlPkt&);
-	bool	modRoute(int, CtlPkt&, CtlPkt&);
+	bool	addRoute(CtlPkt&, CtlPkt&);
+	bool	dropRoute(CtlPkt&, CtlPkt&);
+	bool	getRoute(CtlPkt&, CtlPkt&);
+	bool	modRoute(CtlPkt&, CtlPkt&);
 
-	bool	bootComplete(int, CtlPkt&, CtlPkt&);
-	bool	bootAbort(int, CtlPkt&, CtlPkt&);
+	bool	bootComplete(pktx, CtlPkt&, CtlPkt&);
+	bool	bootAbort(pktx, CtlPkt&, CtlPkt&);
 
 	bool	sendCpReq(CtlPkt&, fAdr_t);
 	void	resendCpReq();
-	void	handleCpReply(int, CtlPkt&);
+	void	handleCpReply(pktx, CtlPkt&);
 
-	void	returnToSender(packet,int);
+	void	returnToSender(pktx,CtlPkt&);
 };
 
 /** Allocate a new leaf address.

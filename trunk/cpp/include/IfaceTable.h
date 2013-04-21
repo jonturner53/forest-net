@@ -9,7 +9,8 @@
 #ifndef IFACETABLE_H
 #define IFACETABLE_H
 
-#include "CommonDefs.h"
+#include "Forest.h"
+#include "RateSpec.h"
 #include "UiSetPair.h"
 
 class IfaceTable {
@@ -26,23 +27,15 @@ public:
 
 	// access methods 
 	ipa_t	getIpAdr(int) const;	
-	int	getMaxBitRate(int) const;
-	int	getMaxPktRate(int) const;
-	int	getAvailBitRate(int) const;
-	int	getAvailPktRate(int) const;
+	RateSpec& getRates(int) const;
+	RateSpec& getAvailRates(int) const;
 	int	getDefaultIface() const;
 	int	getFreeIface() const;
 
 	// modifiers 
-	bool	addEntry(int,ipa_t,int,int);
+	bool	addEntry(int,ipa_t,RateSpec&);
 	void	removeEntry(int);
 	void	setDefaultIface(int);
-	void	setMaxBitRate(int, int);
-	void	setMaxPktRate(int, int);
-	bool	setAvailBitRate(int, int);
-	bool	setAvailPktRate(int, int);
-	bool	addAvailBitRate(int, int);
-	bool	addAvailPktRate(int, int);
 
 	// io routines
 	bool	read(istream&);
@@ -53,10 +46,8 @@ private:
 	struct IfaceInfo {		///< information describing an iface
 	ipa_t	ipa;			///< IP address of interface
 	int	sock;			///< socket number of interface
-	int	maxbitrate;		///< max bit rate for interface (Kb/s)
-	int	maxpktrate;		///< max packet rate for interface
-	int	avbitrate;		///< max bit rate for interface (Kb/s)
-	int	avpktrate;		///< max packet rate for interface
+	RateSpec rates;			///< total rates for interface
+	RateSpec availRates;		///< available rates for interface
 	};
 	IfaceInfo *ift;			///< ift[i]=data for interface i
 	UiSetPair *ifaces;		///< in-use and available iface numbers
@@ -122,32 +113,22 @@ inline int IfaceTable::getFreeIface() const {
  */
 inline ipa_t IfaceTable::getIpAdr(int iface) const { return ift[iface].ipa; }	
 
-/** Get the maximum bit rate allowed for this interface.
+/** Get the maximum rates allowed for this interface.
  *  @param i is the interface number
- *  @return the bit rate in Kb/s
+ *  @return the a reference to the rate spec for the interface; currently
+ *  interface rates are symmetric and upstream and downstream fields
+ *  must be set to identical values.
  */
-inline int IfaceTable::getMaxBitRate(int i) const { return ift[i].maxbitrate; }
+inline RateSpec& IfaceTable::getRates(int i) const { return ift[i].rates; }
 
-/** Get the maximum packet rate allowed for this interface.
+/** Get the available rates allowed for this interface.
  *  @param i is the interface number
- *  @return the packet rate in p/s
+ *  @return the a reference to the available rate spec for the interface;
+ *  currently rates are symmetric and upstream and downstream fields
+ *  must be set to identical values.
  */
-inline int IfaceTable::getMaxPktRate(int i) const { return ift[i].maxpktrate; }
-
-/** Get the available bit rate for this interface.
- *  @param i is the interface number
- *  @return the available bit rate in Kb/s
- */
-inline int IfaceTable::getAvailBitRate(int i) const {
-	return ift[i].avbitrate;
-}
-
-/** Get the available packet rate for this interface.
- *  @param i is the interface number
- *  @return the available packet rate in p/s
- */
-inline int IfaceTable::getAvailPktRate(int i) const {
-	return ift[i].avpktrate;
+inline RateSpec& IfaceTable::getAvailRates(int i) const {
+	return ift[i].availRates;
 }
 
 /** Set the default interface.
@@ -155,78 +136,6 @@ inline int IfaceTable::getAvailPktRate(int i) const {
  */
 inline void IfaceTable::setDefaultIface(int iface) {
 	if (valid(iface)) defaultIf = iface;
-}
-
-/** Set the maximum bit rate for an interface.
- *  If specified rate is outside the allowed range, the rate is set to
- *  the endpoint of the range.
- *  @param iface is a valid interface number
- *  @param r is the max bit rate in Kb/s
- */
-inline void IfaceTable::setMaxBitRate(int iface, int r) {
-	ift[iface].maxbitrate = min(max(r,Forest::MINBITRATE),
-					  Forest::MAXBITRATE);
-}
-
-/** Set the maximum packet rate for an interface.
- *  If specified rate is outside the allowed range, the rate is set to
- *  the endpoint of the range.
- *  @param iface is a valid interface number
- *  @param r is the max packet rate in Kb/s
- */
-inline void IfaceTable::setMaxPktRate(int iface, int r) {
-	ift[iface].maxpktrate = min(max(r,Forest::MINPKTRATE),
-					  Forest::MAXPKTRATE);
-}
-
-/** Set the available bit rate for this interface.
- *  Operation fails if one attempts to over-allocate the interface.
- *  @param iface is the interface number
- *  @param r is the available bit rate in Kb/s
- *  @return true on success, false on failure
- */
-inline bool IfaceTable::setAvailBitRate(int iface, int r) {
-	if (r > ift[iface].maxbitrate) return false;
-	ift[iface].avbitrate = max(0,r);
-	return true;
-}
-
-/** Set the available packet rate for this interface.
- *  Operation fails if one attempts to over-allocate the interface.
- *  @param i is the interface number
- *  @param r is the available packet rate in p/s
- *  @return true on success, false on failure
- */
-inline bool IfaceTable::setAvailPktRate(int iface, int r) {
-	if (r > ift[iface].maxpktrate) return false;
-	ift[iface].avpktrate = max(0,r);
-	return true;
-}
-
-/** Add to the available bit rate for this interface.
- *  Operation fails if one attempts to over-allocate the interface.
- *  @param iface is the interface number
- *  @param r is the amount to add in Kb/s
- *  @return true on success, false on failure
- */
-inline bool IfaceTable::addAvailBitRate(int iface, int r) {
-	int s = r + ift[iface].avbitrate;
-	if (s < 0 || s > ift[iface].maxbitrate) return false;
-	ift[iface].avbitrate = s;
-	return true;
-}
-
-/** Add to the available packet rate for this interface.
- *  Operation fails if one attempts to over-allocate the interface.
- *  @param iface is the interface number
- *  @param r is the amount to add in p/s
- *  @return true on success, false on failure
- */
-inline bool IfaceTable::addAvailPktRate(int iface, int r) {
-	int s = r + ift[iface].avpktrate;
-	if (s < 0 || s > ift[iface].maxpktrate) return false;
-	ift[iface].avpktrate = s;
-	return true;
 }
 
 #endif

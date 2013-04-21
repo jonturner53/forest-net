@@ -1,7 +1,7 @@
 #ifndef CLIENTMGR_H
 #define CLIENTMGR_H
 
-#include "CommonDefs.h"
+#include "Forest.h"
 #include "PacketHeader.h"
 #include "PacketStoreTs.h"
 #include "Queue.h"

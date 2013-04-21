@@ -10,7 +10,7 @@
 #define NETMGR_H
 
 #include <pthread.h>
-#include "CommonDefs.h"
+#include "Forest.h"
 #include "PacketHeader.h"
 #include "PacketStoreTs.h"
 #include "NetInfo.h"
@@ -18,6 +18,8 @@
 #include "UiSetPair.h"
 #include "IdMap.h"
 #include "Queue.h"
+#include "CpHandler.h"
+#include "Logger.h"
 #include <map>
 
 /** NetMgr manages a Forest network.
@@ -38,6 +40,8 @@ bool	booting;		///< true until all routers are booted
 int	intSock;		///< internal socket number
 int	extSock;		///< external listening socket
 int	connSock;		///< external connection socket
+
+Logger logger;			///< error message logger
 
 PacketStoreTs *ps;		///< pointer to packet store
 
@@ -88,14 +92,10 @@ bool	readPrefixInfo(char*);
 void*	run(void*); 
 
 void* 	handler(void *);
-bool 	handleConsReq(int,CtlPkt&, Queue&, Queue&);
-bool 	handleConDisc(int,CtlPkt&, Queue&, Queue&);
-bool 	handleNewClient(int,CtlPkt&, Queue&, Queue&);
-bool 	handleBootRequest(int,CtlPkt&, Queue&, Queue&);
-int	sendCtlPkt(CtlPkt&, fAdr_t, ipa_t, ipp_t, Queue&, Queue&);
-int	sendCtlPkt(CtlPkt&, fAdr_t, Queue&, Queue&);
-int 	sendAndWait(int,CtlPkt&,Queue&,Queue&);
-void 	errReply(int,CtlPkt&,Queue&, const char*);
+bool 	handleConsReq(int,CtlPkt&,CpHandler&);
+bool 	handleConDisc(int,CtlPkt&,CpHandler&);
+bool 	handleNewClient(int,CtlPkt&,CpHandler&);
+bool 	handleBootRequest(int,CtlPkt&,CpHandler&);
 
 void	connect();		
 void	disconnect();	

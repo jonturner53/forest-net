@@ -9,6 +9,8 @@
 #ifndef RATESPEC_H
 #define RATESPEC_H
 
+#include "Forest.h"
+
 /** This class stores bit rates and packet rates for links in
  *  both directions. Directions are referred to as "up" and "down"
  *  to relate easily to usage in comtrees.
@@ -21,7 +23,7 @@ public:
 	int	pktRateDown;	///< downstream packet rate on comtree link
 
 	/** Default constructor. */
-	RateSpec() { set(0); }
+	RateSpec() { reset(); }
 
 	/** Constructor that sets all rate fields to a common value. */
 	RateSpec(int r) { set(r); }
@@ -35,6 +37,12 @@ public:
 	RateSpec(RateSpec& rs) {
 		(*this) = rs;
 	}
+
+	void reset() {
+		bitRateUp = -1; bitRateDown = pktRateUp = pktRateDown = 0;
+	}
+
+	bool isSet() { return bitRateUp != -1; }
 
 	/** Set all rate fields to a single value. */
 	void set(int r) {
@@ -102,14 +110,8 @@ public:
 			pktRateDown <= rs.pktRateDown;
 	};
 
-	/** Create a string representation of the rate spec. */
-	string& toString(string& s) const {
-		stringstream ss;
-		ss << "(" << this->bitRateUp << "," << this->bitRateDown
-		   << "," << this->pktRateUp << "," << this->pktRateDown << ")";
-		s = ss.str();
-		return s;
-	}
+	bool read(istream&);
+	string& toString(string& s) const;
 };
 
 #endif

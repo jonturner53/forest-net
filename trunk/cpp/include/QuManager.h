@@ -9,7 +9,7 @@
 #ifndef QUMANAGER_H
 #define QUMANAGER_H
 
-#include "CommonDefs.h"
+#include "Forest.h"
 #include "UiListSet.h"
 #include "Heap.h"
 #include "HeapSet.h"
@@ -37,8 +37,8 @@ public:
 	void	freeQ(int);
 
 	// set queue rates and length limits
-	bool	setLinkRates(int,int,int);
-	bool	setQRates(int,int,int);
+	bool	setLinkRates(int,RateSpec&);
+	bool	setQRates(int,RateSpec&);
 	bool	setQLimits(int,int,int);
 
 	// enq and deq packets
@@ -91,18 +91,20 @@ inline bool QuManager::validQ(int qid) const {
 	return 1 <= qid && qid <= nQ && quInfo[qid].pktLim >= 0;
 }
 
-inline bool QuManager::setLinkRates(int lnk, int br, int pr) {
+inline bool QuManager::setLinkRates(int lnk, RateSpec& rs) {
 	if (lnk < 1 || lnk > nL) return false;
-	br = max(br,1); 	pr = max(pr,1);
+	int br = max(rs.bitRateDown,1); 
+	int pr = max(rs.pktRateDown,1); 
 	br = min(br,8000000); 	pr = min(pr,1000000000);
 	lnkInfo[lnk].nsPerByte =   8000000/br;
 	lnkInfo[lnk].minDelta = 1000000000/pr;
 	return true;
 }
 
-inline bool QuManager::setQRates(int qid, int br, int pr) {
+inline bool QuManager::setQRates(int qid, RateSpec& rs) {
 	if (!validQ(qid)) return false;
-	br = min(br,8000000); pr = min(pr,1000000000);
+	int br = min(rs.bitRateDown,8000000); 
+	int pr = min(rs.pktRateDown,1000000000); 
 	quInfo[qid].nsPerByte =   8000000/br;
 	quInfo[qid].minDelta = 1000000000/pr;
 	return true;
