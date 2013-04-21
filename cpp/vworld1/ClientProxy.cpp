@@ -1,6 +1,9 @@
 #include "stdinc.h"
 #include "ClientProxy.h"
 
+namespace forest {
+
+
 int main(int argc, char *argv[]){
 	ipa_t cliMgrIpAdr, myIpAdr;
 	uint32_t finTime;
@@ -133,4 +136,7 @@ string pkt; cerr << h.toString(ps->getBuffer(p),pkt);
 	if (rv == -1) fatal("send: failure in sendto");
 	ps->free(p);
 }
+
+
+} // ends namespace
 

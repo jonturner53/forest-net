@@ -10,8 +10,11 @@
 #define HOST_H
 
 #include "Forest.h"
-#include "PacketHeader.h"
+#include "Packet.h"
 #include "PacketStore.h"
+
+namespace forest {
+
 
 /** Host implements a forest host.
  *
@@ -40,5 +43,8 @@ private:
 
 	PacketStore *ps;		// pointer to packet store
 };
+
+
+} // ends namespace
 
 #endif

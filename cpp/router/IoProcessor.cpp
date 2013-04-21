@@ -8,6 +8,9 @@
 
 #include "IoProcessor.h"
 
+namespace forest {
+
+
 // Constructor for IoProcessor, allocates space and initializes private data
 IoProcessor::IoProcessor(int maxIface1, IfaceTable *ift1, LinkTable *lt1,
 			 PacketStore *ps1, StatsModule *sm1)
@@ -215,3 +218,6 @@ void IoProcessor::send(pktx px, int lnk) {
 		       (lt->getPeerType(lnk) == ROUTER));
 	ps->free(px);
 }
+
+} // ends namespace
+

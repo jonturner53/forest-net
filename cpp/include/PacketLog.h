@@ -12,7 +12,10 @@
 #include "Forest.h"
 #include "Misc.h"
 #include "PacketStore.h"
-#include "PacketHeader.h"
+#include "Packet.h"
+
+namespace forest {
+
 
 class PacketLog {
 public:
@@ -40,5 +43,8 @@ private:
 
 	PacketStore *ps;
 };
+
+} // ends namespace
+
 
 #endif

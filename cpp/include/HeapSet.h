@@ -13,6 +13,9 @@
 #include "stdinc.h"
 #include "Util.h"
 
+namespace forest {
+
+
 typedef int item;
 
 /** This class implements a collection of heaps.
@@ -96,5 +99,8 @@ inline bool HeapSet::empty(int h) { return hSize[h] == 0; };
 
 // Return the size of a heap.
 inline int HeapSet::heapSize(int h) const { return hSize[h]; };
+
+} // ends namespace
+
 
 #endif

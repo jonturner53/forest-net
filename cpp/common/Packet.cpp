@@ -8,6 +8,9 @@
 
 #include "Packet.h"
 
+namespace forest {
+
+
 Packet::Packet() {
 	version = 1; buffer = 0;
 }
@@ -153,3 +156,6 @@ string& Packet::toString(string& s) const {
 	s = ss.str();
 	return s;
 }
+
+} // ends namespace
+

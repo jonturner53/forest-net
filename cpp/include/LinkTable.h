@@ -11,9 +11,12 @@
 
 #include <set>
 #include "Forest.h"
-#include "PacketHeader.h"
+#include "Packet.h"
 #include "UiSetPair.h"
 #include "UiHashTbl.h"
+
+namespace forest {
+
 
 /** Maintains information about a Forest router's virtual links.
  */
@@ -228,5 +231,8 @@ inline uint64_t LinkTable::hashkey(ipa_t ipa, ipp_t ipp) const {
 inline int LinkTable::lookup(ipa_t ipa, ipp_t ipp) const {
         return ht->lookup(hashkey(ipa,ipp));
 }
+
+} // ends namespace
+
 
 #endif

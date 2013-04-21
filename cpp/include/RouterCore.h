@@ -26,6 +26,8 @@
 #include "StatsModule.h"
 #include "PacketLog.h"
 
+namespace forest {
+
 /** Structure used to carry information about a router. */
 struct RouterInfo {
         string  mode; 		///< router operation mode (local or remote)
@@ -213,5 +215,7 @@ inline bool RouterCore::isFreeLeafAdr(fAdr_t adr) const {
 	int offset = (adr - firstLeafAdr) + 1;
 	return leafAdr->isOut(offset);
 }
+
+} // ends namespace
 
 #endif

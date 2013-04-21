@@ -8,6 +8,9 @@
 
 #include "CpHandler.h"
 
+namespace forest {
+
+
 bool CpHandler::getCp(pktx px, CtlPkt& cp) {
 	Packet& p = ps->getPacket(px);
 	cp.reset(p.payload(), p.length - Forest::OVERHEAD);
@@ -651,3 +654,6 @@ void CpHandler::errReply(pktx px, CtlPkt& cp, const char* msg) {
 
 	outq->enq(px1);
 }
+
+} // ends namespace
+

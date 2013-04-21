@@ -12,6 +12,9 @@
 #include "Forest.h"
 #include "CtlPkt.h"
 
+namespace forest {
+
+
 /** Class that defines fields in Forest packets.
  *  Note, packet fields and buffer are directly accessible. Use with care.
  */
@@ -53,5 +56,8 @@ public:
 
 private:
 };
+
+} // ends namespace
+
 
 #endif

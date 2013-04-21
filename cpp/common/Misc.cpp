@@ -8,6 +8,9 @@
 
 #include "Misc.h"
 
+namespace forest {
+
+
 /** Read up to first occurrence of a given character.
  *  @param in is the input stream to read from
  *  @param c  is character to look for
@@ -275,3 +278,6 @@ uint64_t Misc::getTimeNs() {
 
         return now;
 }
+
+} // ends namespace
+

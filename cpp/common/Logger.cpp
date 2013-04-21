@@ -8,6 +8,9 @@
 
 #include "Logger.h"
 
+namespace forest {
+
+
 Logger::Logger() {
 	level = 1;
 	if (pthread_mutex_init(&myLock,NULL) != 0)
@@ -54,3 +57,6 @@ void Logger::logit(const string& s, int severity, CtlPkt& cp) {
 	if (severity > 3) fatal("terminating");
 	pthread_mutex_lock(&myLock);
 }
+
+} // ends namespace
+

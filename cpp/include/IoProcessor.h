@@ -15,6 +15,9 @@
 #include "PacketStore.h"
 #include "StatsModule.h"
 
+namespace forest {
+
+
 class IoProcessor {
 public:
 		IoProcessor(int, IfaceTable*, LinkTable*,
@@ -49,6 +52,9 @@ private:
     Timer *timer_np4d_sendto4d, *timer_np4d_recvfrom4d;
     #endif
 };
+
+
+} // ends namespace
 
 
 #endif

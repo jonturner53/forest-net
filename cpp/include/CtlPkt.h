@@ -10,8 +10,10 @@
 #define CTLPKT_H
 
 #include "Forest.h"
-#include "CpType.h"
 #include "RateSpec.h"
+
+namespace forest {
+
 
 /** This class provides a mechanism for handling forest signalling packets.
  *  Signalling packets have a packet type of CLIENT_SIG or NET_SIG in the
@@ -142,5 +144,8 @@ public:
 
 private:
 };
+
+} // ends namespace
+
 
 #endif

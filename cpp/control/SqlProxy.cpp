@@ -1,6 +1,9 @@
 #include "stdinc.h"
 #include "SqlProxy.h"
 
+namespace forest {
+
+
 int main(int argc, char *argv[]){
 	uint32_t finTime;
 	ipa_t intIp, extIp;
@@ -71,3 +74,6 @@ void SqlProxy::run(uint32_t runTime) {
                 else nextTime = now + 1000*UPDATE_PERIOD;
 	}
 }
+
+} // ends namespace
+

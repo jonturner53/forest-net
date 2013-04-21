@@ -8,6 +8,9 @@
 
 #include "PacketLog.h"
 
+namespace forest {
+
+
 /** Constructor for PacketLog, allocates space and initializes private data.
  */
 PacketLog::PacketLog(int maxPkts1, int maxData1, PacketStore *ps1)
@@ -66,3 +69,6 @@ void PacketLog::write(ostream& out) const {
 	}
 	out.flush();
 }
+
+} // ends namespace
+

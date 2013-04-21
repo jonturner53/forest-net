@@ -12,6 +12,9 @@
 #define left(x) (D*((x)-1)+2)
 #define right(x) (D*(x)+1)
 
+namespace forest {
+
+
 Heap::Heap(int N1) : N(N1) {
 // Initialize a heap to store items in {1,...,N}.
 	n = 0;
@@ -85,3 +88,7 @@ string& Heap::toString(string& s) const {
 	}
 	return s;
 }
+
+
+} // ends namespace
+

@@ -12,6 +12,9 @@
 #include "NetInfo.h"
 #include "Heap.h"
 
+namespace forest {
+
+
 /** Class used to represent information used to modify a link.  */
 class LinkMod {
 public:
@@ -725,5 +728,8 @@ inline bool ComtInfo::setLinkRates(int ctx, fAdr_t fa, RateSpec& newRates) {
 	return true;
 }
  */
+
+} // ends namespace
+
 
 #endif

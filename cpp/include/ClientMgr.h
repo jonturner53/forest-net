@@ -10,6 +10,9 @@
 #include <pthread.h> 
 #include <map>
 
+namespace forest {
+
+
 void* run(void *);		///< main run method, takes in finTime
 bool init(fAdr_t,ipa_t,fAdr_t,fAdr_t,ipa_t,ipa_t,ipa_t,fAdr_t,char*); ///< initialize sockets
 ipa_t intIp;		///< address for tcp connections from "internal" hosts
@@ -92,4 +95,7 @@ void connect();		///< connect to forest network
 void disconnect();	///< disconnect from forest network
 void initializeAvatar();///< try to connect to and initialize ClientAvatar
 bool checkUser(string&,string&); ///< check if username/pword pair is in sql db
+
+} // ends namespace
+
 #endif

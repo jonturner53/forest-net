@@ -12,6 +12,9 @@
 #include "stdinc.h"
 #include "Misc.h"
 
+namespace forest {
+
+
 typedef int item;
 
 /** This class implements a heap data structure.
@@ -68,5 +71,8 @@ inline bool Heap::member(item i) { return pos[i] != Null; }
 
 // Return true if heap is empty, else false.
 inline bool Heap::empty() { return n == 0; };
+
+} // ends namespace
+
 
 #endif

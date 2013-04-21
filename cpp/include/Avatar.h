@@ -13,9 +13,11 @@
 #include <list>
 #include <bitset>
 #include "Forest.h"
-#include "PacketHeader.h"
+#include "Packet.h"
 #include "PacketStore.h"
 #include "HashSet.h"
+
+namespace forest {
 
 /** Class that implements a simulated avatar in a virtual world.
  *  
@@ -135,5 +137,7 @@ private:
 	void	send(int);		
 	int	receive();		
 };
+
+} // ends namespace
 
 #endif

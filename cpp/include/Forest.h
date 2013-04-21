@@ -1,4 +1,4 @@
-/** @file Forest
+/** @file Forest.h
  *
  *  @author Jon Turner
  *  @date 2011
@@ -29,6 +29,9 @@
 #include "Util.h"
 #include "Misc.h"
 #include "Np4d.h"
+
+namespace forest {
+
 
 /** Forest node types.
  *
@@ -211,5 +214,8 @@ inline int Forest::truPktLeng(int x) { return 70+x; }
 #include "cycle.h"
 typedef ticks cycle_t;
 inline cycle_t cycCnt() { return getticks(); }
+
+} // ends namespace
+
 
 #endif

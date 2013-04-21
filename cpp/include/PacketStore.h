@@ -13,6 +13,9 @@
 #include "UiList.h"
 #include "Packet.h"
 
+namespace forest {
+
+
 typedef int pktx;
 
 /** Maintains a set of packets with selected header fields and a
@@ -90,5 +93,8 @@ inline void PacketStore::setPacket(pktx px, const Packet& p) {
 	pkt[px] = p;
 }
 */
+
+} // ends namespace
+
 
 #endif
