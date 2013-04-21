@@ -13,7 +13,7 @@
  */
 PacketStoreTs::PacketStoreTs(int N1) : N(N1) {
 	n = 0;
-	phdr = new PacketHeader[N+1]; 
+	pkt = new Packet[N+1]; 
 	buff = new buffer_t[N+1]; 
 	freePkts = new UiList(N); 
 
@@ -23,57 +23,56 @@ PacketStoreTs::PacketStoreTs(int N1) : N(N1) {
 };
 	
 PacketStoreTs::~PacketStoreTs() {
-	delete [] phdr; delete [] buff; delete freePkts; 
+	delete [] pkt; delete [] buff; delete freePkts; 
 }
 
 /** Allocate a new packet and buffer.
  *  @return the packet number or 0, if no more packets available
  */
-packet PacketStoreTs::alloc() {
+pktx PacketStoreTs::alloc() {
 	pthread_mutex_lock(&lock);
 
-	packet p;
+	pktx px;
 	if (freePkts->empty()) { 
-		p = 0;
+		px = 0;
 	} else {
-		p = freePkts->get(1); freePkts->removeFirst(); n++;
+		px = freePkts->get(1); freePkts->removeFirst(); n++;
 	}
 
 	pthread_mutex_unlock(&lock);
-	if (p == 0) {
+	if (px == 0) {
 		cerr << "PacketStoreTs::alloc: no packets left to "
 			"allocate\n";
 	}
-	return p;
+	return px;
 }
 
 /** Release the storage used by a packet.
  *  Also releases the associated buffer, if no clones are using it.
  *  @param p is the packet number of the packet to be released
  */
-void PacketStoreTs::free(packet p) {
+void PacketStoreTs::free(pktx px) {
 	pthread_mutex_lock(&lock);
 
-	if (p >= 1 && p <= N && !freePkts->member(p)) {
-		freePkts->addFirst(p); n--;
+	if (px >= 1 && px <= N && !freePkts->member(px)) {
+		freePkts->addFirst(px); n--;
 	}
 
 	pthread_mutex_unlock(&lock);
 }
 
-/** Allocate a new packet that with the same content as p.
+/** Allocate a new packet that with the same content as px.
  *  A new buffer is allocated for this packet.
  *  @return the index of the new packet.
  */
-packet PacketStoreTs::fullCopy(packet p) {
-        int p1 = alloc();
-        if (p1 == 0) return 0;
-	PacketHeader& h = getHeader(p);
-	PacketHeader& h1 = getHeader(p1);
-        int len = (h.getLength()+3)/4;
-        buffer_t& buf = getBuffer(p); buffer_t& buf1 = getBuffer(p1);
+pktx PacketStoreTs::fullCopy(pktx px) {
+        int px1 = alloc();
+        if (px1 == 0) return 0;
+	Packet& p = getPacket(px); Packet& p1 = getPacket(px1);
+	buffer_t* tmp = p1.buffer; p1 = p; p1.buffer = tmp;
+        int len = (p.length+3)/4;
+        buffer_t& buf = *p.buffer; buffer_t& buf1 = *p1.buffer;
         for (int i = 0; i < len; i++) buf1[i] = buf[i];
-	h1 = h;
-        return p1;
+        return px1;
 }
 

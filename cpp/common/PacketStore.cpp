@@ -14,7 +14,7 @@
  */
 PacketStore::PacketStore(int N1, int M1) : N(N1), M(M1) {
 	n = m = 0;
-	phdr = new PacketHeader[N+1]; pb = new int[N+1];
+	pkt = new Packet[N+1]; pb = new int[N+1];
 	buff = new buffer_t[M+1]; ref = new int[M+1];
 	freePkts = new UiList(N); freeBufs = new UiList(M);
 
@@ -25,61 +25,61 @@ PacketStore::PacketStore(int N1, int M1) : N(N1), M(M1) {
 };
 	
 PacketStore::~PacketStore() {
-	delete [] phdr; delete [] pb; delete [] buff; delete [] ref;
+	delete [] pkt; delete [] pb; delete [] buff; delete [] ref;
 	delete freePkts; delete freeBufs;
 }
 
 /** Allocate a new packet and buffer.
  *  @return the packet number or 0, if no more packets available
  */
-packet PacketStore::alloc() {
-	packet p; int b;
+pktx PacketStore::alloc() {
 	if (freePkts->empty() || freeBufs->empty()) return 0;
 	n++; m++;
-	p = freePkts->get(1); freePkts->removeFirst();
-	b = freeBufs->get(1); freeBufs->removeFirst();
-	pb[p] = b; ref[b] = 1;
-	return p;
+	pktx px = freePkts->get(1); freePkts->removeFirst();
+	int b = freeBufs->get(1); freeBufs->removeFirst();
+	//pb[px] = b;
+	ref[b] = 1;
+	pkt[px].buffer = &buff[b];
+	return px;
 }
 
 /** Release the storage used by a packet.
  *  Also releases the associated buffer, if no clones are using it.
- *  @param p is the packet number of the packet to be released
+ *  @param px is the packet number of the packet to be released
  */
-void PacketStore::free(packet p) {
-	if (p < 1 || p > N || freePkts->member(p)) return;
-	int b = pb[p]; pb[p] = 0;
-	freePkts->addFirst(p); n--;
+void PacketStore::free(pktx px) {
+	if (px < 1 || px > N || freePkts->member(px)) return;
+	int b = pkt[px].buffer - buff;
+	freePkts->addFirst(px); n--;
 	if ((--ref[b]) == 0) { freeBufs->addFirst(b); m--; }
 }
 
 /** Make a "clone" of an existing packet.
  *  The clone shares the same buffer as the original.
  *  Its header is initialized to match the original.
- *  @param p is the packet number of the packet to be cloned
+ *  @param px is the packet number of the packet to be cloned
  *  @return the index of the new packet or 0 on failure
  */
-packet PacketStore::clone(packet p) {
-	int b = pb[p];
+pktx PacketStore::clone(pktx px) {
 	if (freePkts->empty()) return 0;
 	n++;
-	packet p1 = freePkts->get(1); freePkts->removeFirst();
-	ref[b]++; setHeader(p1,getHeader(p)); pb[p1] = pb[p];
-	return p1;
+	pktx px1 = freePkts->get(1); freePkts->removeFirst();
+	pkt[px1] = pkt[px];
+	int b = pkt[px].buffer - buff; ref[b]++;
+	return px1;
 }
 
 /** Allocate a new packet with the same content as p.
  *  A new buffer is allocated for this packet.
  *  @return the index of the new packet.
  */
-packet PacketStore::fullCopy(packet p) {
-	int p1 = alloc();
-	if (p1 == 0) return 0;
-	PacketHeader& h = getHeader(p);
-	PacketHeader& h1 = getHeader(p1);
-	int len = (h.getLength()+3)/4;
-	buffer_t& buf = getBuffer(p); buffer_t& buf1 = getBuffer(p1);
-	for (int i = 0; i < len; i++) buf1[i] = buf[i];
-	h1 = h;
-	return p1;
+pktx PacketStore::fullCopy(pktx px) {
+	int px1 = alloc();
+	if (px1 == 0) return 0;
+	Packet& p = getPacket(px); Packet& p1 = getPacket(px1);
+	buffer_t* tmp = p1.buffer; p1 = p; p1.buffer = tmp;
+	int len = (p.length+3)/4;
+        buffer_t& buf = *p.buffer; buffer_t& buf1 = *p1.buffer;
+        for (int i = 0; i < len; i++) buf1[i] = buf[i];
+	return px1;
 }
