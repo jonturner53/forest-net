@@ -8,9 +8,6 @@
 
 #include "PacketStoreTs.h"
 
-namespace forest {
-
-
 /** Constructor allocates space and initializes free list.
  *  @param N1 is number of packets to allocate space for
  */
@@ -20,7 +17,10 @@ PacketStoreTs::PacketStoreTs(int N1) : N(N1) {
 	buff = new buffer_t[N+1]; 
 	freePkts = new UiList(N); 
 
-	for (int i = 1; i <= N; i++) freePkts->addLast(i);
+	for (int i = 1; i <= N; i++) {
+		pkt[i].buffer = &buff[i];
+		freePkts->addLast(i);
+	}
 
 	pthread_mutex_init(&lock,NULL);
 };
@@ -78,7 +78,4 @@ pktx PacketStoreTs::fullCopy(pktx px) {
         for (int i = 0; i < len; i++) buf1[i] = buf[i];
         return px1;
 }
-
-
-} // ends namespace
 
