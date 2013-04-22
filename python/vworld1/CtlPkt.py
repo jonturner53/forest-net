@@ -15,7 +15,7 @@ CLIENT_LEAVE_COMTREE=15
 # selected attribute codes
 COMTREE=50
 IP1=5
-PORT1=6
+PORT1=9
 
 class CtlPkt:
 	""" Class for working with selected Forest control packets.  """
@@ -41,8 +41,8 @@ class CtlPkt:
 		if (self.cpTyp == CLIENT_JOIN_COMTREE or \
 		    self.cpTyp == CLIENT_LEAVE_COMTREE) and \
 		    self.mode == RR_REQUEST :
-			if self.comtree == 0 or self.clientIp == 0 or \
-			   self.clientPort == 0 :
+			if self.comtree == 0 or self.ip1 == 0 or \
+			   self.port1 == 0 :
 				sys.stderr.write("CtlPkt.pack: missing " + \
 					"required attribute(s)");
 				return None
@@ -110,9 +110,9 @@ class CtlPkt:
 		s += " seqNum=" + str(self.seqNum)
 		if self.comtree != 0 :
 			s += " comtree=" + str(self.comtree)
-		if self.clientIp != 0 :
+		if self.ip1 != 0 :
 			s += " ip1=" + ip2string(self.ip1)
-		if self.clientPort != 0 :
+		if self.port1 != 0 :
 			s += " port1=" + str(self.port1)
 		if self.errMsg != None :
 			s += " errMsg=" + self.errMsg
