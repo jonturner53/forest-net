@@ -1,29 +1,32 @@
+# Top level makefile, order of lower-level makes matters
 SHELL := /bin/bash
-FORESTROOT = $(shell pwd)
-ALGOLIBROOT = ${FORESTROOT}/../../algolib-jst
-FLIB = ${FORESTROOT}/lib/lib-forest.a
-LIBS = ${FLIB} ${ALGOLIBROOT}/lib/lib-ds.a ${ALGOLIBROOT}/lib/lib-util.a
-CXXFLAGS = -Wall -O2 -I ${FORESTROOT}/include -I ${ALGOLIBROOT}/include
-#JAVAC=/usr/java/latest/bin/javac
-JAVAC=javac
+ARCH := -m$(shell getconf LONG_BIT)
+FROOT = $(shell pwd)
+AROOT = ${FROOT}/../../algolib-jst
+INCLUDES = -I ${FROOT}/include -I ${ALGOLIB}/INCLUDE
+FLIB = ${FROOT}/lib/lib-forest.a
+LIBS = ${FLIB} ${AROOT}/lib/lib-ds.a ${AROOT}/lib/lib-util.a
 BIN = ~/bin
+WARN = -Wall -Wno-c++11-extensions
+CXXFLAGS = ${WARN} ${ARCH} ${INCLUDES} -O2
+JAVAC = javac
 
 all:
-	make -C common          ALGOLIBROOT='${ALGOLIBROOT}' FLIB='${FLIB}' \
-				BIN='${BIN}' CXXFLAGS='${CXXFLAGS}' \
-				LIBS='${LIBS}' JAVAC='${JAVAC}' all
-	make -C router          ALGOLIBROOT='${ALGOLIBROOT}' FLIB='${FLIB}' \
-				BIN='${BIN}' CXXFLAGS='${CXXFLAGS}' \
-				LIBS='${LIBS}' JAVAC='${JAVAC}' all
-	make -C control         ALGOLIBROOT='${ALGOLIBROOT}' FLIB='${FLIB}' \
-				BIN='${BIN}' CXXFLAGS='${CXXFLAGS}' \
-				LIBS='${LIBS}' JAVAC='${JAVAC}' all
-	make -C vworld1         ALGOLIBROOT='${ALGOLIBROOT}' FLIB='${FLIB}' \
-				BIN='${BIN}' CXXFLAGS='${CXXFLAGS}' \
-				LIBS='${LIBS}' JAVAC='${JAVAC}' all
-	make -C misc            ALGOLIBROOT='${ALGOLIBROOT}' FLIB='${FLIB}' \
-				BIN='${BIN}' CXXFLAGS='${CXXFLAGS}' \
-				LIBS='${LIBS}' JAVAC='${JAVAC}' all
+	make -C common          AROOT='${AROOT}' FROOT='${FROOT}' \
+				ARCH='${ARCH}' BIN='${BIN}' WARN='${WARN}' \
+				JAVAC='${JAVAC}' all
+	make -C router          AROOT='${AROOT}' FROOT='${FROOT}' \
+				ARCH='${ARCH}' BIN='${BIN}' WARN='${WARN}' \
+				JAVAC='${JAVAC}' all
+	make -C control         AROOT='${AROOT}' FROOT='${FROOT}' \
+				ARCH='${ARCH}' BIN='${BIN}' WARN='${WARN}' \
+				JAVAC='${JAVAC}' all
+	make -C vworld1         AROOT='${AROOT}' FROOT='${FROOT}' \
+				ARCH='${ARCH}' BIN='${BIN}' WARN='${WARN}' \
+				JAVAC='${JAVAC}' all
+	make -C misc         	AROOT='${AROOT}' FROOT='${FROOT}' \
+				ARCH='${ARCH}' BIN='${BIN}' WARN='${WARN}' \
+				JAVAC='${JAVAC}' all
 
 clean:
 	rm -f ${FLIB} 
