@@ -218,10 +218,10 @@ class Net :
 		p.type = CLIENT_SIG; p.comtree = CLIENT_SIG_COMT
 		p.srcAdr = self.myFadr; p.dstAdr = self.comtCtlFadr
 
-		cp = CtlPkt(which,RR_REQUEST,self.seqNum)
+		cp = CtlPkt(which,REQUEST,self.seqNum)
 		cp.comtree = self.comtree
-		cp.clientIp = string2ip(self.myIp)
-		cp.clientPort = self.myAdr[1]
+		cp.ip1 = string2ip(self.myIp)
+		cp.port1 = self.myAdr[1]
 		p.payload = cp.pack()
 		self.seqNum += 1
 
@@ -232,7 +232,7 @@ class Net :
 
 		return	cpReply.seqNum == cp.seqNum and \
 			cpReply.cpTyp  == cp.cpTyp and \
-			cpReply.rrTyp  == RR_POS_REPLY
+			cpReply.mode  == POS_REPLY
 
 	def sendCtlPkt(self,p) :
 		""" Send a control packet and wait for a response.
@@ -383,7 +383,7 @@ class Net :
 		"""
 		dropList = []
 		for avId, remote in self.nearRemotes.iteritems() :
-			if remote[5] > 0 : # implies missing update
+			if remote[0] > 0 : # implies missing update
 				# update position based on dx, dy
 				remote[0] += remote[3]; remote[1] += remote[4]
 				remote[0] = max(0,remote[0])

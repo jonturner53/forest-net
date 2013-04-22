@@ -56,6 +56,8 @@ for i in range(6,len(sys.argv)) :
 pWorld = AIWorld() if auto else PandaWorld()
 net = Net(myIp, cliMgrIp, myComtree, numg, subLimit, pWorld, debug)
 
+if auto : print "type Ctrl-C to terminate"
+
 # setup tasks
 if not net.init("user", "pass") :
 	sys.stderr.write("cannot initialize net object\n");
