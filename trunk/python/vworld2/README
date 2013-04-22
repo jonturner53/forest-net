@@ -10,7 +10,9 @@
    After that, run it with command "python" instead of "ppython".
 
 2. Add the following line to Config.prc:
+
 		window-type none
+
    For OS X, Config.prc is located at /Developer/Panda3D/etc/
 
 3. All model files are located in models/; 2Dmap.png is the top view
