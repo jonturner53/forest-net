@@ -56,7 +56,7 @@ class Net(Thread) :
 			self.direction = randint(0,359)
 			self.speed = SLOW; self.deltaDir = 0 
 		else :
-			self.x = 5; self.y = 5
+			self.x = 2; self.y = 2
                         self.direction = 180; self.deltaDir = 0
                         self.speed = STOPPED
 
@@ -222,10 +222,10 @@ class Net(Thread) :
 		p.type = CLIENT_SIG; p.comtree = CLIENT_SIG_COMT
 		p.srcAdr = self.myFadr; p.dstAdr = self.comtCtlFadr
 
-		cp = CtlPkt(which,RR_REQUEST,self.seqNum)
+		cp = CtlPkt(which,REQUEST,self.seqNum)
 		cp.comtree = self.comtree
-		cp.clientIp = string2ip(self.myIp)
-		cp.clientPort = self.myAdr[1]
+		cp.ip1 = string2ip(self.myIp)
+		cp.port1 = self.myAdr[1]
 		p.payload = cp.pack()
 		self.seqNum += 1
 
@@ -236,7 +236,7 @@ class Net(Thread) :
 
 		return	cpReply.seqNum == cp.seqNum and \
 			cpReply.cpTyp  == cp.cpTyp and \
-			cpReply.rrTyp  == RR_POS_REPLY
+			cpReply.mode  == POS_REPLY
 
 	def sendCtlPkt(self,p) :
 		""" Send a control packet and wait for a response.
