@@ -1,46 +1,51 @@
-JAVAROOT = ${BIN}/java
-ALGOLIBROOT = ../../../algolib-jst
-BIN = ~/bin
-FLIB = ../lib/lib-forest.a
-LIBS = ${FLIB} ${ALGOLIBROOT}/lib/lib-ds.a ${ALGOLIBROOT}/lib/lib-util.a
-CXXFLAGS = -Wall -O2 -m64 -I ../include -I ${ALGOLIBROOT}/include -I /usr/include/mysql
+SHELL := /bin/bash
+ARCH := -m$(shell getconf LONG_BIT)
+FROOT = $(shell pwd)/../
+AROOT = ${FROOT}/../../algolib-jst
+INCLUDES := -I ${FROOT}/include -I ${AROOT}/include
+FLIB := ${FROOT}/lib/lib-forest.a
+LIBS := ${FLIB} ${AROOT}/lib/lib-ds.a ${AROOT}/lib/lib-util.a
+BIN := ~/bin
+WARN := -Wall -Wno-c++11-extensions
+CXXFLAGS := ${WARN} ${ARCH} ${INCLUDES} -O2
+JAVAC := javac
+IDIR := ${FROOT}/include
 
-LIBFILES = NetInfo.o ComtInfo.o CpHandler.o
+HFILES = ${IDIR}/NetInfo.h ${IDIR}/ComtInfo.h ${IDIR}/CpHandler.h
+OFILES = NetInfo.o ComtInfo.o CpHandler.o
 XFILES = NetMgr CliMgr-v0 ComtCtl BuildRtables #Console CliMgr SqlProxy
 
-%.o: %.cpp %.h stdinc.h
+${OFILES} : ${HFILES}
+
+.cpp.o:
 	${CXX} ${CXXFLAGS} -c $<
 
-all : lib ${XFILES}
+all : ${FLIB} ${XFILES}
+	cp ${XFILES} ${BIN}
 
-lib : ${LIBFILES}
-	ar -ru ${FLIB} ${LIBFILES}
+${FLIB} : ${OFILES}
+	ar -ru ${FLIB} ${OFILES}
 
 NetMgr : NetMgr.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -lpthread -o $@
-	cp $@ ${BIN}
 
 Console : Console.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
-	cp $@ ${BIN}
 
 CliMgr : ClientMgr.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -lpthread -o $@
-	cp $@ ${BIN}
 
 CliMgr-v0 : ClientMgr-v0.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -lpthread -o $@
-	cp $@ ${BIN}
 
 ComtCtl : ComtCtl.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -lpthread -o $@
-	cp $@ ${BIN}
+
 SqlProxy : SqlProxy.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} libmysqlpp.a libmysqlclient.a -lssl -o $@
-	cp $@ ${BIN}
+
 BuildRtables : BuildRtables.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
-	cp $@ ${BIN}
 
 clean :
 	rm -f *.o ${XFILES}

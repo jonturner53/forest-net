@@ -1,17 +1,25 @@
-ALGOLIBROOT = ../../../algolib-jst
-FLIB = ../lib/lib-forest.a
-LIBS = ${FLIB} ${ALGOLIBROOT}/lib/lib-util.a ${ALGOLIBROOT}/lib/lib-ds.a
-BIN = ~/bin
-CXXFLAGS = -Wall -O2 -m64 -I ../include -I ${ALGOLIBROOT}/include
+SHELL := /bin/bash
+ARCH := -m$(shell getconf LONG_BIT)
+FROOT = $(shell pwd)/../
+AROOT = ${FROOT}/../../algolib-jst
+INCLUDES := -I ${FROOT}/include -I ${AROOT}/include
+FLIB := ${FROOT}/lib/lib-forest.a
+LIBS := ${FLIB} ${AROOT}/lib/lib-ds.a ${AROOT}/lib/lib-util.a
+BIN := ~/bin
+WARN := -Wall -Wno-c++11-extensions
+CXXFLAGS := ${WARN} ${ARCH} ${INCLUDES} -O2
+JAVAC := javac
 
-%.o: %.cpp %.h stdinc.h
+XFILES = Host
+
+.cpp.o:
 	${CXX} ${CXXFLAGS} -c $<
 
-all : Host
+all : ${XFILES}
+	cp ${XFILES} ${BIN}
 
 Host : Host.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
-	cp $@ ${BIN}
 
 clean :
-	rm -f *.o Host
+	rm -f *.o ${XFILES}
