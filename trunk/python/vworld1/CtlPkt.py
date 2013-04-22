@@ -4,55 +4,52 @@ from socket import *
 from Util import *
 
 # request/return field types
-RR_REQUEST=1		# signifies request packet
-RR_POS_REPLY=2		# signifies positive reply
-RR_NEG_REPLY=3		# signifies positive reply
+REQUEST=1		# signifies request packet
+POS_REPLY=2		# signifies positive reply
+NEG_REPLY=3		# signifies positive reply
 
 # selected control packet types
 CLIENT_JOIN_COMTREE=14
 CLIENT_LEAVE_COMTREE=15
 
 # selected attribute codes
-COMTREE_NUM=4
-CLIENT_IP=34
-CLIENT_PORT=43
+COMTREE=50
+IP1=5
+PORT1=6
 
 class CtlPkt:
 	""" Class for working with selected Forest control packets.  """
 
-	def __init__(self,cpTyp,rrTyp,seqNum) :
+	def __init__(self,cpTyp,mode,seqNum) :
 		""" Constructor for CtlPkt objects.
 		
 		"""
 		self.cpTyp = cpTyp
-		self.rrTyp = rrTyp
+		self.mode = mode
 		self.seqNum = seqNum
 
 		self.comtree = 0
-		self.clientIp = 0
-		self.clientPort = 0
+		self.ip1 = 0
+		self.port1 = 0
 		self.errMsg = None
 
 	def pack(self) :
 		""" Pack control packet into a buffer and return it.
 		"""
 		buf = struct.pack('!IIQ', \
-				  self.cpTyp, self.rrTyp, self.seqNum)
+				  self.cpTyp, self.mode, self.seqNum)
 		if (self.cpTyp == CLIENT_JOIN_COMTREE or \
 		    self.cpTyp == CLIENT_LEAVE_COMTREE) and \
-		    self.rrTyp == RR_REQUEST :
+		    self.mode == RR_REQUEST :
 			if self.comtree == 0 or self.clientIp == 0 or \
 			   self.clientPort == 0 :
 				sys.stderr.write("CtlPkt.pack: missing " + \
 					"required attribute(s)");
 				return None
 			buf += struct.pack('!IIIIII',
-				  COMTREE_NUM,\
-				  self.comtree & 0xffffffff, \
-				  CLIENT_IP,\
-				  self.clientIp & 0xffffffff, \
-				  CLIENT_PORT, \
-				  self.clientPort & 0xffff)
+				  COMTREE, self.comtree & 0xffffffff, \
+				  IP1, self.ip1 & 0xffffffff, \
+				  PORT1, self.port1 & 0xffff)
 		else :
 			sys.stderr.write("CtlPkt.pack: unimplemented " + \
 				"control packet type\n" + self.toString() + \
@@ -68,14 +65,14 @@ class CtlPkt:
 		tuple = struct.unpack('!IIQ', buf[0:16])
 		if len(tuple) != 3 : return False
 		self.cpTyp = tuple[0]
-		self.rrTyp = tuple[1]
+		self.mode = tuple[1]
 		self.seqNum = tuple[2]
 
 		buf = buf[16:]
 		if self.cpTyp == CLIENT_JOIN_COMTREE or \
 		   self.cpTyp == CLIENT_LEAVE_COMTREE :
-			if self.rrTyp == RR_POS_REPLY : return True
-			if self.rrTyp == RR_NEG_REPLY : 
+			if self.mode == POS_REPLY : return True
+			if self.mode == NEG_REPLY : 
 				tuple = struct.unpack('!' + str(len(buf)) + \
 						      's',buf)
 				if len(tuple) != 1 : return False
@@ -83,12 +80,12 @@ class CtlPkt:
 				return True
 			# request type
 			tuple = struct.unpack('!IIIIII',buf)
-			if len(tuple) != 6 or tuple[0] != COMTREE_NUM or \
-			   tuple[2] != CLIENT_IP or tuple[4] != CLIENT_PORT :
+			if len(tuple) != 6 or tuple[0] != COMTREE or \
+			   tuple[2] != IP1 or tuple[4] != PORT1 :
 				return False
 			self.comtree = tuple[1]
-			self.clientIp = tuple[3]
-			self.clientPort = tuple[5]
+			self.ip1 = tuple[3]
+			self.port1 = tuple[5]
 			return True
 		else :
 			sys.stderr.write("CtlPkt.unpack: unimplemented " + \
@@ -105,18 +102,18 @@ class CtlPkt:
 		else :
 			s += "unknown type"
 
-		if self.rrTyp == RR_REQUEST : s += " (request)"
-		elif self.rrTyp == RR_POS_REPLY : s += " (positive reply)"
-		elif self.rrTyp == RR_NEG_REPLY : s += " (negative reply)"
+		if self.mode == REQUEST : s += " (request)"
+		elif self.mode == POS_REPLY : s += " (positive reply)"
+		elif self.mode == NEG_REPLY : s += " (negative reply)"
 		else : s += " (unknown type)"
 
 		s += " seqNum=" + str(self.seqNum)
 		if self.comtree != 0 :
 			s += " comtree=" + str(self.comtree)
 		if self.clientIp != 0 :
-			s += " clientIp=" + ip2string(self.clientIp)
+			s += " ip1=" + ip2string(self.ip1)
 		if self.clientPort != 0 :
-			s += " clientPort=" + str(self.clientPort)
+			s += " port1=" + str(self.port1)
 		if self.errMsg != None :
 			s += " errMsg=" + self.errMsg
 
