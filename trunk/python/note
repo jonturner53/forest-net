@@ -1,5 +1,5 @@
 vworld1 - the original virtual world demo
-	  that does not require a game engine; we can have
+	  that does not require the Panda3D engine; we can have
 	  both C++ and python versions of the Avatar;
 	  useful to retain this for pure networking
 	  experiments, where we are not concerned with dealing
@@ -9,6 +9,6 @@ vworld1 - the original virtual world demo
 vworld2 - a basic panda demo for others who may want to build
 	  their own games; we'll keep it simple
 
-vworld3 - include fast visibility calculation; this has been
-      integrated into vworld2. The content will be replaced
+vworld3 - include a fast visibility calculation; this has been
+	  integrated into vworld2. The content will be replaced
 	  by that in vworld4
