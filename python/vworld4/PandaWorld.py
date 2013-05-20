@@ -33,6 +33,10 @@ import random, sys, os, math, re
 
 from Util import *
 
+
+MAX_REMOTE = 200	# max # of avatars in world
+
+
 def addTitle(text):
 	""" Put title on the screen
 	"""
@@ -83,7 +87,8 @@ class PandaWorld(DirectObject):
 		# are now two copies --- one optimized for rendering,
 		# one for collisions.  
 
-		self.environ = loader.loadModel("models/vworld-grid-24")
+		#self.environ = loader.loadModel("models/vworld-grid-24")
+		self.environ = loader.loadModel("models/washU-prototype")
 		self.environ.reparentTo(render)
 		self.environ.setPos(0,0,0)
 		
@@ -106,7 +111,7 @@ class PandaWorld(DirectObject):
 		self.avPos = printText(0.9)
 
 		# Set the upper bound of # of remote avatars
-		self.maxRemotes = 100
+		self.maxRemotes = MAX_REMOTE
 
  		# Show a list of visible NPCs
  		self.showNumVisible = printText(0.8)
@@ -195,13 +200,13 @@ class PandaWorld(DirectObject):
 		self.dlnp2.setHpr(-70,-60,0)
 		render.setLight(self.dlnp2)
 
-		# Create fog
-		colour = (0.5,0.8,0.8)
-		expfog = Fog("Scene-wide exponential Fog object")
-		expfog.setColor(*colour)
-		expfog.setExpDensity(0.15)
-		render.setFog(expfog)
-		base.setBackgroundColor(*colour)
+#		# Create fog
+#		colour = (0.5,0.8,0.8)
+#		expfog = Fog("Scene-wide exponential Fog object")
+#		expfog.setColor(*colour)
+#		expfog.setExpDensity(0.15)
+#		render.setFog(expfog)
+#		base.setBackgroundColor(*colour)
 
 		# setup collision detection objects used to implement
 		# canSee method
@@ -471,11 +476,11 @@ class PandaWorld(DirectObject):
 
 		return task.cont
 
-#w = PandaWorld()
+w = PandaWorld()
 #w.addRemote(69, 67, 135, 111)
 #w.addRemote(20, 33, 135, 222)
 #w.addRemote(40, 60, 135, 333)
 #w.addRemote(90, 79, 135, 444)
 #w.addRemote(30, 79, 135, 555)
 #w.addRemote(20, 39, 135, 666)
-#run()
+run()
