@@ -21,6 +21,9 @@ import random, sys, os, math, re
 from Util import *
 
 
+MAX_REMOTE = 200	# max # of avatars in world
+
+
 def addTitle(text):
 	""" Put title on the screen
 	"""
@@ -98,7 +101,7 @@ class AIWorld(DirectObject):
 			self.dotOrigin = self.dot.getPos()
 
 		# Set the upper bound of # of remote avatars
-		self.maxRemotes = 100
+		self.maxRemotes = MAX_REMOTE
 
 		# Setup pool of remotes
 		# do not attach to scene yet

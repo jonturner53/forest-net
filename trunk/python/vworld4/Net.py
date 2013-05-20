@@ -14,7 +14,8 @@ UPDATE_PERIOD = .05 	# number of seconds between status updates
 STATUS_REPORT = 1 	# code for status report packets
 #NUM_ITEMS = 10		# number of items in status report
 GRID = 10000  		# xy extent of one grid square
-MAXNEAR = 1000		# max # of nearby avatars
+#MAXNEAR = 1000		# max # of nearby avatars
+MAXNEAR = 10		# max # of nearby (visible) avatars
 REGION_WIDTH = 40	# width of an area for region multicast (in meters)
 VIS_RANGE = 20		# visible range (in meters)
 
@@ -38,7 +39,7 @@ FAST    = 50    	# fast avatar speed
 	2. avatar's multicast address
 			= its forest address +
 				the total number of regions in the virtual world
-			= adId + (# of regions)
+			= avId + (# of regions)
 	3. format of STATUS REPORT
 			= [STATUS REPORT, time stamp, x, y, direction,
 				speed, multicast adr of the sender, numNear]
@@ -47,7 +48,12 @@ FAST    = 50    	# fast avatar speed
 				where the last field counts the total number of
 				status reports we've missed
 				since last call of pruneNearby()
+	4. format of nearRemotes list
+			= [x, y, direction, dx, dy, timestamp]
 	5. when filling a packet, we negate any multicast address
+	6. the objTable stores the info of known objects;
+	   for now, the only objects are pandas; we use remoteMap
+	   in pWorld for convenience.
 """
 
 class Net :
@@ -379,90 +385,14 @@ class Net :
 		x, y, self.direction = self.pWorld.getPosHeading()
 		self.x = x; self.y = y
 
-		# update region
-		currentRegion = self.regionNum(self.x, self.y)
 		newRegSet = set()
-		# add current region in the set
-		newRegSet.add(currentRegion)
-		# add three adjacent regions in the set.
-		# 	first, calculate the reference point of current region
-		regNumPerAxis = self.limit/REGION_WIDTH
 
-		# calculate a reference point;
-		# use it to determine our relative location in a region;
-		# then use that info to determine which three adjacent
-		# regions to subscribe to
-		refX = ((currentRegion-1)%regNumPerAxis)*REGION_WIDTH
-		refY = ((currentRegion-1)/regNumPerAxis)*REGION_WIDTH
-
-		# lower-left subregion
-		if self.x-refX <= REGION_WIDTH/2 \
-		   and self.y-refY <= REGION_WIDTH/2 :
-			# check boundaries
-			if refX == 0 and refY == 0 :
-				pass
-			elif refX == 0 :
-				newRegSet.add(currentRegion-regNumPerAxis)
-			elif refY == 0 :
-				newRegSet.add(currentRegion-1)
-			else :
-				newRegSet.add(currentRegion-regNumPerAxis)
-				newRegSet.add(currentRegion-1)
-				newRegSet.add(currentRegion-regNumPerAxis-1)
-		# lower-right subregion
-		elif self.y-refY <= REGION_WIDTH/2 :
-			# check boundaries
-			if refX == (regNumPerAxis-1)*REGION_WIDTH and refY == 0 :
-				pass
-			elif refX == (regNumPerAxis-1)*REGION_WIDTH :
-				newRegSet.add(currentRegion-regNumPerAxis)
-			elif refY == 0 :
-				newRegSet.add(currentRegion+1)
-			else :
-				newRegSet.add(currentRegion-regNumPerAxis)
-				newRegSet.add(currentRegion+1)
-				newRegSet.add(currentRegion-regNumPerAxis+1)
-		# upper-left subregion
-		elif self.x-refX <= REGION_WIDTH/2 :
-			# check boundaries
-			if refX == 0 and refY == (regNumPerAxis-1)*REGION_WIDTH :
-				pass
-			elif refX == 0 :
-				newRegSet.add(currentRegion+regNumPerAxis)
-			elif refY == (regNumPerAxis-1)*REGION_WIDTH :
-				newRegSet.add(currentRegion-1)
-			else :
-				newRegSet.add(currentRegion+regNumPerAxis)
-				newRegSet.add(currentRegion-1)
-				newRegSet.add(currentRegion+regNumPerAxis-1)
-		# upper-right subregion
-		else :
-			# check boundaries
-			if refX == (regNumPerAxis-1)*REGION_WIDTH and \
-			   refY == (regNumPerAxis-1)*REGION_WIDTH :
-				pass
-			elif refX == (regNumPerAxis-1)*REGION_WIDTH :
-				newRegSet.add(currentRegion+regNumPerAxis)
-			elif refY == (regNumPerAxis-1)*REGION_WIDTH :
-				newRegSet.add(currentRegion+1)
-			else :
-				newRegSet.add(currentRegion+regNumPerAxis)
-				newRegSet.add(currentRegion+1)
-				newRegSet.add(currentRegion+regNumPerAxis+1)
+		# update and subscribe region multicast only when
+		# the size of avaSet < MAXNEAR
+		if len(self.avaSet) < MAXNEAR:
+			newRegSet = self.updateRegMulticast()
 
 		self.updateSubs(avaSetCandi, newRegSet)
-
-
-	def regionNum(self, x1, y1) :
-		""" Return multicast region number for given position.
-
-		x1 is the x coordinate of the position of interest
-		y1 is the y coordinate of the position of interest
-		To convert region number to a region multicast address,
-		just negate it.
-		"""
-		return 1 + (int(x1)/REGION_WIDTH) \
-				+ (int(y1)/REGION_WIDTH)*(self.limit/REGION_WIDTH)
 
 
 	def subscribe(self,glist) :
@@ -550,9 +480,9 @@ class Net :
 		
 		Subscribe to
 			1. multicasts for visible avatars;
-			2. current region multicast
+			2. current region multicasts (if needed)
 		Unsubscribe from
-			1. previous region multicast
+			1. previous region multicasts
 
 		We unsubscribe an avatar's multicast
 		if we haven't heard from it in a while;
@@ -595,18 +525,15 @@ class Net :
 		dir1 = tuple[4]
 		peerMulAdr = tuple[6]
 		avId = p.srcAdr
+		timestamp = (tuple[1]+0.0)/TIME_SCALE
 
 		# Note: it is impossible to receive
 		# our own multicast packet: router has prevented the case.
 		# See multiSend() in RouterCore.cpp
 
 		if avId in self.nearRemotes :
-
-	#		if -p.dstAdr <= self.numRegions :
-	#			print "report received: REGION REPORT"
-	#		else :
-	#			print "report received: AVA REPORT"
-	#		print (tuple[1]+0.0)/TIME_SCALE
+			if timestamp < self.nearRemotes[avId][6] :
+				return
 
 			# Since we've subscribed to its avatar multicast,
 			# no need to update based on region multicase
@@ -614,16 +541,15 @@ class Net :
 			if peerMulAdr in self.avaSet and \
 			   -p.dstAdr <= self.numRegions :
 				if self.debug == 1 :
-					avID = peerMulAdr-self.numRegions
 					print "skip update from region multicast:" ,\
-						 fadr2string(avID)
+						 fadr2string(avId)
 				return
 
 			# update map entry for this remote
 			remote = self.nearRemotes[avId]
-			remote[3] = x1 - remote[0]; remote[4] = y1 - remote[1]
 			remote[0] = x1; remote[1] = y1; remote[2] = dir1
-			remote[5] = 0
+			remote[3] = x1 - remote[0]; remote[4] = y1 - remote[1]
+			remote[6] = timestamp
 			self.pWorld.updateRemote(x1,y1, dir1, avId)
 			return
 		elif len(self.nearRemotes) < MAXNEAR :
@@ -631,7 +557,7 @@ class Net :
 			# if an avatar is visible, subscribe to its multicast
 			if abs(self.x-x1)+abs(self.y-y1) <= VIS_RANGE :
 				# fadr -> x,y,direction,dx,dy,count
-				self.nearRemotes[avId] = [x1,y1,dir1,0,0,0]
+				self.nearRemotes[avId] = [x1,y1,dir1,0,0,0,timestamp]
 				self.pWorld.addRemote(x1,y1, dir1, avId)
 				return peerMulAdr
 			else : return
@@ -666,9 +592,8 @@ class Net :
 			del self.nearRemotes[avId]
 			self.pWorld.removeRemote(avId)
 
-		# Reminder: avId is defined to be forest adr,
-		# and avatar multicast is defined to be forest adr plus
-		# the total number of regions in our world partition.
+		# Reminder: avId = forest adr,
+		# and avatar multicast = forest adr + # of regions in world.
 		# That's why we do the following transformation when
 		# determining the multicast adrs to be unsubscribed.
 		unsubList = [e+self.numRegions for e in dropList]
@@ -680,3 +605,90 @@ class Net :
 		if self.debug == 1 and dropList != [] :
 			newAva = [e-self.numRegions for e in list(self.avaSet)]
 			print "new avaSet:", [fadr2string(e) for e in newAva]
+
+
+	def regionNum(self, x1, y1) :
+		""" Return multicast region number for given position.
+
+		x1 is the x coordinate of the position of interest
+		y1 is the y coordinate of the position of interest
+		To convert region number to a region multicast address,
+		just negate it.
+		"""
+		return 1 + (int(x1)/REGION_WIDTH) \
+				+ (int(y1)/REGION_WIDTH)*(self.limit/REGION_WIDTH)
+
+
+	def updateRegMulticast(self) :
+		newRegSet = set()
+		# update region
+		currentRegion = self.regionNum(self.x, self.y)
+		# add current region in the set
+		newRegSet.add(currentRegion)
+		# add three adjacent regions in the set.
+		# 	first, calculate the reference point of current region
+		regNumPerAxis = self.limit/REGION_WIDTH
+
+		# calculate a reference point;
+		# use it to determine our relative location in a region;
+		# then use that info to determine which three adjacent
+		# regions to subscribe to
+		refX = ((currentRegion-1)%regNumPerAxis)*REGION_WIDTH
+		refY = ((currentRegion-1)/regNumPerAxis)*REGION_WIDTH
+
+		# lower-left subregion
+		if self.x-refX <= REGION_WIDTH/2 \
+		   and self.y-refY <= REGION_WIDTH/2 :
+			# check boundaries
+			if refX == 0 and refY == 0 :
+				pass
+			elif refX == 0 :
+				newRegSet.add(currentRegion-regNumPerAxis)
+			elif refY == 0 :
+				newRegSet.add(currentRegion-1)
+			else :
+				newRegSet.add(currentRegion-regNumPerAxis)
+				newRegSet.add(currentRegion-1)
+				newRegSet.add(currentRegion-regNumPerAxis-1)
+		# lower-right subregion
+		elif self.y-refY <= REGION_WIDTH/2 :
+			# check boundaries
+			if refX == (regNumPerAxis-1)*REGION_WIDTH and refY == 0 :
+				pass
+			elif refX == (regNumPerAxis-1)*REGION_WIDTH :
+				newRegSet.add(currentRegion-regNumPerAxis)
+			elif refY == 0 :
+				newRegSet.add(currentRegion+1)
+			else :
+				newRegSet.add(currentRegion-regNumPerAxis)
+				newRegSet.add(currentRegion+1)
+				newRegSet.add(currentRegion-regNumPerAxis+1)
+		# upper-left subregion
+		elif self.x-refX <= REGION_WIDTH/2 :
+			# check boundaries
+			if refX == 0 and refY == (regNumPerAxis-1)*REGION_WIDTH :
+				pass
+			elif refX == 0 :
+				newRegSet.add(currentRegion+regNumPerAxis)
+			elif refY == (regNumPerAxis-1)*REGION_WIDTH :
+				newRegSet.add(currentRegion-1)
+			else :
+				newRegSet.add(currentRegion+regNumPerAxis)
+				newRegSet.add(currentRegion-1)
+				newRegSet.add(currentRegion+regNumPerAxis-1)
+		# upper-right subregion
+		else :
+			# check boundaries
+			if refX == (regNumPerAxis-1)*REGION_WIDTH and \
+			   refY == (regNumPerAxis-1)*REGION_WIDTH :
+				pass
+			elif refX == (regNumPerAxis-1)*REGION_WIDTH :
+				newRegSet.add(currentRegion+regNumPerAxis)
+			elif refY == (regNumPerAxis-1)*REGION_WIDTH :
+				newRegSet.add(currentRegion+1)
+			else :
+				newRegSet.add(currentRegion+regNumPerAxis)
+				newRegSet.add(currentRegion+1)
+				newRegSet.add(currentRegion+regNumPerAxis+1)
+
+		return newRegSet

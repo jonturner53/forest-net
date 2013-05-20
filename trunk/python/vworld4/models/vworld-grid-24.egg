@@ -39,9 +39,9 @@
   <Scalar> diffr { 1 }
   <Scalar> diffg { 1 }
   <Scalar> diffb { 1 }
-  <Scalar> ambr { 0.5 }
-  <Scalar> ambg { 0.5 }
-  <Scalar> ambb { 0.5 }
+  <Scalar> ambr { 0 }
+  <Scalar> ambg { 0 }
+  <Scalar> ambb { 0 }
   <Scalar> emitr { 0 }
   <Scalar> emitg { 0 }
   <Scalar> emitb { 0 }
@@ -54,9 +54,9 @@
   <Scalar> diffr { 1 }
   <Scalar> diffg { 1 }
   <Scalar> diffb { 1 }
-  <Scalar> ambr { 0.8 }
-  <Scalar> ambg { 0.8 }
-  <Scalar> ambb { 0.8 }
+  <Scalar> ambr { 0 }
+  <Scalar> ambg { 0 }
+  <Scalar> ambb { 0 }
   <Scalar> emitr { 0 }
   <Scalar> emitg { 0 }
   <Scalar> emitb { 0 }
@@ -69,9 +69,9 @@
   <Scalar> diffr { 0 }
   <Scalar> diffg { 0 }
   <Scalar> diffb { 0 }
-  <Scalar> ambr { 0.5 }
-  <Scalar> ambg { 0.5 }
-  <Scalar> ambb { 0.5 }
+  <Scalar> ambr { 0 }
+  <Scalar> ambg { 0 }
+  <Scalar> ambb { 0 }
   <Scalar> emitr { 0 }
   <Scalar> emitg { 0 }
   <Scalar> emitb { 0 }
@@ -82,7 +82,6 @@
 }
 <Group> SketchUp {
   <Group> ID2 {
-  <Collide> { Polyset keep descend }
     <VertexPool> ID2 {
       <Vertex> 0 {
         125 -5 2.5654
@@ -2775,7 +2774,6 @@
     }
   }
   <Group> ID15 {
-  <Collide> { Polyset keep descend }
     <VertexPool> ID15 {
       <Vertex> 0 {
         45 120 2.5654
@@ -7610,7 +7608,6 @@
     }
   }
   <Group> ID23 {
-  <Collide> { Polyset keep descend }
     <VertexPool> ID23 {
       <Vertex> 0 {
         45 105 0
@@ -32563,7 +32560,6 @@
     }
   }
   <Group> ID36 {
-  <Collide> { Polyset keep descend }
     <VertexPool> ID36 {
       <Vertex> 0 {
         35 45 2.5654
@@ -33870,7 +33866,6 @@
     }
   }
   <Group> ID44 {
-  <Collide> { Polyset keep descend }
     <VertexPool> ID44 {
       <Vertex> 0 {
         80 20 0
@@ -35387,7 +35382,6 @@
     }
   }
   <Group> ID52 {
-  <Collide> { Polyset keep descend }
     <VertexPool> ID52 {
       <Vertex> 0 {
         49.691 16.6561 2.5654
@@ -36148,7 +36142,6 @@
     }
   }
   <Group> ID60 {
-  <Collide> { Polyset keep descend }
     <VertexPool> ID60 {
       <Vertex> 0 {
         25 20 2.5654
@@ -37833,7 +37826,6 @@
     }
   }
   <Group> ID68 {
-  <Collide> { Polyset keep descend }
     <VertexPool> ID68 {
       <Vertex> 0 {
         20 5 2.5654
@@ -38258,7 +38250,6 @@
     }
   }
   <Group> ID76 {
-  <Collide> { Polyset keep descend }
     <VertexPool> ID76 {
       <Vertex> 0 {
         30 30 2.5654
@@ -39019,7 +39010,6 @@
     }
   }
   <Group> ID84 {
-  <Collide> { Polyset keep descend }
     <VertexPool> ID84 {
       <Vertex> 0 {
         51.1367 8.88414 2.5654
@@ -39444,7 +39434,6 @@
     }
   }
   <Group> ID92 {
-  <Collide> { Polyset keep descend }
     <VertexPool> ID92 {
       <Vertex> 0 {
         20 50 2.5654
@@ -40247,7 +40236,6 @@
     }
   }
   <Group> ID100 {
-  <Collide> { Polyset keep descend }
     <VertexPool> ID100 {
       <Vertex> 0 {
         10 93.551 0
@@ -40756,7 +40744,6 @@
     }
   }
   <Group> ID108 {
-  <Collide> { Polyset keep descend }
     <VertexPool> ID108 {
       <Vertex> 0 {
         6.80126 90 -0.855662
@@ -40929,7 +40916,6 @@
     }
   }
   <Group> ID121 {
-  <Collide> { Polyset keep descend }
     <VertexPool> ID121 {
       <Vertex> 0 {
         120 91.3489 -0.3128
@@ -41102,7 +41088,6 @@
     }
   }
   <Group> ID129 {
-  <Collide> { Polyset keep descend }
     <VertexPool> ID129 {
       <Vertex> 0 {
         60 115 -0.3128
@@ -41275,7 +41260,6 @@
     }
   }
   <Group> ID137 {
-  <Collide> { Polyset keep descend }
     <VertexPool> ID137 {
       <Vertex> 0 {
         65 104.109 -0.3128
@@ -45606,7 +45590,6 @@
     }
   }
   <Group> ID145 {
-  <Collide> { Polyset keep descend }
     <VertexPool> ID145 {
       <Vertex> 0 {
         90 90 0
@@ -46955,7 +46938,6 @@
     }
   }
   <Group> ID153 {
-  <Collide> { Polyset keep descend }
     <VertexPool> ID153 {
       <Vertex> 0 {
         60 30 -0.3708
@@ -47128,7 +47110,6 @@
     }
   }
   <Group> ID161 {
-  <Collide> { Polyset keep descend }
     <VertexPool> ID161 {
       <Vertex> 0 {
         55 40 -0.3708
@@ -47469,7 +47450,6 @@
     }
   }
   <Group> ID169 {
-  <Collide> { Polyset keep descend }
     <VertexPool> ID169 {
       <Vertex> 0 {
         49.691 15 -0.3708
@@ -47810,7 +47790,6 @@
     }
   }
   <Group> ID177 {
-  <Collide> { Polyset keep descend }
     <VertexPool> ID177 {
       <Vertex> 0 {
         25 16.6561 -0.3708
@@ -47983,7 +47962,6 @@
     }
   }
   <Group> ID185 {
-  <Collide> { Polyset keep descend }
     <VertexPool> ID185 {
       <Vertex> 0 {
         65 15 -0.3708
@@ -48492,7 +48470,6 @@
     }
   }
   <Group> ID193 {
-  <Collide> { Polyset keep descend }
     <VertexPool> ID193 {
       <Vertex> 0 {
         65 15 0
@@ -49169,7 +49146,6 @@
     }
   }
   <Group> ID201 {
-  <Collide> { Polyset keep descend }
     <VertexPool> ID201 {
       <Vertex> 0 {
         105 25.3085 -0.3708
@@ -50014,7 +49990,6 @@
     }
   }
   <Group> ID209 {
-  <Collide> { Polyset keep descend }
     <VertexPool> ID209 {
       <Vertex> 0 {
         120 60 0
@@ -50607,7 +50582,6 @@
     }
   }
   <Group> ID217 {
-  <Collide> { Polyset keep descend }
     <VertexPool> ID217 {
       <Vertex> 0 {
         90 12.2799 -0.3708
@@ -50864,7 +50838,6 @@
     }
   }
   <Group> ID225 {
-  <Collide> { Polyset keep descend }
     <VertexPool> ID225 {
       <Vertex> 0 {
         0 90 0
@@ -50953,7 +50926,6 @@
     }
   }
   <Group> ID233 {
-  <Collide> { Polyset keep descend }
     <VertexPool> ID233 {
       <Vertex> 0 {
         90 110 0
@@ -51210,7 +51182,6 @@
     }
   }
   <Group> ID241 {
-  <Collide> { Polyset keep descend }
     <VertexPool> ID241 {
       <Vertex> 0 {
         90 90 -0.3128
@@ -51383,7 +51354,6 @@
     }
   }
   <Group> ID249 {
-  <Collide> { Polyset keep descend }
     <VertexPool> ID249 {
       <Vertex> 0 {
         10 95 0
@@ -51556,7 +51526,6 @@
     }
   }
   <Group> ID257 {
-  <Collide> { Polyset keep descend }
     <VertexPool> ID257 {
       <Vertex> 0 {
         40 35 0
@@ -59625,7 +59594,6 @@
     }
   }
   <Group> ID270 {
-  <Collide> { Polyset keep descend }
     <VertexPool> ID270 {
       <Vertex> 0 {
         15 41.2455 -0.3708
@@ -59714,7 +59682,6 @@
     }
   }
   <Group> ID278 {
-  <Collide> { Polyset keep descend }
     <VertexPool> ID278 {
       <Vertex> 0 {
         20 45 -0.3708
@@ -59778,7 +59745,6 @@
       }
     }
     <Group> ID278.Material3 {
-    <Collide> { Polyset keep descend }
       <Polygon> {
         <TRef> { ID26 }
         <MRef> { Material3 }
@@ -59793,7 +59759,6 @@
       }
     }
     <Group> ID278.Material2 {
-    <Collide> { Polyset keep descend }
       <Polygon> {
         <TRef> { ID111 }
         <MRef> { Material2.mref1 }
@@ -59809,7 +59774,6 @@
     }
   }
   <Group> ID286 {
-  <Collide> { Polyset keep descend }
     <VertexPool> ID286 {
       <Vertex> 0 {
         15 45 0
@@ -59982,7 +59946,6 @@
     }
   }
   <Group> ID294 {
-  <Collide> { Polyset keep descend }
     <VertexPool> ID294 {
       <Vertex> 0 {
         43.4063 20 0
