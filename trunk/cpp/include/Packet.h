@@ -10,7 +10,6 @@
 #define PACKET_H
 
 #include "Forest.h"
-#include "CtlPkt.h"
 
 namespace forest {
 
@@ -43,7 +42,7 @@ public:
 	// packet fields - note: all public
 	int	version;		///< version number field
 	int	length;			///< length field
-	ptyp_t	type;			///< packet type field
+	Forest::ptyp_t type;		///< packet type field
 	flgs_t	flags;			///< flags
 	comt_t	comtree;		///< comtree field
 	fAdr_t	srcAdr;			///< source address

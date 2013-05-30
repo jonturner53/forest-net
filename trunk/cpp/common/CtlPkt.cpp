@@ -6,8 +6,7 @@
  *  See http://www.apache.org/licenses/LICENSE-2.0 for details.
  */
 
-/**
- *  The CtlPkt class is used to pack and unpack forest control messages.
+/** The CtlPkt class is used to pack and unpack forest control messages.
  *  The class has a public field for every field that can be used in
  *  in a control packet. To create a control packet, the user
  *  constructs a CtlPkt object. The user then specifies
@@ -25,10 +24,14 @@
 
 namespace forest {
 
-
 /** Constructor for CtlPkt with no initialization.
  */
 CtlPkt::CtlPkt() { reset(); }
+
+/** Construct a new control packet from the payload of a packet.
+ *  @param p is a reference to a packet that contains a control packet
+ */
+CtlPkt::CtlPkt(const Packet& p) { reset(p); }
 
 /** Constructor with partial initialization.
  *  Unspecified fields are set to recognized "undefined" values.
@@ -86,15 +89,25 @@ void CtlPkt::reset(uint32_t* payload1, int len) {
 	reset(); payload = payload1; paylen = len;
 }
 
+/** Reset control packet, from a given packet's payload.
+ *  Unspecified fields are set to recognized "undefined" values.
+ *  @param p is a reference to a packet.
+ */
+void CtlPkt::reset(const Packet& p) {
+	reset();
+	payload = p.payload(); paylen = p.length-Forest::OVERHEAD; unpack();
+}
+
 void CtlPkt::reset() {
 	// initialize all fields to undefined values
 	type = UNDEF_CPTYPE; mode = UNDEF_MODE; seqNum = 0;
-	adr1 = 0; adr2 = 0;
+	adr1 = adr2 = adr3 = 0;
 	ip1 = 0; ip2 = 0;
 	port1 = 0; port2 = 0;
+	nonce = 0;
 	rspec1.set(-1); rspec2.set(-1);
 	coreFlag = -1;
-	iface = 0; link = 0; nodeType = UNDEF_NODE;
+	iface = 0; link = 0; nodeType = Forest::UNDEF_NODE;
 	comtree = 0; comtreeOwner = 0;
 	count = -1;
 	queue = 0;
@@ -104,6 +117,9 @@ void CtlPkt::reset() {
 }
 
 #define packPair(x,y) ((payload[pp++] = htonl(x)), (payload[pp++] = htonl(y)))
+#define packNonce(x,y) ((payload[pp++] = htonl(x)), \
+		(payload[pp++] = htonl((int) (((y)>>32)&0xffffffff))), \
+		(payload[pp++] = htonl((int) ((y)&0xffffffff))))
 #define packRspec(x,y) ((payload[pp++] = htonl(x)), \
 				(payload[pp++] = htonl(y.bitRateUp)), \
 				(payload[pp++] = htonl(y.bitRateDown)), \
@@ -224,6 +240,10 @@ int CtlPkt::pack() {
 			packPair(IFACE,iface);
 			packPair(IP1,ip1);
 			packRspec(RSPEC1,rspec1);
+		} else {
+			if (ip1 == 0 || port1 == 0) return 0;
+			packPair(IP1,ip1);
+			packPair(PORT1,port1);
 		}
 		break;
 	case DROP_IFACE:
@@ -242,6 +262,7 @@ int CtlPkt::pack() {
 				return 0;
 			packPair(IFACE,iface);
 			packPair(IP1,ip1);
+			packPair(PORT1,port1);
 			packRspec(RSPEC1,rspec1);
 			packRspec(RSPEC2,rspec2);
 		}
@@ -256,19 +277,17 @@ int CtlPkt::pack() {
 		break;
 	case ADD_LINK:
 		if (mode == REQUEST) {
-			if (nodeType == 0 || ip1 == 0) return 0;
+			if (nodeType == 0 || iface == 0) return 0;
 			packPair(NODE_TYPE,nodeType);
-			packPair(IP1,ip1);
-			if (iface != 0) packPair(IFACE,iface);
+			packPair(IFACE,iface);
+			if (link != 0) packPair(LINK,link);
+			if (ip1 != 0) packPair(IP1,ip1);
+			if (port1 != 0) packPair(PORT1,port1);
+			if (adr1 != 0) packPair(ADR1,adr1);
+			if (nonce != 0) packNonce(NONCE,nonce);
+		} else {
 			if (link != 0) packPair(LINK,link);
 			if (adr1 != 0) packPair(ADR1,adr1);
-			if (port1 != 0) packPair(PORT1,port1);
-		} else {
-			if (link == 0 || ip1 == 0 || adr1 == 0)
-				return 0;
-			packPair(LINK,link);
-			packPair(ADR1,adr1);
-			packPair(IP1,ip1);
 		}
 		break;
 	case DROP_LINK:
@@ -345,6 +364,7 @@ int CtlPkt::pack() {
 			if (coreFlag != -1) packPair(CORE_FLAG,coreFlag);
 			if (ip1 != 0) packPair(IP1,ip1);
 			if (port1 != 0) packPair(PORT1,port1);
+			if (adr1 != 0) packPair(ADR1,adr1);
 		} else {
 			if (link == 0) return 0;
 			packPair(LINK,link);
@@ -357,6 +377,7 @@ int CtlPkt::pack() {
 			if (link != 0) packPair(LINK,link);
 			if (ip1 != 0) packPair(IP1,ip1);
 			if (port1 != 0) packPair(PORT1,port1);
+			if (adr1 != 0) packPair(ADR1,adr1);
 		}
 		break;
 	case MOD_COMTREE_LINK:
@@ -437,16 +458,21 @@ int CtlPkt::pack() {
 			packPair(LINK,link);
 		}
 		break;
-	case NEW_CLIENT:
+	case NEW_SESSION:
 		if (mode == REQUEST) {
-			if (ip1 == 0 || port1 == 0) return 0;
+			if (ip1 == 0 || !rspec1.isSet()) return 0;
 			packPair(IP1,ip1);
-			packPair(PORT1,port1);
+			packRspec(RSPEC1,rspec1);
 		} else {
-			if (adr1 == 0 || adr2 == 0 || ip1 == 0) return 0;
+			if (adr1 == 0 || adr2 == 0 || adr3 == 0 ||
+			    ip1 == 0 || nonce == 0)
+				return 0;
 			packPair(ADR1,adr1);
 			packPair(ADR2,adr2);
+			packPair(ADR3,adr3);
 			packPair(IP1,ip1);
+			packPair(PORT1,port1);
+			packNonce(NONCE,nonce);
 		}
 		break;
 	case CLIENT_CONNECT:
@@ -463,13 +489,23 @@ int CtlPkt::pack() {
 			packPair(ADR2,adr2);
 		}
 		break;
-	case BOOT_REQUEST:
-		if (mode == POS_REPLY) {
-			if (adr1 == 0 || adr2 == 0) return 0;
-			packPair(ADR1,adr1);
-			packPair(ADR2,adr2);
+	case CONFIG_LEAF:
+		if (mode == REQUEST) {
+			if (adr1 == 0 || adr2 == 0 || ip1 == 0 ||
+			    port1 == 0 || nonce == 0) return 0;
+			packPair(ADR1,adr1); packPair(ADR2,adr2);
+			packPair(IP1,ip1);   packPair(PORT1,port1);
+			packNonce(NONCE,nonce);
 		}
 		break;
+	case SET_LEAF_RANGE:
+		if (mode == REQUEST) {
+			if (adr1 == 0 || adr2 == 0) return 0;
+			packPair(ADR1,adr1); packPair(ADR2,adr2);
+		}
+		break;
+	case BOOT_ROUTER:
+	case BOOT_LEAF:
 	case BOOT_COMPLETE:
 	case BOOT_ABORT:
 		break;
@@ -492,13 +528,11 @@ bool CtlPkt::unpack() {
 	if (payload == 0) return false;
 
 	int pp = 0;
-	type = (CpType) ntohl(payload[pp++]);
-	mode = (CpMode) ntohl(payload[pp++]);
-	unpackWord(seqNum);
-	seqNum <<= 32;
-	uint32_t x;
-	unpackWord(x);
-	seqNum |= x;
+	uint32_t x, y;
+	unpackWord(x); type = (CpType) x;
+	unpackWord(x); mode = (CpMode) x;
+	unpackWord(x); unpackWord(y);
+	seqNum = x; seqNum <<= 32; seqNum |= y;
 
 	if (mode == NEG_REPLY) {
 		if (paylen > 4*pp && ntohl(payload[pp]) == ERRMSG) {
@@ -515,22 +549,26 @@ bool CtlPkt::unpack() {
 		switch (attr) {
 		case ADR1:	unpackWord(adr1); break;
 		case ADR2:	unpackWord(adr2); break;
+		case ADR3:	unpackWord(adr3); break;
 		case IP1:	unpackWord(ip1); break;
 		case IP2:	unpackWord(ip2); break;
 		case PORT1:	unpackWord(port1); break;
 		case PORT2:	unpackWord(port2); break;
+		case NONCE:	uint32_t hi,lo; unpackWord(hi); unpackWord(lo);
+				nonce = hi; nonce <<= 32; nonce |= lo; break;
 		case RSPEC1:	unpackRspec(rspec1); break;
 		case RSPEC2:	unpackRspec(rspec2); break;
 		case CORE_FLAG:	unpackWord(coreFlag); break;
 		case IFACE:	unpackWord(iface); break;
 		case LINK:	unpackWord(link); break;
-		case NODE_TYPE:	nodeType = (ntyp_t) ntohl(payload[pp++]);
+		case NODE_TYPE:	nodeType =(Forest::ntyp_t) ntohl(payload[pp++]);
 				break;
 		case COMTREE:	unpackWord(comtree); break;
 		case COMTREE_OWNER: unpackWord(comtreeOwner); break;
 		case COUNT:	unpackWord(count); break;
 		case QUEUE:	unpackWord(queue); break;
 		case ZIPCODE:	unpackWord(zipCode); break;
+		default:	return false;
 		}
 	}
 
@@ -583,7 +621,8 @@ bool CtlPkt::unpack() {
 		break;
 	case ADD_IFACE:
 		if ((mode == REQUEST && 
-		     (iface == 0 || ip1 == 0 || !rspec1.isSet())))
+		     (iface == 0 || ip1 == 0 || !rspec1.isSet())) ||
+		    (mode == POS_REPLY && (ip1 == 0 || port1 == 0)))
 			return false;
 		break;
 	case DROP_IFACE:
@@ -593,7 +632,7 @@ bool CtlPkt::unpack() {
 	case GET_IFACE:
 		if ((mode == REQUEST && iface == 0) ||
 		    (mode == POS_REPLY &&
-		     (iface == 0 || ip1 == 0 || 
+		     (iface == 0 || ip1 == 0 || port1 == 0 ||
 		      !rspec1.isSet() || !rspec2.isSet())))
 			return false;
 		break;
@@ -603,10 +642,7 @@ bool CtlPkt::unpack() {
 			return false;
 		break;
 	case ADD_LINK:
-		if ((mode == REQUEST && 
-		     (nodeType == 0 || ip1 == 0)) ||
-		    (mode == POS_REPLY &&
-		     (link == 0 || adr1 == 0 || ip1 == 0)))
+		if (mode == REQUEST && (nodeType == 0 || iface == 0))
 			return false;
 		break;
 	case DROP_LINK:
@@ -646,12 +682,14 @@ bool CtlPkt::unpack() {
 		break;
 	case ADD_COMTREE_LINK:
 		if (mode == REQUEST && (comtree == 0 ||
-		    (link == 0 && (ip1 == 0 || port1 == 0))))
+		    (link == 0	&& (ip1 == 0 || port1 == 0)
+				&& (adr1 == 0))))
 			return false;
 		break;
 	case DROP_COMTREE_LINK:
 		if (mode == REQUEST && (comtree == 0 ||
-		    (link == 0 && (ip1 == 0 || port1 == 0))))
+		    (link == 0	&& (ip1 == 0 || port1 == 0)
+				&& (adr1 == 0))))
 			return false;
 		break;
 	case MOD_COMTREE_LINK:
@@ -695,11 +733,12 @@ bool CtlPkt::unpack() {
 		    (comtree == 0 || adr1 == 0 || link == 0))
 			return false;
 		break;
-	case NEW_CLIENT:
+	case NEW_SESSION:
 		if ((mode == REQUEST &&
-		     (ip1 == 0 || port1 == 0)) ||
+		     (ip1 == 0 || !rspec1.isSet())) ||
 		    (mode == POS_REPLY &&
-		     (adr1 == 0 || adr2 == 0 || ip1 == 0)))
+		     (adr1 == 0 || adr2 == 0 || adr3 == 0 ||
+		      ip1 == 0 || nonce == 0)))
 			return false;
 		break;
 	case CLIENT_CONNECT:
@@ -710,14 +749,21 @@ bool CtlPkt::unpack() {
 		if (mode == REQUEST && (adr1 == 0 || adr2 == 0))
 			return false;
 		break;
-	case BOOT_REQUEST:
-		if (mode == POS_REPLY && (adr1 == 0 || adr2 == 0))
+	case CONFIG_LEAF:
+		if (mode == REQUEST &&
+		    (adr1 == 0 || adr2 == 0 || ip1 == 0 || port1 == 0 ||
+		     nonce == 0))
 			return false;
 		break;
+	case SET_LEAF_RANGE:
+		if (mode == REQUEST && (adr1 == 0 || adr2 == 0)) return false;
+		break;
+	case BOOT_ROUTER:
+	case BOOT_LEAF:
 	case BOOT_COMPLETE:
 	case BOOT_ABORT:
 		break;
-	default: break;
+	default: return false;
 	}
 	return true;
 }
@@ -735,6 +781,9 @@ string& CtlPkt::avPair2string(CpAttr attr, string& s) {
 		break;
 	case ADR2:
 		if (adr2 != 0) ss << "adr2=" << Forest::fAdr2string(adr2,s);
+		break;
+	case ADR3:
+		if (adr3 != 0) ss << "adr3=" << Forest::fAdr2string(adr3,s);
 		break;
 	case IP1:
 		if (ip1 != 0) ss << "ip1=" << Np4d::ip2string(ip1,s);
@@ -765,7 +814,7 @@ string& CtlPkt::avPair2string(CpAttr attr, string& s) {
 		if (link != 0) ss << "link=" << link;
 		break;
 	case NODE_TYPE:
-		if (nodeType != UNDEF_NODE)
+		if (nodeType != Forest::UNDEF_NODE)
 			ss << "nodeType="
 			   << Forest::nodeType2string(nodeType,s);
 		break;
@@ -780,6 +829,9 @@ string& CtlPkt::avPair2string(CpAttr attr, string& s) {
 		break;
 	case QUEUE:
 		if (queue != 0) ss << "queue=" << queue;
+		break;
+	case NONCE:
+		if (nonce != 0) ss << "nonce=" << nonce;
 		break;
 	case ZIPCODE:
 		if (zipCode != 0) ss << "zipCode=" << zipCode;
@@ -826,10 +878,13 @@ string& CtlPkt::typeName(string& s) {
 	case MOD_ROUTE: s = "mod route"; break;
 	case ADD_ROUTE_LINK: s = "add route link"; break;
 	case DROP_ROUTE_LINK: s = "drop route link"; break;
-	case NEW_CLIENT: s = "new client"; break;
+	case NEW_SESSION: s = "new session"; break;
 	case CLIENT_CONNECT: s = "client connect"; break;
 	case CLIENT_DISCONNECT: s = "client disconnect"; break;
-	case BOOT_REQUEST: s = "boot request"; break;
+	case CONFIG_LEAF: s = "config leaf"; break;
+	case SET_LEAF_RANGE: s = "set leaf range"; break;
+	case BOOT_ROUTER: s = "boot router"; break;
+	case BOOT_LEAF: s = "boot leaf"; break;
 	case BOOT_COMPLETE: s = "boot complete"; break;
 	case BOOT_ABORT: s = "boot abort"; break;
 	default: break;
@@ -850,7 +905,7 @@ string& CtlPkt::modeName(string& s) {
 string& CtlPkt::toString(string& s) {
 	stringstream ss;
 
-	if (payload != 0) unpack();
+	//if (payload != 0) unpack();
 	ss << typeName(s);
 	ss << " (" << modeName(s) << "," << seqNum << "): ";
 	if (mode == NEG_REPLY) {
@@ -927,6 +982,9 @@ string& CtlPkt::toString(string& s) {
 			ss << " " << avPair2string(IFACE,s);
 			ss << " " << avPair2string(IP1,s);
 			ss << " " << avPair2string(RSPEC1,s);
+		} else {
+			ss << " " << avPair2string(IP1,s);
+			ss << " " << avPair2string(PORT1,s);
 		}
 		break;
 	case DROP_IFACE:
@@ -958,6 +1016,7 @@ string& CtlPkt::toString(string& s) {
 			ss << " " << avPair2string(IP1,s);
 			ss << " " << avPair2string(PORT1,s);
 			ss << " " << avPair2string(ADR1,s);
+			ss << " " << avPair2string(NONCE,s);
 		} else {
 			ss << " " << avPair2string(LINK,s);
 			ss << " " << avPair2string(ADR1,s);
@@ -1023,6 +1082,7 @@ string& CtlPkt::toString(string& s) {
 			ss << " " << avPair2string(CORE_FLAG,s);
 			ss << " " << avPair2string(IP1,s);
 			ss << " " << avPair2string(PORT1,s);
+			ss << " " << avPair2string(ADR1,s);
 		} else {
 			ss << " " << avPair2string(LINK,s);
 		}
@@ -1033,6 +1093,7 @@ string& CtlPkt::toString(string& s) {
 			ss << " " << avPair2string(LINK,s);
 			ss << " " << avPair2string(IP1,s);
 			ss << " " << avPair2string(PORT1,s);
+			ss << " " << avPair2string(ADR1,s);
 		}
 		break;
 	case MOD_COMTREE_LINK:
@@ -1100,14 +1161,17 @@ string& CtlPkt::toString(string& s) {
 			ss << " " << avPair2string(LINK,s);
 		}
 		break;
-	case NEW_CLIENT:
+	case NEW_SESSION:
 		if (mode == REQUEST) {
 			ss << " " << avPair2string(IP1,s);
-			ss << " " << avPair2string(PORT1,s);
+			ss << " " << avPair2string(RSPEC1,s);
 		} else {
 			ss << " " << avPair2string(ADR1,s);
 			ss << " " << avPair2string(ADR2,s);
+			ss << " " << avPair2string(ADR3,s);
 			ss << " " << avPair2string(IP1,s);
+			ss << " " << avPair2string(PORT1,s);
+			ss << " " << avPair2string(NONCE,s);
 		}
 		break;
 	case CLIENT_CONNECT:
@@ -1122,12 +1186,23 @@ string& CtlPkt::toString(string& s) {
 			ss << " " << avPair2string(ADR2,s);
 		}
 		break;
-	case BOOT_REQUEST:
-		if (mode == POS_REPLY) {
+	case CONFIG_LEAF:
+		if (mode == REQUEST) {
+			ss << " " << avPair2string(ADR1,s);
+			ss << " " << avPair2string(ADR2,s);
+			ss << " " << avPair2string(IP1,s);
+			ss << " " << avPair2string(PORT1,s);
+			ss << " " << avPair2string(NONCE,s);
+		}
+		break;
+	case SET_LEAF_RANGE:
+		if (mode == REQUEST) {
 			ss << " " << avPair2string(ADR1,s);
 			ss << " " << avPair2string(ADR2,s);
 		}
 		break;
+	case BOOT_ROUTER:
+	case BOOT_LEAF:
 	case BOOT_COMPLETE:
 	case BOOT_ABORT:
 		break;

@@ -26,6 +26,8 @@ public:
 	static bool readNum(istream&, uint16_t&);	
 	static bool readNum(istream&, uint32_t&);	
 	static bool readWord(istream&, string&);
+	static bool readName(istream&, string&);
+	static bool readString(istream&, string&);
 	static void addNum2string(string&, int);
 	static void addNum2string(string&, uint64_t);
 	static string& num2string(int, string&);
@@ -47,6 +49,7 @@ public:
 	static bool prefix(string, string);	
 	static void genPerm(int, int*);	
 	static int strnlen(char*, int);
+	static time_t currentTime();
 	static uint32_t getTime();
 	static uint64_t getTimeNs();
 };
@@ -104,7 +107,7 @@ inline string& Misc::nstime2string(uint64_t t, string& s) {
 	uint64_t frac = (t/1000)%1000000;
 	
 	stringstream ss;
-	ss << sec << "." << setw(6) << frac;
+	ss << sec << "." << setfill('0') << setw(6) << frac;
 	s = ss.str();
 	return s;
 }

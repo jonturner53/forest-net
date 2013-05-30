@@ -32,7 +32,7 @@ using namespace forest;
 
 bool buildIfaceTable(int, const NetInfo&, IfaceTable&);
 bool buildLinkTable(int, const NetInfo&, LinkTable&);
-bool buildComtTable(int, const NetInfo&, const ComtInfo&, ComtreeTable&);
+bool buildComtTable(int, const NetInfo&, ComtInfo&, ComtreeTable&);
 
 int main() {
 	int maxNode = 100000; int maxLink = 10000;
@@ -105,7 +105,7 @@ bool buildIfaceTable(int r, const NetInfo& net, IfaceTable& ift) {
 	for (int i = 1; i <= net.getNumIf(r); i++) {
 		if (!net.validIf(r,i)) continue;
 		RateSpec rs = net.getIfRates(r,i);
-		ift.addEntry(i,	net.getIfIpAdr(r,i), rs);
+		ift.addEntry(i,	net.getIfIpAdr(r,i), net.getIfPort(r,i), rs);
 	}
 	return true;
 }
@@ -139,12 +139,12 @@ bool buildLinkTable(int r, const NetInfo& net, LinkTable& lt) {
 				peerIface = i; break;
 			}
 		}
-		ipa_t peerIp = (net.getNodeType(peer) == ROUTER ?
+		ipa_t peerIp = (net.getNodeType(peer) == Forest::ROUTER ?
 				net.getIfIpAdr(peer,peerIface) :
 				net.getLeafIpAdr(peer));
-		ipp_t peerPort = (net.getNodeType(peer) == ROUTER ?
+		ipp_t peerPort = (net.getNodeType(peer) == Forest::ROUTER ?
 				  Forest::ROUTER_PORT : 0);
-		lt.addEntry(llnk, peerIp, peerPort);
+		lt.addEntry(llnk, peerIp, peerPort, 0);
 		lt.setIface(llnk,iface);
 		lt.setPeerType(llnk,net.getNodeType(peer));
 		lt.setPeerAdr(llnk,net.getNodeAdr(peer));
@@ -192,13 +192,13 @@ int findParentLink(int r, int ctx, const NetInfo& net,
 	return -1;
 }
 
-bool buildComtTable(int r, const NetInfo& net, const ComtInfo& comtrees,
+bool buildComtTable(int r, const NetInfo& net, ComtInfo& comtrees,
 			   ComtreeTable& comtTbl) {
 
 	// find the subset of comtrees involving this router
 	set<int> comtreeSet;
-	for (int ctx = comtrees.firstComtIndex(); ctx != 0;
-	         ctx = comtrees.nextComtIndex(ctx)) {
+	for (int ctx = comtrees.firstComtree(); ctx != 0;
+	         ctx = comtrees.nextComtree(ctx)) {
 		fAdr_t radr = net.getNodeAdr(r);
 		if (comtrees.isComtRtr(ctx,radr))
 			comtreeSet.insert(ctx);

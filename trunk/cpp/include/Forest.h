@@ -32,54 +32,10 @@
 
 namespace forest {
 
-
-/** Forest node types.
- *
- *  Nodes in a Forest network are assigned specific roles.
- *  Nodes with node type codes smaller than 100, are considered
- *  untrusted. All packets received from such hosts are subjected
- *  to extra checks. For example, they may only send packets with
- *  a source address equal to their assigned address.
- */
-enum ntyp_t {
-	UNDEF_NODE=0,
-	// untrusted node types
-	CLIENT=1,	///< client component
-	SERVER=2,	///< server component
-	// trusted node types
-	TRUSTED=100,	///< numeric separator
-	ROUTER=101,	///< router component
-	CONTROLLER=102	///< network control element
-};
-
-/** Forest packet types.
- *  This enumeration lists the distinct packet types that are
- *  currently defined. These are the types that go in the type
- *  field of the first word of each Forest packet.
- */
-enum ptyp_t {
-	UNDEF_PKT=0,
-	// client packet types
-	CLIENT_DATA=1,		///< normal data packet from a host
-	SUB_UNSUB=2,		///< subscribe to multicast groups
-
-	CLIENT_SIG=10,		///< client signalling packet
-
-	CONNECT=11,		///< establish connection for an access link
-	DISCONNECT=12,		///< disconnect anaccess link
-
-	// internal control packet types
-	NET_SIG=100,		///< network signalling packet
-	RTE_REPLY=101,		///< route reply for multicast route learning
-
-	// router internal types
-	RTR_CTL=200,
-	VOQSTATUS=201
-};
-
 typedef int32_t fAdr_t;			///< denotes a forest address
 typedef uint32_t comt_t;		///< denotes a comtree
 typedef uint8_t flgs_t;			///< flags field from packet header
+
 
 /** Miscellaneous utility functions.
  *  This class defines various constants and common functions useful
@@ -87,14 +43,62 @@ typedef uint8_t flgs_t;			///< flags field from packet header
  */
 class Forest {
 public:
+	/** Forest node types.
+	 *
+	 *  Nodes in a Forest network are assigned specific roles.
+	 *  Nodes with node type codes smaller than 100, are considered
+	 *  untrusted. All packets received from such hosts are subjected
+	 *  to extra checks. For example, they may only send packets with
+	 *  a source address equal to their assigned address.
+	 */
+	enum ntyp_t {
+		UNDEF_NODE=0,
+		// untrusted node types
+		CLIENT=1,	///< client component
+		SERVER=2,	///< server component
+		// trusted node types
+		TRUSTED=100,	///< numeric separator
+		ROUTER=101,	///< router component
+		CONTROLLER=102	///< network control element
+	};
+	
+	/** Forest packet types.
+	 *  This enumeration lists the distinct packet types that are
+	 *  currently defined. These are the types that go in the type
+	 *  field of the first word of each Forest packet.
+	 */
+	enum ptyp_t {
+		UNDEF_PKT=0,
+		// client packet types
+		CLIENT_DATA=1,		///< normal data packet from a host
+		SUB_UNSUB=2,		///< subscribe to multicast groups
+	
+		CLIENT_SIG=10,		///< client signalling packet
+	
+		CONNECT=11,		///< connect to a link
+		DISCONNECT=12,		///< disconnect a link
+	
+		// internal control packet types
+		NET_SIG=100,		///< network signalling packet
+		RTE_REPLY=101,		///< route reply for route learning
+	
+		// router internal types
+		RTR_CTL=200,
+		VOQSTATUS=201
+	};
+
 	// constants related to packet formats 
 	static const uint8_t FOREST_VERSION = 1;///< version of forest protocol
 	static const int HDR_LENG = 20;		///< header length in bytes
 	static const int OVERHEAD = 24;		///< total overhead
 	static const flgs_t RTE_REQ = 0x01;	///< route request flag
+	static const flgs_t ACK_FLAG = 0x02;	///< acknowledgment flag
+
+	// well-known ports
+	static const ipp_t NM_PORT = 30120; 	///< port # used by netMgr
+	static const ipp_t CC_PORT = 30121; 	///< port # used by comtCtl
+	static const ipp_t CM_PORT = 30122; 	///< port # used by clientMgr
 	static const ipp_t ROUTER_PORT = 30123; ///< port # used by routers
-	static const ipp_t NM_PORT = 30122; 	///< port # used by netMgr
-	static const ipp_t CC_PORT = 30133; 	///< port # used by comtCtl
 
 	// router implementation parameters 
 	static const short int MAXINTF= 20;	///< max # of interfaces
@@ -106,7 +110,7 @@ public:
 	static const uint32_t BUF_SIZ = 1600;	///< size of a packet buffer
 
 	// comtrees used for control
-	static const comt_t CLIENT_CON_COMT = 1; ///< used for connect packets
+	static const comt_t CONNECT_COMT = 1;	///< used for connect packets
 	static const comt_t CLIENT_SIG_COMT = 2; ///< for comtree signaling
 	static const comt_t NET_SIG_COMT = 100;  ///< for internal signaling
 

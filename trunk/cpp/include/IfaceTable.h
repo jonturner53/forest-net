@@ -15,7 +15,6 @@
 
 namespace forest {
 
-
 class IfaceTable {
 public:
 		IfaceTable(int);
@@ -30,15 +29,17 @@ public:
 
 	// access methods 
 	ipa_t	getIpAdr(int) const;	
+	ipp_t	getPort(int) const;	
 	RateSpec& getRates(int) const;
 	RateSpec& getAvailRates(int) const;
 	int	getDefaultIface() const;
 	int	getFreeIface() const;
 
 	// modifiers 
-	bool	addEntry(int,ipa_t,RateSpec&);
+	bool	addEntry(int,ipa_t,ipp_t,RateSpec&);
 	void	removeEntry(int);
 	void	setDefaultIface(int);
+	void	setPort(int,ipp_t);
 
 	// io routines
 	bool	read(istream&);
@@ -48,6 +49,7 @@ private:
 	int	defaultIf;		///< default interface
 	struct IfaceInfo {		///< information describing an iface
 	ipa_t	ipa;			///< IP address of interface
+	ipp_t	port;			///< port number of interface
 	int	sock;			///< socket number of interface
 	RateSpec rates;			///< total rates for interface
 	RateSpec availRates;		///< available rates for interface
@@ -116,6 +118,12 @@ inline int IfaceTable::getFreeIface() const {
  */
 inline ipa_t IfaceTable::getIpAdr(int iface) const { return ift[iface].ipa; }	
 
+/** Get the port number associated with a given interface.
+ *  @param iface is the interface number
+ *  @return the associated port number
+ */
+inline ipp_t IfaceTable::getPort(int iface) const { return ift[iface].port; }	
+
 /** Get the maximum rates allowed for this interface.
  *  @param i is the interface number
  *  @return the a reference to the rate spec for the interface; currently
@@ -139,6 +147,14 @@ inline RateSpec& IfaceTable::getAvailRates(int i) const {
  */
 inline void IfaceTable::setDefaultIface(int iface) {
 	if (valid(iface)) defaultIf = iface;
+}
+
+/** Set the port number of this interface.
+ *  @param iface is the number of a valid existing interface
+ *  @param port is the port number to be assigned to the interface
+ */
+inline void IfaceTable::setPort(int iface, ipp_t port) {
+	if (valid(iface)) ift[iface].port = port;
 }
 
 } // ends namespace

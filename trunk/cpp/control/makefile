@@ -7,13 +7,14 @@ FLIB := ${FROOT}/lib/lib-forest.a
 LIBS := ${FLIB} ${AROOT}/lib/lib-ds.a ${AROOT}/lib/lib-util.a
 BIN := ~/bin
 WARN := -Wall -Wno-c++11-extensions
-CXXFLAGS := ${WARN} ${ARCH} ${INCLUDES} -O2
+#CXXFLAGS := ${WARN} ${ARCH} ${INCLUDES} -O2 -std=c++11 -stdlib=libc++
+CXXFLAGS := ${WARN} ${ARCH} ${INCLUDES} -O2 
 JAVAC := javac
 IDIR := ${FROOT}/include
 
 HFILES = ${IDIR}/NetInfo.h ${IDIR}/ComtInfo.h ${IDIR}/CpHandler.h
-OFILES = NetInfo.o ComtInfo.o CpHandler.o
-XFILES = NetMgr CliMgr-v0 ComtCtl BuildRtables #Console CliMgr SqlProxy
+OFILES = NetInfo.o ComtInfo.o CpHandler.o Substrate.o ClientTable.o
+XFILES = NetMgr ClientMgr ComtCtl BuildRtables #threadExample Console 
 
 ${OFILES} : ${HFILES}
 
@@ -29,20 +30,17 @@ ${FLIB} : ${OFILES}
 NetMgr : NetMgr.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -lpthread -o $@
 
+threadExample : threadExample.o ${LIBS}
+	${CXX} ${CXXFLAGS} $< ${LIBS} -v -o $@
+
 Console : Console.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
 
-CliMgr : ClientMgr.o ${LIBS}
-	${CXX} ${CXXFLAGS} $< ${LIBS} -lpthread -o $@
-
-CliMgr-v0 : ClientMgr-v0.o ${LIBS}
+ClientMgr : ClientMgr.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -lpthread -o $@
 
 ComtCtl : ComtCtl.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -lpthread -o $@
-
-SqlProxy : SqlProxy.o ${LIBS}
-	${CXX} ${CXXFLAGS} $< ${LIBS} libmysqlpp.a libmysqlclient.a -lssl -o $@
 
 BuildRtables : BuildRtables.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@

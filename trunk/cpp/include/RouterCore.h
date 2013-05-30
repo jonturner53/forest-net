@@ -101,6 +101,16 @@ private:
 	StatsModule *sm;		///< class for recording statistics
 	PacketLog *pktLog;		///< log for recording sample of packets
 
+	/** structure for tracking pending clients */
+	struct nuClient {
+	uint64_t nonce;			///< secret nonce to identify client
+	time_t	timestamp;		///< in seconds, discard after 30
+	int	iface;			///< iface where client connects
+	int	link;			///< pre-assigned link number
+	};
+	list<nuClient> *pendingClients; ///< list of clients that have not
+					///< yet connected
+
 	// setup 
 	bool	setupIfaces();
 	bool	setupLeafAddresses();
@@ -155,9 +165,9 @@ private:
 	bool	getRoute(CtlPkt&, CtlPkt&);
 	bool	modRoute(CtlPkt&, CtlPkt&);
 
-	bool	bootComplete(pktx, CtlPkt&, CtlPkt&);
-	bool	bootAbort(pktx, CtlPkt&, CtlPkt&);
+	bool	setLeafRange(CtlPkt&, CtlPkt&);
 
+	void	sendConnDisc(int,Forest::ptyp_t);
 	bool	sendCpReq(CtlPkt&, fAdr_t);
 	void	resendCpReq();
 	void	handleCpReply(pktx, CtlPkt&);

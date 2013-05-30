@@ -14,7 +14,6 @@
 
 namespace forest {
 
-
 /** Class used to represent information used to modify a link.  */
 class LinkMod {
 public:
@@ -35,6 +34,7 @@ class ComtInfo {
 public:
 		ComtInfo(int,NetInfo&);
 		~ComtInfo();
+	bool	init();
 
 	// predicates
 	bool	validComtree(int) const;
@@ -44,17 +44,19 @@ public:
 	bool	isComtLeaf(int,int) const;
 	bool	isCoreNode(int,fAdr_t) const;
 	bool	isComtLink(int,int) const;
+
 	// methods for iterating through comtrees and comtree components
-	int	firstComtIndex() const;
-	int	nextComtIndex(int) const;
+	int	firstComtree();
+	int	nextComtree(int);
 	fAdr_t	firstCore(int) const;
 	fAdr_t	nextCore(int, fAdr_t) const;
 	fAdr_t	firstRouter(int) const;
 	fAdr_t	nextRouter(int, fAdr_t) const;
 	fAdr_t	firstLeaf(int) const;
 	fAdr_t	nextLeaf(int, fAdr_t) const;
+
 	// access comtree attributes
-	int	getComtIndex(int) const;
+	int	getComtIndex(int);
 	int	getComtree(int) const;
 	fAdr_t	getOwner(int) const;
 	fAdr_t	getRoot(int) const;
@@ -67,13 +69,13 @@ public:
 	int	getLinkCnt(int,fAdr_t) const;
 	bool	isFrozen(int,fAdr_t) const;
 	RateSpec& getLinkRates(int,int) const;
+
 	// add/remove/modify comtrees
 	int	addComtree(int);
 	bool	removeComtree(int);
 	bool	setRoot(int,fAdr_t);
 	bool	setOwner(int,fAdr_t);
 	void	setConfigMode(int,bool);
-	//void	setDefRates(int,RateSpec&,RateSpec&);
 	bool	addNode(int,fAdr_t);
 	bool	removeNode(int,fAdr_t);
 	bool	addCoreNode(int,fAdr_t);
@@ -82,7 +84,7 @@ public:
 	bool	setParent(int,fAdr_t,fAdr_t,int);
 	void	freeze(int,fAdr_t);
 	void	thaw(int,fAdr_t);
-	//bool 	setLinkRates(int,fAdr_t,RateSpec&);
+
 	// compute rates and provision network capacity
 	bool	setAllComtRates();
 	bool	setComtRates(int);
@@ -110,13 +112,18 @@ public:
 	string& comt2string(int,string&) const;
 	string& comtStatus2string(int,string&) const;
 	string& comtStatus22string(int,string&) const;
-	string& toString(string&) const;
+	string& toString(string&);
 
-	// verification methods
+	// verification methods - used after reading ComtInfo file
 	bool	check();
 	bool	checkLinkCounts(int);
 	bool	checkSubtreeRates(int);
 	bool	checkLinkRates(int);
+
+	// locking methods
+	void	releaseComtree(int);
+	void	lockMap();	// use with extreme caution! see below
+	void	unlockMap();
 
 private:
 	int maxComtree;		///< maximum number of comtrees
@@ -151,9 +158,13 @@ private:
 	set<fAdr_t> *coreSet;	///< set of core nodes in comtree
 	map<fAdr_t,ComtRtrInfo> *rtrMap; ///< map for routers in comtree
 	map<fAdr_t,ComtLeafInfo> *leafMap; ///< map for leaf nodes in comtree
+	pthread_cond_t busyCond; /// per comtree condition variable
+	bool	busyBit;	/// true when some thread is using this entry
 	};
 	ComtreeInfo *comtree;	///< array of comtrees
 	IdMap *comtreeMap;	///< maps comtree numbers to indices in array
+
+	pthread_mutex_t mapLock; ///< locks comtreeMap
 };
 
 // Note that methods that take a comtree index as an argument
@@ -242,24 +253,6 @@ inline bool ComtInfo::isComtLink(int ctx, int lnk) const {
 	    	(isComtNode(ctx,right) && left == getParent(ctx,right));
 }
 
-/** Get the first valid comtree index.
- *  Used for iterating through all the comtrees.
- *  @return the index of the first comtree, or 0 if no comtrees defined
- */
-inline int ComtInfo::firstComtIndex() const {
-	return comtreeMap->firstId();
-}
-
-/** Get the next valid comtree index.
- *  Used for iterating through all the comtrees.
- *  @param ctx is a comtree index
- *  @return the index of the next comtree after, or 0 if there is no
- *  next index
- */
-inline int ComtInfo::nextComtIndex(int ctx) const {
-	return comtreeMap->nextId(ctx);
-}
-
 /** Get the forest address of the first core node in a comtree.
  *  @param ctx is a valid comtree index
  *  @return the forest address of the first core node in the comtree,
@@ -324,15 +317,6 @@ inline int ComtInfo::nextLeaf(int ctx, fAdr_t leaf) const {
 	map<fAdr_t,ComtLeafInfo>::iterator p = comtree[ctx].leafMap->find(leaf);
 	p++;
 	return (p != comtree[ctx].leafMap->end() ? p->first : 0);
-}
-
-/** Get the comtree index for a given comtree number.
- *  @param comt is a comtree number
- *  @param return the index used to efficiently access stored information
- *  for the comtree.
- */
-inline int ComtInfo::getComtIndex(int comt) const {
-	return comtreeMap->getId(comt);
 }
 
 /** Get the comtree number for the comtree with a given index.
@@ -471,104 +455,6 @@ inline RateSpec& ComtInfo::getLinkRates(int ctx, fAdr_t fa) const {
 	lp = comtree[ctx].leafMap->find(fa);
 	return lp->second.plnkRates;
 }
-
-/** Add a new comtree.
- *  Defines a new comtree, with attributes left undefined.
- *  @param comt is the comtree number for the new comtree.
- *  @return the index of the new comtree on success, else 0
- */
-inline int ComtInfo::addComtree(int comt) {
-	int ctx = comtreeMap->addPair(comt);
-	if (ctx == 0) return 0;
-	comtree[ctx].comtreeNum = comt;
-	comtree[ctx].coreSet = new set<fAdr_t>;
-	comtree[ctx].rtrMap = new map<fAdr_t,ComtRtrInfo>;
-	comtree[ctx].leafMap = new map<fAdr_t,ComtLeafInfo>;
-	return ctx;
-}
-
-/** Remove a comtree.
- *  Assumes that all bandwidth resources in underlying network
- *  have already been released.
- *  @param comt is the comtree number for the new comtree.
- *  @return true on success, false on failure
- */
-inline bool ComtInfo::removeComtree(int ctx) {
-	if (!validComtIndex(ctx)) return false;
-	comtreeMap->dropPair(comtree[ctx].comtreeNum);
-	comtree[ctx].comtreeNum = 0;
-	delete comtree[ctx].coreSet;
-	delete comtree[ctx].leafMap;
-	delete comtree[ctx].rtrMap;
-	return true;
-}
-
-/** Add a new node to a comtree.
- *  @param ctx is the comtree index
- *  @param fa is a valid forest address
- *  @return true on success, false on failure
- */
-inline bool ComtInfo::addNode(int ctx, fAdr_t fa) {
-	int nn = net->getNodeNum(fa);
-	if (nn != 0 && net->isRouter(nn)) {
-		map<fAdr_t,ComtRtrInfo>::iterator rp;
-	    	rp = comtree[ctx].rtrMap->find(fa);
-	    	if (rp != comtree[ctx].rtrMap->end()) return true;
-		pair<fAdr_t,ComtRtrInfo> newPair;
-		newPair.first = fa;
-		comtree[ctx].rtrMap->insert(newPair);
-		return true;
-	}
-	map<fAdr_t,ComtLeafInfo>::iterator lp;
-	lp = comtree[ctx].leafMap->find(fa);
-	if (lp != comtree[ctx].leafMap->end()) return true;
-	pair<fAdr_t,ComtLeafInfo> newPair;
-	newPair.first = fa;
-	newPair.second.plnkRates = comtree[ctx].leafDefRates;
-	if (nn != 0) {
-		int plnk = net->firstLinkAt(nn);
-		int parent = net->getPeer(nn,plnk);
-		newPair.second.parent = net->getNodeAdr(parent);
-		newPair.second.llnk = net->getLLnum(plnk,parent);
-	}
-	comtree[ctx].leafMap->insert(newPair);
-	return true;
-}
-
-/** Remove a node from a comtree.
- *  This method will fail if the node is a router with links to children
- *  Updates link counts at parent router.
- *  @param ctx is the comtree index
- *  @param fa is the forest address of a comtree node
- *  @return true on success, false on failure
- */
-inline bool ComtInfo::removeNode(int ctx, fAdr_t fa) {
-	map<fAdr_t,ComtRtrInfo>::iterator np;
-	np = comtree[ctx].rtrMap->find(fa);
-	if (np != comtree[ctx].rtrMap->end()) {
-		int plnk = np->second.plnk;
-		if ((plnk == 0 && np->second.lnkCnt != 0) ||
-		    (plnk != 0 && np->second.lnkCnt != 1))
-			return false;
-		if (plnk != 0) {
-			int parent = net->getPeer(net->getNodeNum(fa),plnk);
-			map<fAdr_t,ComtRtrInfo>::iterator pp;
-			pp = comtree[ctx].rtrMap->find(net->getNodeAdr(parent));
-			pp->second.lnkCnt--;
-		}
-		comtree[ctx].rtrMap->erase(np);
-		comtree[ctx].coreSet->erase(fa);
-		return true;
-	}
-	map<fAdr_t,ComtLeafInfo>::iterator lp;
-	lp = comtree[ctx].leafMap->find(fa);
-	map<fAdr_t,ComtRtrInfo>::iterator pp;
-	pp = comtree[ctx].rtrMap->find(lp->second.parent);
-	pp->second.lnkCnt--;
-	comtree[ctx].leafMap->erase(lp);
-	return true;
-}
-
 /** Set the owner of a comtree.
  *  @param ctx is the index of the comtree
  *  @param owner is the forest address of the comtree owner
@@ -708,26 +594,20 @@ inline void ComtInfo::thaw(int ctx, fAdr_t rtr) {
 	rp->second.frozen = false;
 }
 
-/** Set the allocated RateSpec for a comtree link.
- *  @param ctx is a valid comtree index
- *  @param fa is the forest address for a node in the comtree; this method
- *  sets the rates for the parent link at fa
- *  @param newRates is the new allocated RateSpec for the link
- *  @return true on success, false on failure (if node has no parent link)
-inline bool ComtInfo::setLinkRates(int ctx, fAdr_t fa, RateSpec& newRates) {
-	map<fAdr_t,ComtRtrInfo>::iterator rp;
-	rp = comtree[ctx].rtrMap->find(fa);
-	if (rp != comtree[ctx].rtrMap->end()) {
-		if (rp->second.plnk == 0) return false;
-		rp->second.plnkRates = newRates;
-		return true;
-	}
-	map<fAdr_t,ComtLeafInfo>::iterator lp;
-	lp = comtree[ctx].leafMap->find(fa);
-	lp->second.plnkRates = newRates;
-	return true;
-}
+/** Lock the data structure.
+ *  More precisely, locks the map from comtrees to comtree index values.
+ *  The map must be locked when looking up the comtree index
+ *  and when adding/removing comtrees. This locking is done as
+ *  needed by other methods. Applications should generally avoid
+ *  using these methods directly, as uninformed use can cause deadlock.
  */
+inline void ComtInfo::lockMap() {
+	pthread_mutex_lock(&mapLock);
+}
+
+inline void ComtInfo::unlockMap() {
+	pthread_mutex_unlock(&mapLock);
+}
 
 } // ends namespace
 

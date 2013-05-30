@@ -36,7 +36,7 @@ public:
 	static ipa_t ipAddress(const char*); 		
 	static string& ip2string(ipa_t, string&);		
 	static bool readIpAdr(istream&, ipa_t&); 
-	static ipa_t getIpAdr(char*);
+	static ipa_t getIpAdr(const char*);
 	static ipa_t myIpAddress();
 
 	// socket address structure utilities
@@ -74,7 +74,7 @@ public:
 	static int  sendBuf(int, char*, int);
 	static int  recvBufBlock(int, char*, int);
 	static int  sendBufBlock(int, char*, int);
-	static int  sendString(int, string&);
+	static int  sendString(int, const string&);
 };
 
 } // ends namespace

@@ -10,16 +10,18 @@
 
 namespace forest {
 
-
 /** Constructor for LinkTable, allocates space and initializes table. */
 LinkTable::LinkTable(int maxLnk1) : maxLnk(maxLnk1) {
 	lnkTbl = new LinkInfo[maxLnk+1];
 	links = new UiSetPair(maxLnk);
 	ht = new UiHashTbl(maxLnk);
+	padrMap = new UiHashTbl(maxLnk);
 };
 	
 /** Destructor for LinkTable, frees dynamic storage. */
-LinkTable::~LinkTable() { delete [] lnkTbl; delete links; delete ht; }
+LinkTable::~LinkTable() {
+	delete [] lnkTbl; delete links; delete ht; delete padrMap;
+}
 
 /** Add a link table entry.
  *  @param lnk is the number of the link for which an entry is requested;
@@ -29,16 +31,23 @@ LinkTable::~LinkTable() { delete [] lnkTbl; delete links; delete ht; }
  *  @param peerPort is the port number of the peer node
  *  @return the link number of the entry on success, or 0 on failure.
  */
-int LinkTable::addEntry(int lnk, ipa_t peerIp, ipp_t peerPort) {
+int LinkTable::addEntry(int lnk, ipa_t peerIp, ipp_t peerPort, uint64_t nonce) {
 	if (lnk == 0) lnk = links->firstOut();
-	if (!links->isOut(lnk)) return 0;
-	if (ht->lookup(hashkey(peerIp, peerPort)) != 0) return 0;
-	if (!ht->insert(hashkey(peerIp, peerPort),lnk)) return 0;
+	if (lnk == 0 || !links->isOut(lnk)) return 0;
+	if (peerIp != 0 && peerPort != 0) {
+		if (ht->lookup(hashkey(peerIp, peerPort)) != 0) return 0;
+		if (!ht->insert(hashkey(peerIp, peerPort),lnk)) return 0;
+	} else {
+		if (ht->lookup(nonce) != 0) return 0;
+		if (!ht->insert(nonce,lnk)) return 0;
+	}
 	links->swap(lnk);
 	lnkTbl[lnk].peerIp = peerIp;
 	lnkTbl[lnk].peerPort = peerPort;
+	lnkTbl[lnk].nonce = nonce;
+	lnkTbl[lnk].peerAdr = 0;
 	setIface(lnk,0);
-	setPeerAdr(lnk,0); setPeerType(lnk,UNDEF_NODE);
+	setPeerType(lnk,Forest::UNDEF_NODE);
 	getRates(lnk).set(Forest::MINBITRATE,Forest::MINBITRATE,
 			  Forest::MINPKTRATE,Forest::MINPKTRATE);
 	getAvailRates(lnk).set(	Forest::MINBITRATE,Forest::MINBITRATE,
@@ -47,21 +56,76 @@ int LinkTable::addEntry(int lnk, ipa_t peerIp, ipp_t peerPort) {
         return lnk;
 }
 
+/** Remap an entry added earlier using a nonce.
+ *  @param peerIp is the IP address of this link's peer
+ *  @param peerPort is the port number of this link's peer
+ *  @return true on success, false on failure
+ */
+bool LinkTable::remapEntry(int lnk, ipa_t peerIp, ipp_t peerPort) {
+	if (!links->isIn(lnk)) return false;
+	if (ht->lookup(lnkTbl[lnk].nonce) != lnk) return false;
+	ht->remove(lnkTbl[lnk].nonce);
+	if (!ht->insert(hashkey(peerIp, peerPort),lnk)) {
+		ht->insert(lnkTbl[lnk].nonce,lnk); return false;
+	}
+	lnkTbl[lnk].peerIp = peerIp;
+	lnkTbl[lnk].peerPort = peerPort;
+        return true;
+}
+
+/** Revert an entry that was remapped earlier.
+ *  @return true on success, false on failure
+ */
+bool LinkTable::revertEntry(int lnk) {
+	if (!links->isIn(lnk)) return false;
+	ipa_t peerIp = lnkTbl[lnk].peerIp;
+	ipp_t peerPort = lnkTbl[lnk].peerPort;
+	if (ht->lookup(hashkey(peerIp, peerPort)) != lnk) return false;
+	ht->remove(hashkey(peerIp, peerPort));
+	if (!ht->insert(lnkTbl[lnk].nonce,lnk)) {
+		ht->insert(hashkey(peerIp, peerPort),lnk);
+		return false;
+	}
+	lnkTbl[lnk].peerIp = 0;
+	lnkTbl[lnk].peerPort = 0;
+        return true;
+}
+
 /** Set the port number for the peer at the far end of a link.
  *  @param lnk is a valid link number
  *  @param peerPort is the port number of the peer node
  *  @return true on success, false on failure
- */
-bool LinkTable::setPeerPort(int lnk, ipp_t peerPort) {
+bool LinkTable::setPeerIpPort(int lnk, ipa_t peerIp, ipp_t peerPort) {
 	if (!valid(lnk)) return false;
 	ht->remove(hashkey(getPeerIpAdr(lnk),getPeerPort(lnk)));
-	if (!ht->insert(hashkey(getPeerIpAdr(lnk), peerPort),lnk)) {
+	if (!ht->insert(hashkey(peerIp, peerPort),lnk)) {
 		ht->insert(hashkey(getPeerIpAdr(lnk), getPeerPort(lnk)),lnk);
 		return false;
 	}
+	lnkTbl[lnk].peerIp = peerIp;
 	lnkTbl[lnk].peerPort = peerPort;
 	return true;
 }
+ */
+
+/** Set the Forest address of the peer for a given link.
+ *  @param lnk is a valid link number
+ *  @param adr is a Forest unicast address
+ */
+void LinkTable::setPeerAdr(int lnk, fAdr_t adr) {
+	if (!valid(lnk)) return;
+	if (getPeerAdr(lnk) != 0 && getPeerType(lnk) != Forest::ROUTER) {
+		uint64_t x = lnkTbl[lnk].peerAdr; x <<= 32;
+		x |= lnkTbl[lnk].peerAdr;
+		padrMap->remove(x);
+	}
+	if (adr != 0 && getPeerType(lnk) != Forest::ROUTER) {
+		uint64_t x = adr; x <<= 32; x |= adr;
+		padrMap->insert(x,lnk);
+	}
+	lnkTbl[lnk].peerAdr = adr;
+}
+
 
 /** Remove the table entry for a link.
  *  @param lnk is the link number for the entry to be deleted
@@ -83,7 +147,7 @@ bool LinkTable::checkEntry(int lnk) {
 
 	// only a router may use the forest port number
 	if (getPeerPort(lnk) == Forest::ROUTER_PORT &&
-	    getPeerType(lnk) != ROUTER)
+	    getPeerType(lnk) != Forest::ROUTER)
                 return false;
 
 	return true;
@@ -109,7 +173,7 @@ bool LinkTable::checkEntry(int lnk) {
 int LinkTable::readEntry(istream& in) {
 	int lnk, iface; RateSpec rs;
 	ipa_t peerIp; ipp_t peerPort;
-	ntyp_t peerType; int peerAdr;
+	Forest::ntyp_t peerType; int peerAdr;
 	string typStr;
 
 	Misc::skipBlank(in);
@@ -125,9 +189,9 @@ int LinkTable::readEntry(istream& in) {
 	Misc::cflush(in,'\n');
 
 	peerType = Forest::getNodeType(typStr);
-	if (peerType == UNDEF_NODE) return 0;
+	if (peerType == Forest::UNDEF_NODE) return 0;
 
-	if (!addEntry(lnk,peerIp,peerPort)) return 0;
+	if (!addEntry(lnk,peerIp,peerPort,0)) return 0;
 	setIface(lnk,iface); 
         setPeerType(lnk, peerType);
 	setPeerAdr(lnk, peerAdr);

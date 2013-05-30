@@ -206,7 +206,7 @@ bool ComtreeTable::readEntry(istream& in) {
 	for (p = comtLinks.begin(); p != comtLinks.end(); p++) {
 		// if the link is in the core, also add it to the router list
 		int lnk = *p;
-		bool rtrFlag = (lt->getPeerType(lnk) == ROUTER);
+		bool rtrFlag = (lt->getPeerType(lnk) == Forest::ROUTER);
 		bool coreFlag = (coreLinks.find(lnk) != coreLinks.end());
 		if (coreFlag && !rtrFlag) return false;
 		if (!addLink(ctx,lnk,rtrFlag,coreFlag)) return false;

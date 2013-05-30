@@ -23,7 +23,7 @@ namespace forest {
  *  (NetMgr, ComtCtl, etc) that use control packets to communicate
  *  with routers and other components. It handles retransmission
  *  of control packet requests, on behalf of the thread using it.
- *  Each thread instaniates and initializes its own CpHandler.
+ *  Each thread instantiates and initializes its own CpHandler.
  *  The threads use a pair of queues to communicate with a
  *  "main thread" that handles IO and routing of packets to
  *  the appropriate thread.
@@ -32,51 +32,52 @@ class CpHandler {
 public:
 	CpHandler(Queue* q1, Queue* q2, fAdr_t myAdr1, Logger* log,
 		  PacketStoreTs *ps1) : inq(q1), outq(q2), myAdr(myAdr1),
-		  logger(log), ps(ps1), tunIp(0), tunPort(0) {};
+		  tunIp(0), tunPort(0), ps(ps1), logger(log) {}
 
 	static const int NORESPONSE = (1 << 31);
 
-	bool getCp(pktx,CtlPkt&);
+	pktx clientAddComtree(fAdr_t,int,CtlPkt&);
+	pktx clientDropComtree(fAdr_t,comt_t,CtlPkt&);
+	pktx clientJoinComtree(fAdr_t,comt_t,ipa_t, ipp_t,CtlPkt&);
+	pktx clientLeaveComtree(fAdr_t,comt_t,ipa_t, ipp_t,CtlPkt&);
 
-	pktx clientAddComtree(fAdr_t,int);
-	pktx clientDropComtree(fAdr_t,comt_t);
-	pktx clientJoinComtree(fAdr_t,comt_t,ipa_t, ipp_t);
-	pktx clientLeaveComtree(fAdr_t,comt_t,ipa_t, ipp_t);
+	pktx addIface(fAdr_t,int,ipa_t,RateSpec&,CtlPkt&);
+	pktx dropIface(fAdr_t,int,CtlPkt&);
+	pktx modIface(fAdr_t,int,ipa_t,RateSpec&,CtlPkt&);
+	pktx getIface(fAdr_t,int,CtlPkt&);
 
-	pktx addIface(fAdr_t,int,ipa_t,RateSpec&);
-	pktx dropIface(fAdr_t,int);
-	pktx modIface(fAdr_t,int,ipa_t,RateSpec&);
-	pktx getIface(fAdr_t,int);
+	pktx addLink(fAdr_t,Forest::ntyp_t,int,int,ipa_t,ipp_t,					     fAdr_t,uint64_t,CtlPkt&);
+	pktx addLink(fAdr_t,Forest::ntyp_t,int,uint64_t,CtlPkt&);
+	pktx dropLink(fAdr_t,int,CtlPkt&);
+	pktx modLink(fAdr_t,int,RateSpec&,CtlPkt&);
+	pktx getLink(fAdr_t,int,CtlPkt&);
 
-	pktx addLink(fAdr_t,ntyp_t,ipa_t,ipp_t,int,int,fAdr_t);
-	pktx dropLink(fAdr_t,int);
-	pktx modLink(fAdr_t,int,RateSpec&);
-	pktx getLink(fAdr_t,int);
+	pktx addComtree(fAdr_t,comt_t,CtlPkt&);
+	pktx dropComtree(fAdr_t,comt_t,CtlPkt&);
+	pktx modComtree(fAdr_t,comt_t,int,int,CtlPkt&);
+	pktx getComtree(fAdr_t,comt_t,CtlPkt&);
 
-	pktx addComtree(fAdr_t,comt_t);
-	pktx dropComtree(fAdr_t,comt_t);
-	pktx modComtree(fAdr_t,comt_t,int,int);
-	pktx getComtree(fAdr_t,comt_t);
+	pktx addComtreeLink(fAdr_t,comt_t,int,int,CtlPkt&);
+	pktx addComtreeLink(fAdr_t,comt_t,fAdr_t,CtlPkt&);
+	pktx dropComtreeLink(fAdr_t,comt_t,int,fAdr_t,CtlPkt&);
+	pktx modComtreeLink(fAdr_t,comt_t,int,RateSpec&,CtlPkt&);
+	pktx getComtreeLink(fAdr_t,comt_t,int,CtlPkt&);
 
-	pktx addComtreeLink(fAdr_t,comt_t,int,int=-1);
-	pktx addComtreeLink(fAdr_t,comt_t,ipa_t,ipp_t,int=-1);
-	pktx dropComtreeLink(fAdr_t,comt_t,int);
-	pktx dropComtreeLink(fAdr_t,comt_t,ipa_t,ipp_t);
-	pktx modComtreeLink(fAdr_t,comt_t,int,RateSpec&);
-	pktx getComtreeLink(fAdr_t,comt_t,int);
+	pktx newSession(fAdr_t,ipa_t,RateSpec&,CtlPkt&);
+	pktx clientConnect(fAdr_t,fAdr_t,fAdr_t,CtlPkt&);
+	pktx clientDisconnect(fAdr_t,fAdr_t,fAdr_t,CtlPkt&);
 
-	pktx newClient(fAdr_t,ipa_t,ipp_t);
-	pktx clientConnect(fAdr_t,fAdr_t,fAdr_t);
-	pktx clientDisconnect(fAdr_t,fAdr_t,fAdr_t);
+	pktx setLeafRange(fAdr_t,fAdr_t,fAdr_t,CtlPkt&);
+	pktx configLeaf(fAdr_t,fAdr_t,fAdr_t,ipa_t,ipp_t,uint64_t,CtlPkt&);
+	pktx bootRouter(fAdr_t,CtlPkt&);
+	pktx bootLeaf(fAdr_t,CtlPkt&);
+	pktx bootComplete(fAdr_t,CtlPkt&);
+	pktx bootAbort(fAdr_t,CtlPkt&);
 
-	pktx bootRequest(fAdr_t);
-	pktx bootReply(fAdr_t,fAdr_t,fAdr_t);
-	pktx bootComplete(fAdr_t);
-	pktx bootAbort(fAdr_t);
-
-	int sendCtlPkt(CtlPkt&, fAdr_t);
+	int sendRequest(CtlPkt&, fAdr_t, CtlPkt&);
 	bool handleReply(pktx, CtlPkt&, string&, string&);
-	void errReply(pktx, CtlPkt&, const char*);
+	void sendReply(CtlPkt&, fAdr_t);
+	void errReply(pktx, CtlPkt&, const string&);
 
 	void setTunnel(ipa_t, ipp_t);
 
@@ -86,8 +87,8 @@ private:
 	fAdr_t myAdr;		///< address of this host
 	ipa_t tunIp;		///< ip address for tunnel
 	ipp_t tunPort;		///< port number for tunnel
-	Logger* logger;		///< for reporting error messages
 	PacketStoreTs* ps;	///< thread-safe packet store
+	Logger* logger;		///< for reporting error messages
 
 	int sendAndWait(pktx, CtlPkt&);
 };

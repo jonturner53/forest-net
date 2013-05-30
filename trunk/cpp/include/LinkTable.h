@@ -12,6 +12,7 @@
 #include <set>
 #include "Forest.h"
 #include "Packet.h"
+#include "RateSpec.h"
 #include "UiSetPair.h"
 #include "UiHashTbl.h"
 
@@ -27,6 +28,7 @@ public:
 
 	// predicates
 	bool	valid(int) const;
+	bool	isConnected(int) const;
 	bool	checkEntry(int);
 
 	// iteration methods
@@ -35,27 +37,35 @@ public:
 
 	// access methods
 	int 	lookup(ipa_t, ipp_t) const;
+	int 	lookup(uint64_t) const;
+	int	lookup(fAdr_t) const;
 	ipa_t	getPeerIpAdr(int) const;	
 	ipp_t 	getPeerPort(int) const;	
 	int	getIface(int) const;	
-	ntyp_t	getPeerType(int) const;	
+	Forest::ntyp_t getPeerType(int) const;	
 	fAdr_t 	getPeerAdr(int) const;	
+	uint64_t getNonce(int) const;	
 	RateSpec& getRates(int) const;	
 	RateSpec& getAvailRates(int) const;	
 	set<int>& getComtSet(int) const;
 
 	// modifiers
-	int	addEntry(int,ipa_t,ipp_t);
+	int	addEntry(int,ipa_t,ipp_t,uint64_t);
+	bool	remapEntry(int,ipa_t,ipp_t);
+	bool	revertEntry(int);
 	void	removeEntry(int);		
-	bool 	setPeerPort(int, ipp_t);	
+	//bool 	setPeerIpPort(int, ipa_t, ipp_t);	
+	bool	remapEntry(int, ipa_t, ipp_t, uint64_t); 
 	void 	setIface(int, int);	
-	void	setPeerType(int, ntyp_t);	
+	void	setPeerType(int, Forest::ntyp_t);	
 	void	setPeerAdr(int, fAdr_t);	
+	void	setConnectStatus(int, bool);
 	bool	registerComt(int,int);
 	bool	deregisterComt(int,int);
 
 	// io routines
 	bool read(istream&);
+	string&	entry2string(int, string&) const;
 	string& toString(string&) const;
 
 private:
@@ -65,8 +75,10 @@ private:
 	int	iface;			///< interface number for link
 	ipa_t	peerIp;			///< IP address of peer endpoint
 	ipp_t	peerPort;		///< peer port number
-	ntyp_t	peerType;		///< node type of peer
+	Forest::ntyp_t peerType;	///< node type of peer
 	fAdr_t	peerAdr;		///< peer's forest address
+	bool	status;			///< true if link is connected
+	uint64_t nonce;			///< used by peer when connecting
 	RateSpec rates;			///< rate spec for link rates
 	RateSpec availRates;		///< rate spec for available rates
 	set<int> *comtSet;		///< set of comtrees containing link
@@ -74,11 +86,11 @@ private:
 	LinkInfo *lnkTbl;		///< lnkTbl[i] is link info for link i
 	UiSetPair *links;		///< sets for in-use and unused links
 	UiHashTbl *ht;			///< hash table for fast lookup
+	UiHashTbl *padrMap;		///< map from peer address to link #
 
 	// helper functions
 	uint64_t hashkey(ipa_t, ipp_t) const;
 	int	readEntry(istream&);	 	
-	string&	entry2string(int, string&) const;
 };
 
 /** Determine if a link number is valid.
@@ -87,6 +99,14 @@ private:
  *  link number, else false
  */
 inline bool LinkTable::valid(int lnk) const { return links->isIn(lnk); }
+
+/** Determine if a link is connected to peer.
+ *  @param lnk is a link number
+ *  @return true if link is connected to peer, else false
+ */
+inline bool LinkTable::isConnected(int lnk) const {
+	return lnkTbl[lnk].status;
+}
 
 /** Get the "first" link.
  *  This method is used to iterate through the links.
@@ -136,7 +156,7 @@ inline int LinkTable::getIface(int lnk) const {
  *  @param lnk is a valid link number
  *  @return the type of the node at the far end of the link
  */
-inline ntyp_t LinkTable::getPeerType(int lnk) const {
+inline Forest::ntyp_t LinkTable::getPeerType(int lnk) const {
 	return lnkTbl[lnk].peerType;
 }
 
@@ -146,6 +166,14 @@ inline ntyp_t LinkTable::getPeerType(int lnk) const {
  */
 inline fAdr_t LinkTable::getPeerAdr(int lnk) const {
 	return lnkTbl[lnk].peerAdr;
+}
+
+/** Get the nonce used when connecting to this link.
+ *  @param lnk is a valid link number
+ *  @return the nonce that the peer uses when connecting
+ */
+inline uint64_t LinkTable::getNonce(int lnk) const {
+	return lnkTbl[lnk].nonce;
 }
 
 /** Get the rates for a given link.
@@ -190,16 +218,16 @@ inline void LinkTable::setIface(int lnk, int iface) {
  *  @param lnk is a valid link number
  *  @param nt is a node type
  */
-inline void LinkTable::setPeerType(int lnk, ntyp_t nt) {
+inline void LinkTable::setPeerType(int lnk, Forest::ntyp_t nt) {
 	if (valid(lnk)) lnkTbl[lnk].peerType = nt;
 }
 
-/** Set the Forest address of the peer for a given link.
+/** Set the connect status of a link.
  *  @param lnk is a valid link number
- *  @param adr is a Forest unicast address
+ *  @param status is the new status (true for connected)
  */
-inline void LinkTable::setPeerAdr(int lnk, fAdr_t adr) {
-	if (valid(lnk)) lnkTbl[lnk].peerAdr =adr;
+inline void LinkTable::setConnectStatus(int lnk, bool status) {
+	if (valid(lnk)) lnkTbl[lnk].status = status;
 }
 
 inline bool LinkTable::registerComt(int lnk, int ctx) {
@@ -230,6 +258,26 @@ inline uint64_t LinkTable::hashkey(ipa_t ipa, ipp_t ipp) const {
  */
 inline int LinkTable::lookup(ipa_t ipa, ipp_t ipp) const {
         return ht->lookup(hashkey(ipa,ipp));
+}
+
+/** Get the link number based on a nonce.
+ *  @param nonce is a value used to identify a new leaf when connecting.
+ *  @return the number of the link that matches the given nonce,
+ *  or 0 if there is no matching link
+ */
+inline int LinkTable::lookup(uint64_t nonce) const {
+        return ht->lookup(nonce);
+}
+
+/** Get the link number based on the peer's forest address.
+ *  This method is only defined for links going to leaf nodes.
+ *  @param nonce is a value used to identify a new leaf when connecting.
+ *  @return the number of the link that matches the given nonce,
+ *  or 0 if there is no matching link
+ */
+inline int LinkTable::lookup(fAdr_t peerAdr) const {
+	uint64_t x = peerAdr; x <<= 32; x |= peerAdr;
+        return padrMap->lookup(x);
 }
 
 } // ends namespace

@@ -10,6 +10,7 @@
 #define CTLPKT_H
 
 #include "Forest.h"
+#include "Packet.h"
 #include "RateSpec.h"
 
 namespace forest {
@@ -68,18 +69,23 @@ public:
 		GET_ROUTE = 72, MOD_ROUTE = 73,
 		ADD_ROUTE_LINK = 74, DROP_ROUTE_LINK = 75,
 
-		NEW_CLIENT = 100, CLIENT_CONNECT = 101, CLIENT_DISCONNECT = 102,
+		NEW_SESSION = 100,
+		CLIENT_CONNECT = 101, CLIENT_DISCONNECT = 102,
 
-		BOOT_REQUEST = 120, BOOT_COMPLETE = 121, BOOT_ABORT = 122
+		SET_LEAF_RANGE = 110, CONFIG_LEAF = 111,
+
+		BOOT_ROUTER = 120, BOOT_COMPLETE = 121, BOOT_ABORT = 122,
+		BOOT_LEAF = 123
 	};
 
 	// Control packet attribute types
 	enum CpAttr {
 		UNDEF_ATTR = 0,
-		ADR1 = 1, ADR2 = 2,
+		ADR1 = 1, ADR2 = 2, ADR3 = 3,
 		IP1 = 5, IP2 = 6,
 		PORT1 = 9, PORT2 = 10,
 		RSPEC1 = 13, RSPEC2 = 14,
+		NONCE = 17,
 		CORE_FLAG = 20,
 		IFACE = 21,
 		LINK = 22,
@@ -100,6 +106,7 @@ public:
 
 	// constructors/destructor
 		CtlPkt();
+		CtlPkt(const Packet&);
 		CtlPkt(uint32_t*,int);
 		CtlPkt(CpType,CpMode,uint64_t);
 		CtlPkt(CpType,CpMode,uint64_t,uint32_t*);
@@ -107,6 +114,7 @@ public:
 
 	// resetting control packet
 	void	reset();
+	void	reset(const Packet&);
 	void	reset(uint32_t*, int);
 	void	reset(CpType,CpMode,uint64_t);
 	void	reset(CpType,CpMode,uint64_t,uint32_t*);
@@ -123,14 +131,15 @@ public:
 	CpMode	mode;			///< request/return type
 	int64_t seqNum;			///< sequence number
 
-	fAdr_t	adr1, adr2;		///< forest address fields
+	fAdr_t	adr1, adr2, adr3;	///< forest address fields
 	ipa_t	ip1, ip2;		///< ip address fields
 	ipp_t	port1, port2;		///< ip port number fields
 	RateSpec rspec1, rspec2;	///< rate specs
+	uint64_t nonce;			///< nonce used when connecting links
 	int8_t	coreFlag;		///< comtree core flag
 	int	iface;			///< interface number
 	int	link;			///< link number
-	ntyp_t	nodeType;		///< type of a node
+	Forest::ntyp_t nodeType;	///< type of a node
 	comt_t	comtree;		///< comtree number
 	fAdr_t	comtreeOwner;		///< comtree owner
 	int	count;			///< count field

@@ -11,6 +11,7 @@
 
 #include <pthread.h>
 #include "Packet.h"
+#include "CtlPkt.h"
 
 namespace forest {
 
