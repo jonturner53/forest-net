@@ -10,6 +10,8 @@ CLIENT_SIG=10		# client signalling packet
 CONNECT=11		# establish connection for an access link
 DISCONNECT=12		# disconnect an access link
 
+ACK_FLAG=2
+
 ROUTER_PORT=30123
 COMTCTL_PORT=30133
 CLIMGR_PORT=30140

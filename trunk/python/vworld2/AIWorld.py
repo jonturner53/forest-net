@@ -81,6 +81,7 @@ class AIWorld(DirectObject):
 		self.avatar.reparentTo(render)
 		self.avatar.setScale(.002)
 		self.avatar.setPos(58,67,0)
+		self.avatar.setHpr(random.randint(0,359),0,0) 
 
 		self.rotateDir = -1
 		self.rotateDuration = -1

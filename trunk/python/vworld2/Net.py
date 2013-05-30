@@ -75,9 +75,9 @@ class Net :
 
 	def init(self, uname, pword) :
 		if not self.login(uname, pword) : return False
-		self.rtrAdr = (ip2string(self.rtrIp),ROUTER_PORT)
+		self.rtrAdr = (ip2string(self.rtrIp),self.rtrPort)
 		self.t0 = time(); self.now = 0; self.nextTime = 0;
-		self.connect()
+		if not self.connect() : return False
 		sleep(.1)
 		if not self.joinComtree() :
 			sys.stderr.write("Net.run: cannot join comtree\n")
@@ -87,34 +87,90 @@ class Net :
 				appendTask=True)
 		return True
 
+	def readLine(self,sock,buf) :
+		""" Return next line in a buffer, refilling buffer as necessary.
+		sock is a blocking stream socket to read from
+		buf is a buffer containing data read from socket but
+		not yet returned as a distinct linke
+		return the string up to (but not including) the next newline
+		"""
+		while True :
+			pos = buf.find("\n") 
+			if pos >= 0 :
+				line = buf[0:pos]
+				buf = buf[pos+1:]
+				return line, buf
+			nu = sock.recv(1000)
+			buf += nu
+
 	def login(self, uname, pword) :
+		""" Login to connection manager and request session.
+
+		uname is the user name to use when logging in
+		pword is the password to use
+		return True of the login dialog is successful, else False;
+		the client manager returns several configuration parameters
+		as part of the dialog
+		"""
 		cmSock = socket(AF_INET, SOCK_STREAM);
-		cmSock.connect((self.cliMgrIp,30140))
+		cmSock.connect((self.cliMgrIp,30122))
 	
-		s = uname + " " + pword + " " + str(self.myAdr[1]) + \
-		    " 0 noproxy"
-		blen = 4+len(s)
-		buf = struct.pack("!I" + str(blen) + "s",blen,s);
-		cmSock.sendall(buf)
-		
-		buf = cmSock.recv(4)
-		while len(buf) < 4 : buf += cmSock.recv(4-len(buf))
-		tuple = struct.unpack("!I",buf)
-		if tuple[0] == -1 :
-			sys.stderr.write("Avatar.login: negative reply from " \
-					 "client manager");
+		cmSock.sendall("Forest-login-v1\nlogin: " + uname + \
+                	       "\npassword: " + pword + "\nover\n")
+
+
+		buf = ""
+		line,buf = self.readLine(cmSock,buf)
+		if line != "login successful" :
 			return False
-	
-		self.rtrFadr = tuple[0]
-	
-		buf = cmSock.recv(12)
-		while len(buf) < 12 : buf += cmSock.recv(12-len(buf))
-		tuple = struct.unpack("!III",buf)
-	
-		self.myFadr = tuple[0]
-		self.rtrIp = tuple[1]
-		self.comtCtlFadr = tuple[2]
-	
+		line,buf = self.readLine(cmSock,buf)
+		if line != "over" :
+			return False
+
+		cmSock.sendall("newSession\nover\n")
+
+		line,buf = self.readLine(cmSock,buf)
+		chunks = line.partition(":")
+		if chunks[0].strip() != "yourAddress" or chunks[1] != ":" :
+			return False
+		self.myFadr = string2fadr(chunks[2].strip())
+
+		line,buf = self.readLine(cmSock,buf)
+		chunks = line.partition(":")
+		if chunks[0].strip() != "yourRouter" or chunks[1] != ":" :
+			return False
+		triple = chunks[2].strip(); triple = triple[1:-1].strip()
+		chunks = triple.split(",")
+		if len(chunks) != 3 : return False
+		self.rtrIp = string2ip(chunks[0].strip())
+		self.rtrPort = int(chunks[1].strip())
+		self.rtrFadr = string2fadr(chunks[2].strip())
+
+		line,buf = self.readLine(cmSock,buf)
+		chunks = line.partition(":")
+		if chunks[0].strip() != "comtCtlAddress" or chunks[1] != ":" :
+			return False
+		self.comtCtlFadr = string2fadr(chunks[2].strip())
+
+		line,buf = self.readLine(cmSock,buf)
+		chunks = line.partition(":")
+		if chunks[0].strip() != "connectNonce" or chunks[1] != ":" :
+			return False
+		self.nonce = int(chunks[2].strip())
+
+		line,buf = self.readLine(cmSock,buf) 
+		if line != "overAndOut" : return False
+
+		cmSock.close()
+
+		if self.debug >= 1 :
+			print "avatar address =", fadr2string(self.myFadr)
+			print "router info = (", ip2string(self.rtrIp), \
+					     str(self.rtrPort), \
+					     fadr2string(self.rtrFadr), ")"
+			print "comtCtl address = ",fadr2string(self.comtCtlFadr)
+			print "nonce = ", self.nonce
+
 		return True
 
 	def run(self, task) :
@@ -199,13 +255,17 @@ class Net :
 		p = Packet(); p.type = CONNECT
 		p.comtree = CLIENT_CON_COMT
 		p.srcAdr = self.myFadr; p.dstAdr = self.rtrFadr
-		self.send(p)
+		p.payload = struct.pack("!Q",self.nonce)
+		reply = self.sendCtlPkt(p)
+		return reply != None and reply.flags == ACK_FLAG
 
 	def disconnect(self) :
 		p = Packet(); p.type = DISCONNECT
 		p.comtree = CLIENT_CON_COMT
 		p.srcAdr = self.myFadr; p.dstAdr = self.rtrFadr
-		self.send(p)
+		p.payload = struct.pack("!Q",self.nonce)
+		reply = self.sendCtlPkt(p)
+		return reply != None and reply.flags == ACK_FLAG
 
 	def joinComtree(self) :
 		return self.sendJoinLeave(CLIENT_JOIN_COMTREE)
@@ -263,18 +323,20 @@ class Net :
 		"""
 		if self.comtree == 0 : return
 		p = Packet()
-		p.leng = OVERHEAD + 4*8; p.type = CLIENT_DATA; p.flags = 0
+		p.leng = OVERHEAD + 4*5; p.type = CLIENT_DATA; p.flags = 0
 		p.comtree = self.comtree
 		p.srcAdr = self.myFadr;
 		p.dstAdr = -self.mcg.groupNum(self.x,self.y)
+
+		now = int(1000000 * self.now)
 	
 		numNear = len(self.nearRemotes)
 		if numNear > 5000 or numNear < 0 :
 			print "numNear=", numNear
 		p.payload = struct.pack('!IIIII', \
-					STATUS_REPORT, self.now, \
+					STATUS_REPORT, now, \
 					int(self.x*GRID), int(self.y*GRID), \
-					self.direction)
+					int(self.direction))
 		self.send(p)
 
 	def subscribe(self,glist) :
