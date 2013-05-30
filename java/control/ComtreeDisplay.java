@@ -25,7 +25,7 @@ import forest.control.*;
 import princeton.*;
 
 /** Display comtrees based on the information received from a ComtCtl object.
- *  Connect to the ComtCtl object using a stream socket (port 30133).
+ *  Connect to the ComtCtl object using a stream socket.
  *  On connecting, the ComtCtl sends the initial network configuration in
  *  the form of  NetInfo string. This is read into a local NetInfo object.
  *
@@ -37,7 +37,7 @@ import princeton.*;
  *  can also be used to turn on/off the display of  detailed link information.
  */
 public class ComtreeDisplay {
-	private static final int COMTCTL_PORT = 30133;
+	private static final int COMTCTL_PORT = 30121;
 	private static final int maxNode    = 10000;
 	private static final int maxLink    = 20000;
 	private static final int maxRtr     =  1000;

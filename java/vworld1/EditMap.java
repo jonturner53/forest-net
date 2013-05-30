@@ -200,7 +200,6 @@ public class EditMap extends MouseAdapter implements ActionListener {
 	 *  @param fileName is the name of the input file to be read
 	 */
 	private void readOldFile(String fileName) {
-System.out.println("reading old format");
 		try {
 			Scanner imap = new Scanner(new File(fileName));
 			int y = 0; walls = null;
@@ -249,7 +248,6 @@ System.out.println("reading old format");
 	 *  @param fileName is the name of the input file to be read
 	 */
 	private void readNewFile(String fileName) {
-System.out.println("reading new format");
 		try {
 			Scanner imap = new Scanner(new File(fileName));
 			int y = 0; walls = null;

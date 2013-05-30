@@ -153,13 +153,14 @@ public class EMapPanel extends JPanel {
 		int ssc = (int) (ss * w);
 
 		// draw squares
+		Color lightBlue = new Color(200, 220, 255);
 		for (int x = cornerX; x < cornerX+viewSize; x++) {
 			for (int y = cornerY; y < cornerY+viewSize; y++) {
 				int xy = x + y * worldSize;
 				if ((walls[xy]&4) != 0)
 					g2.setPaint(Color.gray);
 				else
-					g2.setPaint(Color.white);
+					g2.setPaint(lightBlue);
 				int row = y - cornerY; int col = x - cornerX;
 				g.fillRect(xc(ss*col),yc(ss*(row+1)),ssc,ssc);
 			}
