@@ -365,13 +365,16 @@ bool handleComtreeDisplay(int sock) {
 			if (!buf.readInt(comt)) {
 				s = "invalid comtree request\n";
 			}
-			int ctx = comtrees->getComtree(comt);
+			int ctx = comtrees->getComtIndex(comt);
 			if (ctx == 0) {
 				// send back error message
 				s = "invalid comtree request\n";
 			} else {
 				comtrees->comtStatus2string(ctx,s);
 			}
+static int cnt = 0;
+if (cnt++ < 10)
+cerr << "sending comtree status string for comt " << comt << "\n" << s << endl;
 			comtrees->releaseComtree(ctx);
 			if (Np4d::sendString(sock,s) < 0) {
 				logger->log("handleComtreeDisplay: unable to "

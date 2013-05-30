@@ -77,6 +77,7 @@ bool Substrate::run(int finTimeSec) {
 	uint64_t finishTime = finTimeSec;
 	finishTime *= 1000000000; // convert to ns
 
+cerr << "finishTime=" << finishTime << endl;
 	bool nothing2do; bool connected = false;
 	while (finishTime == 0 || now <= finishTime) {
 		nothing2do = true;
