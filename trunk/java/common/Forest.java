@@ -87,7 +87,9 @@ public class Forest {
         public static final int OVERHEAD = 24;       ///< total overhead
         public static final short RTE_REQ = 0x01;    ///< route request flag
         public static final int ROUTER_PORT = 30123; ///< port # used by routers
-        public static final int NM_PORT = 30122;     ///< port # used by netMgr
+        public static final int NM_PORT = 30120;     ///< port # used by netMgr
+        public static final int CC_PORT = 30121;     ///< port # used by comtCtl
+        public static final int CM_PORT = 30122;     ///< port # used by cliMgr
 
         // router implementation parameters
         public static final short MAXINTF= 20;    ///< max # of interfaces

@@ -130,7 +130,7 @@ public class NetInfo {
 	};
 	private LinkInfo[] link;
 
-	RateSpec defaultLinkRates;
+	RateSpec defaultLeafRates;
 
 	/** Constructor for NetInfo, allocates space, initializes private data.
 	 *  @param maxNode1 is the max # of nodes in this NetInfo object
@@ -158,7 +158,7 @@ public class NetInfo {
 		locLnk2lnk = new UiHashTbl(2*Math.min(maxLink,
 					   maxRtr*(maxRtr-1)/2)+1);
 
-		defaultLinkRates = new RateSpec(50,500,25,250);
+		defaultLeafRates = new RateSpec(50,500,25,250);
 	}
 
 	// Methods for working with nodes ///////////////////////////////
@@ -667,7 +667,7 @@ public class NetInfo {
 	 *  @param rs is a reference to a RateSpec
 	 */
 	public void getDefLeafRates(RateSpec rs) {
-		rs.copyFrom(defaultLinkRates);
+		rs.copyFrom(defaultLeafRates);
 	}
 	
 	/** Get the length of a link in the Forest network.
@@ -1047,8 +1047,8 @@ public class NetInfo {
 				setAvailRates(lnk, cLink.rates);
 				setLinkLength(lnk, cLink.length);
 				linkNum++;
-			} else if (s.equals("defaultLinkRates")) {
-				if (!readRateSpec(in,defaultLinkRates)) {
+			} else if (s.equals("defaultLeafRates")) {
+				if (!readRateSpec(in,defaultLeafRates)) {
 					System.err.println("read: can't read "
 						+ "default rates for links");
 					return false;
@@ -1317,7 +1317,7 @@ public class NetInfo {
 		}
 		RateSpec rs = new RateSpec(0);
 		if (Util.verify(in,')')) { // omitted rate spec
-			rs = defaultLinkRates;
+			rs = defaultLeafRates;
 		} else {
 			if (!Util.verify(in,',') || !readRateSpec(in,rs)) {
 				return "could not read rate specification";
@@ -1751,7 +1751,7 @@ public class NetInfo {
 		}
 	
 		// and finally, the default link rates
-		s += "defaultLinkRates" + (defaultLinkRates.toString()) + "\n";
+		s += "defaultLeafRates" + (defaultLeafRates.toString()) + "\n";
 	
 		s += ";\n"; return s;
 	}

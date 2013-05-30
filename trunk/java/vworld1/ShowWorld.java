@@ -153,47 +153,61 @@ public class ShowWorld {
 	private static boolean processArgs(String[] args) {
 		try {
 			monSockAdr = new InetSocketAddress(args[0],MON_PORT);
-			mazeFile = new Scanner(new File(args[1]));
-			int y = 0; walls = null;
-			while (mazeFile.hasNextLine() && y >= 0) {
-				String temp = mazeFile.nextLine();
-				if (walls == null) {
-					worldSize = temp.length();
-					y = worldSize-1;
-					viewSize = Math.min(10,worldSize);
-					walls = new int[worldSize*worldSize];
-				} else if (temp.length() != worldSize) {
-					System.out.println("Map file has "
-						 + "unequal line lengths");
-					System.exit(1);
-				}
-				for(int x = 0; x < worldSize; x++) {
-					if(temp.charAt(x) == '+') {
-						walls[y * worldSize + x] = 3;
-					} else if(temp.charAt(x) == '-') {
-						walls[y * worldSize + x] = 2;
-					} else if(temp.charAt(x) == '|') {
-						walls[y * worldSize + x] = 1;
-					} else if(temp.charAt(x) == ' ') {
-						walls[y * worldSize + x] = 0;
-					} else {
-						System.out.println(
-						  "Unrecognized symbol in map "
-					  	  + "file!");
-					}
-				}
-				y--;
-			}
-			if (y >= 0) {
-				System.out.println("Map file incomplete");
-				System.exit(1);
-			}
+			readMapFile(args[1]);
 		} catch (Exception e) {
 			System.out.println("usage: ShowWorld remoteIp mapfile");
 			System.out.println(e);
 			System.exit(1);
 		}
 		return true;
+	}
+
+	/** Read an input file.
+	 *  @param fileName is the name of the input file to be read
+	 */
+	private static void readMapFile(String fileName) {
+		try {
+			Scanner imap = new Scanner(new File(fileName));
+			int y = 0; walls = null;
+			boolean horizRow = true;
+			while (imap.hasNextLine() && y >= 0) {
+				String temp = imap.nextLine();
+				if (walls == null) {
+					worldSize = temp.length()/2;
+					y = worldSize-1;
+					viewSize = Math.min(10,worldSize);
+					walls = new int[worldSize*worldSize];
+				} else if (temp.length()/2 != worldSize) {
+					System.out.println("Map file has "
+						 + "mismatched line lengths");
+					System.exit(1);
+				}
+				for(int xx = 0; xx < 2*worldSize; xx++) {
+					int pos = y * worldSize + xx/2;
+					if (horizRow) {
+						if ((xx&1) == 0) continue;
+						if (temp.charAt(xx) == '-')
+							walls[pos] |= 2;
+						continue;
+					}
+					if ((xx&1) != 0) {
+						if (temp.charAt(xx) == 'x')
+							walls[pos] |= 4;
+					} else if (temp.charAt(xx) == '|') 
+						walls[pos] |= 1;
+				}
+				horizRow = !horizRow;
+				if (horizRow) y--;
+			}
+			if (y >= 0) {
+				System.out.println("Map file incomplete");
+				System.exit(1);
+			}
+		} catch (Exception e) {
+			System.out.println("EditMap cannot read " + fileName);
+			System.out.println(e);
+			System.exit(1);
+		}
 	}
 
 	/** Process movement commands.
@@ -432,8 +446,27 @@ public class ShowWorld {
 	private static void drawGrid(Color c) {
 		StdDraw.clear(c);
 		StdDraw.setPenRadius(.002);
-		StdDraw.setPenColor(Color.GRAY);
 		double frac = 1.0/viewSize;
+		Color lightBlue = new Color(210,230,255);
+
+		// draw squares
+		for (int x = cornerX; x < cornerX+viewSize; x++) {
+			for (int y = cornerY; y < cornerY+viewSize; y++) {
+				int xy = x + y * worldSize;
+				if ((walls[xy]&4) != 0)
+					StdDraw.setPenColor(Color.gray);
+				else
+					StdDraw.setPenColor(lightBlue);
+				int row = y - cornerY; int col = x - cornerX;
+				double cx = frac*(col+.5);
+				double cy = frac*(row+.5);
+				StdDraw.filledRectangle(cx,cy,frac/2,frac/2);
+			}
+		}
+
+
+		// draw grid lines
+		StdDraw.setPenColor(Color.lightGray);
 		if (viewSize <= 40) {
 			for (int i = 0; i <= viewSize; i++) {
 				StdDraw.line(0,frac*i,1,frac*i);
@@ -449,11 +482,11 @@ public class ShowWorld {
 			for (int y = cornerY; y < cornerY + viewSize; y++) {
 				int xy = x + y * worldSize;
 				int row = y - cornerY; int col = x - cornerX;
-				if (walls[xy] == 1 || walls[xy] == 3) {
+				if ((walls[xy]&1) != 0) {
 					StdDraw.line(frac*col, frac*row,
 						     frac*col, frac*(row+1));
 				} 
-				if (walls[xy] == 2 || walls[xy] == 3) {
+				if ((walls[xy]&2) != 0) {
 					StdDraw.line(frac*col,    frac*(row+1),
 						     frac*(col+1),frac*(row+1));
 				}
