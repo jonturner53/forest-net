@@ -99,7 +99,7 @@ bool init(ipa_t nmIp1, ipa_t myIp1, int firstComt1, int lastComt1,
 
 	// configure substrate
 	sub = new Substrate(myAdr,myIp,rtrAdr,rtrIp,rtrPort,nonce,
-			    500, handler, 0, Forest::NM_PORT, ps, logger);
+			    500, handler, 0, Forest::CC_PORT, ps, logger);
 	if (!sub->init()) {
                 logger->log("init: can't initialize substrate",2);
                 return false;
