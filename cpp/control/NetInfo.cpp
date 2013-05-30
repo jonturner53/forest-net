@@ -35,6 +35,9 @@ NetInfo::NetInfo(int maxNode1, int maxLink1, int maxRtr1, int maxCtl1)
 
 	link = new LinkInfo[maxLink+1];
 	locLnk2lnk = new HashMap(2*min(maxLink,maxRtr*(maxRtr-1)/2)+1);
+
+	if (pthread_mutex_init(&glock,NULL) != 0)
+		fatal("NetInfo::NetInfo: cannot initialize lock");
 }
 
 /** Destructor for NetInfo class.
@@ -47,6 +50,7 @@ NetInfo::~NetInfo() {
 	delete [] leaf; delete leaves; delete controllers;
 	delete nameNodeMap; delete adrNodeMap;
 	delete [] link; delete locLnk2lnk;
+	pthread_mutex_destroy(&glock);
 }
 
 
@@ -78,7 +82,7 @@ int NetInfo::addRouter(const string& name) {
 	routers->swap(r);
 
 	rtr[r].name = name; (*nameNodeMap)[name] = r;
-	rtr[r].nType = ROUTER;
+	rtr[r].nType = Forest::ROUTER;
 	rtr[r].fAdr = -1;
 
 	pair<double,double> loc(UNDEF_LAT,UNDEF_LONG);
@@ -113,7 +117,7 @@ bool NetInfo::addInterfaces(int r, int numIf) {
  *  (the method fails if there are no available leaf records to
  *  allocate to this leaf, or if the requested name is in use)
  */
-int NetInfo::addLeaf(const string& name, ntyp_t nTyp) {
+int NetInfo::addLeaf(const string& name, Forest::ntyp_t nTyp) {
 	int ln = leaves->firstOut();
 	if (ln == 0) return 0;
 	if (nameNodeMap->find(name) != nameNodeMap->end()) return 0;
@@ -122,7 +126,7 @@ int NetInfo::addLeaf(const string& name, ntyp_t nTyp) {
 	int nodeNum = ln + maxRtr;
 	leaf[ln].name = name;
 	(*nameNodeMap)[name] = nodeNum;
-	if (nTyp == CONTROLLER) controllers->insert(ln);
+	if (nTyp == Forest::CONTROLLER) controllers->insert(ln);
 	leaf[ln].fAdr = -1;
 
 	setLeafType(nodeNum,nTyp); setLeafIpAdr(nodeNum,0); 
@@ -489,7 +493,9 @@ int NetInfo::readIface(istream& in, IfInfo *ifaces, string& errMsg) {
  *  @return true on success, false on failure
  */
 bool NetInfo::readLeaf(istream& in, LeafNodeInfo& leaf, string& errMsg) {
-	string name; ntyp_t ntyp = UNDEF_NODE; ipa_t ip; fAdr_t fadr;
+	string name;
+	Forest::ntyp_t ntyp = Forest::UNDEF_NODE;
+	ipa_t ip; fAdr_t fadr;
 	pair<double,double> loc; 
 	
 	errMsg = "";
@@ -500,7 +506,7 @@ bool NetInfo::readLeaf(istream& in, LeafNodeInfo& leaf, string& errMsg) {
 	}
 	string typstr;
 	if (!Util::readWord(in,typstr) ||
-	    (ntyp = Forest::getNodeType(typstr)) == UNDEF_NODE ||
+	    (ntyp = Forest::getNodeType(typstr)) == Forest::UNDEF_NODE ||
 	    !Util::verify(in,',',20)) {
 		errMsg = "could not read leaf node name";
 		return false;
@@ -673,7 +679,7 @@ bool NetInfo::checkBackBone() const {
 		for (int lnk = firstLinkAt(u); lnk != 0;
 			 lnk = nextLinkAt(u,lnk)) {	
 			int v = getPeer(u,lnk);
-			if (getNodeType(v) != ROUTER) continue;
+			if (getNodeType(v) != Forest::ROUTER) continue;
 			if (seen.find(v) != seen.end()) continue;
 			seen.insert(v);
 			pending.push(v);
@@ -771,7 +777,7 @@ bool NetInfo::checkLeafNodes() const {
 			     << getNodeName(u,s)<< " with more than one link\n";
 			status = false; continue;
 		}
-		if (getNodeType(getPeer(u,lnk)) != ROUTER) {
+		if (getNodeType(getPeer(u,lnk)) != Forest::ROUTER) {
 			string s;
 			cerr << "NetInfo::checkLeafNodes: detected a leaf node "
 			     << getNodeName(u,s) << " with link to non-router"
@@ -872,9 +878,9 @@ string& NetInfo::link2string(int lnk, string& s) const {
 	if (lnk == 0) { s = "-"; return s; }
 	int left = getLeft(lnk); int right = getRight(lnk);
 	ss << "(" << getNodeName(left,s1);
-	if (getNodeType(left) == ROUTER)  ss << "." << getLeftLLnum(lnk);
+	if (getNodeType(left)==Forest::ROUTER)  ss << "." << getLeftLLnum(lnk);
 	ss << "," << getNodeName(right,s1);
-	if (getNodeType(right) == ROUTER) ss << "." << getRightLLnum(lnk);
+	if (getNodeType(right)==Forest::ROUTER) ss << "." << getRightLLnum(lnk);
 	ss << ")";
 	s = ss.str();
 	return s;
@@ -890,9 +896,9 @@ string& NetInfo::linkProps2string(int lnk, string& s) const {
 	stringstream ss; string s1;
 	int left = getLeft(lnk); int right = getRight(lnk);
 	ss << "(" << getNodeName(left,s1);
-	if (getNodeType(left) == ROUTER) ss << "." << getLeftLLnum(lnk);
+	if (getNodeType(left)==Forest::ROUTER) ss << "." << getLeftLLnum(lnk);
 	ss << "," << getNodeName(right,s1);
-	if (getNodeType(right) == ROUTER) ss << "." << getRightLLnum(lnk);
+	if (getNodeType(right)==Forest::ROUTER) ss << "." << getRightLLnum(lnk);
 	ss << "," << getLinkLength(lnk) << ",";
 	ss << getLinkRates(lnk).toString(s1) << ")";
 	s = ss.str();
@@ -909,9 +915,9 @@ string& NetInfo::linkState2string(int lnk, string& s) const {
 	stringstream ss; string s1;
 	int left = getLeft(lnk); int right = getRight(lnk);
 	ss << "(" << getNodeName(left,s1);
-	if (getNodeType(left) == ROUTER)  ss << "." << getLeftLLnum(lnk);
+	if (getNodeType(left)==Forest::ROUTER)  ss << "." << getLeftLLnum(lnk);
 	ss << "," << getNodeName(right,s1);
-	if (getNodeType(right) == ROUTER)  ss << "." << getRightLLnum(lnk);
+	if (getNodeType(right)==Forest::ROUTER) ss << "." << getRightLLnum(lnk);
 	ss << "," << getLinkLength(lnk) << ",";
 	ss << getLinkRates(lnk).toString(s1);
 	ss << "," << getAvailRates(lnk).toString(s1) << ")";
@@ -935,7 +941,8 @@ string& NetInfo::toString(string& s) const {
 		s += leaf2string(c,s1);
 	}
 	for (int n = firstLeaf(); n != 0; n = nextLeaf(n)) {
-		if (getNodeType(n) != CONTROLLER) s += leaf2string(n,s1);
+		if (getNodeType(n) != Forest::CONTROLLER)
+			s += leaf2string(n,s1);
 	}
 	s += '\n';
 

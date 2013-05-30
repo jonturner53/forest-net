@@ -10,7 +10,6 @@
 
 namespace forest {
 
-
 /** Read up to first occurrence of a given character.
  *  @param in is the input stream to read from
  *  @param c  is character to look for
@@ -97,7 +96,8 @@ void Misc::writeAlpha(ostream& out, int x) {
 	else out << nam(x);
 }
 
-/** Read next word (string containing letters, numbers, underscores, slashes)
+/** Read next word (string containing letters, numbers, underscores,
+ *  @-signs, periods, slashes)
  *  on the current line and return it in s. Return true on success,
  *  false on failure.
  */
@@ -111,10 +111,55 @@ bool Misc::readWord(istream& in, string& s) {
 			if (inword) { in.putback(c); return true; }
 			else continue;
 		}
-		if (!isalpha(c) && !isdigit(c) && c != '_' && c != '/') {
+		if (!isalpha(c) && !isdigit(c) && c != '_' && c != '/' &&			    c != '@' && c != '.') {
 			in.putback(c); return inword;
 		}
 		s += c; inword = true;
+	}
+}
+
+/** Read next name (string containing letters, numbers, underscores,
+ *  starting with a letter)
+ *  on the current line and return it in s. Return true on success,
+ *  false on failure.
+ */
+bool Misc::readName(istream& in, string& s) {
+	char c; bool inword;
+	s = ""; inword = false;
+	while (1) {
+		in.get(c); if (!in.good()) return false;
+		if (c == '\n') { in.putback(c); return inword; }
+		if (isspace(c)) {
+			if (inword) { in.putback(c); return true; }
+			else continue;
+		}
+		if (!isalpha(c) && !isdigit(c) && c != '_') {
+			in.putback(c); return inword;
+		}
+		if (!inword && !isalpha(c)) {
+			in.putback(c); return false;
+		}
+		s += c; inword = true;
+	}
+}
+
+/** Read next string (enclosed in double quotes).
+ *  The string may not contain double quotes.
+ *  @param in is an open input string
+ *  @param s is a reference to a string in which result is returned
+ *  @return true on success, false on failure
+ */
+bool Misc::readString(istream& in, string& s) {
+	char c; bool instring = false;
+	s = "";
+	while (true) {
+		in.get(c); if (!in.good()) return false;
+		if (c == '\"') {
+			if (instring) return true;
+			instring = true;
+		} else if (instring) {
+			s += c; 
+		}
 	}
 }
 
@@ -184,8 +229,12 @@ bool Misc::skipBlank(istream& in) {
  */
 bool Misc::verify(istream& in, char c) {
 	char c1;
-	in.get(c1); if (!in.good()) return false;
-	if (c1 == c) return true;
+	while ( true) {
+		in.get(c1); if (!in.good()) return false;
+		if (c1 == c) return true;
+		else if (c1 == '\n' || !isspace(c1))
+			break;
+	}
 	in.putback(c1);
 	return false;
 }
@@ -207,6 +256,14 @@ int Misc::strnlen(char* s, int n) {
 	for (int i = 0; i < n; i++) 
 		if (*s++ == '\0') return i;
 	return n;
+}
+
+/** Return the current time in number of seconds since epoch.  */
+time_t Misc::currentTime() {
+        struct timeval now;
+        if (gettimeofday(&now, NULL) < 0)
+                fatal("Misc::getTime: gettimeofday failure");
+	return now.tv_sec;
 }
 
 /** Return time expressed as a free-running microsecond clock

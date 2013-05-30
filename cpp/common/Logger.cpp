@@ -35,14 +35,14 @@ void Logger::setLevel(int lev) {
   */
 void Logger::logit(const string& s, int severity) {
 	pthread_mutex_lock(&myLock);
-	cerr << "Logger: " << s << "(" << tag[severity] << ")\n";
+	cerr << "Logger: " << s << " (" << tag[severity] << ")\n";
 	if (severity > 3) fatal("terminating");
 	pthread_mutex_unlock(&myLock);
 }
 
 void Logger::logit(const string& s, int severity, Packet& p) {
 	pthread_mutex_lock(&myLock);
-	cerr << "Logger: " << s << "(" << tag[severity] << ")\n";
+	cerr << "Logger: " << s << " (" << tag[severity] << ")\n";
 	string s1;
 	cerr << p.toString(s1) << endl;
 	if (severity > 3) fatal("terminating");
@@ -51,7 +51,7 @@ void Logger::logit(const string& s, int severity, Packet& p) {
 
 void Logger::logit(const string& s, int severity, CtlPkt& cp) {
 	pthread_mutex_lock(&myLock);
-	cerr << "Logger: " << s << "(" << tag[severity] << ")\n";
+	cerr << "Logger: " << s << " (" << tag[severity] << ")\n";
 	string s1;
 	cerr << cp.toString(s1) << endl;
 	if (severity > 3) fatal("terminating");

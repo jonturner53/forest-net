@@ -14,6 +14,8 @@
 #include <bitset>
 #include "Forest.h"
 #include "Packet.h"
+#include "CtlPkt.h"
+#include "NetBuffer.h"
 #include "PacketStore.h"
 #include "HashSet.h"
 
@@ -41,8 +43,7 @@ public:
 	const static int STATUS_REPORT = 1; ///< status report payload code
 private:
 	const static int UPDATE_PERIOD = 50;  ///< # ms between status updates
-	const static int CLIMGR_PORT = 30140; ///< port number for client mgr
-	const static int CONTROLLER_PORT = 30130;///< port for remote controller
+	const static int LISTEN_PORT = 30130;///< port for remote controller
 	const static int NUM_ITEMS = 10;///< # of items in status report
 	const static int GRID = 10000;	///< xy extent of one grid square
 	const static int MAXNEAR = 1000;///< max # of nearby avatars
@@ -53,16 +54,17 @@ private:
 	const static int STOPPED = 0;
 
 	// network parameters 
-	ipa_t	myIpAdr;		///< IP address of interface
-	ipp_t	port;			///< port to connect to Controller on
-	uint16_t myPort;		///< port number for all io
-	ipa_t	rtrIpAdr;		///< IP address of router
 	fAdr_t	myAdr;			///< forest address of host
+	ipa_t	myIp;	 		///< IP address of interface
 	fAdr_t	rtrAdr;			///< forest address of router
-	fAdr_t	comtCtlAdr;		///< forest address of ComtreeController
+	ipa_t	rtrIp;			///< IP address of router
+	ipp_t	rtrPort;		///< IP port of router
+	fAdr_t	ccAdr;			///< forest address of ComtreeController
 	int	sock;			///< socket number for forest network
-	int	extSock;		///< listen socket for remote driver
-	int	connSock;		///< connect socket for driver
+	ipp_t	listenPort;		///< port to connect to Controller on
+	int	listenSock;		///< listen socket for remote driver
+	int	connSock;		///< for connected socket
+	uint64_t nonce;			///< nonce used when connecting
 
 	// comtrees
 	comt_t	comt;			///< current comtree
@@ -132,8 +134,8 @@ private:
 	void	subscribe(list<int>&);
 	void	unsubscribe(list<int>&);
 
-	void	connect();		
-	void	disconnect();		
+	bool	connect();		
+	bool	disconnect();		
 	void	send(int);		
 	int	receive();		
 };

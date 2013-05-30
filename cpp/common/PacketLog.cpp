@@ -32,15 +32,15 @@ PacketLog::~PacketLog() { delete [] events; }
 void PacketLog::log(pktx px, int lnk, bool sendFlag, uint64_t now) {
         Packet& p = ps->getPacket(px);
         if (numPkts < maxPkts &&
-            (p.type != CLIENT_DATA || numData <= maxData)) {
-                int px1 = (p.type == CLIENT_DATA ?
+            (p.type != Forest::CLIENT_DATA || numData <= maxData)) {
+                int px1 = (p.type == Forest::CLIENT_DATA ?
                           ps->clone(px) : ps->fullCopy(px));
                 events[numPkts].px = px1;
                 events[numPkts].sendFlag = sendFlag;
                 events[numPkts].link = lnk;
                 events[numPkts].time = now;
                 numPkts++;
-                if (p.type == CLIENT_DATA) numData++;
+                if (p.type == Forest::CLIENT_DATA) numData++;
         }
 	if (now < dumpTime + 1000000000) return;
 	dumpTime = now;

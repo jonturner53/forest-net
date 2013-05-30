@@ -8,12 +8,12 @@
  */
 
 #include "stdinc.h"
-#include "CommonDefs.h"
+#include "Forest.h"
 #include "Avatar.h"
 #include <string>
 #include <algorithm>
 
-namespace forest {
+using namespace forest;
 
 /** usage:
  *       Avatar myIpAdr cliMgrIpAdr walls firstComt lastComt uname pword finTime
@@ -58,6 +58,8 @@ int main(int argc, char *argv[]) {
 	avatar.run(1000000*finTime);
 }
 
+namespace forest {
+
 /** Constructor allocates space and initializes private data.
  * 
  *  @param mipa is this host's IP address
@@ -65,7 +67,7 @@ int main(int argc, char *argv[]) {
  *  @param lc is the last comtree in the range used by the avatar
  */
 Avatar::Avatar(ipa_t mipa, comt_t fc, comt_t lc)
-		: myIpAdr(mipa), firstComt(fc), lastComt(lc) {
+		: myIp(mipa), firstComt(fc), lastComt(lc) {
 	int nPkts = 10000;
 	ps = new PacketStore(nPkts+1, nPkts+1);
 	mySubs = new set<int>();
@@ -82,7 +84,7 @@ Avatar::~Avatar() {
 	delete mySubs; delete nearAvatars; delete ps; delete [] walls;
 	delete myVisSet;
 	if (sock >= 0) close(sock);
-	if (extSock >= 0) close(extSock);
+	if (listenSock >= 0) close(listenSock);
 }
 
 /** Perform all required initialization.
@@ -94,24 +96,25 @@ bool Avatar::init(ipa_t cmIpAdr, string& uname, string& pword,
 
 	// open and configure forest socket
 	sock = Np4d::datagramSocket();
-	if (sock<0 || !Np4d::bind4d(sock,myIpAdr,0) || !Np4d::nonblock(sock)) {
-		cerr << "Avatar::init: could not open/configure forest socket "
-			"sockets\n";
+	if (sock<0 || !Np4d::bind4d(sock,myIp,0) || !Np4d::nonblock(sock)) {
+		cerr << "Avatar::init: could not open/configure forest "
+			"socket\n";
 		return false;
 	}
 
-	// open and configure external socket
-	extSock = Np4d::streamSocket();
-	if (extSock < 0 || !Np4d::bind4d(extSock,Np4d::myIpAddress(),0) ||
-	    !Np4d::listen4d(extSock) || !Np4d::nonblock(extSock)) {
+	// open and configure listen socket
+	listenSock = Np4d::streamSocket();
+	if (listenSock < 0 || !Np4d::bind4d(listenSock,myIp,0) ||
+	    !Np4d::listen4d(listenSock) || !Np4d::nonblock(listenSock)) {
 		cerr << "Avatar::init: could not open/configure external "
 			"socket\n";
 		return false;
 	}
-	connSock = -1; // connection socket for extSock; -1 means not connected
+	connSock = -1;	// connection socket for listenSock
+			// -1 means not connected
 	string s;
-	cout << "external socket: " << Np4d::ip2string(Np4d::myIpAddress(),s)
-	     << "/" << Np4d::getSockPort(extSock) << endl;
+	cout << "listen socket: " << Np4d::ip2string(myIp,s)
+	     << "/" << Np4d::getSockPort(listenSock) << endl;
 	cout.flush();
 
 	// login and setup walls 
@@ -119,7 +122,11 @@ bool Avatar::init(ipa_t cmIpAdr, string& uname, string& pword,
 	if (!setupWalls(wallsFile)) return false;
 	// initialize avatar to a random position
 	srand(myAdr);
-	x = randint(0,GRID*worldSize-1); y = randint(0,GRID*worldSize-1);
+	while (true) {
+		x = randint(0,GRID*worldSize-1);
+		y = randint(0,GRID*worldSize-1);
+		if (!(walls[groupNum(x,y)-1]&4)) break;
+	}
 	direction = (double) randint(0,359);
 	deltaDir = 0;
 	speed = MEDIUM;
@@ -135,37 +142,69 @@ bool Avatar::init(ipa_t cmIpAdr, string& uname, string& pword,
  */
 bool Avatar::login(ipa_t cmIpAdr, string uname, string pword) {
 	// open socket to client manager
-	int cmSock = Np4d::streamSocket();
-        if (cmSock < 0 ||
-	    !Np4d::bind4d(cmSock, myIpAdr, 0) ||
-	    !Np4d::connect4d(cmSock,cmIpAdr,CLIMGR_PORT)) {
+	int loginSock = Np4d::streamSocket();
+        if (loginSock < 0 ||
+	    !Np4d::bind4d(loginSock, myIp, 0) ||
+	    !Np4d::connect4d(loginSock,cmIpAdr,Forest::CM_PORT)) {
 		cerr << "Avatar::login: cannot open/configure socket to "
 			"ClientMgr\n";
 		return false;
 	}
-	// send login string to Client Manager
-	stringstream ss;
-	ss << uname << " " << pword << " " << Np4d::getSockPort(sock)
-	   << " 0 noproxy";
-	Np4d::sendBufBlock(cmSock,(char *) ss.str().c_str(),
-			   ss.str().size()+1);
-	//receive rtrAdr, myAdr, rtrIp, comtCtlAdr
-	Np4d::recvIntBlock(cmSock,(uint32_t&) rtrAdr);
-	if (rtrAdr == -1) {
-		cerr << "Avatar::login: negative reply from ClientMgr\n";
+	// start login dialog
+	string s = "Forest-login-v1\nlogin: " + uname +
+		   "\npassword: " + pword + "\nover\n";
+	Np4d::sendString(loginSock,s);
+	NetBuffer buf(loginSock,1024);
+	string s0, s1, s2;
+	if (!buf.readLine(s0) || s0 != "login successful" ||
+	    !buf.readLine(s1) || s1 != "over") {
 		return false;
 	}
-	Np4d::recvIntBlock(cmSock,(uint32_t&) myAdr);
-	Np4d::recvIntBlock(cmSock,(uint32_t&) rtrIpAdr);
-	Np4d::recvIntBlock(cmSock,(uint32_t&) comtCtlAdr);
-	close(cmSock);
-	string s;
-	cout << "avatar address=" << Forest::fAdr2string(myAdr,s);
-	cout << " router address=" << Forest::fAdr2string(rtrAdr,s);
-	cout << " comtree controller address="
-	     << Forest::fAdr2string(comtCtlAdr,s) << endl;
+	
+	// proceed to new session dialog
+	s = "newSession\nover\n";
+	Np4d::sendString(loginSock,s);
+
+	// process reply - expecting my forest address
+	if (!buf.readAlphas(s0) || s0 != "yourAddress" || !buf.verify(':') ||
+	    !buf.readForestAddress(s1) || !buf.nextLine()) 
+		return false;
+	myAdr = Forest::forestAdr(s1.c_str());
+
+	// continuing - expecting info for my forest access router
+	int port;
+	if (!buf.readAlphas(s0) || s0 != "yourRouter" || !buf.verify(':') ||
+	    !buf.verify('(') || !buf.readIpAddress(s1) || !buf.verify(',') ||
+	    !buf.readInt(port) || !buf.verify(',') || 
+	    !buf.readForestAddress(s2) || !buf.verify(')') || !buf.nextLine())
+		return false;
+	rtrIp = Np4d::getIpAdr(s1.c_str());
+	rtrPort = (ipp_t) port;
+	rtrAdr = Forest::forestAdr(s2.c_str());
+
+	// continuing - expecting address of comtree controller
+	if (!buf.readAlphas(s0) || s0 != "comtCtlAddress" || !buf.verify(':') ||
+	    !buf.readForestAddress(s1) || !buf.nextLine()) 
+		return false;
+	ccAdr = Forest::forestAdr(s1.c_str());
+	
+	// continuing - expecting connection nonce
+	if (!buf.readAlphas(s0) || s0 != "connectNonce" || !buf.verify(':') ||
+	    !buf.readInt(nonce) || !buf.nextLine())
+		return false;
+	if (!buf.readLine(s0) || s0 != "overAndOut")
+		return false;
+	
+	close(loginSock);
+
+	cout << "avatar address=" << Forest::fAdr2string(myAdr,s) << endl;
+	cout << "router info= (" << Np4d::ip2string(rtrIp,s) << ",";
+	cout << rtrPort << "," << Forest::fAdr2string(rtrAdr,s) << ")\n";
+	cout << "comtCtl address=" << Forest::fAdr2string(ccAdr,s) << "\n";
+	cout << "nonce=" << nonce << endl;
 	return true;
 }
+
 /** Setup the internal representation of the walls.
  *  @param wallsFile contains the specification of the walls in the
  *  virtual world
@@ -178,11 +217,12 @@ bool Avatar::setupWalls(const char *wallsFile) {
 		return false;
 	}
 	int y = 0; walls = NULL;
+	bool horizRow = true;
 	while(ifs.good()) {
 		string line;
 		getline(ifs,line);
 		if (walls == NULL) {
-			worldSize = line.size();
+			worldSize = line.size()/2;
 			y = worldSize-1;
 			try {
 				walls = new char[worldSize*worldSize];
@@ -193,27 +233,25 @@ bool Avatar::setupWalls(const char *wallsFile) {
 				perror("");
 				exit(1);
 			}
-		} else if ((int) line.size() != worldSize) {
+		} else if ((int) line.size()/2 != worldSize) {
 			cerr << "setupWalls: format error, all lines must have "
 			        "same length\n";
 			return false;
 		}
-		for(int x = 0; x < worldSize; x++) {
-			if(line[x] == '+') {
-				walls[y*worldSize + x] = 3;
-			} else if(line[x] == '-') {
-				walls[y*worldSize + x] = 2;
-			} else if(line[x] == '|') {
-				walls[y*worldSize + x] = 1;
-			} else if(line[x] == ' ') {
-				walls[y*worldSize + x] = 0;
-			} else {
-				cerr << "setupWalls: unrecognized symbol in "
-					"map file!\n";
-				return false;
+		for(int xx = 0; xx < 2*worldSize; xx++) {
+			int pos = y * worldSize + xx/2;
+			if (horizRow) {
+				if (!(xx&1)) continue;
+				if (line[xx] == '-') walls[pos] |= 2;
+				continue;
 			}
+			if (xx&1) {
+				if (line[xx] == 'x') walls[pos] |= 4;
+			} else if (line[xx] == '|') walls[pos] |= 1;
 		}
-		if (--y < 0) break;
+		horizRow = !horizRow;
+		if (horizRow) y--;
+		if (y < 0) break;
 	}
 	return true;
 }
@@ -226,6 +264,7 @@ bool Avatar::setupWalls(const char *wallsFile) {
 void Avatar::computeVisSet(int g1, set<int>& vSet) {
 	int x1 = (g1-1)%worldSize; int y1 = (g1-1)/worldSize;
 	vSet.clear();
+	vSet.insert(g1);
 
 	bool *visVec = new bool[worldSize];
 	bool *prevVisVec = new bool[worldSize];
@@ -367,7 +406,7 @@ void Avatar::run(uint32_t finishTime) {
 	comt = 0;
 
 	bool waiting4switch = false;
-	while (now <= finishTime) {
+	while (finishTime == 0 || now <= finishTime) {
 		//reset hashtables and report
 		numNear = nearAvatars->size(); nearAvatars->clear();
 		numVisible = visibleAvatars->size(); visibleAvatars->clear();
@@ -381,32 +420,32 @@ void Avatar::run(uint32_t finishTime) {
 		}
 
 		now = Misc::getTime();
-		int p;
-		while ((p = receive()) != 0) {
-			PacketHeader& h = ps->getHeader(p);
-			ptyp_t ptyp = h.getPtype();
+		pktx px;
+		while ((px = receive()) != 0) {
+			Packet& p = ps->getPacket(px);
+			Forest::ptyp_t ptyp = p.type;
 			if (waiting4switch) {
 				// pass client signalling packets to
 				// completeComtSwitch and discard all others
-				if (ptyp == CLIENT_SIG) {
+				if (ptyp == Forest::CLIENT_SIG) {
 					waiting4switch =
-						!completeComtSwitch(p,now);
+						!completeComtSwitch(px,now);
 				}
-				ps->free(p); continue;
+				ps->free(px); continue;
 			}
-			if (ptyp != CLIENT_DATA) { // ignore other packets
-				ps->free(p); continue;
+			if (ptyp != Forest::CLIENT_DATA) { // ignore other packets
+				ps->free(px); continue;
 			}
 			// process status reports from other avatars
 			// and forward to driver for this avatar
-			updateNearby(p);
+			updateNearby(px);
 			if (connSock >= 0) {
-				uint64_t key = h.getSrcAdr();
-				key = (key << 32) | h.getSrcAdr();
+				uint64_t key = p.srcAdr;
+				key = (key << 32) | p.srcAdr;
 				bool isVis = visibleAvatars-> member(key);
-				forwardReport(now, (isVis ? 2 : 3), p);
+				forwardReport(now, (isVis ? 2 : 3), px);
 			}
-			ps->free(p);
+			ps->free(px);
 		}
 		// check for timeout
 		waiting4switch = !completeComtSwitch(0,now);
@@ -452,12 +491,12 @@ void Avatar::startComtSwitch(comt_t newComt, uint32_t now) {
 	nextComt = newComt;
 	if (comt != 0) {
 		unsubscribeAll();
-		send2comtCtl(CLIENT_LEAVE_COMTREE);
+		send2comtCtl(CtlPkt::CLIENT_LEAVE_COMTREE);
 		switchState = LEAVING;
 		switchTimer = now; switchCnt = 1;
 	} else {
 		comt = nextComt;
-		send2comtCtl(CLIENT_JOIN_COMTREE);
+		send2comtCtl(CtlPkt::CLIENT_JOIN_COMTREE);
 		switchState = JOINING;
 		switchTimer = now; switchCnt = 1;
 	}
@@ -475,13 +514,13 @@ void Avatar::startComtSwitch(comt_t newComt, uint32_t now) {
  *  never responded after repeated attempts); in the latter case,
  *  set comt to 0
  */
-bool Avatar::completeComtSwitch(packet p, uint32_t now) {
+bool Avatar::completeComtSwitch(pktx px, uint32_t now) {
 	if (switchState == IDLE) return true;
-	if (p == 0 && now - switchTimer < SWITCH_TIMEOUT)
+	if (px == 0 && now - switchTimer < SWITCH_TIMEOUT)
 		return false; // nothing to do in this case
 	switch (switchState) {
 	case LEAVING: {
-		if (p == 0) {
+		if (px== 0) {
 			if (switchCnt > 3) { // give up
 				cerr << "completeSwitch: failed while "
 					"attempting to leave " << comt
@@ -489,21 +528,21 @@ bool Avatar::completeComtSwitch(packet p, uint32_t now) {
 				comt = 0; switchState = IDLE; return true;
 			}
 			// try again
-			send2comtCtl(CLIENT_LEAVE_COMTREE,RETRY);
+			send2comtCtl(CtlPkt::CLIENT_LEAVE_COMTREE,RETRY);
 			switchTimer = now; switchCnt++;
 			return false;
 		}
-		PacketHeader& h = ps->getHeader(p); 
-		CtlPkt cp;
-		cp.unpack(ps->getPayload(p),h.getLength() - Forest::OVERHEAD);
-		if (cp.getCpType() == CLIENT_LEAVE_COMTREE) {
-			if (cp.getRrType() == POS_REPLY) {
+		Packet& p = ps->getPacket(px); 
+		CtlPkt cp(p.payload(),p.length - Forest::OVERHEAD);
+		cp.unpack();
+		if (cp.type == CtlPkt::CLIENT_LEAVE_COMTREE) {
+			if (cp.mode == CtlPkt::POS_REPLY) {
 				comt = nextComt;
-				send2comtCtl(CLIENT_JOIN_COMTREE);
+				send2comtCtl(CtlPkt::CLIENT_JOIN_COMTREE);
 				switchState = JOINING;
 				switchTimer = now; switchCnt = 1;
 				return false;
-			} else if (cp.getRrType() == NEG_REPLY) { // give up
+			} else if (cp.mode == CtlPkt::NEG_REPLY) { // give up
 				cerr << "completeSwitch: failed while "
 					"attempting to leave " << comt
 				     << " (request rejected)" << endl;
@@ -513,7 +552,7 @@ bool Avatar::completeComtSwitch(packet p, uint32_t now) {
 		return false; // ignore anything else
 	}
 	case JOINING: {
-		if (p == 0) {
+		if (px == 0) {
 			if (switchCnt > 3) { // give up
 				cerr << "completeSwitch: failed while "
 					"attempting to join " << comt
@@ -521,18 +560,18 @@ bool Avatar::completeComtSwitch(packet p, uint32_t now) {
 				comt = 0; switchState = IDLE; return true;
 			}
 			// try again
-			send2comtCtl(CLIENT_JOIN_COMTREE,RETRY);
+			send2comtCtl(CtlPkt::CLIENT_JOIN_COMTREE,RETRY);
 			switchTimer = now; switchCnt++;
 			return false;
 		}
-		PacketHeader& h = ps->getHeader(p); 
-		CtlPkt cp;
-		cp.unpack(ps->getPayload(p),h.getLength() - Forest::OVERHEAD);
-		if (cp.getCpType() == CLIENT_JOIN_COMTREE) {
-			if (cp.getRrType() == POS_REPLY) {
+		Packet& p = ps->getPacket(px); 
+		CtlPkt cp(p.payload(),p.length - Forest::OVERHEAD);
+		cp.unpack();
+		if (cp.type == CtlPkt::CLIENT_JOIN_COMTREE) {
+			if (cp.mode == CtlPkt::POS_REPLY) {
 				subscribeAll();
 				switchState = IDLE; return true;
-			} else if (cp.getRrType() == NEG_REPLY) { // give up
+			} else if (cp.mode == CtlPkt::NEG_REPLY) { // give up
 				cerr << "completeSwitch: failed while "
 					"attempting to join " << comt
 				     << " (request rejected)" << endl;
@@ -552,12 +591,12 @@ bool Avatar::completeComtSwitch(packet p, uint32_t now) {
  */
 void Avatar::sendStatus(int now) {
 	if (comt == 0) return;
-	packet p = ps->alloc();
-	PacketHeader& h = ps->getHeader(p);
-	h.setLength(4*(5+8)); h.setPtype(CLIENT_DATA); h.setFlags(0);
-	h.setComtree(comt); h.setSrcAdr(myAdr); h.setDstAdr(-groupNum(x,y));
+	pktx px = ps->alloc();
+	Packet& p = ps->getPacket(px);
+	p.length = 4*(5+8); p.type = Forest::CLIENT_DATA; p.flags = 0;
+	p.comtree = comt; p.srcAdr = myAdr; p.dstAdr = -groupNum(x,y);
 
-	uint32_t *pp = ps->getPayload(p);
+	uint32_t *pp = p.payload();
 	pp[0] = htonl(STATUS_REPORT);
 	pp[1] = htonl(now);
 	pp[2] = htonl(x);
@@ -566,7 +605,7 @@ void Avatar::sendStatus(int now) {
 	pp[5] = htonl((uint32_t) speed);
 	pp[6] = htonl(numVisible);
 	pp[7] = htonl(numNear);
-	send(p);
+	send(px);
 }
 
 /** Send a status report to the remote controller for this avatar.
@@ -577,7 +616,7 @@ void Avatar::sendStatus(int now) {
  *  @param p is an optional packet number; if present and non-zero,
  *  its payload is unpacked to produce the report to send to the avatar
  */
-void Avatar::forwardReport(uint32_t now, int avType, int p) {
+void Avatar::forwardReport(uint32_t now, int avType, pktx px) {
 	if (comt == 0) return;
 	uint32_t buf[10];
 	buf[0] = htonl((uint32_t) now);
@@ -591,12 +630,12 @@ void Avatar::forwardReport(uint32_t now, int avType, int p) {
 		buf[5] = htonl((uint32_t) speed);
 		buf[6] = htonl((uint32_t) numVisible);
 		buf[7] = htonl((uint32_t) numNear);
-	} else if (p != 0) {
-		PacketHeader& h = ps->getHeader(p);
-		uint32_t *pp = ps->getPayload(p);
-		if (h.getComtree() != comt) return;
+	} else if (px != 0) {
+		Packet& p = ps->getPacket(px);
+		uint32_t *pp = p.payload();
+		if (p.comtree != comt) return;
 
-		buf[1] = htonl(h.getSrcAdr());
+		buf[1] = htonl(p.srcAdr);
 		buf[2] = pp[2];
 		buf[3] = pp[3];
 		buf[4] = pp[4];
@@ -616,28 +655,28 @@ void Avatar::forwardReport(uint32_t now, int avType, int p) {
 }
 
 /** Send join or leave packet packet to the ComtreeController.
- *  @param cpx is either CLIENT_JOIN_COMTREE or CLIENT_LEAVE_COMTREE,
+ *  @param joinLeave is either CLIENT_JOIN_COMTREE or CLIENT_LEAVE_COMTREE,
  *  depending on whether we want to join or leave the comtree
  */
-void Avatar::send2comtCtl(CpTypeIndex cpx, bool retry) {
-        packet p = ps->alloc();
-        if (p == 0)
+void Avatar::send2comtCtl(CtlPkt::CpType joinLeave, bool retry) {
+        pktx px = ps->alloc();
+        if (px == 0)
 		fatal("Avatar::send2comtCtl: no packets left to allocate");
+        Packet& p = ps->getPacket(px);
 	if (!retry) seqNum++;
-        CtlPkt cp(cpx,REQUEST,seqNum);;
-        cp.setAttr(COMTREE_NUM,comt);
-        cp.setAttr(CLIENT_IP,myIpAdr);
-        cp.setAttr(CLIENT_PORT,Np4d::getSockPort(sock));
-        int len = cp.pack(ps->getPayload(p));
+        CtlPkt cp(joinLeave,CtlPkt::REQUEST,seqNum,p.payload());
+        cp.comtree = comt;
+        cp.ip1 = myIp;
+        cp.port1 = Np4d::getSockPort(sock);
+        int len = cp.pack();
 	if (len == 0) 
 		fatal("Avatar::send2comtCtl: control packet packing error");
-        PacketHeader& h = ps->getHeader(p);
-	h.setLength(Forest::OVERHEAD + len);
-        h.setPtype(CLIENT_SIG); h.setFlags(0);
-        h.setComtree(Forest::CLIENT_SIG_COMT);
-	h.setSrcAdr(myAdr); h.setDstAdr(comtCtlAdr);
-        h.pack(ps->getBuffer(p));
-	send(p);
+	p.length = Forest::OVERHEAD + len;
+        p.type = Forest::CLIENT_SIG; p.flags = 0;
+        p.comtree = Forest::CLIENT_SIG_COMT;
+	p.srcAdr = myAdr; p.dstAdr = ccAdr;
+        p.pack();
+	send(px);
 }
 
 /** Check for a new command from remote display program.
@@ -661,12 +700,12 @@ void Avatar::send2comtCtl(CpTypeIndex cpx, bool retry) {
  */
 comt_t Avatar::check4command() { 
 	if (connSock < 0) {
-		connSock = Np4d::accept4d(extSock);
+		connSock = Np4d::accept4d(listenSock);
 		if (connSock < 0) return 0;
 		if (!Np4d::nonblock(connSock))
 			fatal("can't make connection socket nonblocking");
 		bool status; int ndVal = 1;
-		status = setsockopt(extSock,IPPROTO_TCP,TCP_NODELAY,
+		status = setsockopt(listenSock,IPPROTO_TCP,TCP_NODELAY,
 			    (void *) &ndVal,sizeof(int));
 		if (status != 0) {
 			cerr << "setsockopt for no-delay failed\n";
@@ -708,73 +747,116 @@ comt_t Avatar::check4command() {
 	return 0;
 }
 
-/** Send initial connect packet, using comtree 1 (the signalling comtree).
+/** Send initial connect packet to forest router
+ *  Uses comtree 1, which is for user signalling.
  */
-void Avatar::connect() {
-	packet p = ps->alloc();
-	PacketHeader& h = ps->getHeader(p);
+bool Avatar::connect() {
+	pktx px = ps->alloc();
+	Packet& p = ps->getPacket(px);
 
-	h.setLength(4*(5+1)); h.setPtype(CONNECT); h.setFlags(0);
-	h.setComtree(Forest::CLIENT_CON_COMT);
-	h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
+	p.payload()[0] = htonl((uint32_t) (nonce >> 32));
+	p.payload()[1] = htonl((uint32_t) (nonce & 0xffffffff));
+	p.length = Forest::OVERHEAD + 8; p.type = Forest::CONNECT; p.flags = 0;
+	p.comtree = Forest::CONNECT_COMT;
+	p.srcAdr = myAdr; p.dstAdr = rtrAdr;
 
-	send(p);
+	int resendTime = Misc::getTime();
+	int resendCount = 1;
+	while (true) {
+		int now = Misc::getTime();
+		if (now > resendTime) {
+			if (resendCount > 3) { ps->free(px); return false; }
+			send(px);
+			resendTime += 1000000;
+			resendCount++;
+		}
+		int rx = receive();
+		if (rx == 0) { usleep(100000); continue; }
+		Packet& reply = ps->getPacket(rx);
+		bool status =  (reply.type == Forest::CONNECT &&
+		    		reply.flags == Forest::ACK_FLAG);
+		ps->free(px); ps->free(rx);
+		return status;
+	}
 }
 
-
-/** Send final disconnect packet.
+/** Send final disconnect packet to forest router.
  */
-void Avatar::disconnect() {
-	packet p = ps->alloc();
-	PacketHeader& h = ps->getHeader(p);
+bool Avatar::disconnect() {
+	pktx px = ps->alloc();
+	Packet& p = ps->getPacket(px);
 
-	h.setLength(4*(5+1)); h.setPtype(DISCONNECT); h.setFlags(0);
-	h.setComtree(Forest::CLIENT_CON_COMT);
-	h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
+	p.payload()[0] = htonl((uint32_t) (nonce >> 32));
+	p.payload()[1] = htonl((uint32_t) (nonce & 0xffffffff));
+	p.length = Forest::OVERHEAD + 8; p.type = Forest::DISCONNECT;
+	p.flags = 0; p.comtree = Forest::CONNECT_COMT;
+	p.srcAdr = myAdr; p.dstAdr = rtrAdr;
 
-	send(p);
+	int resendTime = Misc::getTime();
+	int resendCount = 1;
+	while (true) {
+		int now = Misc::getTime();
+		if (now > resendTime) {
+			if (resendCount > 3) { ps->free(px); return false; }
+			send(px);
+			resendTime += 1000000;
+			resendCount++;
+		}
+		int rx = receive();
+		if (rx == 0) { usleep(100000); continue; }
+		Packet& reply = ps->getPacket(rx);
+		bool status =  (reply.type == Forest::DISCONNECT &&
+		    		reply.flags == Forest::ACK_FLAG);
+		ps->free(px); ps->free(rx);
+		return status;
+	}
 }
 
 /** Send packet to forest router and recycle storage.
  */
-void Avatar::send(int p) {
-	int length = ps->getHeader(p).getLength();
-	ps->pack(p);
-	int rv = Np4d::sendto4d(sock,(void *) ps->getBuffer(p),length,
-		    		rtrIpAdr, Forest::ROUTER_PORT);
+void Avatar::send(pktx px) {
+	Packet& p = ps->getPacket(px);
+	p.pack();
+//string s;
+//cerr << "sending to (" << Np4d::ip2string(rtrIp,s) << "," << rtrPort << ")\n";
+//cerr << p.toString(s);
+	int rv = Np4d::sendto4d(sock,(void *) p.buffer, p.length,
+		    		rtrIp, rtrPort);
 	if (rv == -1) fatal("Avatar::send: failure in sendto");
-	ps->free(p);
+	ps->free(px);
 }
 
 /** Return next waiting packet or 0 if there is none. 
  */
 int Avatar::receive() { 
-	int p = ps->alloc();
-	if (p == 0) return 0;
-	PacketHeader& h = ps->getHeader(p);
-        buffer_t& b = ps->getBuffer(p);
+	pktx px = ps->alloc();
+	if (px == 0) return 0;
+	Packet& p = ps->getPacket(px);
 
 	ipa_t remoteIp; ipp_t remotePort;
-        int nbytes = Np4d::recvfrom4d(sock, &b[0], 1500,
+        int nbytes = Np4d::recvfrom4d(sock, p.buffer, 1500,
 				      remoteIp, remotePort);
         if (nbytes < 0) {
                 if (errno == EWOULDBLOCK) {
-                        ps->free(p); return 0;
+                        ps->free(px); return 0;
                 }
                 fatal("Avatar::receive: error in recvfrom call");
         }
-	ps->unpack(p);
-	if ((h.getPtype() == CLIENT_SIG &&
-	     h.getComtree() != Forest::CLIENT_SIG_COMT) &&
-	    h.getComtree() != comt) {
-		ps->free(p);
+	p.unpack();
+//string s;
+//cerr << "received from (" << Np4d::ip2string(remoteIp,s) << "," << remotePort << ")\n";
+//cerr << p.toString(s);
+	if ((p.type == Forest::CLIENT_SIG &&
+	     p.comtree != Forest::CLIENT_SIG_COMT) &&
+	     p.comtree != comt) {
+		ps->free(px);
 		return 0;
 	}
-        h.setIoBytes(nbytes);
-        h.setTunSrcIp(remoteIp);
-        h.setTunSrcPort(remotePort);
+        p.bufferLen = nbytes;
+        p.tunIp = remoteIp;
+        p.tunPort = remotePort;
 
-        return p;
+        return px;
 }
 
 /** Update status of avatar based on passage of time.
@@ -784,302 +866,63 @@ int Avatar::receive() {
  */
 void Avatar::updateStatus(uint32_t now) {
 	const double PI = 3.141519625;
-	double r;
 
-	// update position
-	double dist = speed;
-	double dirRad = direction * (2*PI/360);
 	int prevRegion = groupNum(x,y)-1;
-	x += (int) (dist * sin(dirRad));
-	y += (int) (dist * cos(dirRad));
-	x = max(x,0); x = min(x,GRID*worldSize-1);
-	y = max(y,0); y = min(y,GRID*worldSize-1);
-	int postRegion = groupNum(x,y)-1;
-	if (postRegion != prevRegion) updateVisSet();
-	int generalDirection = ((int)(direction/90))%4;
-	int regionBelow = groupNum(x,y-10000)-1;
-        if (x == 0)        		direction = -direction;
-        else if (x == GRID*worldSize-1) direction = -direction;
-        else if (y == 0)        	direction = 180 - direction;
-        else if (y == GRID*worldSize-1) direction = 180 - direction;
-	if (connSock >= 0) {
-		//stop the driver and let them choose where to go next
-		// if they hit the wall	
-                if (prevRegion == postRegion + 1 &&
-			(walls[prevRegion]==1 || walls[prevRegion]==3)) {
-			// going east to west and hitting wall
+
+	if (connSock >= 0) { // if there's a driver, stop on collision
+		double dist = speed;
+		double dirRad = direction * (2*PI/360);
+		int x1 = x + (int) (dist * sin(dirRad));
+		int y1 = y + (int) (dist * cos(dirRad));
+		int postRegion = groupNum(x1,y1)-1;
+		if (x1 <= 0 || x1 >= GRID*worldSize-1 ||
+		    y1 <= 0 || y1 >= GRID*worldSize-1 ||
+		    (prevRegion != postRegion &&
+		     (walls[postRegion]&4 ||
+		      separated(prevRegion,postRegion)))) {
 			speed = STOPPED;
-                        x = (prevRegion%worldSize)*GRID + 1;
-                } else if (prevRegion == postRegion - 1 &&
-			(walls[postRegion]==1 || walls[postRegion]==3)) {
-			// going west to east and hitting wall
-			speed = STOPPED;
-                        x = (postRegion%worldSize)*GRID - 1;
-                } else if (prevRegion == postRegion+worldSize &&
-			(walls[postRegion] == 2 || walls[postRegion] == 3)) {
-			// going north to south and hitting wall
-			speed = STOPPED;
-                        y = (prevRegion/worldSize)*GRID + 1;
-                } else if (prevRegion == postRegion - worldSize &&
-			(walls[prevRegion] == 2 || walls[prevRegion] == 3)) {
-			// going south to north and hitting wall
-			speed = STOPPED;
-                        y = (postRegion/worldSize)*GRID - 1;
-                } else if (prevRegion == postRegion - (worldSize-1)) {
-			// going southeast to northwest
-			if (walls[prevRegion] == 3) {
-				speed = STOPPED;
-				x = (prevRegion%worldSize)*GRID + 1;
-				y = (postRegion/worldSize)*GRID - 1;
-			} else if (walls[prevRegion] == 1) {
-				speed = STOPPED;
-                        	x = (prevRegion%worldSize)*GRID + 1;
-			} else if (walls[prevRegion] == 2 ||
-				   walls[prevRegion-1]&2) {
-				speed = STOPPED;
-                        	y = (postRegion/worldSize)*GRID - 1;
-			} 
-                } else if (prevRegion == postRegion - (worldSize+1)) {
-			// going southwest to northeast
-			if (walls[prevRegion]&2 && walls[prevRegion+1]&1) {
-				speed = STOPPED;
-				x = (postRegion%worldSize)*GRID - 1;
-				y = (postRegion/worldSize)*GRID - 1;
-			} else if (walls[prevRegion]&2) {
-				speed = STOPPED;
-                        	y = (postRegion/worldSize)*GRID - 1;
-			} else if (walls[prevRegion+1]&1 ||
-				   walls[postRegion]&1) {
-				speed = STOPPED;
-                        	x = (postRegion%worldSize)*GRID - 1;
-			} 
-                } else if (prevRegion == postRegion - (worldSize-1)) {
-			// going northeast to southwest
-			if (walls[prevRegion]&1 &&
-			    walls[postRegion+1]&2) {
-				speed = STOPPED;
-				if (direction < 0) direction += 360;
-				x = (prevRegion%worldSize)*GRID + 1;
-				y = (prevRegion/worldSize)*GRID + 1;
-			} else if (walls[prevRegion]&1) {
-				speed = STOPPED;
-                        	x = (prevRegion%worldSize)*GRID + 1;
-			} else if (walls[postRegion+1]&2 ||
-				   walls[postRegion]&2) {
-				speed = STOPPED;
-                        	y = (prevRegion/worldSize)*GRID + 1;
-			} 
-                } else if (prevRegion == postRegion - (worldSize+1)) {
-			// going northwest to southeast
-			if (walls[postRegion-1]&2 &&
-			    walls[prevRegion+1]&1) {
-				speed = STOPPED;
-				x = (postRegion%worldSize)*GRID - 1;
-				y = (prevRegion/worldSize)*GRID + 1;
-			} else if (walls[postRegion-1]&2) {
-				speed = STOPPED;
-                        	y = (prevRegion/worldSize)*GRID + 1;
-			} else if (walls[prevRegion+1]&1 ||
-				   walls[postRegion]&1) {
-				speed = STOPPED;
-                        	x = (postRegion%worldSize)*GRID - 1;
-			} 
+		} else {
+			x = x1; y = y1;
+			if (postRegion != prevRegion) updateVisSet();
 		}
-	} else if (connSock < 0) {
-		//avoid walls
-		//first check for the edges of the map 
-		if (x - (.4*GRID) < 0){
-			//left edge
-			if (generalDirection == 3) {
-				direction = direction + 10;// (10*speed/x);
-			}
-			else if (generalDirection == 2){
-				direction = direction -10;//(10*speed/x);
-			}	
-		}
-		if(x+(.4*GRID)> GRID*worldSize){
-			//right edge
-			if(generalDirection == 0){
-				direction = direction - 10;
-			}
-			else if (generalDirection == 1){
-				direction = direction + 10;
-			}
-		}
-		if(y-(.4*GRID)< 0){
-			//bottom
-			if(generalDirection == 1){
-				direction = direction - 10;
-			}
-			else if (generalDirection == 2){
-				direction = direction + 10;
-			}
-		}
-		if(y+(.4*GRID) > GRID*worldSize){
-			//top
-			if(generalDirection == 0){
-				direction = direction + 10;
-			}
-			else if (generalDirection == 3){
-				direction = direction - 10;
-			}
-		}
-		//if you're not near an edge then check to see which 
-		// walls are in your region and avoid them
-		//if you're in a region with a top and left 
-		if (walls[postRegion] ==3 ){
-			//check to avoid the top
-			if(y%GRID >= (.7*GRID)){
-				if(generalDirection == 0){
-					direction += 20;
-				}
-				else if (generalDirection == 3){
-					direction +=  20;
-				}
-				else if(generalDirection == 2){
-					direction -= 20;
-				}
-			}
-			//check to avoid the left side
-			if(x%GRID <= (.3*GRID)){
-				if(generalDirection == 0){
-					direction = direction + 20;
-				}
-			}
-		}
-		if(walls[postRegion] ==2){
-			//this means theres a wall on the top of this region
-			if(y%GRID >= (.7*GRID)){
-				if(generalDirection == 0){
-					direction += 20;	
-				}
-				else if (generalDirection == 3){
-					direction -= 20;
-				}
-			}
-		}
-		if(walls[postRegion] == 1 || walls[postRegion] == 3){
-			//a wall on the left side
-			if(x%GRID <= (.3*GRID)){
-				if(generalDirection == 2){
-					direction -= 20;
-				}
-				else if (generalDirection == 3){
-					direction += 20;
-				}
-			}
-		}
-		//check for the walls that aren't owned by your region 
-		//aka walls on the bottom or right
-		if(walls[postRegion+1] == 1 || walls[postRegion+1] == 3){
-			//a wall on the right
-			if(x%GRID >= (.7*GRID)){
-				if(generalDirection == 0){
-					direction -= 20;
-				}
-				else if(generalDirection == 1){
-					direction += 20;
-				}
-			}
-		}
-		
-		if(walls[regionBelow] == 2 || walls[regionBelow] == 3){
-			//a wall below
-			if(y%GRID <= (.3*GRID)){
-				if(generalDirection == 1){
-					direction -= 20;
-				}
-				else if(generalDirection == 2){
-					direction +=20;
-				}
-			}
-		}
-		
-		//bounce off walls
-                if (prevRegion == postRegion + 1 &&
-			(walls[prevRegion]==1 || walls[prevRegion]==3)) {
-			// going east to west and hitting wall
-                        direction = -direction;
-                        x = (prevRegion%worldSize)*GRID + 1;
-                } else if (prevRegion == postRegion - 1 &&
-			(walls[postRegion]==1 || walls[postRegion]==3)) {
-			// going west to east and hitting wall
-                        direction = -direction;
-                        x = (postRegion%worldSize)*GRID - 1;
-                } else if (prevRegion == postRegion+worldSize &&
-			(walls[postRegion] == 2 || walls[postRegion] == 3)) {
-			// going north to south and hitting wall
-                        direction = 180-direction;
-                        y = (prevRegion/worldSize)*GRID + 1;
-                } else if (prevRegion == postRegion - worldSize &&
-			(walls[prevRegion] == 2 || walls[prevRegion] == 3)) {
-			// going south to north and hitting wall
-                        direction = 180-direction;
-                        y = (postRegion/worldSize)*GRID - 1;
-                } else if (prevRegion == postRegion - (worldSize-1)) {
-			// going southeast to northwest
-			if (walls[prevRegion] == 3) {
-				direction = direction - 180;
-				x = (prevRegion%worldSize)*GRID + 1;
-				y = (postRegion/worldSize)*GRID - 1;
-			} else if (walls[prevRegion] == 1) {
-				direction = -direction;
-                        	x = (prevRegion%worldSize)*GRID + 1;
-			} else if (walls[prevRegion] == 2 ||
-				   walls[prevRegion-1]&2) {
-				direction = 180 - direction;
-                        	y = (postRegion/worldSize)*GRID - 1;
-			} 
-                } else if (prevRegion == postRegion - (worldSize+1)) {
-			// going southwest to northeast
-			if (walls[prevRegion]&2 && walls[prevRegion+1]&1) {
-				direction = direction - 180;
-				x = (postRegion%worldSize)*GRID - 1;
-				y = (postRegion/worldSize)*GRID - 1;
-			} else if (walls[prevRegion]&2) {
-				direction = 180 - direction;
-                        	y = (postRegion/worldSize)*GRID - 1;
-			} else if (walls[prevRegion+1]&1 ||
-				   walls[postRegion]&1) {
-				direction = -direction;
-                        	x = (postRegion%worldSize)*GRID - 1;
-			} 
-                } else if (prevRegion == postRegion - (worldSize-1)) {
-			// going northeast to southwest
-			if (walls[prevRegion]&1 &&
-			    walls[postRegion+1]&2) {
-				direction = direction - 180;
-				if (direction < 0) direction += 360;
-				x = (prevRegion%worldSize)*GRID + 1;
-				y = (prevRegion/worldSize)*GRID + 1;
-			} else if (walls[prevRegion]&1) {
-				direction = -direction;
-                        	x = (prevRegion%worldSize)*GRID + 1;
-			} else if (walls[postRegion+1]&2 ||
-				   walls[postRegion]&2) {
-				direction = 180 - direction;
-                        	y = (prevRegion/worldSize)*GRID + 1;
-			} 
-                } else if (prevRegion == postRegion - (worldSize+1)) {
-			// going northwest to southeast
-			if (walls[postRegion-1]&2 &&
-			    walls[prevRegion+1]&1) {
-				direction = direction - 180;
-				x = (postRegion%worldSize)*GRID - 1;
-				y = (prevRegion/worldSize)*GRID + 1;
-			} else if (walls[postRegion-1]&2) {
-				direction = 180 - direction;
-                        	y = (prevRegion/worldSize)*GRID + 1;
-			} else if (walls[prevRegion+1]&1 ||
-				   walls[postRegion]&1) {
-				direction = -direction;
-                        	x = (postRegion%worldSize)*GRID - 1;
-			} 
-		}
-		// no controller connected, so just make random
+		return;
+	}
+
+	// remainder for case of no driver
+	bool atLeft  = (prevRegion%worldSize == 0);
+	bool atRight = (prevRegion%worldSize == worldSize-1);
+	bool atBot   = (prevRegion/worldSize == 0);
+	bool atTop   = (prevRegion/worldSize == worldSize-1);
+	int xd = x%GRID; int yd = y%GRID;
+	if (xd < .25*GRID && (atLeft || walls[prevRegion]&1 ||
+		walls[prevRegion-1]&4)) {
+		// near left edge of prevRegion
+		if (direction >= 270 || direction < 20) direction += 20;
+		if (160 < direction && direction < 270) direction -= 20;
+		speed = SLOW; deltaDir = 0;
+	} else if (xd > .75*GRID && (atRight || walls[prevRegion+1]&1 ||
+		walls[prevRegion+1]&4)) {
+		// near right edge of prevRegion
+		if (340 < direction || direction <= 90) direction -= 20;
+		if (90 < direction && direction < 200) direction += 20;
+		speed = SLOW; deltaDir = 0;
+	} else if (yd < .25*GRID && (atBot || walls[prevRegion-worldSize]&2 ||
+		walls[prevRegion-worldSize]&4)) {
+		// near bottom of prevRegion
+		if (70 < direction && direction <= 180) direction -= 20;
+		if (180 < direction && direction < 290) direction += 20;
+		speed = SLOW; deltaDir = 0;
+	} else if (yd > .75*GRID && (atTop || walls[prevRegion]&2 ||
+		walls[prevRegion+worldSize]&4)) {
+		// near top of prevRegion
+		if (0 <= direction && direction < 110) direction += 20;
+		if (250 < direction && direction <= 359) direction -= 20;
+		speed = SLOW; deltaDir = 0;
+	} else {
+		// no walls to avoid, so just make random
 		// changes to direction and speed
 		direction += deltaDir;
-		if (direction < 0) direction += 360;
+		double r;
 		if ((r = randfrac()) < 0.1) {
 			if (r < .05) deltaDir -= 0.2 * randfrac();
 			else         deltaDir += 0.2 * randfrac();
@@ -1092,10 +935,46 @@ void Avatar::updateStatus(uint32_t now) {
 			else if (r < 0.05) 		    speed = SLOW;
 			else 				    speed = FAST;
 		}
-
 	} 
-	
+	// update position using adjusted direction and speed
 	if (direction < 0) direction += 360;
+	if (direction >= 360) direction -= 360;
+	double dist = speed;
+	double dirRad = direction * (2*PI/360);
+	x += (int) (dist * sin(dirRad));
+	y += (int) (dist * cos(dirRad));
+	int postRegion = groupNum(x,y)-1;
+	if (postRegion != prevRegion) updateVisSet();
+}
+
+/** Determine if two adjacent squares are separated by a wall.
+ *  @param c0 is the index of a square
+ *  @param c0 is the index of an adjacent square (may be diagonal)
+ *  @return true if there are walls separating c0 and c1, else false
+ */
+bool Avatar::separated(int c0, int c1) {
+	if (c0 > c1) { int temp = c1; c1 = c0; c0 = temp; }
+	if (c0/worldSize == c1/worldSize) // same row
+		return walls[c1]&1;
+	else if (c0%worldSize == c1%worldSize) // same column
+		return walls[c0]&2;
+	else if (c0%worldSize > c1%worldSize) { // se/nw diagonal
+		if ((walls[c0]&3) == 3 ||
+		    (walls[c0]&1 && walls[c1+1]&1) ||
+		    (walls[c0]&2 && walls[c0-1]&2) ||
+		    (walls[c1+1]&1 && walls[c0-1]&2))
+			return true;
+		else 
+			return false;
+	} else { // sw/ne diagonal
+		if ((walls[c0]&2 && walls[c0+1]&1) ||
+		    (walls[c0+1]&1 && walls[c1]&1) ||
+		    (walls[c0]&2 && walls[c0+1]&2) ||
+		    (walls[c0+1]&2 && walls[c1]&1))
+			return true;
+		else 
+			return false;
+	}
 }
 
 /** Return the multicast group number associated with given position.
@@ -1235,9 +1114,9 @@ bool Avatar::linesIntersect(double ax, double ay, double bx, double by,
 
 void Avatar::subscribe(list<int>& glist) {
 	if (comt == 0 || glist.size() == 0) return;
-	packet p = ps->alloc();
-	PacketHeader& h = ps->getHeader(p);
-	uint32_t *pp = ps->getPayload(p);
+	pktx px = ps->alloc();
+	Packet& p = ps->getPacket(px);
+	uint32_t *pp = p.payload();
 
 	int nsub = 0;
 	list<int>::iterator gp;
@@ -1245,22 +1124,22 @@ void Avatar::subscribe(list<int>& glist) {
 		int g = *gp; nsub++;
 		if (nsub > 350) {
 			pp[0] = htonl(nsub-1); pp[nsub] = 0;
-			h.setLength(Forest::OVERHEAD + 4*(1+nsub));
-			h.setPtype(SUB_UNSUB); h.setFlags(0);
-			h.setComtree(comt);
-			h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
-			send(p);
+			p.length = Forest::OVERHEAD + 4*(2+nsub);
+			p.type = Forest::SUB_UNSUB; p.flags = 0;
+			p.comtree = comt;
+			p.srcAdr = myAdr; p.dstAdr = rtrAdr;
+			send(px);
 			nsub = 1;
 		}
 		pp[nsub] = htonl(-g);
 	}
 	pp[0] = htonl(nsub); pp[nsub+1] = 0;
-
-	h.setLength(Forest::OVERHEAD + 4*(2+nsub));
-	h.setPtype(SUB_UNSUB); h.setFlags(0);
-	h.setComtree(comt); h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
-	send(p);
-	ps->free(p);
+	p.length = Forest::OVERHEAD + 4*(2+nsub);
+	p.type = Forest::SUB_UNSUB; p.flags = 0;
+	p.comtree = comt;
+	p.srcAdr = myAdr; p.dstAdr = rtrAdr;
+	send(px);
+	ps->free(px);
 }
 
 /** Unsubscribe from a list of multicast groups.
@@ -1268,9 +1147,9 @@ void Avatar::subscribe(list<int>& glist) {
  */
 void Avatar::unsubscribe(list<int>& glist) {
 	if (comt == 0 || glist.size() == 0) return;
-	packet p = ps->alloc();
-	PacketHeader& h = ps->getHeader(p);
-	uint32_t *pp = ps->getPayload(p);
+	pktx px = ps->alloc();
+	Packet& p = ps->getPacket(px);
+	uint32_t *pp = p.payload();
 
 	int nunsub = 0;
 	list<int>::iterator gp;
@@ -1278,22 +1157,21 @@ void Avatar::unsubscribe(list<int>& glist) {
 		int g = *gp; nunsub++;
 		if (nunsub > 350) {
 			pp[0] = 0; pp[1] = htonl(nunsub-1);
-			h.setLength(Forest::OVERHEAD + 4*(1+nunsub));
-			h.setPtype(SUB_UNSUB); h.setFlags(0);
-			h.setComtree(comt);
-			h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
-			send(p);
+			p.length = Forest::OVERHEAD + 4*(2+nunsub);
+			p.type = Forest::SUB_UNSUB; p.flags = 0;
+			p.comtree = comt;
+			p.srcAdr = myAdr; p.dstAdr = rtrAdr;
+			send(px);
 			nunsub = 1;
 		}
 		pp[nunsub+1] = htonl(-g);
 	}
 	pp[0] = 0; pp[1] = htonl(nunsub);
-
-	h.setLength(Forest::OVERHEAD + 4*(2+nunsub));
-	h.setPtype(SUB_UNSUB); h.setFlags(0);
-	h.setComtree(comt); h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
-	send(p);
-	ps->free(p);
+	p.length = Forest::OVERHEAD + 4*(2+nunsub);
+	p.type = Forest::SUB_UNSUB; p.flags = 0; p.comtree = comt;
+	p.srcAdr = myAdr; p.dstAdr = rtrAdr;
+	send(px);
+	ps->free(px);
 }
 
 /** Subscribe to all multicasts for regions that are currently visible
@@ -1364,14 +1242,14 @@ void Avatar::updateSubs() {
  *  are such that we will get at least one report from a newly
  *  invisible avatar.
  */
-void Avatar::updateNearby(int p) {
-	ps->unpack(p);
-	PacketHeader& h = ps->getHeader(p);
-	uint32_t *pp = ps->getPayload(p);
+void Avatar::updateNearby(pktx px) {
+	Packet& p = ps->getPacket(px);
+	p.unpack();
+	uint32_t *pp = p.payload();
 	if (ntohl(pp[0]) != (int) STATUS_REPORT) return;
 
 	// add the Avatar that sent this status report to the nearAvatars set
-	uint64_t avId = h.getSrcAdr(); avId = (avId << 32) | h.getSrcAdr();
+	uint64_t avId = p.srcAdr; avId = (avId << 32) | p.srcAdr;
 	if (nearAvatars->size() < MAXNEAR)
 		nearAvatars->insert(avId);
 

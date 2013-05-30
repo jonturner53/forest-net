@@ -25,14 +25,15 @@ IfaceTable::~IfaceTable() { delete [] ift; delete ifaces; }
 /** Allocate and initialize a new interface table entry.
  *  @param iface is an interface number for an unused interface
  *  @param ipa is the IP address to be associated with the interface
+ *  @param ipp is the port number to be associated with the interface
  *  @param rs is the rate spec for the interface (up corresponds to in)
  */
-bool IfaceTable::addEntry(int iface, ipa_t ipa, RateSpec& rs) {
+bool IfaceTable::addEntry(int iface, ipa_t ipa, ipp_t ipp, RateSpec& rs) {
 	if (!ifaces->isOut(iface)) return false;
 	if (ifaces->firstIn() == 0) // this is the first iface
 		defaultIf = iface;
 	ifaces->swap(iface);
-	ift[iface].ipa = ipa;
+	ift[iface].ipa = ipa; ift[iface].port = ipp;
 	ift[iface].rates = ift[iface].availRates = rs;
 	return true;
 }
@@ -70,7 +71,7 @@ int IfaceTable::readEntry(istream& in) {
 	}
 	Misc::cflush(in,'\n');
 
-	if (!addEntry(ifnum,ipa,rs)) return 0;
+	if (!addEntry(ifnum,ipa,0,rs)) return 0;
 	return ifnum;
 }
 

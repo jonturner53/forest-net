@@ -19,6 +19,7 @@
 #include "IdMap.h"
 #include "Queue.h"
 #include "CpHandler.h"
+#include "Substrate.h"
 #include "Logger.h"
 #include <map>
 
@@ -31,25 +32,22 @@ namespace forest {
  */
 
 
-ipa_t	extIp;			///< IP address for remote console
-ipa_t	intIp;			///< IP address for Forest net
-ipa_t	rtrIp;			///< IP address of router
+ipa_t	myIp;			///< IP address of this host
 fAdr_t	myAdr;			///< forest address of this host
 fAdr_t	rtrAdr;			///< forest address of router
-fAdr_t  cliMgrAdr;		///< forest address of the cliMgr
+fAdr_t  cliMgrAdr;		///< forest address of the client manager
+fAdr_t  comtCtlAdr;		///< forest address of the comtree controller
+int	netMgr;			///< node number of net manager in NetInfo
+int	nmRtr;			///< node number of net manager's router
 
-bool	booting;		///< true until all routers are booted
-
-int	intSock;		///< internal socket number
-int	extSock;		///< external listening socket
-int	connSock;		///< external connection socket
-
-Logger logger;			///< error message logger
+Logger *logger;			///< error message logger
 
 PacketStoreTs *ps;		///< pointer to packet store
 
 NetInfo *net;			///< global view of net topology
 ComtInfo *comtrees;		///< pre-configured comtrees
+
+Substrate *sub;			///< substrate for routing control packets
 
 // Information relating client addresses and router addresses
 // This is a temporary expedient and will be replaced later
@@ -65,49 +63,25 @@ struct clientInfo {
 	ipa_t rtrIp;
 };
 prefixInfo prefixes[1000];
-map<uint32_t,clientInfo> *packetsSent;
-
-// pair of queues used by a thread
-struct QueuePair {
-Queue	in;
-Queue	out;
-};
-
-static const int NORESPONSE = (1 << 31); ///< to indicate non-reponse to ctl pkt
-
-// defines thread pool
-static const int TPSIZE = 500;	///< number of concurrent threads at NetMgr
-struct ThreadInfo {
-	pthread_t thid;		///< thread id
-	QueuePair qp;		///< associated queue pair
-	uint64_t seqNum;	///< sequence number of pending request
-	uint64_t ts;		///< timestamp of pending request
-};
-ThreadInfo *pool;		///< pool[i]: i-th thread in pool
-UiSetPair *threads;		///< in-use and unused thread indices
-IdMap *reqMap;			///< maps rcvd requests to handling thread
-
-IdMap	*tMap;			///< maps sequence numbers to thread #
 
 bool	init(const char*);
-void	cleanup();
 bool	readPrefixInfo(char*);
-void*	run(void*); 
 
 void* 	handler(void *);
-bool 	handleConsReq(int,CtlPkt&,CpHandler&);
+bool 	handleConsReq(int,CpHandler&);
 bool 	handleConDisc(int,CtlPkt&,CpHandler&);
-bool 	handleNewClient(int,CtlPkt&,CpHandler&);
-bool 	handleBootRequest(int,CtlPkt&,CpHandler&);
+bool 	handleNewSession(int,CtlPkt&,CpHandler&);
+bool 	handleBootLeaf(int,CtlPkt&,CpHandler&);
+bool 	handleBootRouter(int,CtlPkt&,CpHandler&);
 
-void	connect();		
-void	disconnect();	
+uint64_t generateNonce();
+fAdr_t	setupLeaf(int, pktx, CtlPkt&, int, int, uint64_t,CpHandler&,bool=false);
+bool	setupEndpoint(int, int, pktx, CtlPkt&, CpHandler&, bool=false);
+bool	setupComtree(int, int, pktx, CtlPkt&, CpHandler&, bool=false);
+bool	processReply(pktx, CtlPkt&, pktx, CtlPkt&, CpHandler&, const string&);
 
 void	sendToCons(int);	
 int	recvFromCons();
-
-void	sendToForest(int);
-int 	rcvFromForest();
 
 bool	findCliRtr(ipa_t,fAdr_t&); ///< gives the rtrAdr of the prefix
 

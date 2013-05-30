@@ -28,16 +28,228 @@ ComtInfo::ComtInfo(int maxComtree1, NetInfo& net1)
  *  Deallocates all dynamic storage
  */
 ComtInfo::~ComtInfo() {
-// add code to delete other comtree info
-	for (int ctx = firstComtIndex(); ctx != 0; ctx = nextComtIndex(ctx)) {
+	for (int ctx = comtreeMap->firstId(); ctx != 0;
+		 ctx = comtreeMap->nextId(ctx)) {
 		delete comtree[ctx].coreSet;
 		delete comtree[ctx].leafMap;
 		delete comtree[ctx].rtrMap;
+		pthread_cond_destroy(&comtree[ctx].busyCond);
 	}
 	delete [] comtree; delete comtreeMap;
+	pthread_mutex_destroy(&mapLock);
 }
 
+/** Initialize locks and condition variables.  */
+bool ComtInfo::init() {
+        if (pthread_mutex_init(&mapLock,NULL) != 0) return false;
+	for (int ctx = 1; ctx <= maxComtree; ctx++) {
+		comtree[ctx].busyBit = false;
+		if (pthread_cond_init(&comtree[ctx].busyCond,NULL) != 0)
+			return false;
+	}
+	return true;
+}
+
+/** Get the comtree index for a given comtree and lock the comtree.
+ *  @param is a comtree number (not an index)
+ *  @return the comtree index associated with the given comtree number,
+ *  or 0 if the comtree number is not valid; on return the comtree
+ *  is locked
+ */
+int ComtInfo::getComtIndex(int comt) {
+	lockMap();
+	int ctx = comtreeMap->getId(comt);
+	if (ctx == 0) { unlockMap(); return 0; }
+	while (comtree[ctx].busyBit) { // wait until comtree is not busy
+		pthread_cond_wait(&comtree[ctx].busyCond,&mapLock);
+		ctx = comtreeMap->getId(comt);
+		if (ctx == 0) {
+			pthread_cond_signal(&comtree[ctx].busyCond);
+			unlockMap(); return 0;
+		}
+	}
+	comtree[ctx].busyBit = true; // set busyBit to lock comtree
+	unlockMap();
+	return ctx;
+}
+
+/** Release a previously locked comtree.
+ *  Waiting threads are signalled to let them proceed.
+ *  @param ctx is the index of a locked comtree.
+ */
+void ComtInfo::releaseComtree(int ctx) {
+	lockMap();
+	comtree[ctx].busyBit = false;
+	pthread_cond_signal(&comtree[ctx].busyCond);
+	unlockMap();
+}
+
+/** Get the first comtree in the list of valid comtrees and lock it.
+ *  @return the ctx of the first valid comtree, or 0 if there is no
+ *  valid comtree; on return, the comtree is locked
+ */
+int ComtInfo::firstComtree() {
+	lockMap();
+	int ctx = comtreeMap->firstId();
+	if (ctx == 0) { unlockMap(); return 0; }
+	while (comtree[ctx].busyBit) {
+		pthread_cond_wait(&comtree[ctx].busyCond,&mapLock);
+		ctx = comtreeMap->firstId();
+		if (ctx == 0) {
+			pthread_cond_signal(&comtree[ctx].busyCond);
+			unlockMap(); return 0;
+		}
+	}
+	comtree[ctx].busyBit = true;
+	unlockMap();
+	return ctx;
+}
+
+/** Get the next comtree in the list of valid comtrees and lock it.
+ *  @param ctx is the index of a valid comtree
+ *  @return the index of the next comtree in the list of valid comtrees
+ *  or 0 if there is no next comtree; on return, the lock on ctx
+ *  is released and the next comtree is locked.
+ */
+int ComtInfo::nextComtree(int ctx) {
+	lockMap();
+	int nuCtx = comtreeMap->nextId(ctx);
+	if (nuCtx == 0) {
+		comtree[ctx].busyBit = false;
+		pthread_cond_signal(&comtree[ctx].busyCond);
+		unlockMap();
+		return 0;
+	}
+	while (comtree[nuCtx].busyBit) {
+		pthread_cond_wait(&comtree[nuCtx].busyCond,&mapLock);
+		nuCtx = comtreeMap->nextId(ctx);
+		if (nuCtx == 0) {
+			comtree[ctx].busyBit = false;
+			pthread_cond_signal(&comtree[ctx].busyCond);
+			pthread_cond_signal(&comtree[nuCtx].busyCond);
+			unlockMap();
+			return 0;
+		}
+	}
+	comtree[nuCtx].busyBit = true;
+	comtree[ctx].busyBit = false;
+	pthread_cond_signal(&comtree[ctx].busyCond);
+	unlockMap();
+	return nuCtx;
+}
+
+/** Add a new comtree.
+ *  Defines a new comtree, with attributes left undefined.
+ *  @param comt is the comtree number for the new comtree.
+ *  @return the index of the new comtree on success, else 0;
+ *  on return, the new comtree is locked
+ */
+int ComtInfo::addComtree(int comt) {
+	lockMap();
+	int ctx = comtreeMap->addPair(comt);
+	if (ctx == 0) { unlockMap(); return 0; }
+	// since this is a newly allocated comtree, it cannot be
+	// locked by another thread
+	comtree[ctx].busyBit = true;
+	comtree[ctx].comtreeNum = comt;
+	comtree[ctx].coreSet = new set<fAdr_t>;
+	comtree[ctx].rtrMap = new map<fAdr_t,ComtRtrInfo>;
+	comtree[ctx].leafMap = new map<fAdr_t,ComtLeafInfo>;
+	unlockMap();
+	return ctx;
+}
+
+/** Remove a comtree.
+ *  Assumes that all bandwidth resources in underlying network
+ *  have already been released and that the calling thread already
+ *  holds a lock on the comtree.
+ *  @param ctx is the comtree index for a valid comtree to be removed
+ *  @return true on success, false on failure
+ */
+bool ComtInfo::removeComtree(int ctx) {
+	lockMap();
+	if (!validComtIndex(ctx) || !comtree[ctx].busyBit) {
+		unlockMap(); return false;
+	}
+	comtreeMap->dropPair(comtree[ctx].comtreeNum);
+	comtree[ctx].comtreeNum = 0;
+	delete comtree[ctx].coreSet;
+	delete comtree[ctx].leafMap;
+	delete comtree[ctx].rtrMap;
+	comtree[ctx].busyBit = false;
+	unlockMap();
+	return true;
+}
+
+/** Add a new node to a comtree.
+ *  @param ctx is the comtree index
+ *  @param fa is a valid forest address
+ *  @return true on success, false on failure
+ */
+bool ComtInfo::addNode(int ctx, fAdr_t fa) {
+	int nn = net->getNodeNum(fa);
+	if (nn != 0 && net->isRouter(nn)) {
+		map<fAdr_t,ComtRtrInfo>::iterator rp;
+	    	rp = comtree[ctx].rtrMap->find(fa);
+	    	if (rp != comtree[ctx].rtrMap->end()) return true;
+		pair<fAdr_t,ComtRtrInfo> newPair;
+		newPair.first = fa;
+		comtree[ctx].rtrMap->insert(newPair);
+		return true;
+	}
+	map<fAdr_t,ComtLeafInfo>::iterator lp;
+	lp = comtree[ctx].leafMap->find(fa);
+	if (lp != comtree[ctx].leafMap->end()) return true;
+	pair<fAdr_t,ComtLeafInfo> newPair;
+	newPair.first = fa;
+	newPair.second.plnkRates = comtree[ctx].leafDefRates;
+	if (nn != 0) {
+		int plnk = net->firstLinkAt(nn);
+		int parent = net->getPeer(nn,plnk);
+		newPair.second.parent = net->getNodeAdr(parent);
+		newPair.second.llnk = net->getLLnum(plnk,parent);
+	}
+	comtree[ctx].leafMap->insert(newPair);
+	return true;
+}
+
+/** Remove a node from a comtree.
+ *  This method will fail if the node is a router with links to children
+ *  Updates link counts at parent router.
+ *  @param ctx is the comtree index
+ *  @param fa is the forest address of a comtree node
+ *  @return true on success, false on failure
+ */
+bool ComtInfo::removeNode(int ctx, fAdr_t fa) {
+	map<fAdr_t,ComtRtrInfo>::iterator np;
+	np = comtree[ctx].rtrMap->find(fa);
+	if (np != comtree[ctx].rtrMap->end()) {
+		int plnk = np->second.plnk;
+		if ((plnk == 0 && np->second.lnkCnt != 0) ||
+		    (plnk != 0 && np->second.lnkCnt != 1))
+			return false;
+		if (plnk != 0) {
+			int parent = net->getPeer(net->getNodeNum(fa),plnk);
+			map<fAdr_t,ComtRtrInfo>::iterator pp;
+			pp = comtree[ctx].rtrMap->find(net->getNodeAdr(parent));
+			pp->second.lnkCnt--;
+		}
+		comtree[ctx].rtrMap->erase(np);
+		comtree[ctx].coreSet->erase(fa);
+		return true;
+	}
+	map<fAdr_t,ComtLeafInfo>::iterator lp;
+	lp = comtree[ctx].leafMap->find(fa);
+	map<fAdr_t,ComtRtrInfo>::iterator pp;
+	pp = comtree[ctx].rtrMap->find(lp->second.parent);
+	pp->second.lnkCnt--;
+	comtree[ctx].leafMap->erase(lp);
+	return true;
+}
+
+
 /** Adjust the subtree rates along path to root.
+ *  Assumes that current thread holds a lock on comtree and NetInfo object.
  *  @param ctx is a valid comtree index
  *  @param rtr is the forest address of a router in the comtree
  *  @param rs is a RateSpec that is to be added to the subtree rates
@@ -83,6 +295,10 @@ bool ComtInfo::adjustSubtreeRates(int ctx, fAdr_t rtrAdr, RateSpec& rs) {
  *  of the other node in the comtree. The RateSpec may be omitted, but
  *  if provided, the first number is the upstream bit rate, followed
  *  by downstream bit rate, upstream packet rate and downstream packet rate.
+ *
+ *  This method assumes that no other thread currently has access to
+ *  the ComtInfo object. It should only be used on startup, before other
+ *  threads are launched.
  */
 bool ComtInfo::read(istream& in) {
 	int comtNum = 1;	// comtNum = i for i-th comtree read
@@ -117,6 +333,9 @@ bool ComtInfo::read(istream& in) {
  *  Expects the next nonblank input character to be the opening parenthesis
  *  of the comtree description. If a new comtree is read without error,
  *  proceeds to allocate and initialize the new comtree.
+ *  This thread is assumed to be the only one with access to the ComtInfo
+ *  object at the moment. The method should only be used on startup, before
+ *  other threads are launched.
  *  @param in is an open input stream
  *  @param errMsg is a reference to a string used for returning an error
  *  message
@@ -235,6 +454,8 @@ comt_t ComtInfo::readComtree(istream& in, string& errMsg) {
 		errMsg = "could not allocate new comtree";
 		return 0;
 	}
+	releaseComtree(ctx); 	// this is assumed to be only thread with
+				// access to comtree, so locking not needed
 	
 	fAdr_t ownerAdr = net->getNodeAdr(owner);
 	fAdr_t rootAdr  = net->getNodeAdr(root);
@@ -395,7 +616,7 @@ bool ComtInfo::readLinkEndpoint(istream& in, string& name, int& num) {
  */
 bool ComtInfo::check() {
 	bool status = true;
-	for (int ctx = firstComtIndex(); ctx != 0; ctx = nextComtIndex(ctx)) {
+	for (int ctx = firstComtree(); ctx != 0; ctx = nextComtree(ctx)) {
 		int comt = getComtree(ctx);
 		fAdr_t rootAdr = getRoot(ctx);
 		int root = net->getNodeNum(rootAdr);
@@ -654,7 +875,7 @@ bool ComtInfo::checkLinkRates(int ctx) {
  *  @return true if all comtrees configured successfully, else false
  */
 bool ComtInfo::setAllComtRates() {
-	for (int ctx = firstComtIndex(); ctx != 0; ctx = nextComtIndex(ctx)) {
+	for (int ctx = firstComtree(); ctx != 0; ctx = nextComtree(ctx)) {
 		if (!setComtRates(ctx)) return false;
 	}
 	return true;
@@ -663,6 +884,8 @@ bool ComtInfo::setAllComtRates() {
 /** Compute rates for all links in a comtree and allocate capacity of
  *  network links. This is for use when configuring an entire comtree,
  *  not when processing joins/leaves.
+ *  Assumes that the current thread is the only one with access to
+ *  object right now.
  *  @param ctx is a valid comtree index
  *  @return true on success, false on failure
  */
@@ -679,6 +902,7 @@ bool ComtInfo::setComtRates(int ctx) {
 }
 
 /** Set the backbone link capacities for an auto-configured comtree.
+ *  Assumes that current thread holds a lock on comtree, if one is needed.
  *  @param ctx is a valid comtree index
  *  @param u is a node in the comtree (used in recursive calls)
  *  @return true on success, else false
@@ -712,6 +936,7 @@ void ComtInfo::setAutoConfigRates(int ctx) {
 
 /** Check that there is sufficient capacity available for all links in a
  *  comtree. Requires that rates have been set for all comtree links.
+ *  Assumes that current thread holds a lock on comtree and NetInfo object.
  *  @param ctx is a valid comtree index
  *  @return true if the provisioned rates for the comtree are compatible
  *  with the available capacity
@@ -747,6 +972,7 @@ bool ComtInfo::checkComtRates(int ctx) {
 /** Provision all links in a comtree, reducing available link capacity.
  *  Assumes that the required network capacity is available and that
  *  comtree links are configured with required rates.
+ *  Assumes that current thread holds a lock on comtree and NetInfo object.
  *  @param ctx is a valid comtree index
  *  @return true on success, else false
  */
@@ -775,6 +1001,7 @@ void ComtInfo::provision(int ctx) {
 }
 
 /** Unprovision all links in a comtree,increasing available link capacity.
+ *  Assumes that current thread holds a lock on comtree and NetInfo object.
  *  @param ctx is a valid comtree index
  *  @return true on success, else false
  */
@@ -807,6 +1034,7 @@ void ComtInfo::unprovision(int ctx) {
  *  to handle a provided RateSpec.
  *  The search halts when it reaches any node in the comtree.
  *  The path from source to this node is returned in path.
+ *  Assumes that current thread holds a lock on comtree and NetInfo object.
  *  @param ctx is a valid comtree index for the comtree of interest
  *  @param src is the router at which the path search starts
  *  @param rs specifies the rates required on the links in the path
@@ -870,6 +1098,7 @@ int ComtInfo::findPath(int ctx, int src, RateSpec& rs, list<LinkMod>& path) {
  *  This method adds a list of links to the backbone of an existing comtree,
  *  sets their link rates and reserves capacity on the network links;
  *  the links are assumed to have sufficient available capacity.
+ *  Assumes that current thread holds a lock on comtree and NetInfo object.
  *  @param ctx is a valid comtree index for the comtree of interest
  *  @param path is a reference to a list of LinkMod objects defining a path
  *  in the comtree; the links appear in "bottom-up" order
@@ -895,6 +1124,7 @@ void ComtInfo::addPath(int ctx, list<LinkMod>& path) {
 }
 
 /** Remove a path from a router in a comtree.
+ *  Assumes that current thread holds a lock on comtree and NetInfo object.
  *  @param ctx is a valid comtree index for the comtree of interest
  *  @param path is a list of LinkMod objects defining the path
  *  in bottom-up order; the path is assumed to have
@@ -913,16 +1143,32 @@ void ComtInfo::removePath(int ctx, list<LinkMod>& path) {
 	return;
 }
 
+/** Compute the change required in the RateSpecs for links in an
+ *  auto-configured comtree and verify that needed capacity is available.
+ *  Assumes that current thread holds a lock on comtree and NetInfo object.
+ *  @param ctx is the comtree index of the comtree
+ *  @param modList is a list of edges in the comtree and RateSpecs
+ *  representing the change in rates required at each link in the list;
+ *  returned RateSpecs may have negative values; list should be empty 
+ *  in top level recursive call
+ *  @return true if all links in comtree have sufficient available
+ *  capacity to accommodate the changes
+ */
 bool ComtInfo::computeMods(int ctx, list<LinkMod>& modList) {
 	fAdr_t root = getRoot(ctx);
 	map<fAdr_t,ComtRtrInfo>::iterator rp;
 	rp = comtree[ctx].rtrMap->find(root);
 	modList.clear();
-	return computeMods(ctx,root,rp->second.subtreeRates,modList);
+	bool status = computeMods(ctx,root,rp->second.subtreeRates,modList);
+	return status;
 }
 
 /** Compute the change required in the RateSpecs for links in an
  *  auto-configured comtree and verify that needed capacity is available.
+ *  This is a recursive helper method called from the top-level computeMods
+ *  method.
+ *  Assumes that current thread holds a lock on comtree, and a lock on
+ *  the network object.
  *  @param ctx is the comtree index of the comtree
  *  @param radr is the Forest address of the root of the current subtree;
  *  should be the comtree root in the top level recursive call
@@ -978,6 +1224,7 @@ bool ComtInfo::computeMods(int ctx, fAdr_t radr, RateSpec& rootRates,
 /** Add to the capacity of a list of comtree backbone links and provision
  *  required link capacity in the network. Assumes that network links have
  *  the required capacity and that both endpoints of each link are routers.
+ *  Assumes that current thread holds a lock on comtree and NetInfo object.
  *  @param ctx is the index of a comptree
  *  @param modList is a list of link modifications; that is, comtree links
  *  that are either to be added or have their rate adjusted.
@@ -999,6 +1246,7 @@ void ComtInfo::provision(int ctx, list<LinkMod>& modList) {
 
 /** Reduce the capacity of a list of comtree links and release required
  *  link capacity in the network.
+ *  Assumes that current thread holds a lock on comtree and NetInfo object.
  *  @param ctx is the index of a comptree
  *  @param modList is a list of nodes, each representing a link in the comtree
  *  and a RateSpec difference to be removed from that link.
@@ -1019,12 +1267,14 @@ void ComtInfo::unprovision(int ctx, list<LinkMod>& modList) {
 
 
 /** Create a string representation of the ComtInfo object.
+ *  Does not do any locking, so may produce inconsistent results in
+ *  multi-threaded environment.
  *  @param s is a reference to a string in which the result is returned
  *  @return a reference to s
  */
-string& ComtInfo::toString(string& s) const {
+string& ComtInfo::toString(string& s) {
 	s = "";
-	for (int ctx = firstComtIndex(); ctx != 0; ctx = nextComtIndex(ctx)) {
+	for (int ctx = firstComtree(); ctx != 0; ctx = nextComtree(ctx)) {
 		string s1;
 		s += comt2string(ctx,s1);
 	}
@@ -1033,6 +1283,8 @@ string& ComtInfo::toString(string& s) const {
 }
 
 /** Create a string representation of a comtree link, including RateSpec.
+ *  Does not do any locking, so may produce inconsistent results in
+ *  multi-threaded environment.
  *  @param ctx is the comtree index for a comtree
  *  @param lnk is a link number for a link in the comtree
  *  @param s is a reference to a string in which result is returned
@@ -1065,6 +1317,8 @@ string& ComtInfo::link2string(int ctx, int lnk, string& s) const {
 }
 
 /** Create a string representation of a parent link for a leaf.
+ *  Does not do any locking, so may produce inconsistent results in
+ *  multi-threaded environment.
  *  @param ctx is the comtree index for a comtree
  *  @param leafAdr is a forest address of a leaf node
  *  @param s is a reference to a string in which result is returned
@@ -1086,6 +1340,8 @@ string& ComtInfo::leafLink2string(int ctx, fAdr_t leafAdr, string& s) const {
 }
 
 /** Create a string representation of a comtree.
+ *  Does not do any locking, so may produce inconsistent results in
+ *  multi-threaded environment.
  *  @param ctx is the comtree index for a comtree
  *  @param s is a reference to a string in which result is returned
  *  @return a reference to s
@@ -1150,6 +1406,8 @@ string& ComtInfo::comt2string(int ctx, string& s) const {
 
 /** Create a string representation of a the status of a comtree.
  *  Shows only the backbone links, but includes link counts for all routers.
+ *  Does not do any locking, so may produce inconsistent results in
+ *  multi-threaded environment.
  *  @param ctx is the comtree index for a comtree
  *  @param s is a reference to a string in which result is returned
  *  @return a reference to s

@@ -1,643 +1,652 @@
-/** @file ClientMgr.cpp
- * 
- * @author Logan Stafman
- * @date 2011
+/** @file ClientMgr.cpp 
  *
- *
+ *  @author Jonathan Turner (based on earlier version by Logan Stafman)
+ *  @date 2013
+ *  This is open source software licensed under the Apache 2.0 license.
+ *  See http://www.apache.org/licenses/LICENSE-2.0 for details.
  */
+
 #include "ClientMgr.h"
-#include "CommonDefs.h"
-#include "stdinc.h"
-#include "Np4d.h"
-#include <string>
 #include <map>
 #include <iostream>
 #include <fstream>
 #include <sstream>
 
+using namespace forest;
+
 /** usage:
- *  ClientMgr netMgrAdr rtrAdr ccAdr rtrIp intIp extIp myAdr finTime
- *  usersFile acctFile prefixFile
+ *  ClientMgr nmIp myIp finTime
  *
  *  Command line arguments include the following:
- *  netMgrAdr - The Forest address of a Network Manager
- *  rtrAdr - The Forest address of the router to connect to
- *  CC_Adr - The Forest address of a Comtree Controller
- *  rtrIp - The IP address of the router to connect to
- *  intIp - The IP address used for TCP connections from "internal" hosts
- *  extIp - The IP address used for TCP connections from "external" hosts
- *  myAdr - The Forest address of this Client Manager
- *  finTime - How many seconds this program should run before terminating
- *  users - list of usernames and associated passwords
- *  acctFile - output file keeping track of which clients connect to
- *  this Client Manager
- *  prefixFile - file defining how different remote IP prefixes map to
- *  routers in the forest network
+ *  nmIp - IP address of network manager
+ *  myIp - IP address of the preferred interface for client manager
+ *  finTime - how many seconds this program should run before terminating
  */
 
-int main(int argc, char ** argv) {
-	uint32_t finTime = 0;
-	ipa_t rtrIp, intIp, extIp, sqlIp; fAdr_t rtrAdr, myAdr, CC_Adr, netMgrAdr;
-	rtrIp = intIp = extIp = sqlIp = 0; rtrAdr = myAdr = CC_Adr = netMgrAdr = 0;
-	if(argc != 12 ||
-	    (netMgrAdr = Forest::forestAdr(argv[1])) == 0 ||
-	    (rtrAdr = Forest::forestAdr(argv[2])) == 0 ||
-	    (CC_Adr = Forest::forestAdr(argv[3])) == 0 ||
-	    (rtrIp = Np4d::ipAddress(argv[4])) == 0 ||
-	    (intIp = Np4d::ipAddress(argv[5])) == 0 ||
-	    (extIp = Np4d::ipAddress(argv[6])) == 0 ||
-	    (sqlIp = Np4d::ipAddress(argv[7])) == 0 ||
-	    (myAdr = Forest::forestAdr(argv[8])) == 0 ||
-	    (sscanf(argv[9],"%d", &finTime)) != 1) {
-		fatal("ClientMgr usage: ClientMgr netMgrAdr rtrAdr comtCtlAdr "
-		      "rtrIp intIp extIp sqlIp myAdr finTime acctFile "
-		      "prefixFile");
-	}
-	if (extIp == Np4d::ipAddress("127.0.0.1")) extIp = Np4d::myIpAddress(); 
-	if (extIp == 0) fatal("can't retrieve default IP address");
+int main(int argc, char *argv[]) {
+	ipa_t nmIp, myIp; uint32_t finTime = 0;
 
-
-	if(!init(netMgrAdr,rtrIp,rtrAdr,CC_Adr,intIp, extIp, sqlIp, myAdr,
-	         argv[10]))
-		fatal("init: Failed to initialize ClientMgr");
-	if(!readPrefixInfo(argv[11]))
-		fatal("readPrefixFile: Failed to read prefixes");
+	if(argc != 4 ||
+	    (nmIp = Np4d::ipAddress(argv[1])) == 0 ||
+	    (myIp = Np4d::ipAddress(argv[2])) == 0 ||
+	    (sscanf(argv[3],"%d", &finTime)) != 1) 
+		fatal("usage: ClientMgr nmIp myIp fintime");
 	
-	pthread_t run_thread;
-	if(pthread_create(&run_thread,NULL,run,(void *) &finTime) != 0) {
-		fatal("can't create run thread\n");
-	}
-	pthread_join(run_thread,NULL);
+	if (!init(nmIp, myIp))
+		fatal("init: Failed to initialize ClientMgr");
+	
+	sub->run(finTime);
+
 	return 0;
 }
 
+namespace forest {
+
 /** Initializes sockets, and acts as a psuedo-constructor
- *  @param nma is the netMgr forest address
- *  @param ri is the IP of the router
- *  @param ra is the forest address of the router
- *  @param cca is the ComtreeController's forest address
- *  @param mi is the IP address of tihs Netmgr
- *  @param ma is the forest address of this NetMgr
- *  @param filename is the file of the usernames file
- *  @param acctFile is the file to write connection records to
+ *  @param nmIp1 is the IP address of the network manager
+ *  @param myIp1 is the IP address to bind sockets to
  *  @return true on success, false on failure
  */
-bool init(fAdr_t nma, ipa_t ri, fAdr_t ra, fAdr_t cca,
-	ipa_t iip, ipa_t xip, ipa_t sip, fAdr_t ma, char * acctFile) {
-	netMgrAdr = nma; rtrIp = ri; rtrAdr = ra;
-	CC_Adr = cca; intIp = iip; extIp = xip; sqlIp = sip;
-	myAdr = ma;
-	sock = tcpSockInt = tcpSockExt = avaSock = -1;
-	int nPkts = 10000;
-	ps = new PacketStoreTs(nPkts+1);
-	acctFileStream.open(acctFile);
-	clients = new map<uint32_t,clientStruct>;
-	seqNum = 0;
-	proxyIndex = 0;
-	proxyQueues = new map<fAdr_t,Queue*>; 
-	pool = new ThreadPool[TPSIZE+1];
-	threads = new UiSetPair(TPSIZE);
-	tMap = new IdMap(TPSIZE);
-	//setup sockets
-	tcpSockInt = Np4d::streamSocket();
-	tcpSockExt = Np4d::streamSocket();
-	sock = Np4d::datagramSocket();
-	if(sock < 0) return false;
-	if(tcpSockInt < 0) return false;
-	if(tcpSockExt < 0) return false;
-	bool status = Np4d::bind4d(tcpSockInt,intIp,LISTEN_PORT) &&
-		      Np4d::bind4d(tcpSockExt,extIp,LISTEN_PORT);
-	if (!status) return false;
-	status = Np4d::bind4d(sock,intIp,LISTEN_PORT);
-	if (!status) return false;
-	
-	connect();
-	usleep(1000000); //sleep for one second
+bool init(ipa_t nmIp1, ipa_t myIp1) {
+	nmIp = nmIp1; myIp = myIp1;
 
-	pthread_attr_t attr;
-	pthread_attr_init(&attr);
-	pthread_attr_setstacksize(&attr,4*PTHREAD_STACK_MIN);
-	size_t stacksize;
-	pthread_attr_getstacksize(&attr,&stacksize);
-	cerr << "min stack size=" << 4*PTHREAD_STACK_MIN << endl;
-	cerr << "threads in pool have stacksize=" << stacksize << endl;
-	if (stacksize != 4*PTHREAD_STACK_MIN)
-		fatal("init: can't set stack size");
-	for (int t = 1; t <= TPSIZE; t++) {
-		if (!pool[t].qp.in.init() || !pool[t].qp.out.init())
-			fatal("init: can't initialize thread queues\n");
-		pthread_attr_t attr;
-		pthread_attr_init(&attr);
-		pthread_attr_setstacksize(&attr,PTHREAD_STACK_MIN); //stack size 8 kB
-                if (pthread_create(&pool[t].th,&attr,handler,
-		    (void *) &pool[t]) != 0)
-			fatal("init: can't create thread pool");
-        }
-	return Np4d::listen4d(tcpSockInt)
-		&& Np4d::nonblock(tcpSockInt)
-		&& Np4d::listen4d(tcpSockExt)
-		&& Np4d::nonblock(tcpSockExt)
-		&& Np4d::nonblock(sock);
-}
+	ps = new PacketStoreTs(10000);
+	cliTbl = new ClientTable(10000,30000);
+	logger = new Logger();
 
-/** Writes information about connection control packets to a file
- *  @param cp is a control packet with information to write into an accounting file
- */
-void writeToAcctFile(CtlPkt cp) {
-	if(acctFileStream.good()) {
-		string s;
-		if(cp.getCpType() ==NEW_CLIENT && cp.getRrType() == POS_REPLY) {
-			acctFileStream << Misc::getTimeNs() << " Client "
-			  << Forest::fAdr2string(cp.getAttr(CLIENT_ADR),s);
-			acctFileStream << " added to router "
-			  << Forest::fAdr2string(cp.getAttr(RTR_ADR),s);
-			acctFileStream << endl;
-		} else if(cp.getCpType() == CLIENT_CONNECT) {
-			acctFileStream << Misc::getTimeNs() << " Client "
-			  << Forest::fAdr2string(cp.getAttr(CLIENT_ADR),s);
-			acctFileStream << " connected to router "
-			  << Forest::fAdr2string(cp.getAttr(RTR_ADR),s);
-			acctFileStream << endl;
-		} else if(cp.getCpType() == CLIENT_DISCONNECT) {
-			acctFileStream << Misc::getTimeNs() << " Client "
-			  << Forest::fAdr2string(cp.getAttr(CLIENT_ADR),s);
-			acctFileStream << " disconnected from router "
-			  << Forest::fAdr2string(cp.getAttr(RTR_ADR),s);
-			acctFileStream << endl;
-		} else {
-			acctFileStream << "Unrecognized control packet" << endl;
-		}
-	} else {
-		cerr << "accounting file could not open" << endl;
+	uint64_t nonce;
+	if (!bootMe(nmIp, myIp, nmAdr, myAdr, rtrAdr, rtrIp, rtrPort, nonce)) {
+		return false;
 	}
-}
 
-void send(int p) {
-	int length = ps->getHeader(p).getLength();
-	ps->pack(p);
-	int rv = Np4d::sendto4d(sock,(void *) ps->getBuffer(p),length,
-		rtrIp, Forest::ROUTER_PORT);
-	if (rv == -1) fatal("send: failure in sendto");
-	ps->free(p);
-}
+	sub = new Substrate(myAdr, myIp, rtrAdr, rtrIp, rtrPort, nonce,
+			    500,handler,0,Forest::CM_PORT,ps,logger);
+	if (!sub->init()) return false;
+	sub->setRtrReady(true);
 
-/** Finds the router address of the router based on IP prefix
- *  @param cliIp is the ip of the client proxy
- *  @param rtrAdr is the address of the router associated with this IP prefix
- *  @return true if there was an IP prefix found, false otherwise
- */
-bool findCliRtr(ipa_t cliIp, fAdr_t& rtrAdr, ipa_t& rtrIp) {
-	string cip;
-	Np4d::ip2string(cliIp,cip);
-	for(unsigned int i = 0; i < (unsigned int) numPrefixes; ++i) {
-		string ip = prefixes[i].prefix;
-		unsigned int j = 0;
-		while (j < ip.size() && j < cip.size()) {
-			if (ip[j] != '*' && cip[j] != ip[j]) break;
-			if (ip[j] == '*' ||
-			    j+1 == ip.size() && j+1 == cip.size()) {
-				rtrAdr = prefixes[i].rtrAdr;
-				rtrIp  = prefixes[i].rtrIp;
-				return true;
-			}
-			j++;
-		}
+	// read client data and open accounting file
+	ifstream ifs("clientData");
+	if (!ifs.good() || !cliTbl->read(ifs)) {
+		logger->log("ClientMgr::init: could not read clientData "
+			    "file",2);
+		return false;
 	}
-	return false;
-}
-
-/** Reads the prefix file
- *  @param filename is the name of the prefix file
- *  @return true on success, false otherwise
- */
-bool readPrefixInfo(char filename[]) {
-	ifstream ifs; ifs.open(filename);
-	if(ifs.fail()) return false;
-	Misc::skipBlank(ifs);
-	int i = 0;
-	while(!ifs.eof()) {
-		string pfix, rtrIpStr; fAdr_t rtrAdr; ipa_t rtrIp;
-		ifs >> pfix;
-		if(!Forest::readForestAdr(ifs,rtrAdr))
-			break;
-		ifs >> rtrIpStr;
-		rtrIp = Np4d::ipAddress(rtrIpStr.c_str());
-		prefixes[i].prefix = pfix;
-		prefixes[i].rtrAdr = rtrAdr;
-		prefixes[i].rtrIp  = rtrIp;
-		Misc::skipBlank(ifs);
-		i++;
+	acctFile.open("acctRecords");
+	if (!acctFile.good()) {
+		logger->log("ClientMgr::init: could not open acctRecords "
+			   "file",2);
+		return false;
 	}
-	numPrefixes = i;
-	cout << "read address info for " << numPrefixes << " prefixes" << endl;
 	return true;
 }
 
-/** run repeatedly tries to initialize any new avatars until the time runs out
- *@param finTime is the length of time that this should run
- *
- */
-void* run(void* finishTime) {
-	uint64_t now = Misc::getTimeNs();
-	uint64_t finTime = *((uint32_t *) finishTime);
-	finTime *= 1000000000;
-	while (finTime == 0 || now <= finTime) {
-		bool nothing2do = true;
-		ipa_t avIp; ipp_t port;
-		int avaSock = Np4d::accept4d(tcpSockExt,avIp,port);
-		if(avaSock <= 0) avaSock = Np4d::accept4d(tcpSockInt,avIp,port);
-		if(avaSock > 0) {
-			nothing2do = false;
-			int t = threads->firstOut();
-			if(t == 0) fatal("ClientMgr::run: out of threads");
-			threads->swap(t);
-			pool[t].ipa = avIp;
-			pool[t].sock = avaSock;
-			pool[t].seqNum = ++seqNum;
-			pool[t].qp.in.enq(1); //TCP connection set up
-		}
-		//first receieve packets and send to threads
-		string proxyString;
-		int p = recvFromForest(proxyString);
-		if (p > 0) {
-			nothing2do = false;
-			handleIncoming(p);	
-		} else if(p < 0) {
-			//message from proxy
-			istringstream iss(proxyString);
-			string ipStr;
-			ipp_t proxUdp, proxTcp;
-			iss >> ipStr >> proxUdp >> proxTcp;
-			ipa_t proxIp = Np4d::ipAddress(ipStr.c_str());
-			ipa_t rtrIp = -1; fAdr_t rtrAdr = -1;
-			if(!findCliRtr(proxIp,rtrAdr,rtrIp)) {
-				cerr << "no proxy/ip prefix match\n";
-			}
-			proxies[proxyIndex].pip = proxIp;
-			proxies[proxyIndex].udpPort = proxUdp;
-			proxies[proxyIndex].tcpPort = proxTcp;
-			if(proxyQueues->find(rtrAdr)==proxyQueues->end()) {
-				(*proxyQueues)[rtrAdr] = new Queue(10);
-				((proxyQueues->find(rtrAdr))->second)->init();
-			}
-			Queue* q = (proxyQueues->find(rtrAdr))->second;
-			q->enq(proxyIndex++);
-			//send back, but not as ctl pkt
-			string rtrIpStr; Np4d::ip2string(rtrIp,rtrIpStr);
-			string rtrAdrStr; Forest::fAdr2string(rtrAdr,rtrAdrStr);
-			string buf = rtrIpStr + " " + rtrAdrStr;
-			//send that buf
-			Np4d::sendto4d(sock,(void*)buf.c_str(),buf.size()+1,proxIp,proxUdp);
-		} else {
-			ps->free(p);
-		}
-		//now do some sending
-		for (int t = threads->firstIn(); t != 0;
-			t = threads->nextIn(t)) {
-			if(pool[t].qp.out.empty()) continue;
-			nothing2do = false;
-			int p1 = pool[t].qp.out.deq();
-			if (p1 == 0) { //thread is done
-				pool[t].qp.in.reset();
-				threads->swap(t);
-				close(pool[t].sock);
-				continue;
-			}
-			PacketHeader& h1 = ps->getHeader(p1);
-			CtlPkt cp1;
-			cp1.unpack(ps->getPayload(p1),
-				   h1.getLength()-Forest::OVERHEAD);
-			if (cp1.getSeqNum() == 1) {
-				// means this is a repeat of a pending
-				// outgoing request
-				if (tMap->validId(t)) {
-					cp1.setSeqNum(tMap->getKey(t));
-		 		} else {
-					// in this case, reply has arrived
-					// so, suppress duplicate request
-					ps->free(p1); continue;
-				}
-			} else {
-				if (tMap->validId(t))
-					tMap->dropPair(tMap->getKey(t));
-				tMap->addPair(seqNum,t);
-				cp1.setSeqNum(seqNum++);
-			}
-			cp1.pack(ps->getPayload(p1));
-			h1.payErrUpdate(ps->getBuffer(p1));
-			send(p1);
-		}
-		if(nothing2do && threads->firstIn() == 0) usleep(1000);
-		now = Misc::getTimeNs();
-	}
-	disconnect();
-	pthread_exit(NULL);
-}
+bool bootMe(ipa_t nmIp, ipa_t myIp, fAdr_t& nmAdr, fAdr_t& myAdr,
+	    fAdr_t& rtrAdr, ipa_t& rtrIp, ipp_t& rtrPort, uint64_t& nonce) {
 
-void handleIncoming(int p) {
-	PacketHeader& h = ps->getHeader(p);
-	if(h.getPtype() == NET_SIG) {
-		CtlPkt cp;
-		cp.unpack(ps->getPayload(p),
-			h.getLength()-Forest::OVERHEAD);
-		if (cp.getCpType() == NEW_CLIENT) {
-			writeToAcctFile(cp);
-			int t = tMap->getId(cp.getSeqNum());
-			if (t != 0) {
-				pool[t].seqNum = 0;
-				pool[t].qp.in.enq(p);
-// might want to print error message in this case
-			} else ps->free(p);
-		} 
-		else if(cp.getRrType() == REQUEST &&
-		    (cp.getCpType() == CLIENT_CONNECT ||
-		     cp.getCpType() == CLIENT_DISCONNECT)) {
-			writeToAcctFile(cp);
-			CtlPkt cp2(cp.getCpType(),POS_REPLY,cp.getSeqNum());
-			int p1 = ps->alloc();
-			if (p1 == 0) fatal("packetstore out of packets!");
-			PacketHeader & h1 = ps->getHeader(p1);
-			h1.setDstAdr(h.getSrcAdr());
-			h1.setSrcAdr(h.getDstAdr());
-			h1.setFlags(0); h1.setComtree(Forest::NET_SIG_COMT);
-			int len = cp2.pack(ps->getPayload(p1));
-			h1.setLength(Forest::OVERHEAD + len);
-			h1.setPtype(NET_SIG);
-			h1.pack(ps->getBuffer(p1));
-			send(p1);
-		/*} else if(cp.getRrType() == NEG_REPLY &&
-			    h.getSrcAdr()==netMgrAdr) {
-			string s;
-			cerr << "Negative reply from NetMgr:" << endl
-			     << cp.toString(s);
-		*/} else {
-			string s;
-			cerr << "unrecognized ctl pkt\n" << endl
-			     << cp.toString(s);
-			ps->free(p);
-		}
-	} else {
-		ps->free(p);
-	}
-}
-/*Thread dispatcher method
- * @param tp is the threadpool struct for this specific thread/avatar
- */
-void* handler(void * tp) {
-	Queue& inQ = (((ThreadPool *) tp)->qp).in;
-	Queue& outQ = (((ThreadPool *) tp)->qp).out;
-	while (true) {
-		int start = inQ.deq();
-		if (start != 1) {
-			string s;
-			PacketHeader& h = ps->getHeader(start);
-			cerr << h.toString(ps->getBuffer(start),s)
-			     << "handler: Thread synchronization error, "
-				"abandoning this attempt\n";
-			outQ.enq(0); //signal completion to main thread
-			close(avaSock);
-			continue;
-		}
-cerr << "deq'd\n";
-		int aip = ((ThreadPool *) tp)->ipa;
-		int avaSock = ((ThreadPool *) tp)->sock;
-		int seqNum = ((ThreadPool *) tp)->seqNum;
-		char buf[100];
-		uint32_t port;
-	        Np4d::recvBufBlock(avaSock,buf,100);
-		istringstream iss(buf);
-		string uname, pword, proxy, cliIpStr;
-		iss >> uname >> pword >> port >> cliIpStr >> proxy;
-		if(!checkUser(uname,pword)) {
-			cerr << "invalid username/password\n";
-			Np4d::sendInt(avaSock,-1);
-			outQ.enq(0);
-			close(avaSock);
-			continue;
-		}
-		if(Np4d::ipAddress(cliIpStr.c_str())) aip = Np4d::ipAddress(cliIpStr.c_str());
-		bool needProxy = (proxy=="proxy");
-		CtlPkt cp2(NEW_CLIENT,REQUEST,seqNum);
-		fAdr_t rtrAdr; ipa_t rtrIp;
-		if(!findCliRtr(aip,rtrAdr,rtrIp)) {
-			cerr << "client did not match ip prefix\n";
-			Np4d::sendInt(avaSock,-1);
-			outQ.enq(0);
-			close(avaSock);
-			continue;
-		}
-		proxyStruct pro;
-		if(needProxy) {
-			int proxyIndex = ((proxyQueues->find(rtrAdr))->second)->deq();
-			pro = proxies[proxyIndex];
-		}
-		cp2.setAttr(CLIENT_IP,(needProxy ? pro.pip : aip));
-		cp2.setAttr(CLIENT_PORT,(needProxy ? pro.udpPort : (ipp_t)port));
-		int reply = sendCtlPkt(cp2,Forest::NET_SIG_COMT,
-					netMgrAdr,inQ,outQ);
-		if (reply == NORESPONSE) {
-			// abandon this attempt
-			string s;
-			cerr << "handler: no reply from net manager to\n"
-			     << cp2.toString(s);
-			Np4d::sendInt(avaSock,-1);
-			outQ.enq(0); //signal completion to main thread
-			close(avaSock);
-			continue;
-		}
-		//get response
-		PacketHeader &h3 = ps->getHeader(reply);
-		CtlPkt cp3;
-		cp3.unpack(ps->getPayload(reply),
-			   h3.getLength()-Forest::OVERHEAD);
-		if(cp3.getCpType() == NEW_CLIENT &&
-		    cp3.getRrType() == POS_REPLY) {
-			fAdr_t rtrAdr = cp3.getAttr(RTR_ADR);
-			ipa_t rtrIp = cp3.getAttr(RTR_IP);
-			fAdr_t cliAdr = cp3.getAttr(CLIENT_ADR);
-			//send via TCP
-			Np4d::sendInt(avaSock,rtrAdr);
-			Np4d::sendInt(avaSock,cliAdr);
-			if(needProxy) {
-				Np4d::sendInt(avaSock,pro.pip);
-				Np4d::sendInt(avaSock,pro.tcpPort);
-				Np4d::sendInt(avaSock,pro.udpPort);
-				Np4d::sendInt(avaSock,CC_Adr);
-			} else {
-				Np4d::sendInt(avaSock,rtrIp);
-				Np4d::sendInt(avaSock,CC_Adr);
-			}
-		} else if(cp3.getCpType() == NEW_CLIENT &&
-		    	  cp3.getRrType() == NEG_REPLY) { //send -1 to client
-			cerr << "Client could not connect:" << cp3.getErrMsg()
-			     << endl;
-			Np4d::sendInt(avaSock,-1);
-		} else {
-			string s;
-			cerr << h3.toString(ps->getBuffer(reply),s);
-			cerr << cp3.toString(s);
-			cerr << "handler: unrecognized ctl pkt\n";
-		}
-		close(avaSock);
-		ps->free(reply);
-		outQ.enq(0); //signal completion to main thread
-	}
-}
-
-/** Send initial connect packet to forest router
- *  Uses comtree 1, which is for user signalling.
- */
-void connect() {
-        packet p = ps->alloc();
-	if(p == 0) fatal("Couldn't allocate space");
-        PacketHeader& h = ps->getHeader(p);
-        h.setLength(4*(5+1)); h.setPtype(CONNECT); h.setFlags(0);
-        h.setComtree(Forest::CLIENT_CON_COMT);
-	h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
-        send(p);
-	ps->free(p);
-}
-/** Send final disconnect packet to forest router
- */
-void disconnect() {
-        packet p = ps->alloc();
-        PacketHeader& h = ps->getHeader(p);
-
-        h.setLength(4*(5+1)); h.setPtype(DISCONNECT); h.setFlags(0);
-        h.setComtree(Forest::CLIENT_CON_COMT);
-	h.setSrcAdr(myAdr); h.setDstAdr(rtrAdr);
-
-        send(p);
-	ps->free(p);
-}
-/**
- * Receives information over the forest socket
- *
- *@return 0 if nothing is received, a packet otherwise
- */
-int recvFromForest(string& proxyString) {
-        int p = ps->alloc();
-        if (p == 0) return 0;
-        buffer_t& b = ps->getBuffer(p);
-        int nbytes = Np4d::recv4d(sock,&b[0],1500);
-        if (nbytes < 0) { ps->free(p); return 0; }
-	if(b[0] == 0) {//not a forest pkt, but a proxy pkt
-		proxyString = (string)((char *) (&b[1]));
-		ps->free(p);
-		return -1;
-	}
-        ps->unpack(p);
-        PacketHeader& h = ps->getHeader(p);
-        CtlPkt cp;
-        cp.unpack(ps->getPayload(p), h.getLength() - (Forest::OVERHEAD));
-	return p;
-}
-
-/** Send a control packet multiple times before giving up.
- *  This method makes a copy of the original and sends the copy
- *  back to the main thread. If no reply is received after 1 second,
- *  it tries again; it makes a total of three attempts before giving up.
- *  @param p is the packet number of the packet to be sent; the header
- *  for p is assumed to be unpacked
- *  @param cp is the control packet structure for p (already unpacked)
- *  @param inQ is the queue coming from the main thread
- *  @param outQ is the queue going back to the main thread
- *  @return the packet number for the reply packet, or -1 if there
- *  was no reply
- */
-int sendAndWait(int p, CtlPkt& cp, Queue& inQ, Queue& outQ) {
-	PacketHeader& h = ps->getHeader(p);
-	h.setSrcAdr(myAdr); ps->pack(p);
-
-	// make copy of packet and send the copy
-	int copy = ps->fullCopy(p);
-	if (copy == 0) {
-		cerr << "sendAndWait: no packets left in packet store\n";
-		return NORESPONSE;
-	}
-	outQ.enq(copy);
-
-	for (int i = 1; i < 3; i++) {
-		int reply = inQ.deq(2000000000); // 2 sec timeout
-		if (reply == Queue::TIMEOUT) {
-			// no reply, make new copy and send
-			int retry = ps->fullCopy(p);
-			if (retry == 0) {
-				cerr << "sendAndWait: no packets "
-					"left in packet store\n";
-				return NORESPONSE;
-			}
-			cp.setSeqNum(1);        // tag retry as a repeat
-                        cp.pack(ps->getPayload(retry));
-                        PacketHeader& hr = ps->getHeader(retry);
-                        hr.payErrUpdate(ps->getBuffer(retry));
-			outQ.enq(retry);
-		} else {
-			return reply;
-		}
-	}
-	return NORESPONSE;
-}
-
-/** Send a control packet back through the main thread.
- *  The control packet object is assumed to be already initialized.
- *  If it is a reply packet, it is packed into a packet object whose index is
- *  then placed in the outQ. If it is a request packet, it is sent similarly
- *  and then the method waits for a reply. If the reply is not received
- *  after one second, it tries again. After three attempts, it gives up.
- *  @param cp is the pre-formatted control packet
- *  @param comt is the comtree on which it is to be sent
- *  @param dest is the destination address to which it is to be sent
- *  @param inQ is the thread's input queue from the main thread
- *  @param outQ is the thread's output queue back to the main thread
- *  @return the packet number of the reply, when there is one, and 0
- *  on on error, or if there is no reply.
- */
-int sendCtlPkt(CtlPkt& cp, comt_t comt, fAdr_t dest, Queue& inQ, Queue& outQ) {
-        int p = ps->alloc();
-        if (p == 0) {
-                cerr << "sendCtlPkt: no packets left in packet store\n";
-                return 0;
-        }
-	// set default seq# for requests, tells main thread to use "next" seq#
-	if (cp.getRrType() == REQUEST) cp.setSeqNum(0);
-        int plen = cp.pack(ps->getPayload(p));
-        if (plen == 0) {
-		string s;
-                cerr << "sendCtlPkt: packing error\n" << cp.toString(s);
-                ps->free(p);
-                return 0;
-        }
-        PacketHeader& h = ps->getHeader(p);
-        h.setLength(plen + Forest::OVERHEAD);
-        h.setPtype(NET_SIG);
-        h.setFlags(0);
-        h.setComtree(comt);
-        h.setDstAdr(dest);
-        h.setSrcAdr(myAdr);
-        h.pack(ps->getBuffer(p));
-
-        if (cp.getRrType() != REQUEST) {
-                outQ.enq(p); return 0;
-        }
-        int reply = sendAndWait(p,cp,inQ,outQ);
-        ps->free(p);
-        return reply;
-}
-
-bool checkUser(string &user, string &pass) {
-	int sqlSock = Np4d::streamSocket();
-	ipp_t sqlPort = 30190;
-	if(!Np4d::bind4d(sqlSock,intIp,0) ||
-	   !Np4d::connect4d(sqlSock,sqlIp,sqlPort)) {
-		cerr << "could not connect to sql proxy\n";
+cerr << "starting bootMe\n";
+	// open boot socket 
+	int bootSock = Np4d::datagramSocket();
+	if (bootSock < 0) return false;
+	if (!Np4d::bind4d(bootSock,myIp,0) || !Np4d::nonblock(bootSock)) {
+		close(bootSock);
 		return false;
 	}
-	string sql = "SELECT pass FROM users WHERE user='" + user + "'";
-	Np4d::sendBuf(sqlSock,(char*)sql.c_str(),sql.size()+1);
-	char * ret = new char[100];
-	Np4d::recvBuf(sqlSock,ret,100);
-	string retStr = string(ret);
-	if(retStr==pass) return true;
+
+	// setup boot leaf packet to net manager
+	Packet p; buffer_t buf1; p.buffer = &buf1;
+	CtlPkt cp(CtlPkt::BOOT_LEAF,CtlPkt::REQUEST,1,p.payload());
+	int plen = cp.pack();
+	if (plen == 0) { close(bootSock); return false; }
+	p.length = Forest::OVERHEAD + plen; p.type = Forest::NET_SIG;
+	p.flags = 0; p.srcAdr = p.dstAdr = 0; p.comtree = Forest::NET_SIG_COMT;
+	p.pack();
+
+	// setup reply packet
+	Packet reply; buffer_t buf2; reply.buffer = &buf2;
+	CtlPkt repCp;
+
+	int resendTime = Misc::getTime();
+	ipa_t srcIp; ipp_t srcPort;
+string s;
+	while (true) {
+		int now = Misc::getTime();
+		if (now > resendTime) {
+cerr << "sending boot request\n";
+cerr << p.toString(s);
+			if (Np4d::sendto4d(bootSock,(void *) p.buffer, p.length,
+					   nmIp,Forest::NM_PORT) == -1) {
+				close(bootSock); return false;
+			}
+			resendTime += 1000000; // retry after 1 second
+		}
+		int nbytes = Np4d::recvfrom4d(bootSock,reply.buffer,1500,
+					      srcIp, srcPort);
+		if (nbytes < 0) { usleep(100000); continue; }
+		reply.unpack();
+cerr << "got reply\n";
+cerr << reply.toString(s);
+
+		// do some checking
+		if (srcIp != nmIp || reply.type != Forest::NET_SIG) {
+			logger->log("unexpected response to boot request",
+				     2,reply);
+			close(bootSock); return false;
+		}
+		repCp.reset(reply);
+		if (repCp.type != CtlPkt::CONFIG_LEAF ||
+		    repCp.mode != CtlPkt::REQUEST) {
+			logger->log("unexpected response from NetMgr",2,reply);
+			close(bootSock); return false;
+		}
+
+		// unpack data from packet
+		myAdr = repCp.adr1; rtrAdr = repCp.adr2;
+		rtrIp = repCp.ip1; rtrPort = repCp.port1;
+		nonce = repCp.nonce;
+		nmAdr = reply.srcAdr;
+
+		// send positive reply
+		repCp.reset(CtlPkt::CONFIG_LEAF,CtlPkt::POS_REPLY,repCp.seqNum,
+			    repCp.payload);
+		plen = repCp.pack();
+		if (plen == 0) { close(bootSock); return false; }
+		reply.length = Forest::OVERHEAD + plen; 
+		reply.srcAdr = myAdr; reply.dstAdr = nmAdr;
+		reply.pack();
+		if (Np4d::sendto4d(bootSock,(void *) reply.buffer, reply.length,
+				   nmIp,Forest::NM_PORT) == -1) {
+			close(bootSock); return false;
+		}
+		break; // proceed to next step
+	}
+	// we have the configuration information, now just wait for
+	// final ack
+	while (true) {
+		int now = Misc::getTime();
+		if (now > resendTime) {
+			if (Np4d::sendto4d(bootSock,(void *) p.buffer, p.length,
+					   nmIp,Forest::NM_PORT) == -1) {
+				close(bootSock); return false;
+			}
+			resendTime += 1000000; // retry after 1 second
+		}
+		int nbytes = Np4d::recvfrom4d(bootSock,reply.buffer,1500,
+					      srcIp, srcPort);
+		if (nbytes < 0) { usleep(100000); continue; }
+		reply.unpack();
+		if (srcIp != nmIp || reply.type != Forest::NET_SIG) {
+			logger->log("unexpected response to boot request",
+				     2,reply);
+			close(bootSock); return false;
+		}
+		// do some checking
+		repCp.reset(reply);
+		if (repCp.type == CtlPkt::CONFIG_LEAF &&
+		    repCp.mode == CtlPkt::REQUEST) {
+			// our reply must have been lost, send it again
+			repCp.reset(CtlPkt::CONFIG_LEAF,CtlPkt::POS_REPLY,
+				    repCp.seqNum, repCp.payload);
+			plen = repCp.pack();
+			if (plen == 0) { close(bootSock); return false; }
+			reply.length = Forest::OVERHEAD + plen; 
+			reply.srcAdr = myAdr; reply.dstAdr = nmAdr;
+			reply.pack();
+			if (Np4d::sendto4d(bootSock,(void *) reply.buffer,
+					   reply.length,nmIp,Forest::NM_PORT)
+					   == -1) {
+				close(bootSock); return false;
+			}
+		} else if (repCp.type != CtlPkt::BOOT_LEAF ||
+			   repCp.mode != CtlPkt::POS_REPLY) {
+			logger->log("unexpected response from NetMgr",
+				     2,reply);
+			close(bootSock); return false;
+		}
+		break; // success
+	}
+	close(bootSock); return true;
+}
+
+/** Control packet handler.
+ *  This method is run as a separate thread and does not terminate
+ *  until the process does. It communicates with the main thread
+ *  through a pair of queues, passing packet numbers back and forth
+ *  across the thread boundary. When a packet number is passed to
+ *  a handler, the handler "owns" the corresponding packet and can
+ *  read/write it without locking. The handler is required to free any
+ *  packets that it no longer needs to the packet store.
+ *  When the handler has completed the requested operation, it sends
+ *  a 0 value back to the main thread, signalling that it is available
+ *  to handle another task.
+ *  If the main thread passes a negative number through the queue,
+ *  it is interpreted as a negated socket number, for an accepted
+ *  stream socket to a remote display application.
+ *  @param qp is a pair of queues; one is the input queue to the
+ *  handler, the other is its output queue
+ */
+void* handler(void *qp) {
+	Queue& inq  = ((Substrate::QueuePair *) qp)->in;
+	Queue& outq = ((Substrate::QueuePair *) qp)->out;
+	CpHandler cph(&inq, &outq, myAdr, logger, ps);
+
+	while (true) {
+		pktx px = inq.deq();
+		bool success = false;
+		if (px < 0) {
+			// in this case, p is really a negated socket number
+			// for a remote client
+			int sock = -px;
+			success = handleClient(sock, cph);
+		} else {
+			Packet& p = ps->getPacket(px);
+			CtlPkt cp(p.payload(),p.length - Forest::OVERHEAD);
+			cp.unpack();
+			switch (cp.type) {
+			case CtlPkt::CLIENT_CONNECT: 
+			case CtlPkt::CLIENT_DISCONNECT: 
+				success = handleConnDisc(px, cp, cph);
+				break;
+			default:
+				cph.errReply(px,cp,"invalid control packet "
+						   "type for ClientMgr");
+				break;
+			}
+			if (!success) {
+				string s;
+				cerr << "handler: operation failed\n"
+				     << p.toString(s);
+			}
+		}
+		ps->free(px); // release px now that we're done
+		outq.enq(0); // signal completion to main thread
+	}
+}
+
+/** Handle a connection from a client.
+ *  @param sock is a socket number for an open stream socket
+ *  @return true if the interaction proceeds normally, followed
+ *  by a normal close; return false if an error occurs
+ */
+bool handleClient(int sock,CpHandler& cph) {
+	int clx; string clientName;
+	NetBuffer buf(sock,1024);
+	clx = handleLogin(sock,buf,clientName);
+	if (clx == 0) { close(sock); return true; }
+	if (clientName == "admin") {
+		handleAdmin(sock,buf);
+		cliTbl->releaseClient(clx);
+		close(sock); return true;
+	}
+	// process new session request - client is now locked
+	string s1;
+	if (!buf.readAlphas(s1) || s1 != "newSession") {
+		Np4d::sendString(sock,"unrecognized input\noverAndOut\n");
+		cliTbl->releaseClient(clx);
+		close(sock); return true;
+	}
+	RateSpec rs;
+	if (buf.verify(':')) {
+		if (readRates(buf,rs) || !buf.nextLine()) {
+			Np4d::sendString(sock,"unrecognized input\n"
+					      "overAndOut\n");
+			cliTbl->releaseClient(clx);
+			close(sock); return true;
+		}
+	} else {
+		if (buf.nextLine()) {
+			rs = cliTbl->getDefRates(clx);
+		} else {
+			cliTbl->releaseClient(clx);
+			Np4d::sendString(sock,"unrecognized input\n"
+					      "overAndOut\n");
+			close(sock); return true;
+		}
+	}
+	if (!buf.readLine(s1) || s1 != "over") {
+		cliTbl->releaseClient(clx);
+		Np4d::sendString(sock,"unrecognized input\noverAndOut\n");
+		close(sock); return true;
+	}
+	// make sure we have sufficient capacity
+	bool ok = rs.leq(cliTbl->getAvailRates(clx));
+	if (!ok) {
+		Np4d::sendString(sock,"session rate exceeds available "
+				      "capacity\noverAndOut\n");
+		cliTbl->releaseClient(clx);
+		close(sock); return true;
+	}
+
+	// proceed with new session setup
+	ipa_t clientIp = Np4d::getSockIp(sock);
+	CtlPkt repCp;
+	pktx reply = cph.newSession(nmAdr, clientIp, rs, repCp);
+	if (reply == 0) {
+		Np4d::sendString(sock,"cannot complete login: "
+				 "NetMgr never responded\noverAndOut\n");
+		close(sock);
+		cliTbl->releaseClient(clx);
+		return false;
+	}
+	if (repCp.mode != CtlPkt::POS_REPLY) {
+		Np4d::sendString(sock,"cannot complete login: "
+				 "NetMgr failed (" + repCp.errMsg +
+				 ")\noverAndOut\n");
+		ps->free(reply); close(sock);
+		cliTbl->releaseClient(clx);
+		return false;
+	}
+
+	int sess = cliTbl->addSession(repCp.adr1, repCp.adr2, clx);
+	if (sess == 0) {
+		Np4d::sendString(sock,"cannot complete login: "
+				 "could not create session record\n"
+				 ")\noverAndOut\n");
+		cliTbl->releaseClient(clx);
+		close(sock); return false;
+	}
+	cliTbl->setState(sess, ClientTable::PENDING);
+	// set session information
+	const string& cliName = cliTbl->getClientName(clx);
+	cliTbl->setClientIp(sess,clientIp);
+	cliTbl->setRouterAdr(sess,repCp.adr2);
+	cliTbl->setState(sess,ClientTable::PENDING);
+	cliTbl->setStartTime(sess,Misc::currentTime());
+	cliTbl->getAvailRates(sess).subtract(rs);
+	cliTbl->releaseClient(clx);
+
+	// output accounting record
+	writeAcctRecord(cliName, repCp.adr1, clientIp, repCp.adr2, NEWSESSION);
+
+	// send information back to client
+	stringstream ss; string s;
+	ss << "yourAddress: " << Forest::fAdr2string(repCp.adr1,s) << endl;
+	ss << "yourRouter: (" << Np4d::ip2string(repCp.ip1,s)
+	   << "," << repCp.port1 << ",";
+	ss << Forest::fAdr2string(repCp.adr2,s) << ")\n";
+	ss << "comtCtlAddress: " << Forest::fAdr2string(repCp.adr3,s) << endl;
+	ss << "connectNonce: " << repCp.nonce << "\noverAndOut\n";
+cerr << "client manager response\n" << ss.str();
+	Np4d::sendString(sock,ss.str());
+
+	ps->free(reply); close(sock); return true;
+}
+
+/** Carry out login dialog and verify that client/password is correct.
+ *  @param sock is an open socket to the client
+ *  @param buf is a reference to a NetBuffer bound to the socket
+ *  @param clientName is a reference to a string in which the client name
+ *  is returned
+ *  @param return the client's index in the client table, if the operation
+ *  succeeds (including password verification), else 0; on a successful
+ *  return the client's entry in the table is locked; the caller must
+ *  releae it when done
+ */
+int handleLogin(int sock, NetBuffer& buf, string& clientName) {
+	// process up to 3 login attempts
+int numFailures = 0;
+	while (true) {
+		string client, pwd, s0,s1, s2, s3;
+		// expected form for login
+		// Forest-login-v1
+		// login: clientName
+		// password: clientPassword
+		// over
+		// newSession: (50,1000,25,500)
+		// overAndOut
+		if (buf.readWord(s0) && s0 == "Forest-login-v1" &&
+		    buf.nextLine() &&
+		    buf.readAlphas(s1) && s1 == "login" && buf.verify(':') &&
+		    buf.readAlphas(client) && buf.nextLine() &&
+		    buf.readWord(s2) && s2 == "password" && buf.verify(':') &&
+		    buf.readAlphas(pwd) && buf.nextLine() &&
+		    buf.readAlphas(s3) && s3 == "over") {
+			int clx = cliTbl->getClient(client); // locks entry
+			if (clx != 0 && cliTbl->checkPassword(clx,pwd)) {
+				Np4d::sendString(sock,"login successful\n"
+						      "over\n");
+				return clx;
+			}
+			if (clx != 0) cliTbl->releaseClient(clx);
+		} else {
+			Np4d::sendString(sock,"misformatted login dialog\n"
+					      "overAndOut\n");
+			return 0;
+		}
+		Np4d::sendString(sock,"login failed: try again\nover\n");
+		numFailures++;
+		if (numFailures >= 3) {
+			Np4d::sendString(sock,"login failed: you're done\n"
+				 	 "overAndOut\n");
+			return 0;
+		}
+	}
+}
+
+bool readRates(NetBuffer& buf, RateSpec& rs) {
+	int bru, brd, pru, prd;
+	if (buf.verify('(')  &&
+	    buf.readInt(bru) && buf.verify(',') &&
+	    buf.readInt(brd) && buf.verify(',') &&
+	    buf.readInt(pru) && buf.verify(',') &&
+	    buf.readInt(prd) && buf.verify(')')) {
+		rs.set(bru,brd,pru,prd); return true;
+	}
 	return false;
 }
+
+/** Handle an administrative login session.
+ *  Supports commands for adding clients and modifying parameters.
+ */
+void handleAdmin(int sock, NetBuffer& buf) {
+	string cmd;
+	while (true) {
+		Np4d::sendString(sock,"admin: ");
+		buf.readAlphas(cmd);
+		if (cmd == "addClient" && buf.verify(':')) {
+			addClient(sock,buf);
+		} else if (cmd == "removeClient" && buf.verify(':')) {
+			removeClient(sock,buf);
+		} else if (cmd == "modPassword" && buf.verify(':')) {
+			modPassword(sock,buf);
+		} else if (cmd == "modRealName" && buf.verify(':')) {
+			modRealName(sock,buf);
+		} else if (cmd == "modEmail" && buf.verify(':')) {
+			modEmail(sock,buf);
+		} else if (cmd == "modDefRates" && buf.verify(':')) {
+			modDefRates(sock,buf);
+		} else if (cmd == "modTotalRates" && buf.verify(':')) {
+			modTotalRates(sock,buf);
+		} else if (cmd == "showClient" && buf.verify(':')) {
+			showClient(sock,buf);
+		} else if (cmd == "quit") {
+			buf.nextLine(); break;
+		}
+		if (!buf.nextLine()) break;
+	}
+}
+
+void addClient(int sock, NetBuffer& buf) {
+	string cname, pwd, realName, email;
+	RateSpec defRates, totalRates;
+
+	if (buf.readName(cname) && buf.readWord(pwd) && 
+	    buf.readString(realName) && buf.readWord(email) &&
+	    readRates(buf,defRates) && readRates(buf,totalRates)) {
+		int clx = cliTbl->addClient(cname,pwd,realName,email,
+					    defRates,totalRates);
+		if (clx == 0) {
+			Np4d::sendString(sock,"unable to add client\n");
+			return;
+		}
+		cliTbl->getDefRates(clx) = defRates;
+		cliTbl->getTotalRates(clx) = totalRates;
+		cliTbl->releaseClient(clx);
+		return;
+	}
+}
+
+void removeClient(int sock, NetBuffer& buf) {
+	string cname;
+
+	if (buf.readName(cname)) {
+		int clx = cliTbl->getClient(cname);
+		if (clx == 0) {
+			Np4d::sendString(sock,"no such client\n");
+			return;
+		}
+		cliTbl->removeClient(clx);
+		return;
+	}
+}
+
+void modPassword(int sock, NetBuffer& buf) {
+	string cname, pwd;
+
+	if (buf.readName(cname) && buf.readWord(pwd)) {
+		int clx = cliTbl->getClient(cname);
+		if (clx == 0) {
+			Np4d::sendString(sock,"no such client\n");
+			return;
+		}
+		cliTbl->setPassword(clx,pwd);
+		cliTbl->releaseClient(clx);
+		return;
+	}
+}
+	
+void modRealName(int sock, NetBuffer& buf) {
+	string cname, realName;
+
+	if (buf.readName(cname) && buf.readString(realName)) {
+		int clx = cliTbl->getClient(cname);
+		if (clx == 0) {
+			Np4d::sendString(sock,"no such client\n");
+			return;
+		}
+		cliTbl->setRealName(clx,realName);
+		cliTbl->releaseClient(clx);
+		return;
+	}
+}
+
+void modEmail(int sock, NetBuffer& buf) {
+	string cname, email;
+
+	if (buf.readName(cname) && buf.readWord(email)) {
+		int clx = cliTbl->getClient(cname);
+		if (clx == 0) {
+			Np4d::sendString(sock,"no such client\n");
+			return;
+		}
+		cliTbl->setEmail(clx,email);
+		cliTbl->releaseClient(clx);
+		return;
+	}
+}
+
+void modDefRates(int sock, NetBuffer& buf) {
+	string cname; RateSpec rates;
+
+	if (buf.readName(cname) && readRates(buf,rates)) {
+		int clx = cliTbl->getClient(cname);
+		if (clx == 0) {
+			Np4d::sendString(sock,"no such client\n");
+			return;
+		}
+		cliTbl->getDefRates(clx) = rates;
+		cliTbl->releaseClient(clx);
+		return;
+	}
+}
+
+void modTotalRates(int sock, NetBuffer& buf) {
+	string cname; RateSpec rates;
+
+	if (buf.readName(cname) && readRates(buf,rates)) {
+		int clx = cliTbl->getClient(cname);
+		if (clx == 0) {
+			Np4d::sendString(sock,"no such client\n");
+			return;
+		}
+		cliTbl->getTotalRates(clx) = rates;
+		cliTbl->releaseClient(clx);
+		return;
+	}
+}
+
+void showClient(int sock, NetBuffer& buf) {
+	string cname; 
+
+	if (buf.readName(cname)) {
+		int clx = cliTbl->getClient(cname);
+		if (clx == 0) {
+			Np4d::sendString(sock,"no such client\n");
+			return;
+		}
+		string s;
+		cliTbl->client2string(clx,s);
+		cliTbl->releaseClient(clx);
+		Np4d::sendString(sock,s);
+		return;
+	}
+}
+	
+bool handleConnDisc(pktx px, CtlPkt& cp, CpHandler& cph) {
+	Packet& p = ps->getPacket(px);
+	if (p.srcAdr != nmAdr || cp.mode != CtlPkt::REQUEST) {
+		return false;
+	}
+	fAdr_t cliAdr = cp.adr1;
+	int sess = cliTbl->getSession(cliAdr); // locks client
+	if (sess == 0) {
+		cph.errReply(px,cp,"no record of session for "
+			           "specified client address");
+		return false;
+	}
+	int clx = cliTbl->getClientIndex(sess);
+	const string& cliName = cliTbl->getClientName(clx);
+	ipa_t cliIp = cliTbl->getClientIp(sess);
+	fAdr_t rtrAdr = cliTbl->getRouterAdr(sess);
+
+	if (cp.type == CtlPkt::CLIENT_DISCONNECT) 
+		cliTbl->removeSession(sess);
+
+	cliTbl->releaseClient(clx);
+	acctRecType typ = (cp.type == CtlPkt::CLIENT_CONNECT ?
+			   CONNECT_REC : DISCONNECT_REC);	
+	writeAcctRecord(cliName, cliAdr, cliIp, rtrAdr, typ);
+	
+	// send reply to original request
+	CtlPkt repCp(cp.type,CtlPkt::POS_REPLY,cp.seqNum);
+	cph.sendReply(repCp, p.srcAdr);
+	return true;
+}
+
+/** Writes a record to the accounting file.
+ *  @param cname is the name of the client
+ *  @param cliAdr is the Forest address assigned to the client
+ *  @param cliIp is the IP address used by client to login
+ *  @param rtrAdr is the Forest address for the router assigned to the client
+ *  @param recType is the type of accounting record
+ */
+void writeAcctRecord(const string& cname, fAdr_t cliAdr, ipa_t cliIp,
+		     fAdr_t rtrAdr, acctRecType recType) {
+	if (!acctFile.good()) {
+		logger->log("ClientMgr::writeAcctRecord: cannot write "
+		   	   "to accouting file",2);
+			return;
+	}
+	string typeStr = (recType == NEWSESSION ? "new session" :
+			  (recType == CONNECT_REC ? "connect" :
+			   (recType == DISCONNECT_REC ?
+			    "disconnect" : "undefined record")));
+	time_t t = Misc::currentTime();
+	string now = string(ctime(&t)); now.erase(now.end()-1);
+	string s;
+	acctFile << typeStr << ", " << now << ", " << cname << ", "
+		 << Np4d::ip2string(cliIp,s) << ", ";
+	acctFile << Forest::fAdr2string(cliAdr,s) << ", ";
+	acctFile << Forest::fAdr2string(rtrAdr,s) << "\n";
+}
+
+} // ends namespace

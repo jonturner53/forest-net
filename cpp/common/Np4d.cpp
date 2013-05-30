@@ -54,7 +54,7 @@ bool Np4d::readIpAdr(istream& in, ipa_t& ipa) {
  *  @param hostName is the anme of the host
  *  @return an IP address in host byte order, or 0 on failure
  */
-ipa_t Np4d::getIpAdr(char* hostName) {
+ipa_t Np4d::getIpAdr(const char* hostName) {
         hostent* host = gethostbyname(hostName);
         if (host == NULL) return 0;
 	return ntohl(*((ipa_t*) &host->h_addr_list[0][0]));
@@ -414,13 +414,15 @@ int Np4d::recvBuf(int sock, char* buf, int buflen) {
 	nbytes = recv(sock,(void *) buf, length, 0);
 	return nbytes;
 }
+
 int Np4d::recvBufBlock(int sock, char* buf, int buflen) {
 	int rem = sizeof(uint32_t); char lenBuf[sizeof(uint32_t)]; int nbytes;
 	while(true) {
-		nbytes = recv(sock,&lenBuf[sizeof(uint32_t)-rem],sizeof(uint32_t),0);
+		nbytes = recv(sock,&lenBuf[sizeof(uint32_t)-rem],
+				   sizeof(uint32_t),0);
 		if(nbytes < 0) return nbytes;
 		rem -= nbytes;
-		if(rem == 0) break;
+		if (rem == 0) break;
 	}
 	uint32_t length = *((uint32_t *) lenBuf);
 	length = ntohl(length);
@@ -466,7 +468,7 @@ int Np4d::sendBufBlock(int sock, char* buf, int buflen) {
  *  @return the number of bytes sent from the string on success,
  *  -1 on failure
  */
-int Np4d::sendString(int sock, string& s) {
+int Np4d::sendString(int sock, const string& s) {
 	const char *p; p = s.c_str();
 	int numLeft = s.size(); // do not include EOS
 	while (numLeft > 0) {

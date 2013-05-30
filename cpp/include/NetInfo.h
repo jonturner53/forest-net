@@ -51,6 +51,8 @@ public:
 	RateSpec rates;		///< up means allowed rate from left endpoint
 	};
 
+	enum statusType { UP, DOWN, BOOTING };
+
 	// methods for working with nodes
 	// predicates
 	bool	validNode(int) const;
@@ -62,13 +64,15 @@ public:
 	string& getNodeName(int,string&)const ;
 	int	getNodeNum(string&) const;
 	int	getNodeNum(fAdr_t) const;
-	ntyp_t	getNodeType(int) const;
+	Forest::ntyp_t getNodeType(int) const;
 	fAdr_t	getNodeAdr(int) const;
 	bool	getNodeLocation(int, pair<double,double>&) const;
+	statusType getStatus(int) const;
 	// modify node attributes
 	bool	setNodeName(int, string&);
 	bool	setNodeAdr(int, fAdr_t);
 	bool	setNodeLocation(int, pair<double,double>&);
+	void	setStatus(int, statusType);
 
 	// additional methods for leaf nodes
 	// predicates
@@ -80,8 +84,8 @@ public:
 	// access leaf attributes
 	ipa_t	getLeafIpAdr(int) const;
 	// add/modify leaves
-	int	addLeaf(const string&, ntyp_t);
-	bool	setLeafType(int, ntyp_t);
+	int	addLeaf(const string&, Forest::ntyp_t);
+	bool	setLeafType(int, Forest::ntyp_t);
 	bool	setLeafIpAdr(int, ipa_t);
 
 	// additional methods for routers
@@ -98,6 +102,7 @@ public:
 	int	getNumIf(int) const;
 	bool	getLeafRange(int,pair<fAdr_t,fAdr_t>&) const;
 	ipa_t	getIfIpAdr(int,int) const;
+	ipp_t	getIfPort(int,int) const;
 	RateSpec& getIfRates(int,int) const;
 	bool	getIfLinks(int,int,pair<int,int>&) const;
 	// add/modify routers
@@ -105,7 +110,7 @@ public:
 	bool	addInterfaces(int, int);
 	bool	setLeafRange(int,pair<int,int>&);
 	bool	setIfIpAdr(int,int,ipa_t);
-	//bool	setIfRates(int,int);
+	bool	setIfPort(int,int,ipp_t);
 	bool	setIfLinks(int,int,pair<int,int>&);
 
 	// methods for working with links
@@ -129,13 +134,13 @@ public:
 	int	getLLnum(int,int) const;
 	int	getLeftLLnum(int) const;
 	int	getRightLLnum(int) const;
+	uint64_t getNonce(int) const;
 	// add/modify links
 	int	addLink(int,int,int,int);
 	bool	setLeftLLnum(int,int);
 	bool	setRightLLnum(int,int);
-	//bool	setLinkRates(int,RateSpec&);
-	//bool	setAvailRates(int,RateSpec&);
 	bool	setLinkLength(int,int);
+	bool	setNonce(int,uint64_t);
 
 	// io routines
 	bool read(istream&);
@@ -143,6 +148,10 @@ public:
 	string& linkProps2string(int,string&) const;
 	string& linkState2string(int,string&) const;
 	string& toString(string&) const;
+
+	// locking methods for mutually exclusive access
+	void	lock();
+	void	unlock();
 
 private:
 	int maxRtr;		///< max node number for a router;
@@ -158,6 +167,7 @@ private:
 
 	struct IfInfo {
 	ipa_t	ipAdr;		///< ip address of forest interface
+	ipp_t	port;		///< ip port number of forest interface
 	int	firstLink;	///< number of first link assigned to interface
 	int	lastLink;	///< number of last link assigned to interface
 	RateSpec rates;		///< up denotes input, down denotes output
@@ -166,11 +176,12 @@ private:
 	/** structure holding information used by leaf nodes */
 	struct LeafNodeInfo {
 	string	name;		///< leaf name
-	ntyp_t	nType;		///< leaf type
+	Forest::ntyp_t nType;	///< leaf type
 	ipa_t	ipAdr;		///< IP address of leaf
 	fAdr_t	fAdr;		///< leaf's forest address
 	int	latitude;	///< latitude of leaf (in micro-degrees, + or -)
 	int	longitude;	///< latitude of leaf (in micro-degrees, + or -)
+	statusType status;	///< active/inactive status
 	};
 	LeafNodeInfo *leaf;
 	UiSetPair *leaves;	///< in-use and free leaf numbers
@@ -182,12 +193,13 @@ private:
 	/** structure holding information used by router nodes */
 	struct RtrNodeInfo {
 	string	name;		///< node name
-	ntyp_t	nType;		///< node type
+	Forest::ntyp_t nType;	///< node type
 	fAdr_t	fAdr;		///< router's forest address
 	int	latitude;	///< latitude of node (in micro-degrees, + or -)
 	int	longitude;	///< latitude of node (in micro-degrees, + or -)
 	fAdr_t	firstLeafAdr;	///< router's first assignable leaf address
 	fAdr_t  lastLeafAdr;	///< router's last assignable leaf address
+	statusType status;	///< active/inactive status
 	int	numIf;		///< number of interfaces
 	IfInfo	*iface;		///< interface information
 	};
@@ -208,10 +220,13 @@ private:
 	int	rightLnum;	///< local link number used by "right endpoint"
 	RateSpec rates;		///< use "up" to denote rates from "left"
 	RateSpec availRates;	///< unused capacity
+	uint64_t nonce;		///< used when initially connecting links
 	};
 	LinkInfo *link;
 
 	RateSpec defaultLeafRates;	///< default link rates
+
+	pthread_mutex_t glock;	///< for locking in multi-threaded contexts
 
 	// helper methods for reading a NetInfo file
 	bool	readRouter(istream&, RtrNodeInfo&, IfInfo*, string&);
@@ -237,6 +252,7 @@ private:
 	string& rtr2string(int,string&) const;
 	string& leaf2string(int,string&) const;
 };
+
 
 // Methods for working with nodes ///////////////////////////////////
 
@@ -334,9 +350,9 @@ inline int NetInfo::getNodeNum(fAdr_t adr) const {
  *  @param n is a node number
  *  @return the node type of n or UNDEF_NODE if n is not a valid node number
  */
-inline ntyp_t NetInfo::getNodeType(int n) const {
+inline Forest::ntyp_t NetInfo::getNodeType(int n) const {
 	return (isLeaf(n) ? leaf[n-maxRtr].nType : 
-		(isRouter(n) ? rtr[n].nType : UNDEF_NODE));
+		(isRouter(n) ? rtr[n].nType : Forest::UNDEF_NODE));
 }
 
 /** Set the name of a node.
@@ -384,6 +400,15 @@ inline bool NetInfo::setNodeLocation(int n, pair<double,double>& loc) {
 	return true;
 }
 
+/** Set the status of a node.
+ *  @param n is a node number
+ *  @param status is the node status
+ */
+inline void NetInfo::setStatus(int n, statusType status) {
+	if (isLeaf(n)) leaf[n-maxRtr].status = status;
+	else rtr[n].status = status;
+}
+
 // Additional methods for working with leaf nodes ///////////////////
 
 /** Determine if a given node number identifies a leaf.
@@ -420,7 +445,7 @@ inline int NetInfo::nextLeaf(int n) const {
  *  @param typ is its new node type
  *  @return true if the operation succeeds, else false
  */
-inline bool NetInfo::setLeafType(int n, ntyp_t typ) {
+inline bool NetInfo::setLeafType(int n, Forest::ntyp_t typ) {
 	if (isLeaf(n)) leaf[n-maxRtr].nType = typ;
 	else return false;
 	return true;
@@ -538,6 +563,15 @@ inline bool NetInfo::getNodeLocation(int n, pair<double,double>& loc) const {
 	return true;
 }
 
+/** Get the status of a node.
+ *  @param n is a node number
+ *  @return true on success, false on failure
+ */
+inline NetInfo::statusType NetInfo::getStatus(int n) const {
+	if (isLeaf(n)) return leaf[n-maxRtr].status;
+	else return rtr[n].status;
+}
+
 /** Get the IP address of a specified router interface.
  *  @param r is the node number of a router in the network
  *  @param iface is an interface number for r
@@ -546,6 +580,16 @@ inline bool NetInfo::getNodeLocation(int n, pair<double,double>& loc) const {
  */
 inline ipa_t NetInfo::getIfIpAdr(int n, int iface) const {
 	return (validIf(n,iface) ? rtr[n].iface[iface].ipAdr : 0);
+}
+
+/** Get the IP port of a specified router interface.
+ *  @param r is the node number of a router in the network
+ *  @param iface is an interface number for r
+ *  @return the port number of the specified interface or 0 if
+ *  there is no such interface
+ */
+inline ipp_t NetInfo::getIfPort(int n, int iface) const {
+	return (validIf(n,iface) ? rtr[n].iface[iface].port : 0);
 }
 
 /** Get the RateSpec for a router interface.
@@ -616,6 +660,18 @@ inline bool NetInfo::setIfLinks(int r, int iface, pair<int,int>& links) {
  */
 inline bool NetInfo::setIfIpAdr(int r, int iface, ipa_t ip) {
 	if (validIf(r,iface)) rtr[r].iface[iface].ipAdr = ip;
+	else return false;
+	return true;
+}
+
+/** Set the IP address of a router interface.
+ *  @param r is the node number of a router
+ *  @param iface is the interface number
+ *  @param port is the port number for the interface
+ *  @return true if the operation succeeds, else false
+ */
+inline bool NetInfo::setIfPort(int r, int iface, ipp_t port) {
+	if (validIf(r,iface)) rtr[r].iface[iface].port = port;
 	else return false;
 	return true;
 }
@@ -733,6 +789,14 @@ inline int NetInfo::getRightLLnum(int lnk) const {
 	return ((lnk != 0 && isRouter(r)) ? link[lnk].rightLnum : 0);
 }
 
+/** Get the nonce for a link.
+ *  @param lnk is the number of a link.
+ *  @return the nonce used to identify an endpoint when connecting a link
+ */
+inline uint64_t NetInfo::getNonce(int lnk) const {
+	return (validLink(lnk) ? link[lnk].nonce : 0);
+}
+
 /** Get the RateSpec of a link in the Forest network.
  *  @param lnk is a link number
  *  @return a reference to the link rate spec
@@ -801,6 +865,17 @@ inline bool NetInfo::setRightLLnum(int lnk, int loc) {
 	return true;
 }
 
+/** Set the nonce for a link.
+ *  @param lnk is the number of a link.
+ *  @param nonce is a nonce used to identify an endpoint when connecting a link
+ *  @return true on success, else false
+ */
+inline bool NetInfo::setNonce(int lnk, uint64_t nonce) {
+	if (!validLink(lnk)) return false;
+	link[lnk].nonce = nonce;
+	return true;
+}
+
 /** Set the RateSpec for a link.
  *  @param lnk is a link number
  *  @param rs is the new RateSpec for the link
@@ -841,6 +916,16 @@ inline bool NetInfo::setLinkLength(int lnk, int len) {
 inline uint64_t NetInfo::ll2l_key(int r, int llnk) const {
 	return (uint64_t(r) << 32) | (uint64_t(llnk) & 0xffffffff);
 }
+
+/** Lock the data structure.
+ *  Use in multi-threaded applications that dynamically modify the
+ *  data structure. For now, just a single global lock. 
+ */
+inline void NetInfo::lock() { pthread_mutex_lock(&glock); }
+
+/** Unlock the data structure.
+ */
+inline void NetInfo::unlock() { pthread_mutex_unlock(&glock); }
 
 } // ends namespace
 

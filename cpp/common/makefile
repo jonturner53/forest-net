@@ -15,9 +15,9 @@ HFILES = ${IDIR}/Forest.h ${IDIR}/RateSpec.h ${IDIR}/CtlPkt.h ${IDIR}/Packet.h \
 	 ${IDIR}/PacketLog.h ${IDIR}/PacketStore.h  ${IDIR}/PacketStoreTs.h \
 	 ${IDIR}/Queue.h ${IDIR}/Np4d.h ${IDIR}/Heap.h ${IDIR}/HeapSet.h \
 	${IDIR}/Misc.h ${IDIR}/Packet.h ${IDIR}/Logger.h
-OFILES = Forest.o RateSpec.o CtlPkt.o Packet.o \
-	 PacketLog.o PacketStore.o  PacketStoreTs.o \
-	 Queue.o Np4d.o Heap.o HeapSet.o Misc.o Packet.o Logger.o
+OFILES = Forest.o RateSpec.o CtlPkt.o Packet.o PacketLog.o PacketStore.o \
+	 PacketStoreTs.o Queue.o Np4d.o Heap.o HeapSet.o Misc.o Packet.o \
+	 Logger.o NetBuffer.o
 ${OFILES} : ${HFILES}
 
 .cpp.o:

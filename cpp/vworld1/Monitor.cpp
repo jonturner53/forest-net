@@ -11,7 +11,7 @@
 using namespace forest;
 
 /** usage:
- *       Monitor extIp intIp rtrIp myAdr rtrAdr worldSize finTime [logfile]
+ *       Monitor cmIp myIp worldSize uname pword finTime
  * 
  *  Monitor is a program that monitors a virtual world, tracking
  *  the motion of the avatars within it. The monitored data is
@@ -25,54 +25,40 @@ using namespace forest;
  *  (7654321) in the first word.
  * 
  *  Data is forwarded in binary form with 40 reports per packet.
- *  If an optional log file is specified, the reports are also
- *  written to a local log file in binary form.
  * 
- *  Command line arguments include two ip addresses for the
- *  Monitor. The first is the IP address that the GUI can
- *  use to connect to the Monitor. If this is specified as 0.0.0.0,
- *  the Monitor listens on the default IP address. The second is the
- *  IP address used by the Monitor within the Forest overlay. RtrIp
- *  is the route's IP address, myAdr is the Monitor's Forest
- *  address, rtrAdr is the Forest address of the router, 
- *  worldSize is the number of squares in the virtual world's
- *  basic grid (actually, the grid is worldSizeXworldSize) and
- *  finTime is the number of seconds to run before terminating.
+ *  Command line arguments include
+ *
+ *  cmIp	the IP address of the client manager
+ *  myIp	the IP address to bind to the local socket
+ *  worldSize   the number of squares in the virtual world's
+ *  		basic grid (actually, the grid is worldSizeXworldSize)
+ *  uname	the user name to use for logging in
+ *  pword	the corresponding password
+ *  finTime	the number of seconds to run before terminating.
  */
 int main(int argc, char *argv[]) {
-	ipa_t intIp, extIp, rtrIp;
-	fAdr_t myAdr, rtrAdr, comtCtlAdr;
-	int finTime, worldSize;
+	ipa_t cmIp, myIp; int finTime, worldSize;
 
-	if (argc != 9 ||
-  	    (extIp  = Np4d::ipAddress(argv[1])) == 0 ||
-  	    (intIp  = Np4d::ipAddress(argv[2])) == 0 ||
-	    (rtrIp  = Np4d::ipAddress(argv[3])) == 0 ||
-	    (myAdr  = Forest::forestAdr(argv[4])) == 0 ||
-	    (rtrAdr = Forest::forestAdr(argv[5])) == 0 ||
-	    (comtCtlAdr = Forest::forestAdr(argv[6])) == 0 ||
-	    (sscanf(argv[7],"%d", &worldSize) != 1) ||
-	     sscanf(argv[8],"%d", &finTime) != 1)
-		fatal("usage: Monitor extIp intIp rtrIpAdr myAdr rtrAdr "
-		      		    "comtCtlAdr worldSize finTime");
-	if (extIp == Np4d::ipAddress("127.0.0.1")) extIp = Np4d::myIpAddress(); 
-	if (extIp == 0) fatal("can't retrieve default IP address");
+	if (argc != 7 ||
+  	    (cmIp  = Np4d::ipAddress(argv[1])) == 0 ||
+  	    (myIp  = Np4d::ipAddress(argv[2])) == 0 ||
+	    (sscanf(argv[3],"%d", &worldSize) != 1) ||
+	     sscanf(argv[6],"%d", &finTime) != 1)
+		fatal("usage: Monitor myIp worldSize uname pword finTime");
 
-	Monitor mon(extIp,intIp,rtrIp,myAdr,rtrAdr,comtCtlAdr,worldSize);
-	if (!mon.init()) {
+	Monitor mon(cmIp, myIp,worldSize);
+	if (!mon.init(argv[4],argv[5])) {
 		fatal("Monitor: initialization failure");
 	}
-	mon.run(1000000*(finTime-1)); // -1 to compensate for delay in init
+	mon.run(finTime);
 	exit(0);
 }
 
 namespace forest {
 
 // Constructor for Monitor, allocates space and initializes private data
-Monitor::Monitor(ipa_t xipa, ipa_t iipa, ipa_t ripa, fAdr_t ma,
-		 fAdr_t ra, fAdr_t cca, int ws)
-		 : extIp(xipa), intIp(iipa), rtrIp(ripa), myAdr(ma),
-		   rtrAdr(ra), comtCtlAdr(cca), worldSize(min(ws,MAX_WORLD)) {
+Monitor::Monitor(ipa_t cmIp1, ipa_t myIp1, int worldSize1) : cmIp(cmIp1),
+		 myIp(myIp1), worldSize(min(worldSize1,MAX_WORLD)) {
 	int nPkts = 10000;
 	ps = new PacketStore(nPkts+1, nPkts+1);
 	mySubs = new set<int>;
@@ -82,36 +68,101 @@ Monitor::Monitor(ipa_t xipa, ipa_t iipa, ipa_t ripa, fAdr_t ma,
 	comt = 0;
 	switchState = IDLE;
 	seqNum = 0;
-	connSock = -1;
 }
 
 Monitor::~Monitor() {
 	cout.flush();
-	if (extSock > 0) close(extSock);
-	if (intSock > 0) close(intSock);
+	if (listenSock > 0) close(listenSock);
 	delete ps; delete mySubs;
 }
 
 /** Initialize sockets and open log file for writing.
  *  @return true on success, false on failure
  */
-bool Monitor::init() {
-	intSock = Np4d::datagramSocket();
-	if (intSock < 0 || 
-	    !Np4d::bind4d(intSock,intIp,MON_PORT) ||
-	    !Np4d::nonblock(intSock))
+bool Monitor::init(const string& uname, const string& pword) {
+	dgSock = Np4d::datagramSocket();
+	if (dgSock < 0 || 
+	    !Np4d::bind4d(dgSock,myIp,MON_PORT) ||
+	    !Np4d::nonblock(dgSock))
 		return false;
 
-	connect(); 		// send initial connect packet
-	usleep(1000000);	// 1 second delay provided for use in SPP
-				// delay gives SPP linecard the time it needs
-				// to setup NAT filters before second packet
+	// login through client manager
+	if (!login(uname, pword)) return false;
 
 	// setup external TCP socket for use by remote GUI
-	extSock = Np4d::streamSocket();
-	if (extSock < 0) return false;
-	if (!Np4d::bind4d(extSock,extIp,MON_PORT)) return false;
-	return Np4d::listen4d(extSock) && Np4d::nonblock(extSock);
+	listenSock = Np4d::streamSocket();
+	if (listenSock < 0) return false;
+	if (!Np4d::bind4d(listenSock,myIp,MON_PORT)) return false;
+	return Np4d::listen4d(listenSock) && Np4d::nonblock(listenSock);
+}
+
+/** Send username and password to the Client manager, and receive.
+ *  @param cmIpAdr is the IP address of the client manager
+ *  @param uname is the username to log in with
+ *  @param pword is the password to log in with
+ *  @return true on success, false on failure
+ */
+bool Monitor::login(const string& uname, const string& pword) {
+	// open socket to client manager
+	int loginSock = Np4d::streamSocket();
+        if (loginSock < 0 ||
+	    !Np4d::bind4d(loginSock, myIp, 0) ||
+	    !Np4d::connect4d(loginSock,cmIp,Forest::CM_PORT)) {
+		cerr << "Avatar::login: cannot open/configure socket to "
+			"ClientMgr\n";
+		return false;
+	}
+	// start login dialog
+	string s = "login: " + uname + "\npassword: " + pword + "\nover\n";
+	Np4d::sendString(loginSock,s);
+	NetBuffer buf(loginSock,1024);
+	string s0, s1, s2;
+	if (!buf.readLine(s0) || s0 != "login successful" ||
+	    !buf.readLine(s1) || s1 != "over")
+		return false;
+	
+	// proceed to new session dialog
+	s = "newSession\nover\n";
+	Np4d::sendString(loginSock,s);
+
+	// process reply - expecting my forest address
+	if (!buf.readAlphas(s0) || s0 != "yourAddress" || !buf.verify(':') ||
+	    !buf.readForestAddress(s1) || !buf.nextLine()) 
+		return false;
+	myAdr = Forest::forestAdr(s1.c_str());
+
+	// continuing - expecting info for my forest access router
+	int port;
+	if (!buf.readAlphas(s0) || s0 != "yourRouter" || !buf.verify(':') ||
+	    !buf.verify('(') || !buf.readIpAddress(s1) || !buf.verify(',') ||
+	    !buf.readInt(port) || !buf.verify(',') || 
+	    !buf.readForestAddress(s2) || !buf.verify(')') || !buf.nextLine())
+		return false;
+	rtrIp = Np4d::getIpAdr(s1.c_str());
+	rtrPort = (ipp_t) port;
+	rtrAdr = Forest::forestAdr(s2.c_str());
+
+	// continuing - expecting address of comtree controller
+	if (!buf.readAlphas(s0) || s0 != "comtCtlAddress" || !buf.verify(':') ||
+	    !buf.readForestAddress(s1) || !buf.nextLine()) 
+		return false;
+	ccAdr = Forest::forestAdr(s1.c_str());
+	
+	// continuing - expecting connection nonce
+	if (!buf.readAlphas(s0) || s0 != "connectNonce" || !buf.verify(':') ||
+	    !buf.readInt(nonce) || !buf.nextLine())
+		return false;
+	if (!buf.readLine(s0) || s0 != "overAndOut")
+		return false;
+	
+	close(loginSock);
+
+	cout << "avatar address=" << Forest::fAdr2string(myAdr,s) << endl;
+	cout << "router info= (" << Np4d::ip2string(rtrIp,s) << ",";
+	cout << rtrPort << "," << Forest::fAdr2string(rtrAdr,s) << ")\n";
+	cout << "comtCtl address=" << Forest::fAdr2string(ccAdr,s) << "\n";
+	cout << "nonce=" << nonce << endl;
+	return true;
 }
 
 /** Run the monitor, stopping after finishTime
@@ -121,19 +172,21 @@ bool Monitor::init() {
  *  Print a record of all avatar's status, once per second. 
  */
 void Monitor::run(uint32_t finishTime) {
-	pktx px;
 	uint32_t now;    	// free-running microsecond time
 	uint32_t nextTime;	// time of next operational cycle
 	now = nextTime = Misc::getTime(); 
 
+	connSock = -1;
 	bool waiting4switch = false;
+	finishTime *= 1000000; // from seconds to microseconds
 	while (now <= finishTime) {
 		comt_t newComt = check4command();
 		if (newComt != 0 && newComt != comt) {
 			startComtSwitch(newComt,now);
 			waiting4switch = true;
 		}
-		while ((px = receiveReport()) != 0) {
+		pktx px;
+		while ((px = receiveFromRouter()) != 0) {
 			Packet& p = ps->getPacket(px);
 			if (!waiting4switch) {
 				forwardReport(px,now);
@@ -141,7 +194,7 @@ void Monitor::run(uint32_t finishTime) {
 			}
 			// discard non-signalling packets and pass
 			// signalling packets to completeComtSwitch
-			if (p.type == CLIENT_DATA) {
+			if (p.type == Forest::CLIENT_DATA) {
 				ps->free(px); continue;
 			}
 			waiting4switch = !completeComtSwitch(px,now);
@@ -263,38 +316,38 @@ void Monitor::send2comtCtl(CtlPkt::CpType joinLeave, bool retry) {
         Packet& p = ps->getPacket(px);
         CtlPkt cp(joinLeave,CtlPkt::REQUEST,seqNum,p.payload());
         cp.comtree = comt;
-        cp.ip1 = intIp;
-        cp.port1 = Np4d::getSockPort(intSock);
+        cp.ip1 = myIp;
+        cp.port1 = Np4d::getSockPort(dgSock);
         int len = cp.pack();
 	if (len == 0) 
 		fatal("Monitor::send2comtCtl: control packet packing error");
 	p.length = Forest::OVERHEAD + len;
-        p.type = CLIENT_SIG; p.flags = 0;
+        p.type = Forest::CLIENT_SIG; p.flags = 0;
         p.comtree = Forest::CLIENT_SIG_COMT;
-	p.srcAdr = myAdr; p.dstAdr = comtCtlAdr;
+	p.srcAdr = myAdr; p.dstAdr = ccAdr;
         p.pack();
-	send2router(px);
+	sendToRouter(px);
 }
 
 /** Send packet to Forest router (connect, disconnect, sub_unsub).
  */
-void Monitor::send2router(pktx px) {
+void Monitor::sendToRouter(pktx px) {
 	Packet& p = ps->getPacket(px);
 	p.pack();
-	int rv = Np4d::sendto4d(intSock,(void *) p.buffer,p.length,
-		    	      	rtrIp,Forest::ROUTER_PORT);
-	if (rv == -1) fatal("Monitor::send2router: failure in sendto");
+	int rv = Np4d::sendto4d(dgSock,(void *) p.buffer,p.length,
+		    	      	rtrIp,rtrPort);
+	if (rv == -1) fatal("Monitor::sendToRouter: failure in sendto");
 }
 
 /** Check for next Avatar report packet and return it if there is one.
  *  @return next report packet or 0, if no report has been received.
  */
-int Monitor::receiveReport() { 
+int Monitor::receiveFromRouter() { 
 	pktx px = ps->alloc();
 	if (px == 0) return 0;
         Packet& p = ps->getPacket(px);
 
-        int nbytes = Np4d::recv4d(intSock,p.buffer,1500);
+        int nbytes = Np4d::recv4d(dgSock,p.buffer,1500);
         if (nbytes < 0) { ps->free(px); return 0; }
 
 	p.unpack();
@@ -326,12 +379,12 @@ int Monitor::receiveReport() {
  */
 comt_t Monitor::check4command() { 
 	if (connSock < 0) {
-		connSock = Np4d::accept4d(extSock);
+		connSock = Np4d::accept4d(listenSock);
 		if (connSock < 0) return 0;
 		if (!Np4d::nonblock(connSock))
 			fatal("can't make connection socket nonblocking");
 		bool status; int ndVal = 1;
-		status = setsockopt(extSock,IPPROTO_TCP,TCP_NODELAY,
+		status = setsockopt(listenSock,IPPROTO_TCP,TCP_NODELAY,
 			    (void *) &ndVal,sizeof(int));
 		if (status != 0) {
 			cerr << "setsockopt for no-delay failed\n";
@@ -437,10 +490,10 @@ void Monitor::subscribe(list<int>& glist) {
 		if (nsub > 350) {
 			pp[0] = htonl(nsub-1); pp[nsub] = 0;
 			p.length = Forest::OVERHEAD + 4*(2+nsub);
-			p.type = SUB_UNSUB; p.flags = 0;
+			p.type = Forest::SUB_UNSUB; p.flags = 0;
 			p.comtree = comt;
 			p.srcAdr = myAdr; p.dstAdr = rtrAdr;
-			send2router(px);
+			sendToRouter(px);
 			nsub = 1;
 		}
 		pp[nsub] = htonl(-g);
@@ -448,9 +501,9 @@ void Monitor::subscribe(list<int>& glist) {
 	pp[0] = htonl(nsub); pp[nsub+1] = 0;
 
 	p.length = Forest::OVERHEAD + 4*(2+nsub);
-	p.type = SUB_UNSUB; p.flags = 0; p.comtree = comt;
+	p.type = Forest::SUB_UNSUB; p.flags = 0; p.comtree = comt;
 	p.srcAdr = myAdr; p.dstAdr = rtrAdr;
-	send2router(px);
+	sendToRouter(px);
 
 	ps->free(px);
 }
@@ -472,10 +525,10 @@ void Monitor::unsubscribe(list<int>& glist) {
 		if (nunsub > 350) {
 			pp[0] = 0; pp[1] = htonl(nunsub-1);
 			p.length = Forest::OVERHEAD + 4*(2+nunsub);
-			p.type = SUB_UNSUB; p.flags = 0;
+			p.type = Forest::SUB_UNSUB; p.flags = 0;
 			p.comtree = comt;
 			p.srcAdr = myAdr; p.dstAdr = rtrAdr;
-			send2router(px);
+			sendToRouter(px);
 			nunsub = 1;
 		}
 		pp[nunsub+1] = htonl(-g);
@@ -483,9 +536,9 @@ void Monitor::unsubscribe(list<int>& glist) {
 	pp[0] = 0; pp[1] = htonl(nunsub);
 
 	p.length = Forest::OVERHEAD + 4*(2+nunsub);
-	p.type = SUB_UNSUB; p.flags = 0; p.comtree = comt;
+	p.type = Forest::SUB_UNSUB; p.flags = 0; p.comtree = comt;
 	p.srcAdr = myAdr; p.dstAdr = rtrAdr;
-	send2router(px);
+	sendToRouter(px);
 
 	ps->free(px);
 }
@@ -540,7 +593,7 @@ void Monitor::forwardReport(pktx px, int now) {
 	Packet& p = ps->getPacket(px);
 	uint32_t *pp = p.payload();
 
-	if (p.comtree != comt || p.type != CLIENT_DATA ||
+	if (p.comtree != comt || p.type != Forest::CLIENT_DATA ||
 	    ntohl(pp[0]) != (uint32_t) Avatar::STATUS_REPORT) {
 		// ignore packets for other comtrees, or that are not
 		// avatar status reports
@@ -564,28 +617,66 @@ void Monitor::forwardReport(pktx px, int now) {
 /** Send initial connect packet to forest router
  *  Uses comtree 1, which is for user signalling.
  */
-void Monitor::connect() {
+bool Monitor::connect() {
 	pktx px = ps->alloc();
-
 	Packet& p = ps->getPacket(px);
-	p.length = 4*(5+1); p.type = CONNECT; p.flags = 0;
-	p.comtree = Forest::CLIENT_CON_COMT;
+
+	p.payload()[0] = htonl((uint32_t) (nonce >> 32));
+	p.payload()[1] = htonl((uint32_t) (nonce & 0xffffffff));
+	p.length = Forest::OVERHEAD + 8; p.type = Forest::CONNECT; p.flags = 0;
+	p.comtree = Forest::CONNECT_COMT;
 	p.srcAdr = myAdr; p.dstAdr = rtrAdr;
 
-	send2router(px); ps->free(px);
+	int resendTime = Misc::getTime();
+	int resendCount = 1;
+	while (true) {
+		int now = Misc::getTime();
+		if (now > resendTime) {
+			if (resendCount > 3) { ps->free(px); return false; }
+			sendToRouter(px);
+			resendTime += 1000000;
+			resendCount++;
+		}
+		int rx = receiveFromRouter();
+		if (rx == 0) { sleep(100000); continue; }
+		Packet& reply = ps->getPacket(rx);
+		bool status =  (reply.type == Forest::CONNECT &&
+		    		reply.flags == Forest::ACK_FLAG);
+		ps->free(px); ps->free(rx);
+		return status;
+	}
 }
 
-/** Send final disconnect packet to forest router, after unsubscribing.
+/** Send final disconnect packet to forest router.
  */
-void Monitor::disconnect() {
+bool Monitor::disconnect() {
 	pktx px = ps->alloc();
-
 	Packet& p = ps->getPacket(px);
-	p.length = 4*(5+1); p.type = DISCONNECT; p.flags = 0;
-	p.comtree = Forest::CLIENT_CON_COMT;
+
+	p.payload()[0] = htonl((uint32_t) (nonce >> 32));
+	p.payload()[1] = htonl((uint32_t) (nonce & 0xffffffff));
+	p.length = Forest::OVERHEAD + 8; p.type = Forest::DISCONNECT;
+	p.flags = 0; p.comtree = Forest::CONNECT_COMT;
 	p.srcAdr = myAdr; p.dstAdr = rtrAdr;
 
-	send2router(px); ps->free(px);
+	int resendTime = Misc::getTime();
+	int resendCount = 1;
+	while (true) {
+		int now = Misc::getTime();
+		if (now > resendTime) {
+			if (resendCount > 3) { ps->free(px); return false; }
+			sendToRouter(px);
+			resendTime += 1000000;
+			resendCount++;
+		}
+		int rx = receiveFromRouter();
+		if (rx == 0) { sleep(100000); continue; }
+		Packet& reply = ps->getPacket(rx);
+		bool status =  (reply.type == Forest::DISCONNECT &&
+		    		reply.flags == Forest::ACK_FLAG);
+		ps->free(px); ps->free(rx);
+		return status;
+	}
 }
 
 } // ends namespace

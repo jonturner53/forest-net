@@ -42,7 +42,7 @@ string& Forest::nodeType2string(ntyp_t nt, string& s) {
 	return s;
 }
 
-ntyp_t Forest::getNodeType(string& s) {
+Forest::ntyp_t Forest::getNodeType(string& s) {
 	if (s.compare("client") == 0) return CLIENT;
 	if (s.compare("server") == 0) return SERVER;
 	if (s.compare("router") == 0) return ROUTER;

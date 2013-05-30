@@ -116,7 +116,7 @@ RouterCore::RouterCore(bool booting1, const RouterInfo& config)
 			: booting(booting1) {
 	nIfaces = 50; nLnks = 1000;
 	nComts = 5000; nRts = 100000;
-	nPkts = 200000; nBufs = 100000; nQus = 10000;
+	nPkts = 100000; nBufs = 50000; nQus = 10000;
 
 	myAdr = config.myAdr;
 	bootIp = config.bootIp;
@@ -226,6 +226,7 @@ bool RouterCore::setup() {
 bool RouterCore::setupIfaces() {
 	for (int iface = ift->firstIface(); iface != 0;
 		 iface = ift->nextIface(iface)) {
+		if (iop->ready(iface)) continue;
 		if (!iop->setup(iface)) {
 			cerr << "RouterCore::setupIfaces: could not "
 				"setup interface " << iface << endl;
@@ -243,7 +244,7 @@ bool RouterCore::setupIfaces() {
  */
 bool RouterCore::setupLeafAddresses() {
 	for (int lnk = lt->firstLink(); lnk != 0; lnk = lt->nextLink(lnk)) {
-		if (booting || lt->getPeerType(lnk) == ROUTER) continue;
+		if (booting || lt->getPeerType(lnk) == Forest::ROUTER) continue;
 		if (!allocLeafAdr(lt->getPeerAdr(lnk)))
 			return false;
 	}
@@ -274,7 +275,7 @@ bool RouterCore::setupQueues() {
 			if (qid == 0) return false;
 			ctt->setLinkQ(cLnk,qid);
 			qm->setQRates(qid,rs);
-			if (lt->getPeerType(lnk) == ROUTER)
+			if (lt->getPeerType(lnk) == Forest::ROUTER)
 				qm->setQLimits(qid,100,200000);
 			else
 				qm->setQLimits(qid,50,100000);
@@ -322,7 +323,8 @@ bool RouterCore::checkTables() {
 			     << " for link " << lnk << " is not valid\n";
 			success = false;
 		}
-		if (lt->getPeerIpAdr(lnk) == 0) {
+		if (lt->getPeerIpAdr(lnk) == 0 &&
+		    lt->getPeerType(lnk) == Forest::ROUTER) {
 			cerr << "RouterCore::checkTables: invalid peer IP "
 			     << "for link " << lnk << endl;
 			success = false;
@@ -390,7 +392,7 @@ bool RouterCore::checkTables() {
 				     << comt << endl;
 				success = false;
 			}
-			if (lt->getPeerType(lnk) != ROUTER) {
+			if (lt->getPeerType(lnk) != Forest::ROUTER) {
 				cerr << "RouterCore::checkTables: router link "
 				     << lnk << " in comtree " << comt 
 				     << " connects to non-router peer\n";
@@ -488,7 +490,7 @@ void RouterCore::addLocalRoutes() {
 		for (p = comtLinks.begin(); p != comtLinks.end(); p++) {
 			int cLnk = *p; int lnk = ctt->getLink(cLnk);
 			fAdr_t peerAdr = lt->getPeerAdr(lnk);
-			if (lt->getPeerType(lnk) == ROUTER &&
+			if (lt->getPeerType(lnk) == Forest::ROUTER &&
 			    Forest::zipCode(peerAdr)
 			    == Forest::zipCode(myAdr))
 				continue;
@@ -547,7 +549,7 @@ void RouterCore::run(uint64_t finishTime) {
 		string s1;
 		cout << "sending boot request to " << Np4d::ip2string(nmIp,s1)
 		     << endl;
-		CtlPkt cp(CtlPkt::BOOT_REQUEST,CtlPkt::REQUEST,0);
+		CtlPkt cp(CtlPkt::BOOT_ROUTER,CtlPkt::REQUEST,0);
 		if (!sendCpReq(cp,nmAdr))
 			fatal("RouterCore::run: could not send boot request\n");
 	}
@@ -576,13 +578,14 @@ void RouterCore::run(uint64_t finishTime) {
 				ps->free(px);
 			} else if (booting) {
 				handleCtlPkt(px);
-			} else if (ptype == CLIENT_DATA) {
+			} else if (ptype == Forest::CLIENT_DATA) {
 				forward(px,ctx);
-			} else if (ptype == SUB_UNSUB) {
+			} else if (ptype == Forest::SUB_UNSUB) {
 				subUnsub(px,ctx);
-			} else if (ptype == RTE_REPLY) {
+			} else if (ptype == Forest::RTE_REPLY) {
 				handleRteReply(px,ctx);
-			} else if (ptype == CONNECT || ptype == DISCONNECT) {
+			} else if (ptype == Forest::CONNECT ||
+				   ptype == Forest::DISCONNECT) {
 				handleConnDisc(px);
 			} else if (p.dstAdr != myAdr) {
 				forward(px,ctx);
@@ -645,15 +648,15 @@ bool RouterCore::pktCheck(pktx px, int ctx) {
 	if (p.version != Forest::FOREST_VERSION) {
 		return false;
 	}
-
 	if (p.length != p.bufferLen || p.length < Forest::HDR_LENG) {
 		return false;
 	}
-
 	if (booting) {
-		return 	p.srcAdr == nmAdr && p.dstAdr == myAdr &&
-		    	p.type == NET_SIG && p.comtree == Forest::NET_SIG_COMT;
+		return 	p.tunIp == nmIp && p.type == Forest::NET_SIG
+					&& p.comtree == Forest::NET_SIG_COMT;
 	}
+	if (p.type == Forest::CONNECT || p.type == Forest::DISCONNECT)
+	    return (p.length == Forest::OVERHEAD+8);
 
 	if (!ctt->validComtIndex(ctx)) {
 		return false;
@@ -671,7 +674,7 @@ bool RouterCore::pktCheck(pktx px, int ctx) {
 	}
 
 	// extra checks for packets from untrusted peers
-	if (lt->getPeerType(inLink) < TRUSTED) {
+	if (lt->getPeerType(inLink) < Forest::TRUSTED) {
 		// check for spoofed source address
 		if (lt->getPeerAdr(inLink) != p.srcAdr) return false;
 		// and that destination restrictions are respected
@@ -679,16 +682,16 @@ bool RouterCore::pktCheck(pktx px, int ctx) {
 		if (dest!=0 && p.dstAdr != dest && p.dstAdr != myAdr)
 			return false;
 		// verify that type is valid
-		ptyp_t ptype = p.type;
-		if (ptype != CLIENT_DATA &&
-		    ptype != CONNECT && ptype != DISCONNECT &&
-		    ptype != SUB_UNSUB && ptype != CLIENT_SIG)
+		Forest::ptyp_t ptype = p.type;
+		if (ptype != Forest::CLIENT_DATA &&
+		    ptype != Forest::CONNECT && ptype != Forest::DISCONNECT &&
+		    ptype != Forest::SUB_UNSUB && ptype != Forest::CLIENT_SIG)
 			return false;
 		int comt = ctt->getComtree(ctx);
-		if ((ptype == CONNECT || ptype == DISCONNECT) &&
-		     comt != (int) Forest::CLIENT_CON_COMT)
+		if ((ptype == Forest::CONNECT || ptype == Forest::DISCONNECT) &&
+		     comt != (int) Forest::CONNECT_COMT)
 			return false;
-		if (ptype == CLIENT_SIG &&
+		if (ptype == Forest::CLIENT_SIG &&
 		    comt != (int) Forest::CLIENT_SIG_COMT)
 			return false;
 	}
@@ -819,7 +822,7 @@ void RouterCore::sendRteReply(pktx px, int ctx) {
 	pktx px1 = ps->alloc();
 	Packet& p1 = ps->getPacket(px1);
 	p1.length = Forest::HDR_LENG + 8;
-	p1.type = RTE_REPLY;
+	p1.type = Forest::RTE_REPLY;
 	p1.flags = 0;
 	p1.comtree = p.comtree;
 	p1.srcAdr = myAdr;
@@ -860,7 +863,7 @@ void RouterCore::handleRteReply(pktx px, int ctx) {
 		return;
 	}
 	int dcLnk = rt->getLink(rtx); int dLnk = ctt->getLink(dcLnk);
-	if (lt->getPeerType(dLnk) != ROUTER || !qm->enq(px,dLnk,now))
+	if (lt->getPeerType(dLnk) != Forest::ROUTER || !qm->enq(px,dLnk,now))
 		ps->free(px);
 	return;
 }
@@ -944,57 +947,59 @@ void RouterCore::handleConnDisc(pktx px) {
 	Packet& p = ps->getPacket(px);
 	int inLnk = p.inLink;
 
-	if (!validLeafAdr(p.srcAdr)) {
+	if (p.srcAdr != lt->getPeerAdr(inLnk) ||
+	    p.length != Forest::OVERHEAD + 8) {
 		ps->free(px); return;
 	}
-	if (p.type == CONNECT) {
-		if (lt->getPeerPort(inLnk) == 0) {
-			lt->setPeerPort(inLnk,p.tunPort);
+	uint64_t nonce = ntohl(p.payload()[0]);
+	nonce <<= 32;
+	nonce |= ntohl(p.payload()[1]);
+	if (nonce != lt->getNonce(inLnk)) { ps->free(px); return; }
+	if ((p.flags & Forest::ACK_FLAG) != 0) {
+		uint64_t x = 1; x <<= 63; x |= nonce;
+		pending->erase(x); ps->free(px); return;
+	}
+	if (p.type == Forest::CONNECT) {
+		if (lt->isConnected(inLnk) && !lt->revertEntry(inLnk)) {
+			ps->free(px); return;
 		}
-/*
-		if (lt->getPeerPort(inLnk) != p.tunPort) {
-			if (lt->getPeerPort(inLnk) != 0) {
-				string s;
-				cerr << "modifying peer port for host with ip "
-				     << Np4d::ip2string(p.tunIp,s)
-				     << endl;
-			}
-			lt->setPeerPort(inLnk,p.tunPort);
+		if (!lt->remapEntry(inLnk,p.tunIp,p.tunPort)) {
+			ps->free(px); return;
 		}
-*/
-		if (nmAdr != 0 && lt->getPeerType(inLnk) == CLIENT) {
+		lt->setConnectStatus(inLnk,true);
+		if (nmAdr != 0 && lt->getPeerType(inLnk) == Forest::CLIENT) {
 			CtlPkt cp(CtlPkt::CLIENT_CONNECT,CtlPkt::REQUEST,0);
 			cp.adr1 = p.srcAdr; cp.adr2 = myAdr;
 			sendCpReq(cp,nmAdr);
 		}
-	} else if (p.type == DISCONNECT) {
-		if (lt->getPeerPort(inLnk) == p.tunPort) {
+	} else if (p.type == Forest::DISCONNECT) {
+		lt->setConnectStatus(inLnk,false);
+		lt->revertEntry(inLnk);
+		if (nmAdr != 0 && lt->getPeerType(inLnk) == Forest::CLIENT) {
 			dropLink(inLnk);
-		}
-		if (nmAdr != 0 && lt->getPeerType(inLnk) == CLIENT) {
 			CtlPkt cp(CtlPkt::CLIENT_DISCONNECT,CtlPkt::REQUEST,0);
 			cp.adr1 = p.srcAdr; cp.adr2 = myAdr;
 			sendCpReq(cp,nmAdr);
 		}
 	}
-	ps->free(px); return;
+	// send ack back to sender
+	p.flags |= Forest::ACK_FLAG; p.dstAdr = p.srcAdr; p.srcAdr = myAdr;
+	p.pack();
+	iop->send(px,inLnk);
+	return;
 }
 
-/** Handle all control packets addressed to the router.
- *  with the exception of SUB_UNSUB and RTE_REPLY which
- *  are handled "inline".
+/** Handle all signalling packets addressed to the router.
  *  Assumes packet has passed all basic checks.
- *  Return 0 if the packet should be forwarded, else 1.
- *
- *  Still need to add error checking for modify messages.
- *  This requires extensions to ioProc and lnkTbl to
- *  track available bandwidth.
- *  @param px is a PacketStore index
+ *  @param px is the index of some packet
  */
 void RouterCore::handleCtlPkt(int px) {
 	Packet& p = ps->getPacket(px);
 	CtlPkt cp(p.payload(), p.length - Packet::OVERHEAD);
 
+	if (p.type != Forest::NET_SIG || p.comtree != Forest::NET_SIG_COMT) {
+		ps->free(px); return;
+	}
 	if (!cp.unpack()) {
 		string s;
 		cerr << "RouterCore::handleCtlPkt: misformatted control "
@@ -1004,9 +1009,6 @@ void RouterCore::handleCtlPkt(int px) {
 		cp.errMsg = "misformatted control packet";
 		returnToSender(px,cp);
 		return;
-	}
-	if (p.type != NET_SIG || p.comtree != Forest::NET_SIG_COMT) {
-		ps->free(px); return;
 	}
 	if (cp.mode != CtlPkt::REQUEST) { 
 		handleCpReply(px,cp); return;
@@ -1045,12 +1047,9 @@ void RouterCore::handleCtlPkt(int px) {
         case CtlPkt::GET_ROUTE:		getRoute(cp,reply); break;
         case CtlPkt::MOD_ROUTE:		modRoute(cp,reply); break;
 
-	// finishing up boot phase
-	case CtlPkt::BOOT_COMPLETE:	bootComplete(px,cp,reply); break;
+	// setting parameters
+	case CtlPkt::SET_LEAF_RANGE:	setLeafRange(cp,reply); break;
 
-	// aborting boot process
-	case CtlPkt::BOOT_ABORT:	bootAbort(px,cp,reply); break;
-	
 	default:
 		cerr << "unrecognized control packet type " << cp.type
 		     << endl;
@@ -1060,11 +1059,6 @@ void RouterCore::handleCtlPkt(int px) {
 	}
 
 	returnToSender(px,reply);
-
-	if (reply.type == CtlPkt::BOOT_COMPLETE) {
-		iop->closeBootSock();
-		booting = false;
-	}
 
 	return;
 }
@@ -1082,7 +1076,6 @@ void RouterCore::handleCtlPkt(int px) {
  */
 bool RouterCore::addIface(CtlPkt& cp, CtlPkt& reply) {
 	int iface = cp.iface;
-	ipa_t localIp = cp.ip1;
 	RateSpec rs(max(min(cp.rspec1.bitRateUp,  Forest::MAXBITRATE),
 						  Forest::MINBITRATE),
 		    max(min(cp.rspec1.bitRateDown,Forest::MAXBITRATE),
@@ -1092,18 +1085,28 @@ bool RouterCore::addIface(CtlPkt& cp, CtlPkt& reply) {
 		    max(min(cp.rspec1.pktRateDown,Forest::MAXPKTRATE),
 						  Forest::MINPKTRATE));
 	if (ift->valid(iface)) {
-		if (localIp != ift->getIpAdr(iface) ||
+		if (cp.iface != ift->getIpAdr(iface) ||
 		    !rs.equals(ift->getRates(iface))) { 
 			reply.errMsg = "add iface: requested interface "
 				 	"conflicts with existing interface";
 			reply.mode = CtlPkt::NEG_REPLY;
 			return false;
 		}
-	} else if (!ift->addEntry(iface, localIp, rs)) {
+		// means reply to earlier add iface was lost
+		reply.ip1 = ift->getIpAdr(iface);
+		reply.port1 = ift->getPort(iface);
+		return true;
+	} else if (!ift->addEntry(iface, cp.ip1, 0, rs)) {
 		reply.errMsg = "add iface: cannot add interface";
 		reply.mode = CtlPkt::NEG_REPLY;
 		return false;
+	} else if (!iop->setup(iface)) {
+		reply.errMsg = "add iface: could not setup interface";
+		reply.mode = CtlPkt::NEG_REPLY;
+		return false;
 	}
+	reply.ip1 = ift->getIpAdr(iface);
+	reply.port1 = ift->getPort(iface);
 	return true;
 }
 
@@ -1117,6 +1120,7 @@ bool RouterCore::getIface(CtlPkt& cp, CtlPkt& reply) {
 	if (ift->valid(iface)) {
 		reply.iface = iface;
 		reply.ip1 = ift->getIpAdr(iface);
+		reply.port1 = ift->getPort(iface);
 		reply.rspec1 = ift->getRates(iface);
 		reply.rspec2 = ift->getAvailRates(iface);
 		return true;
@@ -1138,77 +1142,95 @@ bool RouterCore::modIface(CtlPkt& cp, CtlPkt& reply) {
 }
 
 bool RouterCore::addLink(CtlPkt& cp, CtlPkt& reply) {
-	ntyp_t peerType = cp.nodeType;
-	if (peerType == ROUTER && cp.adr1 == 0) {
+	Forest::ntyp_t peerType = cp.nodeType;
+	if (peerType == Forest::ROUTER && cp.adr1 == 0) {
 		reply.errMsg = "add link: adding link to router, but no peer "
 				"address supplied";
 		reply.mode = CtlPkt::NEG_REPLY;
 		return false;
 	}
-	ipa_t  pipa = cp.ip1;
-	int lnk = cp.link;
-	int iface = (cp.iface != 0 ? cp.iface : ift->getDefaultIface());
-	ipp_t pipp = (cp.port1 != 0 ? cp.port1 :
-		      (peerType == ROUTER ? Forest::ROUTER_PORT : 0));
-	fAdr_t padr = cp.adr1;
-	int xlnk = lt->lookup(pipa,pipp);
-	if (xlnk != 0) { // this link already exists
-		if ((lnk != 0 && lnk != xlnk) ||
+	int iface = cp.iface;
+
+	int xlnk = lt->lookup(cp.ip1,cp.port1);
+	if (xlnk != 0 || (cp.link != 0 && lt->valid(cp.link))) {
+		if (cp.link != xlnk ||
 		    (peerType != lt->getPeerType(xlnk)) ||
-		    (cp.iface != 0 && cp.iface != lt->getIface(xlnk)) ||
-		    (padr != 0 && padr != lt->getPeerAdr(xlnk))) {
+		    (cp.iface != lt->getIface(xlnk)) ||
+		    (cp.adr1  != 0 && cp.adr1  != lt->getPeerAdr(xlnk)) ||
+		    (cp.ip1   != 0 && cp.ip1   != ift->getIpAdr(iface)) ||
+		    (cp.port1 != 0 && cp.port1 != ift->getPort(iface))) {
 			reply.errMsg = "add link: new link conflicts "
 						"with existing link";
 			reply.mode = CtlPkt::NEG_REPLY;
 			return false;
 		}
-		lnk = xlnk; padr = lt->getPeerAdr(xlnk);
-	} else { // adding a new link
-		// first ensure that the interface has enough
-		// capacity to support a new link of minimum capacity
-		RateSpec rs(Forest::MINBITRATE, Forest::MINPKTRATE,
-			    Forest::MINBITRATE, Forest::MINPKTRATE);
-		RateSpec& availRates = ift->getAvailRates(iface);
-		if (!rs.leq(availRates)) {
-			reply.errMsg = "add link: requested link "
-						"exceeds interface capacity";
-			reply.mode = CtlPkt::NEG_REPLY;
-			return false;
-		}
-		if ((peerType == ROUTER && pipp != Forest::ROUTER_PORT) ||
-		    (peerType != ROUTER && pipp == Forest::ROUTER_PORT) ||
-		    (lnk = lt->addEntry(lnk,pipa,pipp)) == 0) {
-			reply.errMsg = "add link: cannot add "
-				 		"requested link";
-			reply.mode = CtlPkt::NEG_REPLY;
-			return false;
-		}
-		// note: when lt->addEntry succeeds, link rates are
-		// initializied to Forest minimum rates
-		if (peerType != ROUTER && padr != 0 && !allocLeafAdr(padr)) {
-			lt->removeEntry(lnk);
-			reply.errMsg = "add link: specified peer "
-						"address is in use";
-			reply.mode = CtlPkt::NEG_REPLY;
-			return false;
-		}
-		if (padr == 0) padr = allocLeafAdr();
-		if (padr == 0) {
-			lt->removeEntry(lnk);
-			reply.errMsg = "add link: no available "
-						"peer addresses";
-			reply.mode = CtlPkt::NEG_REPLY;
-			return false;
-		}
-		availRates.subtract(rs);
-		lt->setIface(lnk,iface);
-		lt->setPeerType(lnk,peerType);
-		lt->setPeerAdr(lnk,padr);
-		sm->clearLnkStats(lnk);
+		// assume response to previous add link was lost
+		reply.link = xlnk;
+		reply.adr1 = lt->getPeerAdr(xlnk);
+		reply.ip1  = lt->getPeerIpAdr(xlnk);
+		return true;
 	}
+
+	// first ensure that the interface has enough
+	// capacity to support a new link of minimum capacity
+	RateSpec rs(Forest::MINBITRATE, Forest::MINPKTRATE,
+		    Forest::MINBITRATE, Forest::MINPKTRATE);
+	RateSpec& availRates = ift->getAvailRates(iface);
+	if (!rs.leq(availRates)) {
+		reply.errMsg =	"add link: requested link "
+				"exceeds interface capacity";
+		reply.mode = CtlPkt::NEG_REPLY;
+		return false;
+	}
+
+	// setting up link
+	// case 1: adding link to leaf; peer (ip,port) not known, use nonce
+	//	   subcase - lnk, peer forest address is known
+	//		     (for preconfigured leaf)
+	//	   subcase - lnk, peer address to be assigned by router
+	// case 2: adding link to router not yet up; port not known, use nonce
+	//	   lnk, peer address specified
+	// case 3: adding link to a router that is already up
+	//	   lnk, peer address specified, peer (ip,port) specified
+
+	// add table entry with (ip,port) or nonce
+	// note: when lt->addEntry succeeds, link rates are
+	// initialized to Forest minimum rates
+	int lnk = lt->addEntry(cp.link,cp.ip1,cp.port1,cp.nonce);
+	if (lnk == 0) {
+		reply.errMsg = "add link: cannot add requested link";
+		reply.mode = CtlPkt::NEG_REPLY;
+		return false;
+	}
+
+	if (peerType == Forest::ROUTER) {
+		lt->setPeerAdr(lnk,cp.adr1);
+	} else { // case 1
+		fAdr_t peerAdr = 0;
+		if (cp.adr1 == 0) peerAdr = allocLeafAdr();
+		else if (allocLeafAdr(cp.adr1)) peerAdr = cp.adr1;
+		if (peerAdr == 0) {
+			lt->removeEntry(lnk);
+			reply.errMsg =	"add link: cannot add link using "
+					"specified address";
+			reply.mode = CtlPkt::NEG_REPLY;
+			return false;
+		}
+		lt->setPeerAdr(lnk,peerAdr);
+	}
+	
+	availRates.subtract(rs);
+	lt->setIface(lnk,iface);
+	lt->setPeerType(lnk,peerType);
+	lt->setConnectStatus(lnk,false);
+	sm->clearLnkStats(lnk);
+	if (peerType == Forest::ROUTER && cp.ip1 != 0 && cp.port1 != 0) {
+		// link to a router that's already up, so connect
+		sendConnDisc(lnk,Forest::CONNECT);
+	}
+
 	reply.link = lnk;
-	reply.adr1 = padr;
-	reply.ip1 = ift->getIpAdr(iface);
+	reply.adr1 = lt->getPeerAdr(lnk);
 	return true;
 }
 
@@ -1371,8 +1393,10 @@ bool RouterCore::addComtreeLink(CtlPkt& cp, CtlPkt& reply) {
 	int lnk = 0; 
 	if (cp.link != 0) {
 		lnk = cp.link;
-	} else {
+	} else if (cp.ip1 != 0 && cp.port1 != 0) {
 		lnk = lt->lookup(cp.ip1, cp.port1);
+	} else if (cp.adr1 != 0) {
+		lnk = lt->lookup(cp.adr1);
 	}
 	if (!lt->valid(lnk)) {
 		reply.errMsg = "add comtree link: invalid link or "
@@ -1380,10 +1404,10 @@ bool RouterCore::addComtreeLink(CtlPkt& cp, CtlPkt& reply) {
 		reply.mode = CtlPkt::NEG_REPLY;
 		return false;
 	}
-	bool isRtr = (lt->getPeerType(lnk) == ROUTER);
+	bool isRtr = (lt->getPeerType(lnk) == Forest::ROUTER);
 	bool isCore = false;
 	if (isRtr) {
-		if(cp.coreFlag < 0) {
+		if (cp.coreFlag < 0) {
 			reply.errMsg = "add comtree link: must specify "
 					"core flag on links to routers";
 			reply.mode = CtlPkt::NEG_REPLY;
@@ -1416,7 +1440,7 @@ bool RouterCore::addComtreeLink(CtlPkt& cp, CtlPkt& reply) {
 	// add unicast route to cLnk if peer is a leaf or a router
 	// in a different zip code
 	fAdr_t peerAdr = lt->getPeerAdr(lnk);
-	if (lt->getPeerType(lnk) != ROUTER) {
+	if (lt->getPeerType(lnk) != Forest::ROUTER) {
 		int rtx = rt->getRteIndex(comt,peerAdr);
 		if (rtx == 0) rt->addEntry(comt,peerAdr,cLnk);
 	} else {
@@ -1467,8 +1491,14 @@ bool RouterCore::dropComtreeLink(CtlPkt& cp, CtlPkt& reply) {
 		reply.mode = CtlPkt::NEG_REPLY;
 		return false;
 	}
-	int lnk = cp.link;
-	if (lnk == 0) lnk = lt->lookup(cp.ip1,cp.port1);
+	int lnk = 0; 
+	if (cp.link != 0) {
+		lnk = cp.link;
+	} else if (cp.ip1 != 0 && cp.port1 != 0) {
+		lnk = lt->lookup(cp.ip1, cp.port1);
+	} else if (cp.adr1 != 0) {
+		lnk = lt->lookup(cp.adr1);
+	}
 	if (!lt->valid(lnk)) {
 		reply.errMsg = "drop comtree link: invalid link "
 			       "or peer IP and port";
@@ -1489,7 +1519,7 @@ void RouterCore::dropComtreeLink(int ctx, int lnk, int cLnk) {
 	// remove unicast route for this comtree
 	fAdr_t peerAdr = lt->getPeerAdr(lnk);
 	int comt = ctt->getComtree(ctx);
-	if (lt->getPeerType(lnk) != ROUTER) {
+	if (lt->getPeerType(lnk) != Forest::ROUTER) {
 		int rtx = rt->getRteIndex(comt,peerAdr);
 		if (rtx != 0) rt->removeEntry(rtx);
 	} else {
@@ -1702,11 +1732,7 @@ bool RouterCore::modRoute(CtlPkt& cp, CtlPkt& reply) {
 	return false;
 }
 
-/** Handle boot complete message.
- *  At the end of the boot phase, we do some additional setup and checking
- *  of the configuration tables. If the tables are inconsistent in some way,
- *  the operation fails. On successful completion of the boot phase,
- *  we close the boot socket and sent the booting variable to false.
+/** Set leaf address range.
  *  @param px is the number of the boot complete request packet
  *  @param cp is an unpacked control packet for p
  *  @param reply is a reference to a pre-formatted positive reply packet
@@ -1714,27 +1740,54 @@ bool RouterCore::modRoute(CtlPkt& cp, CtlPkt& reply) {
  *  a negative reply.
  *  @return true on success, false on failure
  */
-bool RouterCore::bootComplete(pktx px, CtlPkt& cp, CtlPkt& reply) {
-	if (booting && !setup()) {
-		cerr << "RouterCore::bootComplete: setup failed after "
-			"completion of boot phase\n";
-		perror("");
-		reply.errMsg = "configured tables are not consistent\n";
+bool RouterCore::setLeafRange(CtlPkt& cp, CtlPkt& reply) {
+	if (!booting) {
+		reply.errMsg =	"attempting to set leaf address range when "
+				"not booting";
 		reply.mode = CtlPkt::NEG_REPLY;
-		returnToSender(px,reply);
-		pktLog->write(cout);
-		exit(1);
+		return false;
 	}
+	firstLeafAdr = cp.adr1;
+       	fAdr_t lastLeafAdr = cp.adr2;
+	if (firstLeafAdr > lastLeafAdr) {
+		reply.errMsg = "request contained empty leaf address range";
+		reply.mode = CtlPkt::NEG_REPLY;
+		return false;
+	}
+	leafAdr = new UiSetPair((lastLeafAdr - firstLeafAdr)+1);
 	return true;
 }
 
-bool RouterCore::bootAbort(pktx px, CtlPkt& cp, CtlPkt& reply) {
-	cerr << "RouterCore::bootAbort: received boot abort message "
-			"from netMgr; exiting\n";
-	reply.mode = CtlPkt::POS_REPLY;
-	returnToSender(px,reply);
-	pktLog->write(cout);
-	exit(1);
+/** Send a connect packet to a peer router.
+ *  @param lnk is link number of the link on which we want to connect.
+ */
+void RouterCore::sendConnDisc(int lnk, Forest::ptyp_t type) {
+	pktx px = ps->alloc();
+	Packet& p = ps->getPacket(px);
+
+	uint64_t nonce = lt->getNonce(lnk);
+	p.length = Forest::OVERHEAD + 8; p.type = type; p.flags = 0;
+	p.comtree = Forest::CONNECT_COMT;
+	p.srcAdr = myAdr; p.dstAdr = lt->getPeerAdr(lnk);
+	p.payload()[0] = htonl((int) (nonce >> 32));
+	p.payload()[1] = htonl((int) (nonce & 0xffffffff));
+	p.inLink = lnk; // hack to force consistent routing of conn/disc
+	p.pack();
+
+	// save a record of the packet in pending map
+	pair<uint64_t,CpInfo> cpp;
+	cpp.first = 1; cpp.first <<= 63; cpp.first |= nonce;
+	cpp.second.px = px; cpp.second.nSent = 1; cpp.second.timestamp = now;
+	pending->insert(cpp);
+
+	// now, make copy of packet and send the copy
+	int copy = ps->fullCopy(px);
+	if (copy == 0) {
+		cerr << "RouterCore::sendConnect: no packets left in packet "
+			"store\n";
+		return;
+	}
+	iop->send(copy,lnk);
 }
 
 /** Send control packet request.
@@ -1763,7 +1816,7 @@ bool RouterCore::sendCpReq(CtlPkt& cp, fAdr_t dest) {
 		return false;
 	}
 	p.length = Forest::OVERHEAD + cp.paylen;
-	p.type = NET_SIG; p.flags = 0;
+	p.type = Forest::NET_SIG; p.flags = 0;
 	p.comtree = Forest::NET_SIG_COMT;
 	p.srcAdr = myAdr; p.dstAdr = dest;
 	p.inLink = 0;
@@ -1824,11 +1877,14 @@ void RouterCore::resendCpReq() {
 				"packet store\n";
 			return;
 		}
-		if (booting) {
+		if (p.type == Forest::CONNECT || p.type == Forest::DISCONNECT) {
+			iop->send(copy,p.inLink);
+		} else if (booting) {
 			pktLog->log(copy,0,true,now);
 			iop->send(copy,0);
-		} else
+		} else {
 			forward(copy,ctt->getComtIndex(p.comtree));
+		}
 	}
 }
 
@@ -1849,11 +1905,11 @@ void RouterCore::handleCpReply(pktx reply, CtlPkt& cpr) {
 		ps->free(reply);
 		return;
 	}
-	// so, remove it from the map of pending requests
+	// an expected reply, so remove it from the map of pending requests
 	ps->free(pp->second.px);
 	pending->erase(pp);
 
-	// and then handle the reply
+	// and then handle it
 	switch (cpr.type) {
 	case CtlPkt::CLIENT_CONNECT: case CtlPkt::CLIENT_DISCONNECT:
 		if (cpr.mode == CtlPkt::NEG_REPLY) {
@@ -1864,27 +1920,22 @@ void RouterCore::handleCpReply(pktx reply, CtlPkt& cpr) {
 		}
 		// otherwise, nothing to do
 		break;
-	case CtlPkt::BOOT_REQUEST: {
+	case CtlPkt::BOOT_ROUTER: {
 		if (cpr.mode == CtlPkt::NEG_REPLY) {
 			cerr << "RouterCore::handleCpReply: got "
 				"negative reply to a boot request: "
 				<< cpr.errMsg << endl;
 			break;
 		}
-		// unpack first and last leaf addresses, initialize leafAdr
-		if (cpr.adr1 == 0 || cpr.adr2 == 0) {
-			cerr << "RouterCore::handleCpReply: reply to boot "
-				"request did not include leaf address range\n";
-			break;
+		if (booting && !setup()) {
+			cerr << "RouterCore::handleCpReply: setup failed after "
+				"completion of boot phase\n";
+			perror("");
+			pktLog->write(cout);
+			exit(1);
 		}
-		firstLeafAdr = cpr.adr1;
-        	fAdr_t lastLeafAdr = cpr.adr2;
-		if (firstLeafAdr > lastLeafAdr) {
-			cerr << "RouterCore::handleCpReply: reply to boot "
-				"request contained empty leaf address range\n";
-			break;
-		}
-		leafAdr = new UiSetPair((lastLeafAdr - firstLeafAdr)+1);
+		iop->closeBootSock();
+		booting = false;
 		break;
 	}
 	default:
@@ -1898,7 +1949,7 @@ void RouterCore::handleCpReply(pktx reply, CtlPkt& cpr) {
 /** Send packet back to sender.
  *  Update the length, flip the addresses and pack the buffer.
  *  @param px is the packet number
- *  @param paylen is the length of the payload in bytes
+ *  @param cp is a control packet to be packed
  */
 void RouterCore::returnToSender(pktx px, CtlPkt& cp) {
 	Packet& p = ps->getPacket(px);

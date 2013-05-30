@@ -19,7 +19,9 @@
 #include "IdMap.h"
 #include "Heap.h"
 #include "Queue.h"
+#include "NetBuffer.h"
 #include "Logger.h"
+#include "Substrate.h"
 #include "CpHandler.h"
 #include <map>
 
@@ -31,25 +33,24 @@ namespace forest {
  *  comtrees in response to those requests.
  */
 
-ipa_t	extIp;			///< IP address used by remote display program
-ipa_t	intIp;			///< IP address for Forest net
-ipa_t	rtrIp;			///< IP address of access router
+ipa_t	nmIp;			///< IP address for network manager
+fAdr_t	nmAdr;			///< forest address for network manager
+ipa_t	myIp;			///< IP address bound to sockets
 fAdr_t	myAdr;			///< forest address of this host
 fAdr_t	rtrAdr;			///< forest address of access router
-
-int	intSock;		///< internal socket number
-int	extSock;		///< external listening socket
 
 PacketStoreTs *ps;		///< pointer to packet store
 
 NetInfo *net;			///< global view of net topology
 ComtInfo *comtrees;		///< definition of all comtrees
+Substrate *sub;			///< substrate for steering packets
 
-Logger logger;			///< error message logger
+Logger *logger;			///< error message logger
 
 int	maxComtree;		///< max# of comtrees
 int 	firstComt, lastComt;	///< defines range of comtrees controlled
 UiSetPair *comtSet;		///< in-use and unused comtrees
+pthread_mutex_t comtSetLock;	///< used to lock comtSet
 
 // pair of queues used by a thread
 struct QueuePair {
@@ -80,22 +81,10 @@ IdMap *reqMap;                  ///< maps rcvd requests to handling thread
 
 IdMap	*tMap;			///< maps sequence numbers to thread index
 
-pthread_mutex_t allComtLock;	///< global comtree lock
-				///< this lock must be held while executing
-				///< any of the following operations on the
-				///< NetInfo object:
-				///< addComtree(), removeComtree(),
-				///< validComtree(), validComtIndex(),
-				///< firstComtIndex(), lastComtIndex(),
-				///< lookupComtree()
-pthread_mutex_t *comtLock;	///< per comtree locks indexed by comtree index
-				///< must hold a comtree's lock to access or
-				///< modify any of its data
-pthread_mutex_t rateLock;	///< must hold this lock when accessing or
-				///< modifying available link rates
-				
 
-bool	init(const char*);
+bool	init(ipa_t, ipa_t, int, int, const char *topoFile);
+bool	bootMe(ipa_t, ipa_t, fAdr_t&, fAdr_t&, fAdr_t&, ipa_t&, ipp_t&,
+		uint64_t&);
 void	cleanup();
 void*	run(void*); 
 
@@ -106,14 +95,19 @@ bool 	handleAddComtReq(int,CtlPkt&, CpHandler&);
 bool 	handleDropComtReq(int,CtlPkt&, CpHandler&);
 bool 	handleJoinComtReq(int,CtlPkt&, CpHandler&);
 bool 	handleLeaveComtReq(int,CtlPkt&, CpHandler&);
+
+// helper functions for allocating comtree numbers from pool
+int	newComtreeNum();
+void	releaseComtreeNum(int);
+
 // helper funnctions for coniguring routers to add/remove paths to comtrees
 bool	setupPath(int, list<LinkMod>&, CpHandler&);
 bool	teardownPath(int, list<LinkMod>&, CpHandler&);
 bool	setupComtNode(int, int, CpHandler&);
 bool	teardownComtNode(int, int, CpHandler&);
 bool	setupComtLink(int, int, int, CpHandler&);
-int	setupClientLink(int, ipa_t, ipp_t, int, CpHandler&);
-bool	teardownClientLink(int, ipa_t, ipp_t, int, CpHandler&);
+int	setupClientLink(int, fAdr_t, int, CpHandler&);
+bool	teardownClientLink(int, fAdr_t, int, CpHandler&);
 bool	setupComtAttrs(int, int, CpHandler&);
 bool	setComtLinkRates(int, int, int, CpHandler&);
 bool	setComtLeafRates(int, fAdr_t, CpHandler&);

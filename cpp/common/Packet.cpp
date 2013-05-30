@@ -7,6 +7,7 @@
  */
 
 #include "Packet.h"
+#include "CtlPkt.h"
 
 namespace forest {
 
@@ -26,7 +27,7 @@ bool Packet::unpack() {
 	uint32_t x = ntohl(b[0]);
 	version = (x >> 28) & 0xf;
 	length = (x >> 16) & 0xfff;
-	type = (ptyp_t) ((x >> 8) & 0xff);
+	type = (Forest::ptyp_t) ((x >> 8) & 0xff);
 	flags = (x & 0xff);
 	comtree = ntohl(b[1]);
 	srcAdr = ntohl(b[2]);
@@ -93,13 +94,13 @@ bool Packet::read(istream& in) {
 		return false;
 	flags = (flgs_t) flgs; comtree = (comt_t) comt;
 
-             if (ptypString == "data")       type = CLIENT_DATA;
-        else if (ptypString == "sub_unsub")  type = SUB_UNSUB;
-        else if (ptypString == "connect")    type = CONNECT;
-        else if (ptypString == "disconnect") type = DISCONNECT;
-        else if (ptypString == "rteRep")     type = RTE_REPLY;
-        else if (ptypString == "client_sig") type = CLIENT_SIG;
-        else if (ptypString == "net_sig")    type = NET_SIG;
+             if (ptypString == "data")       type = Forest::CLIENT_DATA;
+        else if (ptypString == "sub_unsub")  type = Forest::SUB_UNSUB;
+        else if (ptypString == "connect")    type = Forest::CONNECT;
+        else if (ptypString == "disconnect") type = Forest::DISCONNECT;
+        else if (ptypString == "rteRep")     type = Forest::RTE_REPLY;
+        else if (ptypString == "client_sig") type = Forest::CLIENT_SIG;
+        else if (ptypString == "net_sig")    type = Forest::NET_SIG;
         else fatal("Packet::getPacket: invalid packet type");
 
 	if (buffer == 0) return true;
@@ -123,15 +124,15 @@ string& Packet::toString(string& s) const {
         ss << "len=" << setw(3) << length;
         ss << " typ=";
 
-        if (type == CLIENT_DATA)     ss << "data      ";
-        else if (type == SUB_UNSUB)  ss << "sub_unsub ";
-        else if (type == CLIENT_SIG) ss << "client_sig";
-        else if (type == CONNECT)    ss << "connect   ";
-        else if (type == DISCONNECT) ss << "disconnect";
-        else if (type == NET_SIG)    ss << "net_sig   ";
-        else if (type == RTE_REPLY)  ss << "rteRep    ";
-        else if (type == RTR_CTL)    ss << "rtr_ctl   ";
-        else if (type == VOQSTATUS)  ss << "voq_status";
+        if (type == Forest::CLIENT_DATA)     ss << "data      ";
+        else if (type == Forest::SUB_UNSUB)  ss << "sub_unsub ";
+        else if (type == Forest::CLIENT_SIG) ss << "client_sig";
+        else if (type == Forest::CONNECT)    ss << "connect   ";
+        else if (type == Forest::DISCONNECT) ss << "disconnect";
+        else if (type == Forest::NET_SIG)    ss << "net_sig   ";
+        else if (type == Forest::RTE_REPLY)  ss << "rteRep    ";
+        else if (type == Forest::RTR_CTL)    ss << "rtr_ctl   ";
+        else if (type == Forest::VOQSTATUS)  ss << "voq_status";
         else                         ss << "--------- ";
         ss << " flags=" << int(flags);
         ss << " comt=" << setw(3) << comtree;
@@ -148,9 +149,8 @@ string& Packet::toString(string& s) const {
                 ss << " " << x;
 	}
         ss << endl;
-	if (type == CLIENT_SIG || type == NET_SIG) {
-		CtlPkt cp(payload(), length - Forest::OVERHEAD);
-		cp.unpack();
+	if (type == Forest::CLIENT_SIG || type == Forest::NET_SIG) {
+		CtlPkt cp(*this);
 		ss << cp.toString(s);
 	}
 	s = ss.str();

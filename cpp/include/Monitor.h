@@ -13,6 +13,8 @@
 #include <list>
 #include "Forest.h"
 #include "Packet.h"
+#include "CtlPkt.h"
+#include "NetBuffer.h"
 #include "PacketStore.h"
 #include "UiHashTbl.h"
 #include "Avatar.h"
@@ -26,10 +28,10 @@ namespace forest {
  */
 class Monitor {
 public:
-		Monitor(ipa_t, ipa_t , ipa_t, fAdr_t, fAdr_t, fAdr_t, int);
+		Monitor(ipa_t, ipa_t , int);
 		~Monitor();
 
-	bool	init();			///< open and setup socket
+	bool	init(const string&, const string&); ///< open and setup socket
 	void	run(uint32_t); 		///< run avatar
 private:
 	const static short MON_PORT = 30124;///< port# for connection to GUI
@@ -41,16 +43,19 @@ private:
 	const static int UPDATE_PERIOD = 50;    ///< # ms between status updates
 	int worldSize;			///< # of squares in x and y directions
 	
-	ipa_t	extIp;			///< local IP used for remote GUI
-	ipa_t	intIp;			///< local IP used for Forest
-	ipa_t	rtrIp;			///< IP address of router
 	fAdr_t	myAdr;			///< forest address of host
+	ipa_t	myIp;			///< IP address to bind to sockets
 	fAdr_t	rtrAdr;			///< forest address of router
-	fAdr_t	comtCtlAdr;		///< address of ComtCtl
+	ipa_t	rtrIp;			///< IP address of router
+	ipp_t	rtrPort;		///< port number of router
+	ipa_t	cmIp;			///< IP address of client manager
+	fAdr_t	ccAdr;			///< address of ComtCtl
 
-	int	intSock;		///< internal socket number
-	int	extSock;		///< external listening socket
-	int	connSock;		///< external connection socket
+	uint64_t nonce;			///< used when connecting
+
+	int	dgSock;			///< datagram socket number
+	int	listenSock;		///< listening socket for remote GUI
+	int	connSock;		///< connection socket
 
 	int	cornerX;		///< lower-left corner of current view
 	int	cornerY;
@@ -75,17 +80,17 @@ private:
 	int	seqNum;			///< sequence number of control packet
 
 	// private helper methods
+	bool	login(const string&, const string&);
 	int	groupNum(int, int);
 
-	void	connect();		
-	void	disconnect();	
+	bool	connect();		
+	bool	disconnect();	
 
 	comt_t 	check4command(); 	
 
-	int 	receiveReport();
+	void	sendToRouter(int);
+	int 	receiveFromRouter();
 	void	forwardReport(int,int);
-
-	void	send2router(int);
 
 	void	startComtSwitch(comt_t, uint32_t);
 	bool	completeComtSwitch(pktx, uint32_t);
@@ -100,6 +105,5 @@ private:
 };
 
 } // ends namespace
-
 
 #endif

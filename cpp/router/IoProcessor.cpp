@@ -19,13 +19,8 @@ IoProcessor::IoProcessor(int maxIface1, IfaceTable *ift1, LinkTable *lt1,
 	nRdy = 0; maxSockNum = -1;
 	sockets = new fd_set;
 	sock = new int[maxIface+1];
+	for (int i = 0; i <= maxIface; i++) sock[i] = -1;
 	bootSock = -1;
-	#ifdef PROFILING // MAH
-    timer_send = new Timer("IoProcessor::send()");
-    timer_receive = new Timer("IoProcessor::receive() excluding when no pkts received");
-    timer_np4d_sendto4d = new Timer("IoProcessor::receive() -> timer_np4d_sendto4d()");
-    timer_np4d_recvfrom4d = new Timer("IoProcessor::receive() -> timer_np4d_recvfrom4d()");
-	#endif
 }
 
 IoProcessor::~IoProcessor() {
@@ -34,34 +29,27 @@ IoProcessor::~IoProcessor() {
 	     iface = ift->nextIface(iface))
 		close(sock[iface]);
 	delete sockets;
-	#ifdef PROFILING // MAH
-    cout << *timer_send << endl;
-    cout << *timer_np4d_sendto4d << endl;
-    cout << *timer_receive << endl;
-    cout << *timer_np4d_recvfrom4d << endl;
-    delete timer_send; delete timer_receive;
-    delete timer_np4d_sendto4d; delete timer_np4d_recvfrom4d; 
-	#endif
 }
 
 // Setup an interface. Return true on success, false on failure.
 bool IoProcessor::setup(int i) {
 	// create datagram socket
-	sock[i]= Np4d::datagramSocket();
+	sock[i] = Np4d::datagramSocket();
 	if (sock[i] < 0) {
 		cerr << "IoProcessor::setup: socket call failed\n";
                 return false;
         }
 	maxSockNum = max(maxSockNum, sock[i]);
 
-	// bind it to an address/port
-        if (!Np4d::bind4d(sock[i], ift->getIpAdr(i), Forest::ROUTER_PORT)) {
+	// bind it to an address
+        if (!Np4d::bind4d(sock[i], ift->getIpAdr(i),0)) {
 		string s;
 		cerr << "IoProcessor::setup: bind call failed for "
-		     << Np4d::ip2string(ift->getIpAdr(i),s) << ":"
-		     << Forest::ROUTER_PORT << ", check interface's IP address\n";
+		     << Np4d::ip2string(ift->getIpAdr(i),s)
+		     << " check interface's IP address\n";
                 return false;
         }
+	ift->setPort(i,Np4d::getSockPort(sock[i]));
 	return true;
 }
 
@@ -110,6 +98,13 @@ pktx IoProcessor::receive() {
 			ps->free(px); return 0;
 		}
 		p.unpack();
+string s;
+cerr << "iop received " << " nbytes=" << nbytes << endl;
+cerr << p.toString(s) << endl;
+if (p.type == Forest::CONNECT) {
+uint64_t x = ntohl(p.payload()[0]); x <<= 32; x |= ntohl(p.payload()[1]);
+cerr << x << endl;
+}
 	        if (!p.hdrErrCheck()) { ps->free(px); return 0; }
         	p.tunIp = sIpAdr; p.tunPort = sPort;
 		p.inLink = 0;
@@ -159,17 +154,28 @@ pktx IoProcessor::receive() {
 	if (nbytes < 0) fatal("IoProcessor::receive: error in recvfrom call");
 
 	p.unpack();
+string s;
+cerr << "iop received from (" << Np4d::ip2string(sIpAdr,s) << ",";
+cerr << sPort << ") nbytes=" << nbytes << endl;
+cerr << p.toString(s);
+if (p.type == Forest::CONNECT) {
+uint64_t x = ntohl(p.payload()[0]); x <<= 32; x |= ntohl(p.payload()[1]);
+cerr << x << endl;
+}
+
         if (!p.hdrErrCheck()) { ps->free(px); return 0; }
 	lnk = lt->lookup(sIpAdr, sPort);
-	if (lnk == 0 && p.type == CONNECT)
-		lnk = lt->lookup(sIpAdr, 0); // check for "startup" entry
-        if (lnk == 0 || cIf != lt->getIface(lnk) ||
-	    (sPort == Forest::ROUTER_PORT && lt->getPeerType(lnk) != ROUTER) ||
-	    (sPort != Forest::ROUTER_PORT && lt->getPeerType(lnk) == ROUTER)) {
+	if (lnk == 0 && p.type == Forest::CONNECT
+		     && p.length == Forest::OVERHEAD+8) {
+		uint64_t nonce = ntohl(p.payload()[0]); nonce <<= 32;
+		nonce |= ntohl(p.payload()[1]);
+		lnk = lt->lookup(nonce); // check for "startup" entry
+	}
+        if (lnk == 0 || cIf != lt->getIface(lnk)) {
 		string s;
 		cerr << "IoProcessor::receive: bad packet: lnk=" << lnk << " "
-		     << p.toString(s) << endl;
-		cerr << "sender (" << Np4d::ip2string(sIpAdr,s) << ","
+		     << p.toString(s);
+		cerr << "sender=(" << Np4d::ip2string(sIpAdr,s) << ","
 		     << sPort << ")\n";
 		ps->free(px); return 0;
 	}
@@ -178,15 +184,22 @@ pktx IoProcessor::receive() {
         p.tunIp = sIpAdr; p.tunPort = sPort;
 
         sm->cntInLink(lnk,Forest::truPktLeng(nbytes),
-		      (lt->getPeerType(lnk) == ROUTER));
+		      (lt->getPeerType(lnk) == Forest::ROUTER));
         return px;
 }
 
 void IoProcessor::send(pktx px, int lnk) {
 // Send packet on specified link and recycle storage.
 	Packet p = ps->getPacket(px);
-	if (bootSock >= 0) {
+string s;
+	if (lnk == 0) { // means we're booting and this is going to NetMgr
 		int rv, lim = 0;
+cerr << "iop sending to (" << Np4d::ip2string(nmIp,s) << ",";
+cerr << Forest::NM_PORT << ") \n" << p.toString(s);
+if (p.type == Forest::CONNECT) {
+uint64_t x = ntohl(p.payload()[0]); x <<= 32; x |= ntohl(p.payload()[1]);
+cerr << x << endl;
+}
 		do {
 			rv = Np4d::sendto4d(bootSock,
 				(void *) p.buffer, p.length,
@@ -198,12 +211,19 @@ void IoProcessor::send(pktx px, int lnk) {
 		ps->free(px);
 		return;
 	}
-	ipp_t farPort = lt->getPeerPort(lnk);
-	if (farPort == 0) { ps->free(px); return; }
-
 	ipa_t farIp = lt->getPeerIpAdr(lnk);
+	ipp_t farPort = lt->getPeerPort(lnk);
+	if (farIp == 0 || farPort == 0) { ps->free(px); return; }
 
 	int rv, lim = 0;
+{
+cerr << "iop sending to (" << Np4d::ip2string(farIp,s) << ",";
+cerr << farPort << ") \n" << p.toString(s);
+if (p.type == Forest::CONNECT) {
+uint64_t x = ntohl(p.payload()[0]); x <<= 32; x |= ntohl(p.payload()[1]);
+cerr << x << endl;
+}
+}
 	do {
 		rv = Np4d::sendto4d(sock[lt->getIface(lnk)],
 			(void *) p.buffer, p.length,
@@ -215,7 +235,7 @@ void IoProcessor::send(pktx px, int lnk) {
 		exit(1);
 	}
 	sm->cntOutLink(lnk,Forest::truPktLeng(p.length),
-		       (lt->getPeerType(lnk) == ROUTER));
+		       (lt->getPeerType(lnk) == Forest::ROUTER));
 	ps->free(px);
 }
 
