@@ -77,7 +77,6 @@ bool Substrate::run(int finTimeSec) {
 	uint64_t finishTime = finTimeSec;
 	finishTime *= 1000000000; // convert to ns
 
-cerr << "finishTime=" << finishTime << endl;
 	bool nothing2do; bool connected = false;
 	while (finishTime == 0 || now <= finishTime) {
 		nothing2do = true;
@@ -212,7 +211,6 @@ void Substrate::outbound(pktx px, int t) {
 	p.payErrUpdate();
 	// timeout used to purge old entries
 	pool[t].ts = now + 2000000000; // 2 sec timeout
-	seqNum++;
 	sendToForest(px);
 }
 
@@ -230,9 +228,11 @@ pktx Substrate::recvFromForest() {
 	if (nbytes < 0) { ps->free(px); return 0; }
 	p.unpack();
 	p.tunIp = srcIp; p.tunPort = srcPort;
+/*
 string s;
 cerr << "got packet from " << Np4d::ip2string(srcIp,s) << " " << srcPort << endl;
 cerr << p.toString(s) << endl;
+*/
 
 	return px;
 }
@@ -250,9 +250,11 @@ void Substrate::sendToForest(pktx px) {
 	} else {
 		ip = rtrIp; port = rtrPort;
 	}
+/*
 string s;
 cerr << "substrate sending to " << Np4d::ip2string(ip,s) << " " << port << endl;
 cerr << p.toString(s) << endl;
+*/
 	if (port == 0) fatal("Substrate::sendToForest: zero port number");
 	int rv = Np4d::sendto4d(dgSock,(void *) p.buffer, p.length,ip,port);
 	if (rv == -1) fatal("Substrate::sendToForest: failure in sendto");

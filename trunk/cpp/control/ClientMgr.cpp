@@ -233,8 +233,7 @@ void* handler(void *qp) {
 			success = handleClient(sock, cph);
 		} else {
 			Packet& p = ps->getPacket(px);
-			CtlPkt cp(p.payload(),p.length - Forest::OVERHEAD);
-			cp.unpack();
+			CtlPkt cp(p);
 			switch (cp.type) {
 			case CtlPkt::CLIENT_CONNECT: 
 			case CtlPkt::CLIENT_DISCONNECT: 
@@ -373,11 +372,11 @@ cerr << "client manager response\n" << ss.str();
  *  @param return the client's index in the client table, if the operation
  *  succeeds (including password verification), else 0; on a successful
  *  return the client's entry in the table is locked; the caller must
- *  releae it when done
+ *  release it when done
  */
 int handleLogin(int sock, NetBuffer& buf, string& clientName) {
 	// process up to 3 login attempts
-int numFailures = 0;
+	int numFailures = 0;
 	while (true) {
 		string client, pwd, s0,s1, s2, s3;
 		// expected form for login
@@ -391,8 +390,8 @@ int numFailures = 0;
 		    buf.nextLine() &&
 		    buf.readAlphas(s1) && s1 == "login" && buf.verify(':') &&
 		    buf.readAlphas(client) && buf.nextLine() &&
-		    buf.readWord(s2) && s2 == "password" && buf.verify(':') &&
-		    buf.readAlphas(pwd) && buf.nextLine() &&
+		    buf.readAlphas(s2) && s2 == "password" && buf.verify(':') &&
+		    buf.readWord(pwd) && buf.nextLine() &&
 		    buf.readAlphas(s3) && s3 == "over") {
 			int clx = cliTbl->getClient(client); // locks entry
 			if (clx != 0 && cliTbl->checkPassword(clx,pwd)) {
