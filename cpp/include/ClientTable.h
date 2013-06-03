@@ -41,7 +41,7 @@ public:
 	int	nextSession(int, int) const;
 
 	// access routines for client info
-	bool	lockClient(int);
+	bool	isLocked(int) const;
 	int	getClient(string&);		
 	void	releaseClient(int);
 	int	getSession(fAdr_t);		
@@ -136,6 +136,10 @@ private:
 	bool 	readEntry(istream&);
 
 };
+
+inline bool ClientTable::isLocked(int clx) const {
+	return cvec[clx].busyBit;
+}
 
 /** Get the first session index for a client.
  *  This method is used to iterate through the active sessions of a client.

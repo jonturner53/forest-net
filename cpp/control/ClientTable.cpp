@@ -45,7 +45,6 @@ bool ClientTable::init() {
  *  @param clx is a client index
  *  @return true if able to a lock on the specified client;
  *  return false if the client index does not refer to a valid client
- */
 bool ClientTable::lockClient(int clx) {
 	lockMap();
 	if (!clients->isIn(clx)) {
@@ -62,6 +61,7 @@ bool ClientTable::lockClient(int clx) {
 	unlockMap();
 	return true;
 }
+ */
 
 /** Get a client by name and lock its table entry.
  *  @param cname is a client name
@@ -122,7 +122,7 @@ int ClientTable::getSession(fAdr_t cliAdr) {
 	}
 	cvec[clx].busyBit = true; // set busyBit to lock client table entry
 	unlockMap();
-	return clx;
+	return sess;
 }
 
 /** Get the first client in the list of valid clients.
@@ -274,6 +274,7 @@ void ClientTable::removeSession(int sess) {
 	} else {
 		sessLists->remove(sess);
 	}
+	sessMap->dropPair(key(svec[sess].cliAdr));
 	svec[sess].clx = 0; // used to detect unused entries
 	unlockMap();
 }

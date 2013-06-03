@@ -83,7 +83,6 @@ bool init(ipa_t nmIp1, ipa_t myIp1) {
 bool bootMe(ipa_t nmIp, ipa_t myIp, fAdr_t& nmAdr, fAdr_t& myAdr,
 	    fAdr_t& rtrAdr, ipa_t& rtrIp, ipp_t& rtrPort, uint64_t& nonce) {
 
-cerr << "starting bootMe\n";
 	// open boot socket 
 	int bootSock = Np4d::datagramSocket();
 	if (bootSock < 0) return false;
@@ -107,12 +106,9 @@ cerr << "starting bootMe\n";
 
 	int resendTime = Misc::getTime();
 	ipa_t srcIp; ipp_t srcPort;
-string s;
 	while (true) {
 		int now = Misc::getTime();
 		if (now > resendTime) {
-cerr << "sending boot request\n";
-cerr << p.toString(s);
 			if (Np4d::sendto4d(bootSock,(void *) p.buffer, p.length,
 					   nmIp,Forest::NM_PORT) == -1) {
 				close(bootSock); return false;
@@ -123,8 +119,6 @@ cerr << p.toString(s);
 					      srcIp, srcPort);
 		if (nbytes < 0) { usleep(100000); continue; }
 		reply.unpack();
-cerr << "got reply\n";
-cerr << reply.toString(s);
 
 		// do some checking
 		if (srcIp != nmIp || reply.type != Forest::NET_SIG) {
@@ -277,7 +271,7 @@ bool handleClient(int sock,CpHandler& cph) {
 		cliTbl->releaseClient(clx);
 		close(sock); return true;
 	}
-	// process new session request - client is now locked
+	// look for new session request - note: client is now locked
 	string s1;
 	if (!buf.readAlphas(s1) || s1 != "newSession") {
 		Np4d::sendString(sock,"unrecognized input\noverAndOut\n");
@@ -608,8 +602,9 @@ bool handleConnDisc(pktx px, CtlPkt& cp, CpHandler& cph) {
 	ipa_t cliIp = cliTbl->getClientIp(sess);
 	fAdr_t rtrAdr = cliTbl->getRouterAdr(sess);
 
-	if (cp.type == CtlPkt::CLIENT_DISCONNECT) 
+	if (cp.type == CtlPkt::CLIENT_DISCONNECT) {
 		cliTbl->removeSession(sess);
+	}
 
 	cliTbl->releaseClient(clx);
 	acctRecType typ = (cp.type == CtlPkt::CLIENT_CONNECT ?
@@ -647,6 +642,7 @@ void writeAcctRecord(const string& cname, fAdr_t cliAdr, ipa_t cliIp,
 		 << Np4d::ip2string(cliIp,s) << ", ";
 	acctFile << Forest::fAdr2string(cliAdr,s) << ", ";
 	acctFile << Forest::fAdr2string(rtrAdr,s) << "\n";
+	acctFile.flush();
 }
 
 } // ends namespace

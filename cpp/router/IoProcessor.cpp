@@ -98,6 +98,7 @@ pktx IoProcessor::receive() {
 			ps->free(px); return 0;
 		}
 		p.unpack();
+/*
 string s;
 cerr << "iop received " << " nbytes=" << nbytes << endl;
 cerr << p.toString(s) << endl;
@@ -105,6 +106,7 @@ if (p.type == Forest::CONNECT) {
 uint64_t x = ntohl(p.payload()[0]); x <<= 32; x |= ntohl(p.payload()[1]);
 cerr << x << endl;
 }
+*/
 	        if (!p.hdrErrCheck()) { ps->free(px); return 0; }
         	p.tunIp = sIpAdr; p.tunPort = sPort;
 		p.inLink = 0;
@@ -154,6 +156,7 @@ cerr << x << endl;
 	if (nbytes < 0) fatal("IoProcessor::receive: error in recvfrom call");
 
 	p.unpack();
+/*
 string s;
 cerr << "iop received from (" << Np4d::ip2string(sIpAdr,s) << ",";
 cerr << sPort << ") nbytes=" << nbytes << endl;
@@ -162,6 +165,7 @@ if (p.type == Forest::CONNECT) {
 uint64_t x = ntohl(p.payload()[0]); x <<= 32; x |= ntohl(p.payload()[1]);
 cerr << x << endl;
 }
+*/
 
         if (!p.hdrErrCheck()) { ps->free(px); return 0; }
 	lnk = lt->lookup(sIpAdr, sPort);
@@ -194,12 +198,14 @@ void IoProcessor::send(pktx px, int lnk) {
 string s;
 	if (lnk == 0) { // means we're booting and this is going to NetMgr
 		int rv, lim = 0;
+/*
 cerr << "iop sending to (" << Np4d::ip2string(nmIp,s) << ",";
 cerr << Forest::NM_PORT << ") \n" << p.toString(s);
 if (p.type == Forest::CONNECT) {
 uint64_t x = ntohl(p.payload()[0]); x <<= 32; x |= ntohl(p.payload()[1]);
 cerr << x << endl;
 }
+*/
 		do {
 			rv = Np4d::sendto4d(bootSock,
 				(void *) p.buffer, p.length,
@@ -216,6 +222,7 @@ cerr << x << endl;
 	if (farIp == 0 || farPort == 0) { ps->free(px); return; }
 
 	int rv, lim = 0;
+/*
 {
 cerr << "iop sending to (" << Np4d::ip2string(farIp,s) << ",";
 cerr << farPort << ") \n" << p.toString(s);
@@ -224,6 +231,7 @@ uint64_t x = ntohl(p.payload()[0]); x <<= 32; x |= ntohl(p.payload()[1]);
 cerr << x << endl;
 }
 }
+*/
 	do {
 		rv = Np4d::sendto4d(sock[lt->getIface(lnk)],
 			(void *) p.buffer, p.length,
