@@ -327,27 +327,22 @@ fAdr_t setupLeaf(int leaf, pktx px, CtlPkt& cp, int rtr, int iface,
 		return 0;
 
 	// now add the new leaf to the leaf connection comtree
-cerr << "adding comtree link for connect comt\n";
 	reply = cph.addComtreeLink(dest,Forest::CONNECT_COMT,
 				   leafLink,-1,repCp);
 	if (!processReply(px,cp,reply,repCp,cph,"could not add leaf to "
 			  "connection comtree"))
 		return 0;
 
-cerr << "modifying comtree link rate\n";
 	// now modify comtree link rate
 	int ctx = comtrees->getComtIndex(Forest::CONNECT_COMT);
-cerr << "a\n";
 	rates = comtrees->getDefLeafRates(ctx);
 	comtrees->releaseComtree(ctx);
 	reply = cph.modComtreeLink(dest,Forest::CONNECT_COMT,leafLink,
 				   rates,repCp);
-cerr << "b\n";
 	if (!processReply(px,cp,reply,repCp,cph,"could not set rate on "
 			  "connection comtree"))
 		return 0;
 
-cerr << "adding comtree link for client sig comt\n";
 	// now add the new leaf to the client signaling comtree
 	reply = cph.addComtreeLink(dest,Forest::CLIENT_SIG_COMT,
 				   leafLink,-1,repCp);
@@ -368,7 +363,6 @@ cerr << "adding comtree link for client sig comt\n";
 	if (leafType == Forest::CLIENT) return leafAdr;
 
 	// for controllers, also add to the network signaling comtree
-cerr << "adding comtree link for net sig comt\n";
 	reply = cph.addComtreeLink(dest,Forest::NET_SIG_COMT,
 				   leafLink,-1,repCp);
 	if (!processReply(px,cp,reply,repCp,cph,"could not add leaf to network "
@@ -421,12 +415,6 @@ bool handleBootLeaf(pktx px, CtlPkt& cp, CpHandler& cph) {
 	int lnk = net->firstLinkAt(leaf);
 	int rtr = net->getPeer(leaf,lnk);
 	fAdr_t rtrAdr = net->getNodeAdr(rtr);
-{
-string s;
-cerr << "handleBootLeaf lnk=" << net->link2string(lnk,s);
-cerr << " ipAdr=" << Np4d::ip2string(net->getLeafIpAdr(leaf),s) << endl;
-cerr << " rtrIp=" << Np4d::ip2string(net->getLeafIpAdr(leaf),s) << endl;
-}
 
 	net->setStatus(leaf,NetInfo::BOOTING);
 
@@ -439,9 +427,6 @@ cerr << " rtrIp=" << Np4d::ip2string(net->getLeafIpAdr(leaf),s) << endl;
 	// find first iface for this router - refine this later
 	int iface = 1;
 	while (iface < net->getNumIf(rtr) && !net->validIf(rtr,iface)) iface++;
-{ string s;
-cerr << " rtrIp=" << Np4d::ip2string(net->getIfIpAdr(rtr,iface),s) << endl;
-}
 	uint64_t nonce = generateNonce();
 
 	// add link at router and configure rates/comtrees
@@ -537,7 +522,6 @@ bool processReply(pktx px, CtlPkt& cp, pktx reply, CtlPkt& repCp,
  */
 bool handleBootRouter(pktx px, CtlPkt& cp, CpHandler& cph) {
 	Packet& p = ps->getPacket(px);
-cerr << "entering handleBootRouter\n";
 
 	// find rtr index based on source address
 	ipa_t rtrAdr = p.srcAdr;
@@ -554,7 +538,6 @@ cerr << "entering handleBootRouter\n";
 	}
 
 	if (net->getStatus(rtr) == NetInfo::UP) {
-cerr << "early return\n";
 		// final reply lost or delayed, resend and quit
 		CtlPkt repCp(CtlPkt::BOOT_ROUTER,CtlPkt::POS_REPLY,cp.seqNum);
 		cph.sendReply(repCp,0);
@@ -564,7 +547,6 @@ cerr << "early return\n";
 	net->setStatus(rtr,NetInfo::BOOTING);
 
 	// configure leaf address range
-cerr << "configuring leaf range\n";
 	CtlPkt repCp;
 	pair<fAdr_t,fAdr_t> leafRange; net->getLeafRange(rtr,leafRange);
 	int reply = cph.setLeafRange(0,leafRange.first,leafRange.second,repCp);
@@ -574,7 +556,6 @@ cerr << "configuring leaf range\n";
 		return false;
 	}
 
-cerr << "configuring interfaces\n";
 	// add/configure interfaces
 	// for each interface in table, do an add iface
 	int nmLnk = net->getLLnum(net->firstLinkAt(netMgr),nmRtr);
@@ -592,12 +573,10 @@ cerr << "configuring interfaces\n";
 		// if this is the network manager's router, configure port
 		// in substrate
 		if (rtr == nmRtr && i == nmIface) {
-cerr << "setting rtrPort=" << repCp.port1 << endl;
 			sub->setRtrPort(repCp.port1);
 		}
 	}
 
-cerr << "configuring lnks\n";
 	// add/configure links to other routers
 	for (int lnk = net->firstLinkAt(rtr); lnk != 0;
 		 lnk = net->nextLinkAt(rtr,lnk)) {
@@ -609,7 +588,6 @@ cerr << "configuring lnks\n";
 		}
 	}
 
-cerr << "configuring comtrees\n";
 	// add/configure comtrees
 	for (int ctx = comtrees->firstComtree(); ctx != 0;
 		 ctx = comtrees->nextComtree(ctx)) {
@@ -624,7 +602,6 @@ cerr << "configuring comtrees\n";
 
 	// if this is net manager's router, configure link
 	if (rtr == nmRtr) {
-cerr << "net manager's access link\n";
 		uint64_t nonce = generateNonce();
 		sub->setNonce(nonce);
 		if (setupLeaf(netMgr,px,cp,rtr,nmIface,nonce,cph,true) == 0) {
@@ -632,7 +609,6 @@ cerr << "net manager's access link\n";
 		}
 	}
 
-cerr << "sending boot reply\n";
 	// finally, send positive reply
 	repCp.reset(CtlPkt::BOOT_ROUTER,CtlPkt::POS_REPLY,cp.seqNum);
 	cph.sendReply(repCp,0);
@@ -671,7 +647,6 @@ bool setupEndpoint(int lnk, int rtr, pktx px, CtlPkt& cp, CpHandler& cph,
 	ipp_t peerPort = 0;
 
 	uint64_t nonce;
-cerr << "peer=" << peer << " status=" << net->getStatus(peer) << endl;
 	if (net->getStatus(peer) != NetInfo::UP) {
 		nonce = generateNonce();
 		net->setNonce(lnk,nonce);
@@ -679,9 +654,6 @@ cerr << "peer=" << peer << " status=" << net->getStatus(peer) << endl;
 		peerPort = net->getIfPort(peer,i);
 		nonce = net->getNonce(lnk);
 	}
-string s;
-cerr << "peerIp=" << Np4d::ip2string(peerIp,s) << endl;
-cerr << "peerPort=" << peerPort << endl;
 	CtlPkt repCp;
 	fAdr_t dest = (useTunnel ? 0 : rtrAdr);
 	int reply = cph.addLink(dest,Forest::ROUTER,iface,llnk,peerIp,
