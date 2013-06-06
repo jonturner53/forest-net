@@ -311,7 +311,6 @@ bool handleComtreeDisplay(int sock) {
 	NetBuffer buf(sock,1024);
 	//const int BLEN = 100;
 	//char buf[BLEN+1]; int i;
-	string savs = "";
 	while (true) {
 		// wait for a request from comtreeDisplay
 		// these take three forms
@@ -372,9 +371,6 @@ bool handleComtreeDisplay(int sock) {
 			} else {
 				comtrees->comtStatus2string(ctx,s);
 			}
-static int cnt = 0;
-if (cnt++ < 10)
-cerr << "sending comtree status string for comt " << comt << "\n" << s << endl;
 			comtrees->releaseComtree(ctx);
 			if (Np4d::sendString(sock,s) < 0) {
 				logger->log("handleComtreeDisplay: unable to "
@@ -398,32 +394,9 @@ cerr << "sending comtree status string for comt " << comt << "\n" << s << endl;
  *  completion; the operation can fail if it cannot allocate
  *  packets, or if one of the routers that must be configured
  *  fails to respond.
+ *
  */
 bool handleAddComtReq(pktx px, CtlPkt& cp, CpHandler& cph) {
-// Hmmm. This method can produce orphan comtrees.
-// If a comtree is added, but the reply to the user is lost,
-// the user will try again, leading to an additional comtree
-// for that user. Could alter the protocol to deal with this.
-// We reply immediately to handleAddComtReq, but send completion
-// message when done, for which we require an ack. If we don't
-// get it, we tear down. Ugly. Alternatively, request could
-// contain a comtree sequence #, which we store with the comtree and
-// if a specific user requests two comtrees with the same sequence #,
-// we assume they are the same. This seems ugly since we already have
-// sequence number for packet. Maybe should retain record of requests
-// by sequence number. How long to retain them? And what should we
-// do on getting a repeat? Could send to handler and let handler
-// figure out when we have a repeat.
-//
-// Not clear we can make addComtree operation idempotent
-// Another approach is to require that a user first request a
-// comtree number, then do addComtree using that comtree number.
-// Then, a repeated request can be idempotent.
-// Need to limit number of comtrees a user can request, so we
-// need to track this and need to timeout old requests.
-// Maybe just keep a list of up to 1000 pending comtrees and
-// every time we add a new one, we recycle one of the old ones,
-// if the list is full.
 	Packet& p = ps->getPacket(px);
 	if (cp.zipCode != 0) {
 		cph.errReply(px,cp,"missing required attribute");
