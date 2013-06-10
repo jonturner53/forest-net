@@ -39,22 +39,32 @@ enum acctRecType { UNDEF, NEWSESSION, CONNECT_REC, DISCONNECT_REC };
 bool init(ipa_t,ipa_t);
 bool bootMe(ipa_t, ipa_t, fAdr_t&, fAdr_t&, fAdr_t&, ipa_t&, ipp_t&, uint64_t&);
 
+// handler tasks
 void* handler(void *);
 bool handleClient(int,CpHandler&);
-int handleLogin(int,NetBuffer&,string&);
-void handleAdmin(int,NetBuffer&);
 bool handleConnDisc(pktx,CtlPkt&,CpHandler&);
 
-bool readRates(NetBuffer&,RateSpec&);
+// dialogs with client
+int loginDialog(int,NetBuffer&);
+void adminDialog(int,CpHandler&,int,NetBuffer&);
+void userDialog(int,CpHandler&,int,NetBuffer&);
 
-void addClient(int, NetBuffer&);
-void removeClient(int, NetBuffer&);
-void modPassword(int, NetBuffer&);
-void modRealName(int, NetBuffer&);
-void modEmail(int, NetBuffer&);
-void modDefRates(int, NetBuffer&);
-void modTotalRates(int, NetBuffer&);
-void showClient(int, NetBuffer&);
+// operations that can be performed by normal clients
+bool newSession(int, CpHandler&, int, NetBuffer&, string&);
+void getProfile(int, NetBuffer&, string&);
+void updateProfile(int, NetBuffer&, string&);
+void changePassword(int, NetBuffer&, string&);
+void addComtree(int, NetBuffer&, string&);
+
+// privileged operations
+void addClient(NetBuffer&, string&);
+void removeClient(NetBuffer&, string&);
+void modPassword(NetBuffer&, ClientTable::privileges, string&);
+void modRealName(NetBuffer&, string&);
+void modEmail(NetBuffer&, string&);
+void modDefRates(NetBuffer&, string&);
+void modTotalRates(NetBuffer&, string&);
+void showClient(NetBuffer&, string&);
 
 void writeAcctRecord(const string&, fAdr_t, ipa_t, fAdr_t, acctRecType); 
 

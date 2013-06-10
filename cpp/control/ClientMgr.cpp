@@ -263,81 +263,187 @@ void* handler(void *qp) {
 bool handleClient(int sock,CpHandler& cph) {
 	int clx; string clientName;
 	NetBuffer buf(sock,1024);
-	clx = handleLogin(sock,buf,clientName);
-	if (clx == 0) { close(sock); return true; }
-	if (clientName == "admin") {
-		handleAdmin(sock,buf);
-		cliTbl->releaseClient(clx);
-		close(sock); return true;
+
+	clx = loginDialog(sock,buf);
+	if (clx == 0) {
+		if (sock >= 0) close(sock);
+		return true;
 	}
+	// clx is locked now
+
+	ClientTable::privileges priv = cliTbl->getPrivileges(clx);
+	if (priv == ClientTable::ADMIN || priv == ClientTable::ROOT) {
+		adminDialog(sock,cph,clx,buf);
+	} else {
+		userDialog(sock,cph,clx,buf);
+	}
+	cliTbl->releaseClient(clx);
+	if (sock >= 0) close(sock);
+	return true;
+}
+
+/** Carry out login dialog and verify that client/password is correct.
+ *  @param sock is an open socket to the client
+ *  @param buf is a reference to a NetBuffer bound to the socket
+ *  @param return the client's index in the client table, if the operation
+ *  succeeds (including password verification), else 0; on a successful
+ *  return the client's entry in the table is locked; the caller must
+ *  release it when done
+ */
+int loginDialog(int sock, NetBuffer& buf) {
+	string client, pwd, s0, s1, s2, s3;
+	int numFailures = 0;
+	if (!buf.readWord(s0) || s0 != "Forest-login-v1" ||
+	    !buf.nextLine() || buf.readAlphas(s1)) {
+		Np4d::sendString(sock,"misformatted login dialog\n"
+				      "overAndOut\n");
+		return 0;
+	}
+	while (true) {
+		// process up to 3 login attempts
+		// expected form for login
+		// Forest-login-v1
+		// login: clientName
+		// password: clientPassword
+		// over
+		if (s1 == "login") {
+			// process remainder of login dialog
+			if (buf.verify(':') && buf.readAlphas(client) &&
+			      buf.nextLine() &&
+			    buf.readAlphas(s2) && s2 == "password" &&
+			      buf.verify(':') && buf.readWord(pwd) &&
+			      buf.nextLine() &&
+			    buf.readAlphas(s3) && s3 == "over") {
+				int clx = cliTbl->getClient(client); // locks clx
+				if (clx == 0) {
+					Np4d::sendString(sock,"login failed: "
+							 "try again\nover\n");
+				} else if (cliTbl->checkPassword(clx,pwd)) {
+					Np4d::sendString(sock,"login successful"
+							      "\nover\n");
+					return clx;
+				} else {
+					cliTbl->releaseClient(clx);
+				}
+			}
+		} else if (s1 == "newAccount") {
+			// attempt to add account
+			if (buf.verify(':') && buf.readAlphas(client) &&
+			      buf.nextLine() &&
+			    buf.readAlphas(s2) && s2 == "password" &&
+			      buf.verify(':') && buf.readWord(pwd) &&
+			      buf.nextLine() &&
+			    buf.readAlphas(s3) && s3 == "over") {
+				int clx = cliTbl->getClient(client); //locks clx
+				if (clx != 0) {
+					Np4d::sendString(sock,"client name not "
+							 "available: try again\n"
+							 "over\n");
+					cliTbl->releaseClient(clx);
+				}
+				clx = cliTbl->addClient(client,pwd,
+							ClientTable::STANDARD);
+				if (clx == 0) {
+					Np4d::sendString(sock,"unable to add "
+							 "client\nover\n");
+				} else {
+					Np4d::sendString(sock,"success\nover\n");
+					return clx;
+				}
+			}
+		} else {
+			Np4d::sendString(sock,"misformatted login dialog\n"
+					      "overAndOut\n");
+			return 0;
+		}
+		numFailures++;
+		if (numFailures >= 3) {
+			Np4d::sendString(sock,"login failed: you're done\n"
+				 	 "overAndOut\n");
+			return 0;
+		}
+	}
+}
+
+void userDialog(int sock, CpHandler& cph, int clx, NetBuffer& buf) {
+	string cmd, reply;
+	while (buf.readAlphas(cmd)) {
+		reply = "success";
+		if (cmd == "newSession") {
+			newSession(sock,cph,clx,buf,reply);
+		} else if (cmd == "getProfile" && buf.nextLine()) {
+			getProfile(clx,buf,reply);
+		} else if (cmd == "updateProfile" && buf.nextLine()) {
+			updateProfile(clx,buf,reply);
+		} else if (cmd == "changePassword" && buf.nextLine()) {
+			changePassword(clx,buf,reply);
+		} else if (cmd == "addComtree" && buf.nextLine()) {
+			addComtree(clx,buf,reply);
+		} else if (cmd == "over" && buf.nextLine()) {
+			// ignore
+		} else if (cmd == "overAndOut" && buf.nextLine()) {
+			break;
+		} else {
+			reply = "unrecognized input";
+		}
+		if (sock == -1) break;
+		reply += "\nover\n";
+		Np4d::sendString(sock,reply);
+	}
+	if (sock > 0) { close(sock); sock = -1; }
+}
+
+bool newSession(int sock, CpHandler& cph, int clx,
+		NetBuffer& buf, string& reply) {
 	// look for new session request - note: client is now locked
 	string s1;
-	if (!buf.readAlphas(s1) || s1 != "newSession") {
-		Np4d::sendString(sock,"unrecognized input\noverAndOut\n");
-		cliTbl->releaseClient(clx);
-		close(sock); return true;
-	}
 	RateSpec rs;
 	if (buf.verify(':')) {
-		if (readRates(buf,rs) || !buf.nextLine()) {
-			Np4d::sendString(sock,"unrecognized input\n"
-					      "overAndOut\n");
-			cliTbl->releaseClient(clx);
-			close(sock); return true;
+		if (buf.readRspec(rs) || !buf.nextLine()) {
+			reply = "unrecognized input";
+			return false;
 		}
 	} else {
 		if (buf.nextLine()) {
 			rs = cliTbl->getDefRates(clx);
 		} else {
-			cliTbl->releaseClient(clx);
-			Np4d::sendString(sock,"unrecognized input\n"
-					      "overAndOut\n");
-			close(sock); return true;
+			reply = "unrecognized input";
+			return false;
 		}
 	}
 	if (!buf.readLine(s1) || s1 != "over") {
-		cliTbl->releaseClient(clx);
-		Np4d::sendString(sock,"unrecognized input\noverAndOut\n");
-		close(sock); return true;
+		reply = "unrecognized input";
+		return false;
 	}
 	// make sure we have sufficient capacity
 	bool ok = rs.leq(cliTbl->getAvailRates(clx));
 	if (!ok) {
-		Np4d::sendString(sock,"session rate exceeds available "
-				      "capacity\noverAndOut\n");
-		cliTbl->releaseClient(clx);
-		close(sock); return true;
+		reply = "session rate exceeds available capacity";
+		return true;
 	}
 
 	// proceed with new session setup
-	ipa_t clientIp = Np4d::getSockIp(sock);
 	CtlPkt repCp;
-	pktx reply = cph.newSession(nmAdr, clientIp, rs, repCp);
-	if (reply == 0) {
-		Np4d::sendString(sock,"cannot complete login: "
-				 "NetMgr never responded\noverAndOut\n");
-		close(sock);
-		cliTbl->releaseClient(clx);
+	ipa_t clientIp = Np4d::getSockIp(sock);
+	pktx rpx = cph.newSession(nmAdr, clientIp, rs, repCp);
+	if (rpx == 0) {
+		reply = "cannot complete login: NetMgr never responded";
 		return false;
 	}
 	if (repCp.mode != CtlPkt::POS_REPLY) {
-		Np4d::sendString(sock,"cannot complete login: "
-				 "NetMgr failed (" + repCp.errMsg +
-				 ")\noverAndOut\n");
-		ps->free(reply); close(sock);
-		cliTbl->releaseClient(clx);
+		reply = "cannot complete login: NetMgr failed (" +
+			 repCp.errMsg + ")";
+		ps->free(rpx); 
 		return false;
 	}
 
 	int sess = cliTbl->addSession(repCp.adr1, repCp.adr2, clx);
 	if (sess == 0) {
-		Np4d::sendString(sock,"cannot complete login: "
-				 "could not create session record\n"
-				 ")\noverAndOut\n");
-		cliTbl->releaseClient(clx);
-		close(sock); return false;
+		reply = "cannot complete login: could not create session record";
+		return false;
 	}
 	cliTbl->setState(sess, ClientTable::PENDING);
+
 	// set session information
 	const string& cliName = cliTbl->getClientName(clx);
 	cliTbl->setClientIp(sess,clientIp);
@@ -359,176 +465,191 @@ bool handleClient(int sock,CpHandler& cph) {
 	ss << "comtCtlAddress: " << Forest::fAdr2string(repCp.adr3,s) << endl;
 	ss << "connectNonce: " << repCp.nonce << "\noverAndOut\n";
 cerr << "client manager response\n" << ss.str();
-	Np4d::sendString(sock,ss.str());
+	reply = ss.str();
 
-	ps->free(reply); close(sock); return true;
+	ps->free(rpx);
+	return true;
 }
 
-/** Carry out login dialog and verify that client/password is correct.
- *  @param sock is an open socket to the client
- *  @param buf is a reference to a NetBuffer bound to the socket
- *  @param clientName is a reference to a string in which the client name
- *  is returned
- *  @param return the client's index in the client table, if the operation
- *  succeeds (including password verification), else 0; on a successful
- *  return the client's entry in the table is locked; the caller must
- *  release it when done
- */
-int handleLogin(int sock, NetBuffer& buf, string& clientName) {
-	// process up to 3 login attempts
-	int numFailures = 0;
-	while (true) {
-		string client, pwd, s0,s1, s2, s3;
-		// expected form for login
-		// Forest-login-v1
-		// login: clientName
-		// password: clientPassword
-		// over
-		// newSession: (50,1000,25,500)
-		// overAndOut
-		if (buf.readWord(s0) && s0 == "Forest-login-v1" &&
-		    buf.nextLine() &&
-		    buf.readAlphas(s1) && s1 == "login" && buf.verify(':') &&
-		    buf.readAlphas(client) && buf.nextLine() &&
-		    buf.readAlphas(s2) && s2 == "password" && buf.verify(':') &&
-		    buf.readWord(pwd) && buf.nextLine() &&
-		    buf.readAlphas(s3) && s3 == "over") {
-			int clx = cliTbl->getClient(client); // locks entry
-			if (clx != 0 && cliTbl->checkPassword(clx,pwd)) {
-				Np4d::sendString(sock,"login successful\n"
-						      "over\n");
-				return clx;
+void getProfile(int clx, NetBuffer& buf, string& reply) {
+	string s;
+	reply  = "clientName: " + cliTbl->getClientName(clx) + "\n";
+	reply += "realName: " + cliTbl->getRealName(clx) + "\n";
+	reply += "email: " + cliTbl->getEmail(clx) + "\n";
+	reply += "defRates: " + cliTbl->getDefRates(clx).toString(s) + "\n";
+	reply += "totalRates: " + cliTbl->getTotalRates(clx).toString(s) + "\n";
+}
+
+void updateProfile(int clx, NetBuffer& buf, string& reply) {
+	string item, s; RateSpec rates;
+	ClientTable::privileges priv = cliTbl->getPrivileges(clx);
+	while (buf.readAlphas(item)) {
+		if (item == "clientName" && buf.verify(':') &&
+		    buf.readAlphas(s) && buf.nextLine()) {
+			cliTbl->setClientName(clx,s);
+		} else if (item == "realName" && buf.verify(':') &&
+		    buf.readAlphas(s) && buf.nextLine()) {
+			cliTbl->setRealName(clx,s);
+		} else if (item == "email" && buf.verify(':') &&
+		    buf.readAlphas(s) && buf.nextLine()) {
+			cliTbl->setEmail(clx,s);
+		} else if (item == "defRates" && buf.verify(':') &&
+		    buf.readRspec(rates) && buf.nextLine() &&
+		    priv != ClientTable::LIMITED) {
+			if (rates.leq(cliTbl->getTotalRates(clx)))
+				cliTbl->getDefRates(clx) = rates;
+		} else if (item == "totalRates" && buf.verify(':') &&
+		    buf.readRspec(rates) && buf.nextLine() &&
+		    priv != ClientTable::LIMITED) {
+			if (rates.leq(cliTbl->getTotalRates(clx)) ||
+			    rates.leq(cliTbl->getTotalRates())) {
+				cliTbl->getTotalRates(clx) = rates;
 			}
-			if (clx != 0) cliTbl->releaseClient(clx);
+		} else if (item == "over" && buf.nextLine()) {
+			break;
+		} else if (item == "overAndOut" && buf.nextLine()) {
+			break;
 		} else {
-			Np4d::sendString(sock,"misformatted login dialog\n"
-					      "overAndOut\n");
-			return 0;
-		}
-		Np4d::sendString(sock,"login failed: try again\nover\n");
-		numFailures++;
-		if (numFailures >= 3) {
-			Np4d::sendString(sock,"login failed: you're done\n"
-				 	 "overAndOut\n");
-			return 0;
+			reply = "misformatted request (" + item + ")";
+			break;
 		}
 	}
+	return;
 }
 
-bool readRates(NetBuffer& buf, RateSpec& rs) {
-	int bru, brd, pru, prd;
-	if (buf.verify('(')  &&
-	    buf.readInt(bru) && buf.verify(',') &&
-	    buf.readInt(brd) && buf.verify(',') &&
-	    buf.readInt(pru) && buf.verify(',') &&
-	    buf.readInt(prd) && buf.verify(')')) {
-		rs.set(bru,brd,pru,prd); return true;
+void changePassword(int clx, NetBuffer& buf, string& reply) {
+	string item, pwd, s; RateSpec rates;
+	while (buf.readAlphas(item)) {
+		if (item == "password" && buf.verify(':') &&
+		    buf.readAlphas(pwd) && buf.nextLine()) {
+			cliTbl->setPassword(clx,s);
+		} else if (item == "over" && buf.nextLine()) {
+			break;
+		} else if (item == "overAndOut" && buf.nextLine()) {
+			break;
+		} else {
+			reply = "misformatted request (" + item + ")";
+			break;
+		}
 	}
-	return false;
+	return;
+}
+
+void addComtree(int clx, NetBuffer& buf, string& reply) {
 }
 
 /** Handle an administrative login session.
  *  Supports commands for adding clients and modifying parameters.
  */
-void handleAdmin(int sock, NetBuffer& buf) {
-	string cmd;
-	while (true) {
-		Np4d::sendString(sock,"admin: ");
-		buf.readAlphas(cmd);
+void adminDialog(int sock, CpHandler& cph, int clx, NetBuffer& buf) {
+	string cmd; string reply;
+
+	// add code to reject if non-local connection
+	// can still use ssh tunneling for secure remote access
+	while (buf.readAlphas(cmd)) {
+		reply = "success";
 		if (cmd == "addClient" && buf.verify(':')) {
-			addClient(sock,buf);
+			addClient(buf,reply);
 		} else if (cmd == "removeClient" && buf.verify(':')) {
-			removeClient(sock,buf);
+			removeClient(buf,reply);
 		} else if (cmd == "modPassword" && buf.verify(':')) {
-			modPassword(sock,buf);
+			ClientTable::privileges priv =
+				cliTbl->getPrivileges(clx);
+			modPassword(buf,priv,reply);
 		} else if (cmd == "modRealName" && buf.verify(':')) {
-			modRealName(sock,buf);
+			modRealName(buf,reply);
 		} else if (cmd == "modEmail" && buf.verify(':')) {
-			modEmail(sock,buf);
+			modEmail(buf,reply);
 		} else if (cmd == "modDefRates" && buf.verify(':')) {
-			modDefRates(sock,buf);
+			modDefRates(buf,reply);
 		} else if (cmd == "modTotalRates" && buf.verify(':')) {
-			modTotalRates(sock,buf);
+			modTotalRates(buf,reply);
 		} else if (cmd == "showClient" && buf.verify(':')) {
-			showClient(sock,buf);
-		} else if (cmd == "quit") {
+			showClient(buf,reply);
+		} else if (cmd == "over" && buf.nextLine()) {
+			// ignore
+		} else if (cmd == "overAndOut") {
 			buf.nextLine(); break;
 		}
+		reply += "\n"; Np4d::sendString(sock,reply);
+
 		if (!buf.nextLine()) break;
 	}
+	cliTbl-> releaseClient(clx); close(sock);
 }
 
-void addClient(int sock, NetBuffer& buf) {
+void addClient(NetBuffer& buf, string& reply) {
 	string cname, pwd, realName, email;
 	RateSpec defRates, totalRates;
 
-	if (buf.readName(cname) && buf.readWord(pwd) && 
-	    buf.readString(realName) && buf.readWord(email) &&
-	    readRates(buf,defRates) && readRates(buf,totalRates)) {
-		int clx = cliTbl->addClient(cname,pwd,realName,email,
-					    defRates,totalRates);
+	if (buf.readName(cname) && buf.readWord(pwd)) {
+		int clx = cliTbl->addClient(cname,pwd,ClientTable::STANDARD);
 		if (clx == 0) {
-			Np4d::sendString(sock,"unable to add client\n");
+			reply = "unable to add client";
 			return;
 		}
-		cliTbl->getDefRates(clx) = defRates;
-		cliTbl->getTotalRates(clx) = totalRates;
+		cliTbl->setRealName(clx,"none"); cliTbl->setEmail(clx,"none");
+		cliTbl->getDefRates(clx) = cliTbl->getDefRates();
+		cliTbl->getTotalRates(clx) = cliTbl->getTotalRates();
 		cliTbl->releaseClient(clx);
-		return;
 	}
 }
 
-void removeClient(int sock, NetBuffer& buf) {
+void removeClient(NetBuffer& buf, string& reply) {
 	string cname;
 
 	if (buf.readName(cname)) {
 		int clx = cliTbl->getClient(cname);
 		if (clx == 0) {
-			Np4d::sendString(sock,"no such client\n");
+			reply = "no such client";
 			return;
 		}
 		cliTbl->removeClient(clx);
-		return;
 	}
 }
 
-void modPassword(int sock, NetBuffer& buf) {
+void modPassword(NetBuffer& buf, ClientTable::privileges priv,
+		 string& reply) {
 	string cname, pwd;
 
 	if (buf.readName(cname) && buf.readWord(pwd)) {
 		int clx = cliTbl->getClient(cname);
 		if (clx == 0) {
-			Np4d::sendString(sock,"no such client\n");
+			reply = "no such client";
 			return;
 		}
-		cliTbl->setPassword(clx,pwd);
+		ClientTable::privileges cpriv = cliTbl->getPrivileges(clx);
+		if ((priv == ClientTable::ROOT  && cpriv != ClientTable::ROOT) ||
+		    (priv == ClientTable::ADMIN && cpriv != ClientTable::ROOT &&
+		     cpriv != ClientTable::ADMIN))
+			cliTbl->setPassword(clx,pwd);
+		else
+			reply = "rejected request";
 		cliTbl->releaseClient(clx);
-		return;
 	}
 }
 	
-void modRealName(int sock, NetBuffer& buf) {
+void modRealName(NetBuffer& buf, string& reply) {
 	string cname, realName;
 
 	if (buf.readName(cname) && buf.readString(realName)) {
 		int clx = cliTbl->getClient(cname);
 		if (clx == 0) {
-			Np4d::sendString(sock,"no such client\n");
+			reply = "no such client";
 			return;
 		}
 		cliTbl->setRealName(clx,realName);
 		cliTbl->releaseClient(clx);
-		return;
 	}
 }
 
-void modEmail(int sock, NetBuffer& buf) {
+void modEmail(NetBuffer& buf, string& reply) {
 	string cname, email;
 
 	if (buf.readName(cname) && buf.readWord(email)) {
 		int clx = cliTbl->getClient(cname);
 		if (clx == 0) {
-			Np4d::sendString(sock,"no such client\n");
+			reply = "no such client";
 			return;
 		}
 		cliTbl->setEmail(clx,email);
@@ -537,50 +658,45 @@ void modEmail(int sock, NetBuffer& buf) {
 	}
 }
 
-void modDefRates(int sock, NetBuffer& buf) {
+void modDefRates(NetBuffer& buf, string& reply) {
 	string cname; RateSpec rates;
 
-	if (buf.readName(cname) && readRates(buf,rates)) {
+	if (buf.readName(cname) && buf.readRspec(rates)) {
 		int clx = cliTbl->getClient(cname);
 		if (clx == 0) {
-			Np4d::sendString(sock,"no such client\n");
+			reply = "no such client";
 			return;
 		}
 		cliTbl->getDefRates(clx) = rates;
 		cliTbl->releaseClient(clx);
-		return;
 	}
 }
 
-void modTotalRates(int sock, NetBuffer& buf) {
+void modTotalRates(NetBuffer& buf, string& reply) {
 	string cname; RateSpec rates;
 
-	if (buf.readName(cname) && readRates(buf,rates)) {
+	if (buf.readName(cname) && buf.readRspec(rates)) {
 		int clx = cliTbl->getClient(cname);
 		if (clx == 0) {
-			Np4d::sendString(sock,"no such client\n");
+			reply = "no such client";
 			return;
 		}
 		cliTbl->getTotalRates(clx) = rates;
 		cliTbl->releaseClient(clx);
-		return;
 	}
 }
 
-void showClient(int sock, NetBuffer& buf) {
+void showClient(NetBuffer& buf, string& reply) {
 	string cname; 
 
 	if (buf.readName(cname)) {
 		int clx = cliTbl->getClient(cname);
 		if (clx == 0) {
-			Np4d::sendString(sock,"no such client\n");
+			reply = "no such client";
 			return;
 		}
-		string s;
-		cliTbl->client2string(clx,s);
+		cliTbl->client2string(clx,reply);
 		cliTbl->releaseClient(clx);
-		Np4d::sendString(sock,s);
-		return;
 	}
 }
 	
