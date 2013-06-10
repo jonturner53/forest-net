@@ -10,6 +10,7 @@
 #define NETBUFFER_H
 
 #include "Forest.h"
+#include "RateSpec.h"
 
 namespace forest {
 
@@ -44,6 +45,7 @@ public:
 	bool	readInt(uint64_t&);
 	bool	readForestAddress(string&);
 	bool	readIpAddress(string&);
+	bool	readRspec(RateSpec&);
 	bool	nextLine();
 	bool	skipSpace();
 	bool	skipSpaceInLine();

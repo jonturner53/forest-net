@@ -285,6 +285,16 @@ bool NetBuffer::readIpAddress(string& s) {
 	}
 }
 
+bool NetBuffer::readRspec(RateSpec& rates) {
+	int bru, brd, pru, prd;
+	if (verify('(')  &&
+	    readInt(bru) && verify(',') && readInt(brd) && verify(',') &&
+	    readInt(pru) && verify(',') && readInt(prd) && verify(')')) {
+		rates.set(bru,brd,pru,prd); return true;
+	}
+	return false;
+}
+
 /** Verify next character.
  *  @param c is a non-space character
  *  @return true if the next non-space character on the current line
@@ -327,15 +337,12 @@ string& NetBuffer::toString(string& s) {
 	stringstream ss;
 	ss << "rp=" << (rp-buf) << " wp=" << (wp-buf) << endl;
 	s = ss.str();
-cerr << "toString s=" << s;
 	if (rp <= wp) {
 		s.append(rp,wp-rp);
-cerr << "toString s=" << s;
 	} else {
 		int len1 = buf+size-rp;
 		s.append(rp,len1);
 		s.append(buf,wp-buf);
-cerr << "toString s=" << s;
 	}
 	s += "\n";
 	return s;

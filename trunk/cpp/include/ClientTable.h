@@ -32,7 +32,12 @@ public:
 		~ClientTable();
 	bool	init();
 
-	enum sessionState { UNDEF, IDLE, PENDING, SUSPENDED, CONNECTED };
+	enum sessionState { NUL_STATE, IDLE, PENDING, SUSPENDED, CONNECTED };
+	enum privileges { NUL_PRIV, LIMITED, STANDARD, ADMIN, ROOT };
+
+	// global parameters
+	const RateSpec& getDefRates() const;
+	const RateSpec& getTotalRates() const;
 
 	// iteration methods
 	int	firstClient();
@@ -42,13 +47,14 @@ public:
 
 	// access routines for client info
 	bool	isLocked(int) const;
-	int	getClient(string&);		
+	int	getClient(const string&);		
 	void	releaseClient(int);
 	int	getSession(fAdr_t);		
 	const string& getPassword(int) const;
 	const string& getClientName(int) const;
 	const string& getRealName(int) const;
 	const string& getEmail(int) const;
+	privileges getPrivileges(int) const;
 	RateSpec& getDefRates(int) const;
 	RateSpec& getTotalRates(int) const;
 	RateSpec& getAvailRates(int) const;
@@ -64,15 +70,16 @@ public:
 	RateSpec& getSessRates(int) const;
 
 	// add/remove/modify table entries
-	int	addClient(string&,string&,string&,string&,RateSpec&,RateSpec&);
+	int	addClient(string&, string&, privileges);
 	void	removeClient(int);
 	int	addSession(fAdr_t, fAdr_t, int);
 	void	removeSession(int);
 
-	void	setClientName(int, string&);
-	void	setPassword(int, string&);
-	void	setRealName(int, string&);
-	void	setEmail(int, string&);
+	void	setClientName(int, const string&);
+	void	setPassword(int, const string&);
+	void	setPrivileges(int, privileges);
+	void	setRealName(int, const string&);
+	void	setEmail(int, const string&);
 	void	setClientIndex(int,int);		
 	//void	setClientAdr(int,fAdr_t);
 	void	setClientIp(int,ipa_t);
@@ -111,16 +118,20 @@ private:
 	struct Client { 		///< client table entry
 	string	cname;			///< client's login name
 	string	pwd;			///< password
+	privileges priv;		///< client privileges
 	string	realName;		///< real world name
 	string	email;			///< email address
 	RateSpec defRates;		///< default rate spec for this user
 	RateSpec totalRates;		///< total allowed for all sessions
 	RateSpec availRates;		///< amount of unallocated capacity
+	int	numSess;		///< number of active sessions
 	int	firstSess;		///< index of first session in list
-	int	activeCount;		///< number of active sessions
 	bool	busyBit;		///< set for a busy client
 	pthread_cond_t busyCond;	///< used to wait for a busy client
 	};
+
+	RateSpec defRates;		///< initial default rates
+	RateSpec totalRates;		///< initial total rates
 	
 	Client *cvec;			///< vector of client structs
 
@@ -136,6 +147,20 @@ private:
 	bool 	readEntry(istream&);
 
 };
+
+/** Get the intial default rate spec for new clients.
+ *  @return a const reference to the initial default rate spec
+ */
+inline const RateSpec& ClientTable::getDefRates() const {
+	return defRates;
+}
+
+/** Get the intial total rate spec for new clients.
+ *  @return a const reference to the initial total rate spec
+ */
+inline const RateSpec& ClientTable::getTotalRates() const {
+	return totalRates;
+}
 
 inline bool ClientTable::isLocked(int clx) const {
 	return cvec[clx].busyBit;
@@ -207,6 +232,14 @@ inline const string& ClientTable::getRealName(int clx) const {
  */
 inline const string& ClientTable::getEmail(int clx) const {
 	return cvec[clx].email;
+}
+
+/** Get a client's privileges.
+ *  @param clx is a valid client index
+ *  @return the client's privileges.
+ */
+inline ClientTable::privileges ClientTable::getPrivileges(int clx) const {
+	return cvec[clx].priv;
 }
 
 /** Get the default rate spec for a client.
@@ -285,7 +318,7 @@ inline RateSpec& ClientTable::getSessRates(int sess) const {
  *  @param clx is a valid client index
  *  @return a const reference to the client name string
  */
-inline void ClientTable::setClientName(int clx, string& cname) {
+inline void ClientTable::setClientName(int clx, const string& cname) {
 	cvec[clx].cname = cname;
 }
 
@@ -293,7 +326,7 @@ inline void ClientTable::setClientName(int clx, string& cname) {
  *  @param clx is a valid client index
  *  @return a const reference to the password string
  */
-inline void ClientTable::setPassword(int clx, string& pwd) {
+inline void ClientTable::setPassword(int clx, const string& pwd) {
 	cvec[clx].pwd = pwd;
 }
 
@@ -301,16 +334,24 @@ inline void ClientTable::setPassword(int clx, string& pwd) {
  *  @param clx is a valid client index
  *  @return a const reference to the client's realName string
  */
-inline void ClientTable::setRealName(int clx, string& realName) {
+inline void ClientTable::setRealName(int clx, const string& realName) {
 	cvec[clx].realName = realName;
 }
 
 /** Set a client's email address.
  *  @param clx is a valid client index
- *  @return a const reference to the client's email string
+ *  @param email is the client's new email address
  */
-inline void ClientTable::setEmail(int clx, string& email) {
+inline void ClientTable::setEmail(int clx, const string& email) {
 	cvec[clx].email = email;
+}
+
+/** Set a client's privileges.
+ *  @param clx is a valid client index
+ *  @param priv is the client's new privileges
+ */
+inline void ClientTable::setPrivileges(int clx, ClientTable::privileges priv) {
+	cvec[clx].priv = priv;
 }
 
 /** Set the client address for a session.

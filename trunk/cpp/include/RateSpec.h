@@ -72,13 +72,13 @@ public:
 	}
 
 	/** Add the fields in another RateSpec to this one. */
-	void add(RateSpec& rs) {
+	void add(const RateSpec& rs) {
 		bitRateUp += rs.bitRateUp; bitRateDown += rs.bitRateDown;
 		pktRateUp += rs.pktRateUp; pktRateDown += rs.pktRateDown;
 	}
 
 	/** Subtract the fields in another RateSpec from this one. */
-	void subtract(RateSpec& rs) {
+	void subtract(const RateSpec& rs) {
 		bitRateUp -= rs.bitRateUp; bitRateDown -= rs.bitRateDown;
 		pktRateUp -= rs.pktRateUp; pktRateDown -= rs.pktRateDown;
 	}
@@ -98,7 +98,7 @@ public:
 	}
 
 	/** Compare another RateSpec to this for equality. */
-	bool equals(RateSpec& rs) {
+	bool equals(const RateSpec& rs) {
 		return	bitRateUp == rs.bitRateUp &&
 			bitRateDown == rs.bitRateDown &&
 			pktRateUp == rs.pktRateUp &&
@@ -106,7 +106,7 @@ public:
 	};
 
 	/** Compare another RateSpec to this one. */
-	bool leq(RateSpec& rs) {
+	bool leq(const RateSpec& rs) {
 		return	bitRateUp <= rs.bitRateUp &&
 			bitRateDown <= rs.bitRateDown &&
 			pktRateUp <= rs.pktRateUp &&

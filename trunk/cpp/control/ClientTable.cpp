@@ -21,6 +21,8 @@ ClientTable::ClientTable(int maxClients, int maxSessions)
 	clients = new UiSetPair(maxClients);
 	nameMap = new map<string, int>();
 	for (int i = 0; i <= maxSess; i++) svec[i].clx = 0;
+	defRates.set(50,500,25,250);
+	totalRates.set(100,1000,50,500);
 }
 	
 /** Destructor for ClientTable, frees dynamic storage */
@@ -70,7 +72,7 @@ bool ClientTable::lockClient(int clx) {
  *  return, the table entry for the client is locked; the caller
  *  must release it when done using it
  */
-int ClientTable::getClient(string& cname) {
+int ClientTable::getClient(const string& cname) {
 	lockMap();
 	map<string, int>::iterator p = nameMap->find(cname);
 	if (p == nameMap->end()) { unlockMap(); return 0; }
@@ -187,13 +189,11 @@ int ClientTable::nextClient(int clx) {
  *  release it when done.
  *  @param cname is the client name
  *  @param pwd is the client password
- *  @param realName is the client's real world name
- *  @param email is the client's email address
+ *  @param priv is the assigned privilege level
  *  @return the index of the new table entry or 0 on failure;
  *  can fail if cname clashes with an existing name, or there is no space left
  */
-int ClientTable::addClient(string& cname, string& pwd, string& realName,
-		   string& email, RateSpec& defRates, RateSpec& totalRates) {
+int ClientTable::addClient(string& cname, string& pwd, privileges priv) {
 	lockMap();
 	map<string,int>::iterator p = nameMap->find(cname);
 	if (p != nameMap->end()) { unlockMap(); return 0; }
@@ -204,12 +204,9 @@ int ClientTable::addClient(string& cname, string& pwd, string& realName,
 	cvec[clx].busyBit = true;
 	unlockMap();
 
-	setClientName(clx,cname); setPassword(clx,pwd);
-	setRealName(clx,realName); setEmail(clx,email);
-	getDefRates(clx) = defRates;
-	getTotalRates(clx) = totalRates;
-	getAvailRates(clx) = totalRates;
-	cvec[clx].firstSess = cvec[clx].activeCount = 0;
+	setClientName(clx,cname); setPassword(clx,pwd); setPrivileges(clx,priv);
+	getDefRates(clx) = getDefRates(); getTotalRates(clx) = getTotalRates();
+	cvec[clx].firstSess = cvec[clx].numSess = 0;
 
 	return clx;
 }
@@ -251,6 +248,7 @@ int ClientTable::addSession(fAdr_t cliAdr, fAdr_t rtrAdr, int clx) {
 	} else {
 		sessLists->join(sess,cvec[clx].firstSess);
 	}
+	cvec[clx].numSess++;
 	unlockMap();
 	
 	return sess;
@@ -276,6 +274,7 @@ void ClientTable::removeSession(int sess) {
 	}
 	sessMap->dropPair(key(svec[sess].cliAdr));
 	svec[sess].clx = 0; // used to detect unused entries
+	cvec[clx].numSess--;
 	unlockMap();
 }
 
@@ -286,13 +285,14 @@ void ClientTable::removeSession(int sess) {
  *  @param in is an open input stream
  */
 bool ClientTable::readEntry(istream& in) {
-	string cname, pwd, realName, email;
+	string cname, pwd, privString, realName, email;
 	RateSpec defRates, totalRates;
 
 	cerr << "reading entry\n";
         Misc::skipBlank(in);
         if (!Misc::readName(in, cname)      || !Misc::verify(in,',') ||
 	    !Misc::readWord(in, pwd)        || !Misc::verify(in,',') || 
+	    !Misc::readWord(in, privString) || !Misc::verify(in,',') || 
 	    !Misc::readString(in, realName) || !Misc::verify(in,',') ||
 	    !Misc::readWord(in, email)      || !Misc::verify(in,',') ||
 	    !defRates.read(in)		    || !Misc::verify(in,',') ||
@@ -301,8 +301,19 @@ bool ClientTable::readEntry(istream& in) {
 	}
 	Misc::cflush(in,'\n');
 
-	int clx = addClient(cname, pwd, realName, email, defRates, totalRates);
+	privileges priv;
+	     if (privString == "limited")	priv = LIMITED;
+	else if (privString == "standard")	priv = STANDARD;
+	else if (privString == "admin")		priv = ADMIN;
+	else if (privString == "root")		priv = ROOT;
+	else					priv = NUL_PRIV;
+
+	int clx = addClient(cname, pwd, priv);
 	if (clx == 0) return false;
+	setRealName(clx,realName); setEmail(clx,email);
+	getDefRates(clx) = defRates;
+	getTotalRates(clx) = totalRates;
+	getAvailRates(clx) = totalRates;
 	releaseClient(clx);
         return true;
 }
@@ -334,8 +345,18 @@ bool ClientTable::read(istream& in) {
  */
 string& ClientTable::client2string(int clx, string& s, bool includeSess) const {
 	string s1;
-	s  = getClientName(clx) + ", " + getPassword(clx) + ", \"" +
-	     getRealName(clx) + "\", " + getEmail(clx) + ", " + 
+	s  = getClientName(clx) + ", " + getPassword(clx);
+
+	privileges priv = getPrivileges(clx);
+	switch (priv) {
+	case LIMITED:	s += "limited"; break;
+	case STANDARD:	s += "standard"; break;
+	case ADMIN:	s += "admin"; break;
+	case ROOT:	s += "root"; break;
+	default: s += "-";
+	}
+
+	s += ", \"" + getRealName(clx) + "\", " + getEmail(clx) + ", " + 
 	     getDefRates(clx).toString(s1) + ", ";
 	s += getTotalRates(clx).toString(s1) + "\n";
 	if (includeSess) {
