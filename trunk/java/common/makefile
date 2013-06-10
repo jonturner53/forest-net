@@ -1,7 +1,7 @@
 JAVAROOT = ~/bin/java
 JAVAC=javac
-CLASSFILES = Forest.class CpAttr.class CpTyp.class CtlPkt.class \
-	     PktHeader.class Heap.class RateSpec.class Pair.class
+CLASSFILES = Forest.class Heap.class RateSpec.class Pair.class \
+	     NetBuffer.class
 
 %.class: %.java
 	${JAVAC} -cp ${JAVAROOT} $<
