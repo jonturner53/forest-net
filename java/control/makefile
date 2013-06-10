@@ -1,7 +1,7 @@
 JAVAROOT = ~/bin/java
 JAVAC=javac
 
-CLASSFILES = NetInfo.class ComtInfo.class ComtreeDisplay.class
+CLASSFILES = NetInfo.class ComtInfo.class ComtreeDisplay.class AcctMgr.class
 
 %.class: %.java
 	javac -cp ${JAVAROOT} $<
