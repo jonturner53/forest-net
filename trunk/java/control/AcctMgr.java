@@ -59,27 +59,31 @@ public class AcctMgr extends MouseAdapter implements ActionListener {
 	private SocketChannel serverChan;
 	private NetBuffer inBuf;
 
+	private boolean loggedIn;		// true when logged in
+
 	private JTextField serverField;
 	private String serverName;
 	private JTextField userField;
 	private String userName;
 	private JPasswordField pwdField;
-	private char[] password;
+	private String password;
 	JTextArea statusArea;
 
 	private JTextField nameField;
 	private String realName;
 	private JTextField emailField;
 	private String email;
-	private JTextField nupwdField;
-	private char[] newPassword;
+	private JPasswordField nupwdField;
+	private String newPassword;
 
 	private JTextField drateField;
 	private String defRates;
 	private JTextField trateField;
 	private String totRates;
-	private JTextField confirmField;
-	private char[] confirmPassword;
+	private JPasswordField confirmField;
+	private String confirmPassword;
+
+	private JTextField photoField;
 
 	private Box labeledField(JTextField text, String name) {
 		JLabel label = new JLabel(name);
@@ -95,12 +99,20 @@ public class AcctMgr extends MouseAdapter implements ActionListener {
 		return box;
 	}
 		
+	private Box doubleBox(Box b1, Box b2) {
+		Box b = Box.createHorizontalBox();
+			   b.add(Box.createHorizontalStrut(10));
+		b.add(b1); b.add(Box.createHorizontalStrut(5));
+		b.add(b2);
+		return b;
+	}
+
 	private Box tripleBox(Box b1, Box b2, Box b3) {
 		Box b = Box.createHorizontalBox();
 			   b.add(Box.createHorizontalStrut(10));
 		b.add(b1); b.add(Box.createHorizontalStrut(5));
 		b.add(b2); b.add(Box.createHorizontalStrut(5));
-		b.add(b3); b.add(Box.createHorizontalGlue());
+		b.add(b3);
 		return b;
 	}
 
@@ -113,28 +125,38 @@ public class AcctMgr extends MouseAdapter implements ActionListener {
 		jfrm.setSize(850,400);
 		jfrm.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
-		// top area with server name, user name, password
+		// top area with server name connect button
 		serverField = new JTextField(20);
+		serverField.setText("forest2.arl.wustl.edu");
+		serverName = "forest2.arl.wustl.edu";
 		Box b1 = labeledField(serverField,"client manager");
+		JButton connectBtn = new JButton("connect");
+		connectBtn.addActionListener(this);
+		b1.setAlignmentY(1); connectBtn.setAlignmentY(1);
+		Box box0 = Box.createHorizontalBox();
+		box0.add(Box.createHorizontalStrut(10));
+		box0.add(b1); box0.add(connectBtn); 
+		box0.add(Box.createHorizontalGlue());
+
+		// next user name and password; login, new account buttons
 		userField = new JTextField(20);
 		Box b2 = labeledField(userField,"user name");
 		pwdField = new JPasswordField(15);
 		Box b3 = labeledField(pwdField,"password");
-		Box box1 = tripleBox(b1,b2,b3);
-
+		Box box1 = doubleBox(b2,b3);
 		JButton loginBtn = new JButton("login");
 		loginBtn.addActionListener(this);
 		JButton newAcctBtn = new JButton("new account");
 		newAcctBtn.addActionListener(this);
+		box1.setAlignmentY(1);
+		loginBtn.setAlignmentY(1); newAcctBtn.setAlignmentY(1);
 		Box box1a = Box.createHorizontalBox();
-		box1a.add(loginBtn); box1a.add(newAcctBtn);
+		box1a.add(box1); box1a.add(loginBtn); box1a.add(newAcctBtn);
 
 		// status panel comes next
 		statusArea = new JTextArea(3,60);
 		statusArea.setEditable(false);
-		statusArea.append("Fill in fields above " +
-				  "(type enter after each), " +
-				  "then press login or new account button\n");
+		statusArea.append("Enter server name above and connect\n");
 		Box statusBox = Box.createHorizontalBox();
 		statusBox.add(statusArea);
 		statusBox.setBorder(BorderFactory.
@@ -145,7 +167,7 @@ public class AcctMgr extends MouseAdapter implements ActionListener {
 		b1 = labeledField(nameField,"real name");
 		emailField = new JTextField(20);
 		b2 = labeledField(emailField,"email address");
-		nupwdField = new JTextField(15);
+		nupwdField = new JPasswordField(15);
 		b3 = labeledField(nupwdField,"new password");
 
 		Box box2 = tripleBox(b1,b2,b3);
@@ -154,22 +176,31 @@ public class AcctMgr extends MouseAdapter implements ActionListener {
 		b1 = labeledField(drateField,"default rates");
 		trateField = new JTextField(20);
 		b2 = labeledField(trateField,"total rates");
-		confirmField = new JTextField(15);
+		confirmField = new JPasswordField(15);
 		b3 = labeledField(confirmField,"confirm password");
 
 		Box box3 = tripleBox(b1,b2,b3);
 
 		JButton updateBtn = new JButton("update");
 		updateBtn.addActionListener(this);
+		JButton modPwdBtn = new JButton("change password");
+		modPwdBtn.addActionListener(this);
+		photoField = new JTextField(20);
+		photoField.setText("not working yet");
+		photoField.setMaximumSize(photoField.getPreferredSize());
+		JButton uploadBtn = new JButton("upload photo");
 		Box box4 = Box.createHorizontalBox();
 		box4.add(Box.createHorizontalStrut(10));
 		box4.add(updateBtn);
+		box4.add(modPwdBtn);
+		box4.add(photoField);
+		box4.add(uploadBtn);
 
 		// Finally, the sessions area
 		Box box5 = showSessions();
 
 		// Putting it together
-		box1.setAlignmentX(Component.LEFT_ALIGNMENT);
+		box0.setAlignmentX(Component.LEFT_ALIGNMENT);
 		box1a.setAlignmentX(Component.LEFT_ALIGNMENT);
 		statusBox.setAlignmentX(Component.LEFT_ALIGNMENT);
 		box2.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -177,7 +208,7 @@ public class AcctMgr extends MouseAdapter implements ActionListener {
 		box4.setAlignmentX(Component.LEFT_ALIGNMENT);
 
 		Box boxAll = Box.createVerticalBox();
-		boxAll.add(box1); boxAll.add(box1a); boxAll.add(statusBox);
+		boxAll.add(box0); boxAll.add(box1a); boxAll.add(statusBox);
 		boxAll.add(box2); boxAll.add(box3); boxAll.add(box4);
 		boxAll.add(box5);
 		boxAll.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -185,7 +216,7 @@ public class AcctMgr extends MouseAdapter implements ActionListener {
 		jfrm.add(boxAll);
 		jfrm.setVisible(true);
 
-		setupIo();
+		loggedIn = false; setupIo();
 	}
 
 	Charset ascii;
@@ -203,6 +234,7 @@ public class AcctMgr extends MouseAdapter implements ActionListener {
 	}
 
 	private boolean sendString(String s) {
+		cbuf.clear(); bbuf.clear();
 		cbuf.put(s); cbuf.flip();
 		enc.encode(cbuf,bbuf,false); bbuf.flip();
 		try {
@@ -229,25 +261,36 @@ public class AcctMgr extends MouseAdapter implements ActionListener {
 	}
 
 	private boolean updateProfile() {
+                                "realName: \"" + realName + "\"\n" +
+                                "email: " + email + "\n" +
+                                "defRates: " + defRates + "\n" +
+                                "totalRates: " + totRates + "\n" +
+                                "over\n");
 		if (!sendString("updateProfile\n" +
-			   	"realName: " + realName + "\n" +
+			   	"realName: \"" + realName + "\"\n" +
 				"email: " + email + "\n" +
 				"defRates: " + defRates + "\n" +
-				"totRates: " + totRates + "\n" +
-				"over"))
+				"totalRates: " + totRates + "\n" +
+				"over\n"))
 			return false;
-		if (!inBuf.readLine().equals("profile updated") ||
-		    !inBuf.readLine().equals("over"))
+		String s1 = inBuf.readLine();
+		String s2 = inBuf.readLine();
+		if (!s1.equals("profile updated") || !s2.equals("over"))
+		//if (!inBuf.readLine().equals("profile updated") ||
+		 //   !inBuf.readLine().equals("over"))
 			return false;
 		return true;
 	}
 
 	private boolean changePassword(String pwd) {
 		if (!sendString("changePassword\n" + "password: " + pwd +
-				"\n" + "over"))
+				"\n" + "over\n"))
 			return false;
-		if (!inBuf.readLine().equals("password updated") ||
-		    !inBuf.readLine().equals("over"))
+		String s1 = inBuf.readLine();
+		String s2 = inBuf.readLine();
+		if (!s1.equals("success") || !s2.equals("over")) 
+		//if (!inBuf.readLine().equals("password updated") ||
+		 //   !inBuf.readLine().equals("over"))
 			return false;
 		return true;
 	}
@@ -259,7 +302,7 @@ public class AcctMgr extends MouseAdapter implements ActionListener {
 		while (true) {
 			s = inBuf.readAlphas();
 			if (s.equals("realName") && inBuf.verify(':')) {
-				realName = inBuf.readName();
+				realName = inBuf.readString();
 				if (realName == null) return false;
 				nameField.setText(realName);
 				gotName = true;
@@ -271,14 +314,17 @@ public class AcctMgr extends MouseAdapter implements ActionListener {
 			} else if (s.equals("defRates") && inBuf.verify(':')) {
 				RateSpec rates = inBuf.readRspec();
 				if (rates == null) return false;
-				drateField.setText(rates.toString());
+				defRates = rates.toString();
+				drateField.setText(defRates);
 				gotDefRates = true;
-			} else if (s.equals("totRates") && inBuf.verify(':')) {
+			} else if (s.equals("totalRates") && inBuf.verify(':')) {
 				RateSpec rates = inBuf.readRspec();
 				if (rates == null) return false;
-				trateField.setText(rates.toString());
+				totRates = rates.toString();
+				trateField.setText(totRates);
 				gotTotRates = true;
-			} else {
+			} else if (s.equals("over")) {
+				inBuf.nextLine();
 				return	gotName && gotEmail &&
 					gotDefRates && gotTotRates;
 			}
@@ -286,9 +332,8 @@ public class AcctMgr extends MouseAdapter implements ActionListener {
 		}
 	}
 
-	private boolean login(String server, String user, char[] pwd) {
-		// open channel to server, send login string and
-		// process reply
+	private boolean connect(String server) {
+		// open channel to server
 		// on success, return true
 		try {
 			SocketAddress serverAdr = new InetSocketAddress(
@@ -296,18 +341,27 @@ public class AcctMgr extends MouseAdapter implements ActionListener {
                 	// connect to server
                 	serverChan = SocketChannel.open(serverAdr);
 		} catch(Exception e) {
-			showStatus("cannot connect to client manager" + "\n");
 			return false;
 		}
-
-		if (!sendString("Forest-login-v1\nlogin: " + user + "\n" +
-			   	"password: " + (new String(pwd)) + "\nover\n"))
-			return false;
-
+		if (!sendString("Forest-login-v1\n")) return false;
 		inBuf = new NetBuffer(serverChan,1000);
-		if (!inBuf.readLine().equals("login successful") ||
-		    !inBuf.readLine().equals("over"))
+		return true;
+	}
+
+	private boolean login(String user, String pwd) {
+		if (!sendString("login: " + user + "\n" +
+			   	"password: " + pwd + "\nover\n"))
 			return false;
+		String s1 = inBuf.readLine();
+		String s2 = inBuf.readLine();
+		if (s1 == null || !s1.equals("login successful") ||
+		    s2 == null || !s2.equals("over")) {
+		//if (!inBuf.readLine().equals("login successful") ||
+		    //!inBuf.readLine().equals("over")) {
+			if (s1 != null) System.out.println(s1);
+			if (s2 != null) System.out.println(s2);
+			return false;
+		}
 
 		if (!sendString("getProfile\n")) return false;
 
@@ -316,28 +370,17 @@ public class AcctMgr extends MouseAdapter implements ActionListener {
 		return true;
 	}
 
-	private boolean newAccount(String server, String user, char[] pwd) {
-		// open channel to server, send login string and
-		// process reply
-		// on success, return true
-		try {
-			SocketAddress serverAdr = new InetSocketAddress(
-                                      InetAddress.getByName(server),CM_PORT);
-                	// connect to server
-                	serverChan = SocketChannel.open(serverAdr);
-		} catch(Exception e) {
-			showStatus("cannot connect to client manager" + "\n");
-			return false;
-		}
-
-		if (!sendString("Forest-login-v1\nnewAccount: " + user + "\n" +
-			   	"password: " + (new String(pwd)) + "\nover\n"))
+	private boolean newAccount(String user, String pwd) {
+		if (!sendString("newAccount: " + user + "\n" +
+			   	"password: " + pwd + "\nover\n"))
 			return false;
 
-		NetBuffer inBuf = new NetBuffer(serverChan,1000);
-		if (!inBuf.readLine().equals("new account created") ||
+		if (!inBuf.readLine().equals("success") ||
 		    !inBuf.readLine().equals("over"))
 			return false;
+		if (!sendString("getProfile\n")) return false;
+
+		if (!readProfile()) return false;
 		return true;
 	}
 
@@ -355,11 +398,14 @@ public class AcctMgr extends MouseAdapter implements ActionListener {
 		} else if (ae.getActionCommand().equals("user name")) {
 			userName = userField.getText();
 		} else if (ae.getActionCommand().equals("password")) {
-			password = pwdField.getPassword();
+			char[] x = pwdField.getPassword();
+			password = new String(x);
 		} else if (ae.getActionCommand().equals("new password")) {
-			newPassword = pwdField.getPassword();
+			char[] x = nupwdField.getPassword();
+			newPassword = new String(x);
 		} else if (ae.getActionCommand().equals("confirm password")) {
-			confirmPassword = pwdField.getPassword();
+			char[] x = confirmField.getPassword();
+			confirmPassword = new String(x);
 		} else if (ae.getActionCommand().equals("real name")) {
 			realName = nameField.getText();
 		} else if (ae.getActionCommand().equals("email address")) {
@@ -368,17 +414,28 @@ public class AcctMgr extends MouseAdapter implements ActionListener {
 			defRates = drateField.getText();
 		} else if (ae.getActionCommand().equals("total rates")) {
 			totRates = drateField.getText();
+		} else if (ae.getActionCommand().equals("connect")) {
+			if (connect(serverName)) {
+				showStatus("Success\nEnter user name and " +
+					   "password, then login or create " +
+					   "new account");
+			} else {
+				showStatus("Cannot connect");
+			}
 		} else if (ae.getActionCommand().equals("login")) {
-			if (login(serverName,userName,password)) {
-				showStatus("Success");
+			if (loggedIn) {
+				; // do nothing
+			} else if (login(userName,password)) {
+				loggedIn = true;
+				showStatus("Logged in");
 			} else {
 				showStatus("Login failed");
 			}
-		} else if (ae.getActionCommand().equals("newAccount")) {
-			showStatus("Complete profile info below," +
-				   "typing password twice to confirm");
-			if (newAccount(serverName,userName,password)) {
-				showStatus("New account created");
+		} else if (ae.getActionCommand().equals("new account")) {
+			if (newAccount(userName,password)) {
+				showStatus("New account created\n" +
+					   "Update profile and change" +
+				   	   "password below");
 			} else {
 				showStatus("Cannot create account");
 			}
