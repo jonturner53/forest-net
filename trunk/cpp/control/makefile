@@ -14,7 +14,7 @@ IDIR := ${FROOT}/include
 
 HFILES = ${IDIR}/NetInfo.h ${IDIR}/ComtInfo.h ${IDIR}/CpHandler.h
 OFILES = NetInfo.o ComtInfo.o CpHandler.o Substrate.o ClientTable.o
-XFILES = NetMgr ClientMgr ComtCtl BuildRtables #threadExample Console 
+XFILES = NetMgr ClientMgr ComtCtl BuildRtables PhotoServer #threadExample Console 
 
 ${OFILES} : ${HFILES}
 
@@ -42,6 +42,9 @@ ClientMgr : ClientMgr.o ${LIBS}
 ComtCtl : ComtCtl.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -lpthread -o $@
 
+PhotoServer : PhotoServer.o ${LIBS}
+	${CXX} ${CXXFLAGS} $< ${LIBS} -lpthread -o $@	
+	
 BuildRtables : BuildRtables.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
 
