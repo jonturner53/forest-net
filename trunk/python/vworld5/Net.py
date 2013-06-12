@@ -1,3 +1,4 @@
+from socket import *
 import sys
 import struct
 from time import sleep, time
@@ -19,6 +20,8 @@ import errno
 import pyaudio
 import wave
 #edit by feng end
+import os
+
 UPDATE_PERIOD = .05 	# number of seconds between status updates
 STATUS_REPORT = 1 	# code for status report packets
 AUDIO = 2 		# code for audio packets
@@ -206,7 +209,55 @@ class Net :
 			print "nonce = ", self.nonce
 
 		return True
-
+	
+	# getPhoto communicates with the photo server and get the picture specified by uname
+	
+	def getPhoto(self, uname) :		
+		psSock = socket(AF_INET, SOCK_STREAM)
+		self.photoServerIp = gethostbyname("shell.cec.wustl.edu")
+		print self.photoServerIp
+		psSock.connect((self.photoServerIp, 30124))
+		
+		#send a getPhoto request
+		totalSent = 0
+		msgLen = 10 + len(uname)
+		while totalSent < msgLen:
+			sent = psSock.send("getPhoto: " + uname)
+			if sent == 0:
+				raise RuntimeError("socket connection broken")
+			totalSent = totalSent + sent
+			
+		# receiving the photo	
+		buffer = ''
+		photo = ''
+		photoLen = 0
+		gotPic = false
+		while (not gotPic):
+			buffer = psSock.recv(4)
+			if buffer == '':
+				raise RuntimeError("socket connection broken")			
+			len = struct.unpack("!I", buffer)[0]
+			photoLen = photoLen + len
+			if len < 1024:
+				gotPic = true
+			more2read = true
+			while(more2read):
+				block = psSock.recv(len) #returns a string
+				len = len - len(block)
+				photo = photo + block
+				if len == 0:
+					more2read = false
+					
+		#tuple = struct.unpack(str(photoLen/4) + "I", photo) #endian don't care?
+		out = open(uname + ".jpg", "wb")
+		out.write(photo)
+		out.close()
+		
+		
+		psSock.send("complete!")
+		psSock.close()
+						
+		
 	def run(self, task) :
 		""" This is the main method for the Net object.
 		"""
@@ -304,7 +355,7 @@ class Net :
 		p.payload = struct.pack("!Q",self.nonce)
 		reply = self.sendCtlPkt(p)
 		return reply != None and reply.flags == ACK_FLAG
-
+		
 	def disconnect(self) :
 		p = Packet(); p.type = DISCONNECT
 		p.comtree = CLIENT_CON_COMT
@@ -505,8 +556,7 @@ class Net :
 				if audioAdr == self.audioAdr:
 					self.audioAdr = None
 					self.isListening = 0
-				    
-		
+				    		
 		    	avId = p.srcAdr        
 		    	if avId in self.nearRemotes :
 				# update map entry for this remote
@@ -518,8 +568,12 @@ class Net :
 			elif len(self.nearRemotes) < MAXNEAR :
 				# fadr -> x,y,direction,dx,dy,count
 				self.nearRemotes[avId] = [x1,y1,dir1,0,0,0]
-				self.pWorld.addRemote(x1, y1, dir1, avId,name)                           
-		
+				# download picture for a remote for the 1st time and save it in cache
+				savedPath = os.getcwd()
+				os.chdir("photo_cache")
+				self.getPhoto(name)
+				os.chdir(savedPath)
+				self.pWorld.addRemote(x1, y1, dir1, avId, name)                           		
         	#play audio,edit by feng
 		elif tuple[0] == AUDIO :
 			tuple = struct.unpack('!'+str(BYTES)+'s',p.payload[20:BYTES+20])

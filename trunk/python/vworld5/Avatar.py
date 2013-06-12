@@ -1,7 +1,7 @@
 """ Demonstration of simple virtual world using Forest overlay
 
 usage:
-      Avatar myIp cliMgrIp numg subLimit comtree name [ debug ] [ auto ]
+      Avatar myIp cliMgrIp numg subLimit comtree name[ debug ] [ auto ]
 
 - myIp is the IP address of the user's computer
 - cliMgrIp is the IP address of the client manager's computer
@@ -45,6 +45,8 @@ numg = int(sys.argv[3])
 subLimit = int(sys.argv[4])
 myComtree = int(sys.argv[5])
 myName = sys.argv[6];
+#myPic = sys.argv[7];
+
 auto = False; debug = 0
 for i in range(7,len(sys.argv)) :
 	if sys.argv[i] == "debug" : debug = 1
