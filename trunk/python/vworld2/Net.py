@@ -223,7 +223,7 @@ class Net :
 		try :
 			buf, senderAdr = self.sock.recvfrom(2000)
 		except error as e :
-			if e.errno == 35 or e.errno == 11 : return None
+			if e.errno == 35 or e.errno == 11 or e.errno == 10035: return None
 			# 11, 35 both imply no data to read
 			# treat anything else as fatal error
 			sys.stderr.write("Substrate: socket " \
