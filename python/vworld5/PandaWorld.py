@@ -62,12 +62,12 @@ class PandaWorld(DirectObject):
 		base.windowType = 'onscreen' 
 		wp = WindowProperties.getDefault() 
 		base.openDefaultWindow(props = wp)
- 
+		
 		self.keyMap = {"left":0, "right":0, "forward":0, "backward":0, \
- 				"cam-up":0, "cam-down":0, \
- 				"strafe-left":0, "strafe-right":0, \
-				"zoom-in":0, "zoom-out":0, "reset-view":1, "voice":0}
-				
+ 				"cam-up":0, "cam-down":0, "cam-left":0, "cam-right":0, \
+				"zoom-in":0, "zoom-out":0, "reset-view":1}
+		self.info = 0
+		self.audioLevel = 1
 		base.win.setClearColor(Vec4(0,0,0,1))
 
 		# Add title and show map
@@ -129,13 +129,6 @@ class PandaWorld(DirectObject):
 		#Set audio data
 		self.audioData = ''	 
 		
-		# Show a list of instructions
-		self.zoomCmd = printText(0.7)
-		self.zoomCmd.setText("*I: zoom-in" + '\n' + "*O: zoom-out" \
-							+ '\n' + "*R: reset view to Panda"\
-							+ '\n' + "*T: toggle Zoom mode")
-		
-
 		# Setup pool of remotes
 		# do not attach to scene yet
 		self.remoteMap = {}
@@ -159,28 +152,27 @@ class PandaWorld(DirectObject):
 		self.accept("arrow_right", self.setKey, ["right",1])
 		self.accept("arrow_up", self.setKey, ["forward",1])
  		self.accept("arrow_down", self.setKey, ["backward",1])
-		self.accept("a", self.setKey, ["cam-up",1])
-		self.accept("s", self.setKey, ["cam-down",1])
- 		self.accept("z", self.setKey, ["strafe-left",1])
- 		self.accept("x", self.setKey, ["strafe-right",1])
-		self.accept("i", self.setKey, ["zoom-in",1])
- 		self.accept("o", self.setKey, ["zoom-out",1])
-		self.accept("r", self.setKey, ["reset-view",1])
-		self.accept("v", self.setKey, ["voice",1])
-                
+		self.accept("shift-arrow_up", self.setKey, ["cam-up",1])
+		self.accept("shift-arrow_down", self.setKey, ["cam-down",1])
+		self.accept("shift-arrow_left", self.setKey, ["cam-left",1])
+		self.accept("shift-arrow_right", self.setKey, ["cam-right",1])	
+		self.accept("z", self.setKey, ["zoom-in",1])
+ 		self.accept("shift-z", self.setKey, ["zoom-out",1])
+		self.accept("r", self.setKey, ["reset-view",1])         
 		self.accept("arrow_left-up", self.setKey, ["left",0])
 		self.accept("arrow_right-up", self.setKey, ["right",0])
 		self.accept("arrow_up-up", self.setKey, ["forward",0])
  		self.accept("arrow_down-up", self.setKey, ["backward",0])
-		self.accept("a-up", self.setKey, ["cam-up",0])
-		self.accept("s-up", self.setKey, ["cam-down",0])
- 		self.accept("z-up", self.setKey, ["strafe-left",0])
- 		self.accept("x-up", self.setKey, ["strafe-right",0])
-		self.accept("i-up", self.setKey, ["zoom-in",0])
- 		self.accept("o-up", self.setKey, ["zoom-out",0])
+		self.accept("shift-arrow_up-up", self.setKey, ["cam-up",0])
+		self.accept("shift-arrow_down-up", self.setKey, ["cam-down",0])
+		self.accept("shift-arrow_left-up", self.setKey, ["cam-left",0])
+		self.accept("shift-arrow_right-up", self.setKey, ["cam-right",0])
+		self.accept("z-up", self.setKey, ["zoom-in",0])
+ 		self.accept("shift-z-up", self.setKey, ["zoom-out",0])
 		self.accept("t", self.setKey, ["reset-view",0])
-        	self.accept("v-up", self.setKey, ["voice",0])
 		self.accept("mouse1", self.showPic)
+		self.accept("f1", self.showInfo)
+		self.accept("m", self.mute)
         
 		taskMgr.add(self.move,"moveTask")
         
@@ -272,7 +264,7 @@ class PandaWorld(DirectObject):
 				# click occurs close enough to the name of the avatar, try to create pic 
 				if id not in self.remotePics.keys() or (id in self.remotePics.keys() and self.remotePics[id] is None):
 					name = self.remoteNames[id].getText()
-					card = OnscreenImage(image = 'models/Display/'+ name +'.jpg', pos = (x, 0, y), scale = (0.2, 1, 0.2))
+					card = OnscreenImage(image = 'photo_cache/'+ name +'.jpg', pos = (x, 0, y), scale = (0.2, 1, 0.2))
 					self.remotePics[id] = card
 					responded = 1
 		if responded is not 1:
@@ -290,7 +282,29 @@ class PandaWorld(DirectObject):
 		""" Records the state of the arrow keys
 		"""
 		self.keyMap[key] = value
-		
+
+	def showInfo(self):
+		# Show a list of instructions
+		if self.info is 0:
+			self.ctrlCmd = printText(0.7)
+			self.ctrlCmd.setText("Z: zoom-in" + '\n' + "Shift+Z: zoom-out" \
+								+ '\n' + "*R: reset view to Panda"\
+								+ '\n' + "*T: toggle Zoom mode" \
+								+ '\n' + "*M: mute/un-mute audio"\
+								+ '\n' + "Arrow Keys: move avatar"\
+								+ '\n' + "Shift+Arrows: look around")
+			self.info = 1
+		else:
+			self.ctrlCmd.setText("")
+			self.info = 0
+			
+	def mute(self):
+		#mute / un-mute
+		if self.audioLevel is 0:
+			self.audioLevel = 1
+		else:
+			self.audioLevel = 0
+					
 	def addRemote(self, x, y, direction, id, name) : 
 		""" Add a remote panda.
 
@@ -333,7 +347,8 @@ class PandaWorld(DirectObject):
 		    r2d = Point3(p2[0], 0, p2[1])
 		    a2d = aspect2d.getRelativePoint(render2d, r2d) 
 		    if id not in self.remoteNames.keys():
-				self.remoteNames[id] = OnscreenText( text = name, pos = a2d, scale = 0.04, fg = (1, 1, 1 ,1), shadow = (0, 0, 0, 0.5) )
+				self.remoteNames[id] = OnscreenText( text = name, pos = a2d, scale = 0.04, \
+												fg = (1, 1, 1 ,1), shadow = (0, 0, 0, 0.5) )
 		
 		# if off view
 		else:
@@ -380,15 +395,16 @@ class PandaWorld(DirectObject):
 			if id in self.remoteNames.keys():
 				if self.remoteNames[id]:
 					self.remoteNames[id].destroy()
-			self.remoteNames[id] = OnscreenText(text = name, pos = a2d, scale = 0.04, fg = (1, 1, 1, 1), shadow = (0, 0, 0, 0.5))
+			self.remoteNames[id] = OnscreenText(text = name, pos = a2d, scale = 0.04, \
+									fg = (1, 1, 1, 1), shadow = (0, 0, 0, 0.5))
 
 			if id in self.remotePics.keys():
 				if self.remotePics[id]:
-					try:
-						self.remotePics[id].setPos(a2d[0], 0, a2d[1]) 
+					#try:
+					self.remotePics[id].setPos(a2d[0], 0, a2d[1]) 
 					# if pic happens to have been removed by the user
-					except Exception as e:
-						pass
+					# except Exception as e:
+						# pass
 					
 		#off screen, delete text obj. and the picture
 		else:
@@ -404,30 +420,7 @@ class PandaWorld(DirectObject):
     	
 		print len(inputData)
 		self.stream.write(inputData)
-		#stream.stop_stream()
-		#stream.close()
-		#p1.terminate()
-		#print "input"
-		#wf = wave.open('models/Panda.wav', 'rb')
 
-		#data = wf.readframes(self.CHUNK)
-
-		#while data != '':
-		#	p = pyaudio.PyAudio()
-
-		#	stream = p.open(format=p.get_format_from_width(wf.getsampwidth()),
-		#		channels=wf.getnchannels(),
-		#		rate=wf.getframerate(),
-		#		output=True)
-
-
-		#    	stream.write(data)
-		#    	data = wf.readframes(self.CHUNK)
-
-		#	stream.stop_stream()
-		#	stream.close()
-
-		#	p.terminate()
 
 	def removeRemote(self, id) :
 		""" Remove a remote when it goes out of range.
@@ -546,7 +539,9 @@ class PandaWorld(DirectObject):
 		# If the camera-down key is pressed, look down
 		if (self.keyMap["cam-up"]!=0): camAngle = 10
 		elif (self.keyMap["cam-down"]!=0): camAngle = -10
-		else : camAngle = 0
+		elif (self.keyMap["cam-left"]!=0): camAngleX = 10
+		elif (self.keyMap["cam-right"]!=0): camAngleX = -10
+		else : camAngle = 0; camAngleX = 0
 
 		# save avatar's initial position so that we can restore it,
 		# in case he falls off the map or runs into something.
@@ -566,18 +561,6 @@ class PandaWorld(DirectObject):
  		if (self.keyMap["backward"]!=0):
  			self.avatar.setY(self.avatar, \
  					 +1000* globalClock.getDt())
- 		if (self.keyMap["strafe-left"]!=0):
- 			self.avatar.setX(self.avatar, \
- 					 +3000 * globalClock.getDt())
- 		if (self.keyMap["strafe-right"]!=0):
- 			self.avatar.setX(self.avatar, \
- 					 -3000 * globalClock.getDt())
-        	if (self.keyMap["voice"]!=0):
-                	#mySound = base.loader.loadSfx("models/Panda.mp3")
-            		#mySound.play()			
-			self.audioLevel = 1
- 		else:
-			self.audioLevel = 0	
 
 		# If avatar is moving, loop the run animation.
 		# If he is standing still, stop the animation.
@@ -592,18 +575,23 @@ class PandaWorld(DirectObject):
 				self.avatar.pose("run",5)
 				self.isMoving = False
 		
-		# if the zoom-in key 'i' is held down, move the camera forward
+		# if the zoom-in key 'i' is held down, increase fov of the lens
+		# fov: field of view, 20--80 is acceptable range, others distorted
 		# if the key 'o' is held down, zoom out	
 		hpr = self.avatar.getHpr()
 		pos = self.avatar.getPos()
-		hpr[0] += 180; hpr[1] = camAngle
+		hpr[0] += 180; hpr[1] = camAngle; hpr[2] = camAngleX;
 		
-		if (self.keyMap["zoom-in"] != 0): 
-			base.camera.setHpr(hpr)
-			base.camera.setY(base.camera, 2 * globalClock.getDt())
+		if (self.keyMap["zoom-in"] != 0): 			
+			angle = base.camLens.getHFov()
+			if angle > 20:
+				angle = angle - 5
+			base.camLens.setFov(angle)
 		elif (self.keyMap["zoom-out"] != 0):	
-			base.camera.setHpr(hpr)
-			base.camera.setY(base.camera, -2 * globalClock.getDt())
+			angle = base.camera.Lens.getHFov()
+			if angle < 75:
+				angle = angle + 5
+			base.camLens.setFov(angle)
 		elif (self.keyMap["reset-view"] != 0):
 			pos[2] += 1
 			base.camera.setPos(pos); base.camera.setHpr(hpr)
