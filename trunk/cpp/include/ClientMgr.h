@@ -32,6 +32,7 @@ ClientTable *cliTbl;	///< data about clients and active sessions
 Logger *logger;		///< error message logger
 
 ofstream acctFile;	///< stream for writing accounting records
+ofstream clientLog;	///< stream for writing updates to client data
 
 /** Used to identify the type of an accounting record. */
 enum acctRecType { UNDEF, NEWSESSION, CONNECT_REC, DISCONNECT_REC };
@@ -54,12 +55,14 @@ bool newSession(int, CpHandler&, int, NetBuffer&, string&);
 void getProfile(int, NetBuffer&, string&);
 void updateProfile(int, NetBuffer&, string&);
 void changePassword(int, NetBuffer&, string&);
+void uploadPhoto(int, int, NetBuffer&, string&);
 void addComtree(int, NetBuffer&, string&);
 
 // privileged operations
 void addClient(NetBuffer&, string&);
 void removeClient(NetBuffer&, string&);
 void modPassword(NetBuffer&, ClientTable::privileges, string&);
+void modPrivileges(NetBuffer&, ClientTable::privileges, string&);
 void modRealName(NetBuffer&, string&);
 void modEmail(NetBuffer&, string&);
 void modDefRates(NetBuffer&, string&);
@@ -67,6 +70,7 @@ void modTotalRates(NetBuffer&, string&);
 void showClient(NetBuffer&, string&);
 
 void writeAcctRecord(const string&, fAdr_t, ipa_t, fAdr_t, acctRecType); 
+void writeClientLog(int);
 
 } // ends namespace
 

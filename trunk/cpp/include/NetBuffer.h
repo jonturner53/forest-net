@@ -45,6 +45,7 @@ public:
 	bool	readInt(uint64_t&);
 	bool	readForestAddress(string&);
 	bool	readIpAddress(string&);
+	int	readBlock(char*, int);
 	bool	readRspec(RateSpec&);
 	bool	nextLine();
 	bool	skipSpace();
