@@ -69,6 +69,8 @@ class PandaWorld(DirectObject):
 		self.info = 0
 		self.audioLevel = 1
 		base.win.setClearColor(Vec4(0,0,0,1))
+		
+		self.fieldAngle = 40
 
 		# Add title and show map
 		self.title = addTitle("wandering pandas")
@@ -157,18 +159,18 @@ class PandaWorld(DirectObject):
 		self.accept("shift-arrow_left", self.setKey, ["cam-left",1])
 		self.accept("shift-arrow_right", self.setKey, ["cam-right",1])	
 		self.accept("z", self.setKey, ["zoom-in",1])
- 		self.accept("shift-z", self.setKey, ["zoom-out",1])
+ 		self.accept("control-z", self.setKey, ["zoom-out",1])
 		self.accept("r", self.setKey, ["reset-view",1])         
 		self.accept("arrow_left-up", self.setKey, ["left",0])
 		self.accept("arrow_right-up", self.setKey, ["right",0])
 		self.accept("arrow_up-up", self.setKey, ["forward",0])
  		self.accept("arrow_down-up", self.setKey, ["backward",0])
-		self.accept("shift-arrow_up-up", self.setKey, ["cam-up",0])
-		self.accept("shift-arrow_down-up", self.setKey, ["cam-down",0])
-		self.accept("shift-arrow_left-up", self.setKey, ["cam-left",0])
-		self.accept("shift-arrow_right-up", self.setKey, ["cam-right",0])
+		self.accept("shift-up" or "arrow_up-up", self.setKey, ["cam-up",0])
+		self.accept("shift-up" or "arrow_down-up", self.setKey, ["cam-down",0])
+		self.accept("shift-up" or "arrow_left-up", self.setKey, ["cam-left",0])
+		self.accept("shift-up" or "arrow_right-up", self.setKey, ["cam-right",0])
 		self.accept("z-up", self.setKey, ["zoom-in",0])
- 		self.accept("shift-z-up", self.setKey, ["zoom-out",0])
+ 		self.accept("control-up", self.setKey, ["zoom-out",0])
 		self.accept("t", self.setKey, ["reset-view",0])
 		self.accept("mouse1", self.showPic)
 		self.accept("f1", self.showInfo)
@@ -539,9 +541,11 @@ class PandaWorld(DirectObject):
 		# If the camera-down key is pressed, look down
 		if (self.keyMap["cam-up"]!=0): camAngle = 10
 		elif (self.keyMap["cam-down"]!=0): camAngle = -10
-		elif (self.keyMap["cam-left"]!=0): camAngleX = 10
+		else : camAngle = 0 
+		
+		if (self.keyMap["cam-left"]!=0): camAngleX = 10
 		elif (self.keyMap["cam-right"]!=0): camAngleX = -10
-		else : camAngle = 0; camAngleX = 0
+		else: camAngleX = 0
 
 		# save avatar's initial position so that we can restore it,
 		# in case he falls off the map or runs into something.
@@ -583,18 +587,18 @@ class PandaWorld(DirectObject):
 		hpr[0] += 180; hpr[1] = camAngle; hpr[2] = camAngleX;
 		
 		if (self.keyMap["zoom-in"] != 0): 			
-			angle = base.camLens.getHFov()
-			if angle > 20:
-				angle = angle - 5
-			base.camLens.setFov(angle)
+			if self.fieldAngle > 20:
+				self.fieldAngle = self.fieldAngle - 5
+			base.camLens.setFov(self.fieldAngle)
 		elif (self.keyMap["zoom-out"] != 0):	
-			angle = base.camera.Lens.getHFov()
-			if angle < 75:
-				angle = angle + 5
-			base.camLens.setFov(angle)
+			if self.fieldAngle < 80:
+				self.fieldAngle = self.fieldAngle + 5
+			base.camLens.setFov(self.fieldAngle)		
 		elif (self.keyMap["reset-view"] != 0):
-			pos[2] += 1
+			pos[2] = pos[2] + 1
 			base.camera.setPos(pos); base.camera.setHpr(hpr)
+			base.camLens.setFov(40)
+			
 		# Now check for collisions.
 		
 		self.cTrav.traverse(render)
