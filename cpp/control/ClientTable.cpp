@@ -205,6 +205,7 @@ int ClientTable::addClient(string& cname, string& pwd, privileges priv) {
 	unlockMap();
 
 	setClientName(clx,cname); setPassword(clx,pwd); setPrivileges(clx,priv);
+	setRealName(clx,"noname"); setEmail(clx,"nomail");
 	getDefRates(clx) = getDefRates(); getTotalRates(clx) = getTotalRates();
 	cvec[clx].firstSess = cvec[clx].numSess = 0;
 
@@ -345,7 +346,7 @@ bool ClientTable::read(istream& in) {
  */
 string& ClientTable::client2string(int clx, string& s, bool includeSess) const {
 	string s1;
-	s  = getClientName(clx) + ", " + getPassword(clx);
+	s  = getClientName(clx) + ", " + getPassword(clx) + ", ";
 
 	privileges priv = getPrivileges(clx);
 	switch (priv) {

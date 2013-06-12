@@ -285,6 +285,22 @@ bool NetBuffer::readIpAddress(string& s) {
 	}
 }
 
+/** Read a block of bytes from the buffer.
+ *  @param xbuf is a pointer to a character buffer
+ *  @param siz is the number of bytes that xbuf can hold
+ *  @return the number of bytes that were transferred from this NetBuffer
+ *  object into xbuf.
+ */
+int NetBuffer::readBlock(char *xbuf, int siz) {
+	char* p = rp; int i = 0;
+	while (i < siz) {
+		if (p == wp && !refill()) break;
+		xbuf[i++] = *p; advance(p);
+	}
+	xbuf[i] = EOS; rp = p;
+	return i;
+}
+
 bool NetBuffer::readRspec(RateSpec& rates) {
 	int bru, brd, pru, prd;
 	if (verify('(')  &&
