@@ -271,16 +271,9 @@ bool handleClient(int sock,CpHandler& cph) {
 	int clx; string clientName;
 	NetBuffer buf(sock,1024);
 
-	clx = loginDialog(sock,buf);
-	if (clx == 0) return true;
-	// clx is locked now
-
-	ClientTable::privileges priv = cliTbl->getPrivileges(clx);
-	//if (priv == ClientTable::ADMIN || priv == ClientTable::ROOT) {
-	//	adminDialog(sock,cph,clx,buf);
-	//} else {
-		userDialog(sock,cph,clx,buf);
-//	}
+	string clientName;
+	if (!loginDialog(sock,buf,clientName)) return true;
+	userDialog(sock,cph,buf,clientName);
 	cliTbl->releaseClient(clx);
 	return true;
 }
@@ -288,12 +281,10 @@ bool handleClient(int sock,CpHandler& cph) {
 /** Carry out login dialog and verify that client/password is correct.
  *  @param sock is an open socket to the client
  *  @param buf is a reference to a NetBuffer bound to the socket
- *  @param return the client's index in the client table, if the operation
- *  succeeds (including password verification), else 0; on a successful
- *  return the client's entry in the table is locked; the caller must
- *  release it when done
+ *  @param clientName is a reference to a string in which user's name is retured
+ *  @param return true on success, false on failure
  */
-int loginDialog(int sock, NetBuffer& buf) {
+bool loginDialog(int sock, NetBuffer& buf, string& clientName) {
 	string client, pwd, s0, s1, s2, s3;
 	int numFailures = 0;
 	if (!buf.readWord(s0) || s0 != "Forest-login-v1" ||
@@ -312,22 +303,24 @@ int loginDialog(int sock, NetBuffer& buf) {
 		if (s1 == "login") {
 cerr << "login" << endl;
 			// process remainder of login dialog
-			if (buf.verify(':') && buf.readAlphas(client) &&
+			if (buf.verify(':') && buf.readAlphas(clientName) &&
 			      buf.nextLine() &&
 			    buf.readAlphas(s2) && s2 == "password" &&
 			      buf.verify(':') && buf.readWord(pwd) &&
 			      buf.nextLine() &&
 			    buf.readLine(s3) && s3 == "over") {
 cerr << "client=" << client << " pwd=" << pwd << endl;
-				int clx =cliTbl->getClient(client); // locks clx
+				int clx =cliTbl->getClient(clientName);
+				// locks clx
 cerr << "proceeding clx=" << clx << "\n";
 				if (clx == 0) {
 					Np4d::sendString(sock,"login failed: "
 							 "try again\nover\n");
 				} else if (cliTbl->checkPassword(clx,pwd)) {
+					cliTbl->releaseClient(clx);
 					Np4d::sendString(sock,"login successful"
 							      "\nover\n");
-					return clx;
+					return true;
 				} else {
 					cliTbl->releaseClient(clx);
 					Np4d::sendString(sock,"login failed, "
@@ -337,19 +330,20 @@ cerr << "proceeding clx=" << clx << "\n";
 							"misformatted login "
 							"dialog\n"
 					      		"overAndOut\n");
-						return 0;
+						return false;
 					}
 				}
 			}
 		} else if (s1 == "newAccount") {
 			// attempt to add account
-			if (buf.verify(':') && buf.readAlphas(client) &&
+			if (buf.verify(':') && buf.readAlphas(clientName) &&
 			      buf.nextLine() &&
 			    buf.readAlphas(s2) && s2 == "password" &&
 			      buf.verify(':') && buf.readWord(pwd) &&
 			      buf.nextLine() &&
 			    buf.readLine(s3) && s3 == "over") {
-				int clx = cliTbl->getClient(client); //locks clx
+				int clx = cliTbl->getClient(clientName);
+				//locks clx
 				if (clx != 0) {
 					Np4d::sendString(sock,"client name not "
 							"available: try again\n"
@@ -360,9 +354,10 @@ cerr << "proceeding clx=" << clx << "\n";
 							ClientTable::STANDARD);
 				if (clx != 0) {
 					writeClientLog(clx);
+					cliTbl->releaseClient(clx);
 					Np4d::sendString(sock,"success\n"
 							      "over\n");
-					return clx;
+					return true;
 				} else {
 					Np4d::sendString(sock,"unable to add "
 							 "client\nover\n");
@@ -371,42 +366,42 @@ cerr << "proceeding clx=" << clx << "\n";
 							"misformatted login "
 							"dialog\n"
 					      		"overAndOut\n");
-						return 0;
+						return false;
 					}
 				}
 			}
 		} else {
 			Np4d::sendString(sock,"misformatted login dialog\n"
 					      "overAndOut\n");
-			return 0;
+			return false;
 		}
 		numFailures++;
 		if (numFailures >= 3) {
 			Np4d::sendString(sock,"login failed: you're done\n"
 				 	 "overAndOut\n");
-			return 0;
+			return false;
 		}
 	}
 }
 
-void userDialog(int sock, CpHandler& cph, int clx, NetBuffer& buf) {
+void userDialog(int sock, CpHandler& cph, NetBuffer& buf, string& clientName) {
 	string cmd, reply;
 cerr << "entering userDialog\n";
 	while (buf.readAlphas(cmd)) {
 cerr << "cmd=" << cmd << endl;
 		reply = "success";
 		if (cmd == "newSession") {
-			newSession(sock,cph,clx,buf,reply);
+			newSession(sock,cph,buf,clientName,reply);
 		} else if (cmd == "getProfile") {
-			getProfile(clx,buf,reply);
+			getProfile(buf,clientName,reply);
 		} else if (cmd == "updateProfile") {
-			updateProfile(clx,buf,reply);
+			updateProfile(buf,clientName,reply);
 		} else if (cmd == "changePassword") {
-			changePassword(clx,buf,reply);
+			changePassword(buf,clientName,reply);
 		} else if (cmd == "uploadPhoto") {
-			uploadPhoto(sock,clx,buf,reply);
+			uploadPhoto(sock,buf,clientName,reply);
 		} else if (cmd == "addComtree" && buf.nextLine()) {
-			addComtree(clx,buf,reply);
+			addComtree(buf,clientName,reply);
 		} else if (cmd == "over" && buf.nextLine()) {
 			// ignore
 		} else if (cmd == "overAndOut" && buf.nextLine()) {
@@ -422,31 +417,33 @@ cerr << "sending reply: " << reply << endl;
 cerr << "terminating" << endl;
 }
 
-bool newSession(int sock, CpHandler& cph, int clx,
-		NetBuffer& buf, string& reply) {
-	// look for new session request - note: client is now locked
+bool newSession(int sock, CpHandler& cph, NetBuffer& buf,
+		string& clientName, string& reply) {
 	string s1;
 	RateSpec rs;
 	if (buf.verify(':')) {
-		if (buf.readRspec(rs) || !buf.nextLine()) {
+		if (!buf.readRspec(rs) || !buf.nextLine()) {
+		    !buf.readLine(s1)  || s1 != "over") {
 			reply = "unrecognized input";
 			return false;
 		}
 	} else {
-		if (buf.nextLine()) {
-			rs = cliTbl->getDefRates(clx);
-		} else {
+		if (!buf.nextLine() || !buf.readLine(s1)  || s1 != "over") {
 			reply = "unrecognized input";
 			return false;
 		}
 	}
-	if (!buf.readLine(s1) || s1 != "over") {
-		reply = "unrecognized input";
+	int clx = cliTbl->getClient(clientName);
+	if (clx == 0) {
+		reply = "cannot access client data(" + clientName + ")";
 		return false;
 	}
+
+	rs = cliTbl->getDefRates(clx);
 	// make sure we have sufficient capacity
 	bool ok = rs.leq(cliTbl->getAvailRates(clx));
 	if (!ok) {
+		cliTbl->releaseClient(clx);
 		reply = "session rate exceeds available capacity";
 		return true;
 	}
@@ -456,10 +453,12 @@ bool newSession(int sock, CpHandler& cph, int clx,
 	ipa_t clientIp = Np4d::getSockIp(sock);
 	pktx rpx = cph.newSession(nmAdr, clientIp, rs, repCp);
 	if (rpx == 0) {
+		cliTbl->releaseClient(clx);
 		reply = "cannot complete login: NetMgr never responded";
 		return false;
 	}
 	if (repCp.mode != CtlPkt::POS_REPLY) {
+		cliTbl->releaseClient(clx);
 		reply = "cannot complete login: NetMgr failed (" +
 			 repCp.errMsg + ")";
 		ps->free(rpx); 
@@ -468,6 +467,7 @@ bool newSession(int sock, CpHandler& cph, int clx,
 
 	int sess = cliTbl->addSession(repCp.adr1, repCp.adr2, clx);
 	if (sess == 0) {
+		cliTbl->releaseClient(clx);
 		reply = "cannot complete login: could not create "
 			"session record";
 		return false;
@@ -481,6 +481,7 @@ bool newSession(int sock, CpHandler& cph, int clx,
 	cliTbl->setState(sess,ClientTable::PENDING);
 	cliTbl->setStartTime(sess,Misc::currentTime());
 	cliTbl->getAvailRates(sess).subtract(rs);
+	cliTbl->releaseClient(clx);
 
 	// output accounting record
 	writeAcctRecord(cliName, repCp.adr1, clientIp, repCp.adr2, NEWSESSION);
@@ -499,32 +500,39 @@ bool newSession(int sock, CpHandler& cph, int clx,
 	return true;
 }
 
-void getProfile(int clx, NetBuffer& buf, string& reply) {
-	string s, userName;
-cerr << "reading user name\n";
-	if (!buf.verify(':') || !buf.readAlphas(userName) || !buf.nextLine()) {
-		reply = "could not read user name"; return;
+void getProfile(NetBuffer& buf, string& clientName, string& reply) {
+	string s, targetName;
+cerr << "reading target name\n";
+	if (!buf.verify(':') || !buf.readAlphas(targetName) || !buf.nextLine()){
+		reply = "could not read target name"; return;
 	}
-	string myName = cliTbl->getClientName(clx);
-cerr << "myName=" << myName << " userName=" << userName << endl;
+cerr << "clientName=" << clientName << " targetName=" << targetName << endl;
+	int clx = cliTbl->getClient(clientName);
+	if (clx == 0) {
+		reply = "cannot access client data(" + clientName + ")";
+		return;
+	}
 	int tclx;
-	if (userName == myName) {
+	if (targetName == clientName) {
 		tclx = clx;
 	} else {
 		tclx = cliTbl->getClient(userName);
 		if (tclx == 0) {
+			cliTbl->releaseClient(clx);
 			reply = "no such user"; return;
 		}
 		ClientTable::privileges priv = cliTbl->getPrivileges(clx);
 		if (priv != ClientTable::ADMIN && priv != ClientTable::ROOT) {
 			reply = "this operation requires administrative "
 				"privileges";
+			cliTbl->releaseClient(clx);
 			cliTbl->releaseClient(tclx);
 			return;
 		}
 		ClientTable::privileges tpriv = cliTbl->getPrivileges(tclx);
 		if (priv != ClientTable::ROOT && tpriv == ClientTable::ROOT) {
 			reply = "this operation requires root privileges";
+			cliTbl->releaseClient(clx);
 			cliTbl->releaseClient(tclx);
 			return;
 		}
@@ -533,6 +541,7 @@ cerr << "myName=" << myName << " userName=" << userName << endl;
 	reply += "email: " + cliTbl->getEmail(tclx) + "\n";
 	reply += "defRates: " + cliTbl->getDefRates(tclx).toString(s) + "\n";
 	reply += "totalRates: " + cliTbl->getTotalRates(tclx).toString(s) +"\n";
+	cliTbl->releaseClient(clx);
 	if (tclx != clx) cliTbl->releaseClient(tclx);
 }
 
