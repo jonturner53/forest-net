@@ -276,11 +276,11 @@ bool handleClient(int sock,CpHandler& cph) {
 	// clx is locked now
 
 	ClientTable::privileges priv = cliTbl->getPrivileges(clx);
-	if (priv == ClientTable::ADMIN || priv == ClientTable::ROOT) {
-		adminDialog(sock,cph,clx,buf);
-	} else {
+	//if (priv == ClientTable::ADMIN || priv == ClientTable::ROOT) {
+	//	adminDialog(sock,cph,clx,buf);
+	//} else {
 		userDialog(sock,cph,clx,buf);
-	}
+//	}
 	cliTbl->releaseClient(clx);
 	return true;
 }
@@ -310,6 +310,7 @@ int loginDialog(int sock, NetBuffer& buf) {
 		// password: clientPassword
 		// over
 		if (s1 == "login") {
+cerr << "login" << endl;
 			// process remainder of login dialog
 			if (buf.verify(':') && buf.readAlphas(client) &&
 			      buf.nextLine() &&
@@ -317,7 +318,9 @@ int loginDialog(int sock, NetBuffer& buf) {
 			      buf.verify(':') && buf.readWord(pwd) &&
 			      buf.nextLine() &&
 			    buf.readLine(s3) && s3 == "over") {
+cerr << "client=" << client << " pwd=" << pwd << endl;
 				int clx =cliTbl->getClient(client); // locks clx
+cerr << "proceeding clx=" << clx << "\n";
 				if (clx == 0) {
 					Np4d::sendString(sock,"login failed: "
 							 "try again\nover\n");
@@ -326,9 +329,9 @@ int loginDialog(int sock, NetBuffer& buf) {
 							      "\nover\n");
 					return clx;
 				} else {
+					cliTbl->releaseClient(clx);
 					Np4d::sendString(sock,"login failed, "
 							 "try again\nover\n");
-		
 					if (!buf.readAlphas(s1)) {
 						Np4d::sendString(sock,
 							"misformatted login "
@@ -336,7 +339,6 @@ int loginDialog(int sock, NetBuffer& buf) {
 					      		"overAndOut\n");
 						return 0;
 					}
-					cliTbl->releaseClient(clx);
 				}
 			}
 		} else if (s1 == "newAccount") {
@@ -352,6 +354,7 @@ int loginDialog(int sock, NetBuffer& buf) {
 					Np4d::sendString(sock,"client name not "
 							"available: try again\n"
 							"over\n");
+					cliTbl->releaseClient(clx);
 				}
 				clx = cliTbl->addClient(client,pwd,
 							ClientTable::STANDARD);
@@ -388,16 +391,17 @@ int loginDialog(int sock, NetBuffer& buf) {
 
 void userDialog(int sock, CpHandler& cph, int clx, NetBuffer& buf) {
 	string cmd, reply;
+cerr << "entering userDialog\n";
 	while (buf.readAlphas(cmd)) {
 cerr << "cmd=" << cmd << endl;
 		reply = "success";
 		if (cmd == "newSession") {
 			newSession(sock,cph,clx,buf,reply);
-		} else if (cmd == "getProfile" && buf.nextLine()) {
+		} else if (cmd == "getProfile") {
 			getProfile(clx,buf,reply);
-		} else if (cmd == "updateProfile" && buf.nextLine()) {
+		} else if (cmd == "updateProfile") {
 			updateProfile(clx,buf,reply);
-		} else if (cmd == "changePassword" && buf.nextLine()) {
+		} else if (cmd == "changePassword") {
 			changePassword(clx,buf,reply);
 		} else if (cmd == "uploadPhoto") {
 			uploadPhoto(sock,clx,buf,reply);
@@ -411,9 +415,11 @@ cerr << "cmd=" << cmd << endl;
 			reply = "unrecognized input";
 		}
 		if (sock == -1) break;
+cerr << "sending reply: " << reply << endl;
 		reply += "\nover\n";
 		Np4d::sendString(sock,reply);
 	}
+cerr << "terminating" << endl;
 }
 
 bool newSession(int sock, CpHandler& cph, int clx,
@@ -494,71 +500,159 @@ bool newSession(int sock, CpHandler& cph, int clx,
 }
 
 void getProfile(int clx, NetBuffer& buf, string& reply) {
-	string s;
-	reply  = "clientName: " + cliTbl->getClientName(clx) + "\n";
-	reply += "realName: \"" + cliTbl->getRealName(clx) + "\"\n";
-	reply += "email: " + cliTbl->getEmail(clx) + "\n";
-	reply += "defRates: " + cliTbl->getDefRates(clx).toString(s) + "\n";
-	reply += "totalRates: " + cliTbl->getTotalRates(clx).toString(s) + "\n";
+	string s, userName;
+cerr << "reading user name\n";
+	if (!buf.verify(':') || !buf.readAlphas(userName) || !buf.nextLine()) {
+		reply = "could not read user name"; return;
+	}
+	string myName = cliTbl->getClientName(clx);
+cerr << "myName=" << myName << " userName=" << userName << endl;
+	int tclx;
+	if (userName == myName) {
+		tclx = clx;
+	} else {
+		tclx = cliTbl->getClient(userName);
+		if (tclx == 0) {
+			reply = "no such user"; return;
+		}
+		ClientTable::privileges priv = cliTbl->getPrivileges(clx);
+		if (priv != ClientTable::ADMIN && priv != ClientTable::ROOT) {
+			reply = "this operation requires administrative "
+				"privileges";
+			cliTbl->releaseClient(tclx);
+			return;
+		}
+		ClientTable::privileges tpriv = cliTbl->getPrivileges(tclx);
+		if (priv != ClientTable::ROOT && tpriv == ClientTable::ROOT) {
+			reply = "this operation requires root privileges";
+			cliTbl->releaseClient(tclx);
+			return;
+		}
+	}
+	reply  = "realName: \"" + cliTbl->getRealName(tclx) + "\"\n";
+	reply += "email: " + cliTbl->getEmail(tclx) + "\n";
+	reply += "defRates: " + cliTbl->getDefRates(tclx).toString(s) + "\n";
+	reply += "totalRates: " + cliTbl->getTotalRates(tclx).toString(s) +"\n";
+	if (tclx != clx) cliTbl->releaseClient(tclx);
 }
 
 void updateProfile(int clx, NetBuffer& buf, string& reply) {
-	string item, s; RateSpec rates;
+	string s, userName;
+cerr << "reading user name\n";
+	if (!buf.verify(':') || !buf.readAlphas(userName) || !buf.nextLine()) {
+		reply = "could not read user name"; return;
+	}
+
+	string myName = cliTbl->getClientName(clx);
+cerr << "got (" << userName << ") and I am (" << myName << ")" << endl;
+// null value for userName??? even though readAlphas passed??
+	int tclx;
+	if (userName == myName) {
+		tclx = clx;
+	} else {
+		tclx = cliTbl->getClient(userName);
+		if (tclx == 0) {
+			reply = "no such user"; return;
+		}
+		ClientTable::privileges priv = cliTbl->getPrivileges(clx);
+		if (priv != ClientTable::ADMIN && priv != ClientTable::ROOT) {
+			reply = "this operation requires administrative "
+				"privileges";
+			cliTbl->releaseClient(tclx);
+			return;
+		}
+		ClientTable::privileges tpriv = cliTbl->getPrivileges(tclx);
+		if (priv != ClientTable::ROOT &&
+		    (tpriv == ClientTable::ROOT ||
+		     tpriv == ClientTable::ADMIN)) {
+			reply = "this operation requires root privileges";
+			cliTbl->releaseClient(tclx);
+			return;
+		}
+	}
+	string item; RateSpec rates;
 	ClientTable::privileges priv = cliTbl->getPrivileges(clx);
 	while (buf.readAlphas(item)) {
-		if (item == "clientName" && buf.verify(':') &&
-		    buf.readAlphas(s) && buf.nextLine()) {
-			cliTbl->setClientName(clx,s);
-		} else if (item == "realName" && buf.verify(':') &&
+		if (item == "realName" && buf.verify(':') &&
 		    buf.readString(s) && buf.nextLine()) {
-			cliTbl->setRealName(clx,s);
+			cliTbl->setRealName(tclx,s);
 		} else if (item == "email" && buf.verify(':') &&
 		    buf.readLine(s)) {
-			cliTbl->setEmail(clx,s);
+			cliTbl->setEmail(tclx,s);
 		} else if (item == "defRates" && buf.verify(':') &&
 			   buf.readRspec(rates) && buf.nextLine()) {
 			if (priv == ClientTable::LIMITED) continue;
-			if (rates.leq(cliTbl->getTotalRates(clx)))
-				cliTbl->getDefRates(clx) = rates;
+			if (rates.leq(cliTbl->getTotalRates(tclx)))
+				cliTbl->getDefRates(tclx) = rates;
 		} else if (item == "totalRates" && buf.verify(':') &&
 			   buf.readRspec(rates) && buf.nextLine()) {
 			if (priv == ClientTable::LIMITED) continue;
-			if (rates.leq(cliTbl->getTotalRates(clx)) ||
+			if (rates.leq(cliTbl->getTotalRates(tclx)) ||
 			    rates.leq(cliTbl->getTotalRates())) {
-				cliTbl->getTotalRates(clx) = rates;
+				cliTbl->getTotalRates(tclx) = rates;
 			}
 		} else if (item == "over" && buf.nextLine()) {
 			reply = "profile updated";
-			writeClientLog(clx);
+			writeClientLog(tclx);
 			break;
 		} else if (item == "overAndOut" && buf.nextLine()) {
 			reply = "profile updated";
-			writeClientLog(clx);
+			writeClientLog(tclx);
 			break;
 		} else {
 			reply = "misformatted request (" + item + ")";
 			break;
 		}
 	}
+	if (tclx != clx) cliTbl->releaseClient(tclx);
 	return;
 }
 
 void changePassword(int clx, NetBuffer& buf, string& reply) {
-	string item, pwd, s; RateSpec rates;
+	string s, userName;
+	if (!buf.verify(':') || !buf.readAlphas(userName) || !buf.nextLine()) {
+		reply = "could not read user name"; return;
+	}
+	int tclx;
+	if (userName == cliTbl->getClientName(clx)) {
+		tclx = clx;
+	} else {
+		tclx = cliTbl->getClient(userName);
+		if (tclx == 0) {
+			reply = "no such user"; return;
+		}
+		ClientTable::privileges priv = cliTbl->getPrivileges(clx);
+		if (priv != ClientTable::ADMIN && priv != ClientTable::ROOT) {
+			reply = "this operation requires administrative "
+				"privileges";
+			cliTbl->releaseClient(tclx);
+			return;
+		}
+		ClientTable::privileges tpriv = cliTbl->getPrivileges(tclx);
+		if (priv != ClientTable::ROOT &&
+		    (tpriv == ClientTable::ROOT ||
+		     tpriv == ClientTable::ADMIN)) {
+			reply = "this operation requires root privileges";
+			cliTbl->releaseClient(tclx);
+			return;
+		}
+	}
+	string item, pwd;
 	while (buf.readAlphas(item)) {
 cerr << "item=" << item << "\nbuf=" << buf.toString(s);
 		if (item == "password" && buf.verify(':') &&
 		    buf.readWord(pwd) && buf.nextLine()) {
-			cliTbl->setPassword(clx,pwd);
+			cliTbl->setPassword(tclx,pwd);
 		} else if (item == "over" && buf.nextLine()) {
-			writeClientLog(clx); break;
+			writeClientLog(tclx); break;
 		} else if (item == "overAndOut" && buf.nextLine()) {
-			writeClientLog(clx); break;
+			writeClientLog(tclx); break;
 		} else {
 			reply = "misformatted request (" + item + ")";
 			break;
 		}
 	}
+	if (tclx != clx) cliTbl->releaseClient(tclx);
 	return;
 }
 
