@@ -54,18 +54,13 @@ void* handler(void* sockp) {
 	string s1;
 
 	if (!buf.readAlphas(s1) || s1 != "getPhoto") {
-		Np4d::sendString(sock,"unrecognized input\noverAndOut\n");
+		Np4d::sendString(sock,"1unrecognized input\noverAndOut\n");
 		close(sock); return NULL;
 	}
 	
-	
 	if (buf.verify(':')) {
-		Np4d::sendString(sock,"unrecognized input\n"
-					     "overAndOut\n");
-		close(sock); return NULL;
-	} else {
 		if ( !buf.readAlphas(s1)) {				
-			Np4d::sendString(sock,"unrecognized input\n"
+			Np4d::sendString(sock,"2unrecognized input\n"
 					      "overAndOut\n");
 			close(sock); return NULL;		
 		} else {
@@ -112,5 +107,11 @@ void* handler(void* sockp) {
 			}
 		}
 	}
+	else{
+			Np4d::sendString(sock,"3unrecognized input\n"
+					     "overAndOut\n");
+			close(sock); return NULL;
+	} 
+	
 	close(sock); return NULL;
 }
