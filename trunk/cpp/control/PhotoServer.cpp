@@ -64,11 +64,7 @@ void* handler(void* sockp) {
 					      "overAndOut\n");
 			close(sock); return NULL;		
 		} else {
-<<<<<<< .mine
 			fileName = string("clientPhotos/") + s1 + string(".jpg");
-=======
-			fileName = string("clientPhotos/") + s1 +string(".jpg");
->>>>>>> .r415
 			//int str_size = fileName.size() + 1;
 			//char pFileName[str_size];
 			//pFileName = fileName.c_str();
