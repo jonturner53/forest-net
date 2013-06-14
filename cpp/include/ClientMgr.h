@@ -46,28 +46,28 @@ bool handleClient(int,CpHandler&);
 bool handleConnDisc(pktx,CtlPkt&,CpHandler&);
 
 // dialogs with client
-int loginDialog(int,NetBuffer&);
-void adminDialog(int,CpHandler&,int,NetBuffer&);
-void userDialog(int,CpHandler&,int,NetBuffer&);
+bool loginDialog(int,NetBuffer&,string&);
+//void adminDialog(int,CpHandler&,int,NetBuffer&);
+void userDialog(int,CpHandler&,NetBuffer&,string&);
 
 // operations that can be performed by normal clients
-bool newSession(int, CpHandler&, int, NetBuffer&, string&);
-void getProfile(int, NetBuffer&, string&);
-void updateProfile(int, NetBuffer&, string&);
-void changePassword(int, NetBuffer&, string&);
-void uploadPhoto(int, int, NetBuffer&, string&);
-void addComtree(int, NetBuffer&, string&);
+bool newSession(int, CpHandler&, NetBuffer&, string&, string&);
+void getProfile(NetBuffer&, string&, string&);
+void updateProfile(NetBuffer&, string&, string&);
+void changePassword(NetBuffer&, string&, string&);
+void uploadPhoto(int, NetBuffer&, string&, string&);
+void addComtree(NetBuffer&, string&, string&);
 
 // privileged operations
-void addClient(NetBuffer&, string&);
-void removeClient(NetBuffer&, string&);
-void modPassword(NetBuffer&, ClientTable::privileges, string&);
-void modPrivileges(NetBuffer&, ClientTable::privileges, string&);
-void modRealName(NetBuffer&, string&);
-void modEmail(NetBuffer&, string&);
-void modDefRates(NetBuffer&, string&);
-void modTotalRates(NetBuffer&, string&);
-void showClient(NetBuffer&, string&);
+//void addClient(NetBuffer&, string&);
+//void removeClient(NetBuffer&, string&);
+//void modPassword(NetBuffer&, ClientTable::privileges, string&);
+//void modPrivileges(NetBuffer&, ClientTable::privileges, string&);
+//void modRealName(NetBuffer&, string&);
+//void modEmail(NetBuffer&, string&);
+//void modDefRates(NetBuffer&, string&);
+//void modTotalRates(NetBuffer&, string&);
+//void showClient(NetBuffer&, string&);
 
 void writeAcctRecord(const string&, fAdr_t, ipa_t, fAdr_t, acctRecType); 
 void writeClientLog(int);

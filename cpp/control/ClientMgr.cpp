@@ -271,7 +271,6 @@ bool handleClient(int sock,CpHandler& cph) {
 	int clx; string clientName;
 	NetBuffer buf(sock,1024);
 
-	string clientName;
 	if (!loginDialog(sock,buf,clientName)) return true;
 	userDialog(sock,cph,buf,clientName);
 	cliTbl->releaseClient(clx);
@@ -422,7 +421,7 @@ bool newSession(int sock, CpHandler& cph, NetBuffer& buf,
 	string s1;
 	RateSpec rs;
 	if (buf.verify(':')) {
-		if (!buf.readRspec(rs) || !buf.nextLine()) {
+		if (!buf.readRspec(rs) || !buf.nextLine() ||
 		    !buf.readLine(s1)  || s1 != "over") {
 			reply = "unrecognized input";
 			return false;
@@ -438,16 +437,13 @@ bool newSession(int sock, CpHandler& cph, NetBuffer& buf,
 		reply = "cannot access client data(" + clientName + ")";
 		return false;
 	}
-
-	rs = cliTbl->getDefRates(clx);
+	if (!rs.isSet()) rs = cliTbl->getDefRates(clx);
 	// make sure we have sufficient capacity
-	bool ok = rs.leq(cliTbl->getAvailRates(clx));
-	if (!ok) {
+	if (!rs.leq(cliTbl->getAvailRates(clx))) {
 		cliTbl->releaseClient(clx);
 		reply = "session rate exceeds available capacity";
 		return true;
 	}
-
 	// proceed with new session setup
 	CtlPkt repCp;
 	ipa_t clientIp = Np4d::getSockIp(sock);
@@ -464,7 +460,6 @@ bool newSession(int sock, CpHandler& cph, NetBuffer& buf,
 		ps->free(rpx); 
 		return false;
 	}
-
 	int sess = cliTbl->addSession(repCp.adr1, repCp.adr2, clx);
 	if (sess == 0) {
 		cliTbl->releaseClient(clx);
@@ -516,10 +511,10 @@ cerr << "clientName=" << clientName << " targetName=" << targetName << endl;
 	if (targetName == clientName) {
 		tclx = clx;
 	} else {
-		tclx = cliTbl->getClient(userName);
+		tclx = cliTbl->getClient(targetName);
 		if (tclx == 0) {
 			cliTbl->releaseClient(clx);
-			reply = "no such user"; return;
+			reply = "no such target client"; return;
 		}
 		ClientTable::privileges priv = cliTbl->getPrivileges(clx);
 		if (priv != ClientTable::ADMIN && priv != ClientTable::ROOT) {
@@ -545,28 +540,33 @@ cerr << "clientName=" << clientName << " targetName=" << targetName << endl;
 	if (tclx != clx) cliTbl->releaseClient(tclx);
 }
 
-void updateProfile(int clx, NetBuffer& buf, string& reply) {
-	string s, userName;
-cerr << "reading user name\n";
-	if (!buf.verify(':') || !buf.readAlphas(userName) || !buf.nextLine()) {
-		reply = "could not read user name"; return;
+void updateProfile(NetBuffer& buf, string& clientName, string& reply) {
+	string s, targetName;
+cerr << "reading target name\n";
+	if (!buf.verify(':') || !buf.readAlphas(targetName) || !buf.nextLine()){
+		reply = "could not read target name"; return;
 	}
-
-	string myName = cliTbl->getClientName(clx);
-cerr << "got (" << userName << ") and I am (" << myName << ")" << endl;
-// null value for userName??? even though readAlphas passed??
+	int clx = cliTbl->getClient(clientName);
+	if (clx == 0) {
+		reply = "cannot access client data(" + clientName + ")";
+		return;
+	}
+cerr << "got (" << targetName << ") and I am (" << clientName << ")" << endl;
 	int tclx;
-	if (userName == myName) {
+	if (targetName == clientName) {
 		tclx = clx;
 	} else {
-		tclx = cliTbl->getClient(userName);
+		tclx = cliTbl->getClient(targetName);
 		if (tclx == 0) {
-			reply = "no such user"; return;
+			cliTbl->releaseClient(clx);
+			reply = "no such target client";
+			return;
 		}
 		ClientTable::privileges priv = cliTbl->getPrivileges(clx);
 		if (priv != ClientTable::ADMIN && priv != ClientTable::ROOT) {
 			reply = "this operation requires administrative "
 				"privileges";
+			cliTbl->releaseClient(clx);
 			cliTbl->releaseClient(tclx);
 			return;
 		}
@@ -575,74 +575,91 @@ cerr << "got (" << userName << ") and I am (" << myName << ")" << endl;
 		    (tpriv == ClientTable::ROOT ||
 		     tpriv == ClientTable::ADMIN)) {
 			reply = "this operation requires root privileges";
+			cliTbl->releaseClient(clx);
 			cliTbl->releaseClient(tclx);
 			return;
 		}
 	}
 	string item; RateSpec rates;
 	ClientTable::privileges priv = cliTbl->getPrivileges(clx);
+	// release locks while getting profile data
+	cliTbl->releaseClient(clx);
+	if (tclx != clx) cliTbl->releaseClient(tclx);
+	string realName, email; RateSpec defRates, totRates;
 	while (buf.readAlphas(item)) {
 		if (item == "realName" && buf.verify(':') &&
-		    buf.readString(s) && buf.nextLine()) {
-			cliTbl->setRealName(tclx,s);
+		    buf.readString(realName) && buf.nextLine()) {
+			// that's all for now
 		} else if (item == "email" && buf.verify(':') &&
-		    buf.readLine(s)) {
-			cliTbl->setEmail(tclx,s);
+		    buf.readWord(email) && buf.nextLine()) {
+			// that's all for now
 		} else if (item == "defRates" && buf.verify(':') &&
-			   buf.readRspec(rates) && buf.nextLine()) {
-			if (priv == ClientTable::LIMITED) continue;
-			if (rates.leq(cliTbl->getTotalRates(tclx)))
-				cliTbl->getDefRates(tclx) = rates;
+			   buf.readRspec(defRates) && buf.nextLine()) {
+			// that's all for now
 		} else if (item == "totalRates" && buf.verify(':') &&
-			   buf.readRspec(rates) && buf.nextLine()) {
-			if (priv == ClientTable::LIMITED) continue;
-			if (rates.leq(cliTbl->getTotalRates(tclx)) ||
-			    rates.leq(cliTbl->getTotalRates())) {
-				cliTbl->getTotalRates(tclx) = rates;
-			}
-		} else if (item == "over" && buf.nextLine()) {
-			reply = "profile updated";
-			writeClientLog(tclx);
-			break;
-		} else if (item == "overAndOut" && buf.nextLine()) {
-			reply = "profile updated";
-			writeClientLog(tclx);
+			   buf.readRspec(totRates) && buf.nextLine()) {
+			// that's all for now
+		} else if ((item == "over" && buf.nextLine()) ||
+			   (item == "overAndOut" && buf.nextLine())) {
 			break;
 		} else {
 			reply = "misformatted request (" + item + ")";
-			break;
+			return;
 		}
 	}
-	if (tclx != clx) cliTbl->releaseClient(tclx);
+	tclx = cliTbl->getClient(targetName);
+	if (tclx == 0) {
+		reply = "could not update target client data";
+		return;
+	}
+	if (realName.length() > 0) cliTbl->setRealName(tclx,realName);
+	if (email.length() > 0) cliTbl->setEmail(tclx,email);
+	if (priv != ClientTable::LIMITED) {
+		if (defRates.isSet() && 
+		    defRates.leq(cliTbl->getTotalRates(tclx)))
+			cliTbl->getDefRates(tclx) = defRates;
+		if (totRates.isSet() && 
+	    	    defRates.leq(cliTbl->getTotalRates(tclx)))
+			cliTbl->getTotalRates(tclx) = totRates;
+	}
+	writeClientLog(tclx);
+	reply = "profile updated";
+	cliTbl->releaseClient(tclx);
 	return;
 }
 
-void changePassword(int clx, NetBuffer& buf, string& reply) {
-	string s, userName;
-	if (!buf.verify(':') || !buf.readAlphas(userName) || !buf.nextLine()) {
-		reply = "could not read user name"; return;
+void changePassword(NetBuffer& buf, string& clientName, string& reply) {
+	string s, targetName;
+	if (!buf.verify(':') || !buf.readAlphas(targetName) || !buf.nextLine()){
+		reply = "could not read target name"; return;
+	}
+	int clx = cliTbl->getClient(clientName);
+	if (clx == 0) {
+		reply = "cannot access client data(" + clientName + ")";
+		return;
 	}
 	int tclx;
-	if (userName == cliTbl->getClientName(clx)) {
+	if (targetName == clientName) {
 		tclx = clx;
+		cliTbl->releaseClient(clx);
 	} else {
-		tclx = cliTbl->getClient(userName);
+		tclx = cliTbl->getClient(targetName);
 		if (tclx == 0) {
-			reply = "no such user"; return;
+			reply = "no such target"; return;
 		}
 		ClientTable::privileges priv = cliTbl->getPrivileges(clx);
+		ClientTable::privileges tpriv = cliTbl->getPrivileges(tclx);
+		cliTbl->releaseClient(clx);
+		cliTbl->releaseClient(tclx);
 		if (priv != ClientTable::ADMIN && priv != ClientTable::ROOT) {
 			reply = "this operation requires administrative "
 				"privileges";
-			cliTbl->releaseClient(tclx);
 			return;
 		}
-		ClientTable::privileges tpriv = cliTbl->getPrivileges(tclx);
 		if (priv != ClientTable::ROOT &&
 		    (tpriv == ClientTable::ROOT ||
 		     tpriv == ClientTable::ADMIN)) {
 			reply = "this operation requires root privileges";
-			cliTbl->releaseClient(tclx);
 			return;
 		}
 	}
@@ -651,21 +668,27 @@ void changePassword(int clx, NetBuffer& buf, string& reply) {
 cerr << "item=" << item << "\nbuf=" << buf.toString(s);
 		if (item == "password" && buf.verify(':') &&
 		    buf.readWord(pwd) && buf.nextLine()) {
-			cliTbl->setPassword(tclx,pwd);
-		} else if (item == "over" && buf.nextLine()) {
-			writeClientLog(tclx); break;
-		} else if (item == "overAndOut" && buf.nextLine()) {
-			writeClientLog(tclx); break;
+			// nothing more for now
+		} else if ((item == "over" && buf.nextLine()) ||
+			  (item == "overAndOut" && buf.nextLine())) {
+			break;
 		} else {
 			reply = "misformatted request (" + item + ")";
-			break;
+			return;
 		}
 	}
-	if (tclx != clx) cliTbl->releaseClient(tclx);
+	tclx = cliTbl->getClient(clientName);
+	if (tclx == 0) {
+		reply = "cannot access target client data(" + targetName + ")";
+		return;
+	}
+	cliTbl->setPassword(tclx,pwd);
+	writeClientLog(tclx);
+	cliTbl->releaseClient(tclx);
 	return;
 }
 
-void uploadPhoto(int sock, int clx, NetBuffer& buf, string& reply) {
+void uploadPhoto(int sock, NetBuffer& buf, string& clientName, string& reply) {
 	int length;
 	if (!buf.verify(':') || !buf.readInt(length) || !buf.nextLine()) {
 		reply = "cannot read length"; return;
@@ -673,12 +696,13 @@ void uploadPhoto(int sock, int clx, NetBuffer& buf, string& reply) {
 	if (length > 50000) {
 		reply = "photo file exceeds 50000 byte limit"; return;
 	}
-	const string& cname = cliTbl->getClientName(clx);
+	int clx = cliTbl->getClient(clientName);
 	ofstream photoFile;
-	photoFile.open("clientPhotos/" + cname + ".jpg",ofstream::binary);
+	photoFile.open("clientPhotos/" + clientName + ".jpg",ofstream::binary);
 	if (!photoFile.good()) {
 		reply = "cannot open photo file"; return;
 	}
+	cliTbl->releaseClient(clx);
 	Np4d::sendString(sock,"proceed\n");
 	char xbuf[1001];
 	int numRcvd = 0;
@@ -702,12 +726,84 @@ void uploadPhoto(int sock, int clx, NetBuffer& buf, string& reply) {
 	return;
 }
 
-void addComtree(int clx, NetBuffer& buf, string& reply) {
+void addComtree(NetBuffer& buf, string& clientName, string& reply) {
+}
+	
+bool handleConnDisc(pktx px, CtlPkt& cp, CpHandler& cph) {
+	Packet& p = ps->getPacket(px);
+	if (p.srcAdr != nmAdr || cp.mode != CtlPkt::REQUEST) {
+		return false;
+	}
+	fAdr_t cliAdr = cp.adr1;
+	int sess = cliTbl->getSession(cliAdr); // locks client
+	if (sess == 0) {
+		cph.errReply(px,cp,"no record of session for "
+			           "specified client address");
+		return false;
+	}
+	int clx = cliTbl->getClientIndex(sess);
+	const string& cliName = cliTbl->getClientName(clx);
+	ipa_t cliIp = cliTbl->getClientIp(sess);
+	fAdr_t rtrAdr = cliTbl->getRouterAdr(sess);
+
+	if (cp.type == CtlPkt::CLIENT_DISCONNECT) {
+		cliTbl->removeSession(sess);
+	}
+
+	cliTbl->releaseClient(clx);
+	acctRecType typ = (cp.type == CtlPkt::CLIENT_CONNECT ?
+			   CONNECT_REC : DISCONNECT_REC);	
+	writeAcctRecord(cliName, cliAdr, cliIp, rtrAdr, typ);
+	
+	// send reply to original request
+	CtlPkt repCp(cp.type,CtlPkt::POS_REPLY,cp.seqNum);
+	cph.sendReply(repCp, p.srcAdr);
+	return true;
+}
+
+/** Writes a record to the accounting file.
+ *  @param cname is the name of the client
+ *  @param cliAdr is the Forest address assigned to the client
+ *  @param cliIp is the IP address used by client to login
+ *  @param rtrAdr is the Forest address for the router assigned to the client
+ *  @param recType is the type of accounting record
+ */
+void writeAcctRecord(const string& cname, fAdr_t cliAdr, ipa_t cliIp,
+		     fAdr_t rtrAdr, acctRecType recType) {
+	// should really lock while writing
+	if (!acctFile.good()) {
+		logger->log("ClientMgr::writeAcctRecord: cannot write "
+		   	   "to accouting file",2);
+			return;
+	}
+	string typeStr = (recType == NEWSESSION ? "new session" :
+			  (recType == CONNECT_REC ? "connect" :
+			   (recType == DISCONNECT_REC ?
+			    "disconnect" : "undefined record")));
+	time_t t = Misc::currentTime();
+	string now = string(ctime(&t)); now.erase(now.end()-1);
+	string s;
+	acctFile << typeStr << ", " << now << ", " << cname << ", "
+		 << Np4d::ip2string(cliIp,s) << ", ";
+	acctFile << Forest::fAdr2string(cliAdr,s) << ", ";
+	acctFile << Forest::fAdr2string(rtrAdr,s) << "\n";
+	acctFile.flush();
+}
+
+void writeClientLog(int clx) {
+	// should really lock while writing
+	if (!clientLog.good()) {
+		logger->log("ClientMgr::writeClientLog: cannot write "
+		   	   "to client log file",2);
+			return;
+	}
+	string s;
+	clientLog << cliTbl->client2string(clx,s);
+	clientLog.flush();
 }
 
 /** Handle an administrative login session.
  *  Supports commands for adding clients and modifying parameters.
- */
 void adminDialog(int sock, CpHandler& cph, int clx, NetBuffer& buf) {
 	string cmd; string reply;
 
@@ -929,78 +1025,6 @@ void showClient(NetBuffer& buf, string& reply) {
 		cliTbl->releaseClient(clx);
 	}
 }
-	
-bool handleConnDisc(pktx px, CtlPkt& cp, CpHandler& cph) {
-	Packet& p = ps->getPacket(px);
-	if (p.srcAdr != nmAdr || cp.mode != CtlPkt::REQUEST) {
-		return false;
-	}
-	fAdr_t cliAdr = cp.adr1;
-	int sess = cliTbl->getSession(cliAdr); // locks client
-	if (sess == 0) {
-		cph.errReply(px,cp,"no record of session for "
-			           "specified client address");
-		return false;
-	}
-	int clx = cliTbl->getClientIndex(sess);
-	const string& cliName = cliTbl->getClientName(clx);
-	ipa_t cliIp = cliTbl->getClientIp(sess);
-	fAdr_t rtrAdr = cliTbl->getRouterAdr(sess);
-
-	if (cp.type == CtlPkt::CLIENT_DISCONNECT) {
-		cliTbl->removeSession(sess);
-	}
-
-	cliTbl->releaseClient(clx);
-	acctRecType typ = (cp.type == CtlPkt::CLIENT_CONNECT ?
-			   CONNECT_REC : DISCONNECT_REC);	
-	writeAcctRecord(cliName, cliAdr, cliIp, rtrAdr, typ);
-	
-	// send reply to original request
-	CtlPkt repCp(cp.type,CtlPkt::POS_REPLY,cp.seqNum);
-	cph.sendReply(repCp, p.srcAdr);
-	return true;
-}
-
-/** Writes a record to the accounting file.
- *  @param cname is the name of the client
- *  @param cliAdr is the Forest address assigned to the client
- *  @param cliIp is the IP address used by client to login
- *  @param rtrAdr is the Forest address for the router assigned to the client
- *  @param recType is the type of accounting record
  */
-void writeAcctRecord(const string& cname, fAdr_t cliAdr, ipa_t cliIp,
-		     fAdr_t rtrAdr, acctRecType recType) {
-	// should really lock while writing
-	if (!acctFile.good()) {
-		logger->log("ClientMgr::writeAcctRecord: cannot write "
-		   	   "to accouting file",2);
-			return;
-	}
-	string typeStr = (recType == NEWSESSION ? "new session" :
-			  (recType == CONNECT_REC ? "connect" :
-			   (recType == DISCONNECT_REC ?
-			    "disconnect" : "undefined record")));
-	time_t t = Misc::currentTime();
-	string now = string(ctime(&t)); now.erase(now.end()-1);
-	string s;
-	acctFile << typeStr << ", " << now << ", " << cname << ", "
-		 << Np4d::ip2string(cliIp,s) << ", ";
-	acctFile << Forest::fAdr2string(cliAdr,s) << ", ";
-	acctFile << Forest::fAdr2string(rtrAdr,s) << "\n";
-	acctFile.flush();
-}
-
-void writeClientLog(int clx) {
-	// should really lock while writing
-	if (!clientLog.good()) {
-		logger->log("ClientMgr::writeClientLog: cannot write "
-		   	   "to client log file",2);
-			return;
-	}
-	string s;
-	clientLog << cliTbl->client2string(clx,s);
-	clientLog.flush();
-}
 
 } // ends namespace

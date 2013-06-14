@@ -60,11 +60,12 @@ void* handler(void* sockp) {
 	
 	if (buf.verify(':')) {
 		if ( !buf.readAlphas(s1)) {				
-			Np4d::sendString(sock,"2unrecognized input\n"
+			Np4d::sendString(sock,"unrecognized input\n"
 					      "overAndOut\n");
 			close(sock); return NULL;		
 		} else {
-			fileName = string("clientPhotos/") + s1 + string(".jpg");
+			fileName = string("clientPhotos/") + s1 +string(".jpg");
+cerr << "opening file " << fileName << endl;
 			//int str_size = fileName.size() + 1;
 			//char pFileName[str_size];
 			//pFileName = fileName.c_str();
@@ -75,6 +76,7 @@ void* handler(void* sockp) {
 			
 			if(pFile.is_open())
 			{ 
+cerr << "file is open\n";
 				size = pFile.tellg();
 				memblock = new char [size];
 				pFile.seekg (0, ios::beg);
@@ -101,6 +103,7 @@ void* handler(void* sockp) {
 				delete[] memblock;
 			}
 			else{
+cerr << "file will not open\n";
 				Np4d::sendString(sock,"failed to locate file\n"
 							  "overAndOut\n");
 				close(sock); return NULL;
