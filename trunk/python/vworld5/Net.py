@@ -217,48 +217,59 @@ class Net :
 	
 	def getPhoto(self, uname) :		
 		psSock = socket(AF_INET, SOCK_STREAM)
-		self.photoServerIp = gethostbyname("shell.cec.wustl.edu")
+		self.photoServerIp = gethostbyname("forest2.arl.wustl.edu")
 		print self.photoServerIp
 		psSock.connect((self.photoServerIp, 30124))
 		
 		#send a getPhoto request
-		totalSent = 0
-		msgLen = 10 + len(uname)
-		while totalSent < msgLen:
-			sent = psSock.send("getPhoto: " + uname)
-			if sent == 0:
-				raise RuntimeError("socket connection broken")
-			totalSent = totalSent + sent
+
+		sent = psSock.sendall("getPhoto:" + uname)
+		if sent == 0:
+			raise RuntimeError("socket connection broken")
+
 			
 		# receiving the photo	
-		buffer = ''
-		photo = ''
-		photoLen = 0
-		gotPic = false
-		while (not gotPic):
-			buffer = psSock.recv(4)
+		echo_len = 15
+		echo_recvd = 0
+		while echo_recvd == 0:
+			buffer = psSock.recv(echo_len)
+			print buffer
 			if buffer == '':
-				raise RuntimeError("socket connection broken")			
-			len = struct.unpack("!I", buffer)[0]
-			photoLen = photoLen + len
-			if len < 1024:
-				gotPic = true
-			more2read = true
-			while(more2read):
-				block = psSock.recv(len) #returns a string
-				len = len - len(block)
-				photo = photo + block
-				if len == 0:
-					more2read = false
-					
-		#tuple = struct.unpack(str(photoLen/4) + "I", photo) #endian don't care?
-		out = open(uname + ".jpg", "wb")
-		out.write(photo)
-		out.close()
-		
-		
-		psSock.send("complete!")
-		psSock.close()
+				RuntimeError("broken connection")
+			echo_len = echo_len - len(buffer) 
+			if echo_len == 0:
+				echo_recvd = 1
+		if struct.unpack("7s", buffer[0:7])[0] == "failure":
+			# didn't get pic, give up, may do something more?
+			psSock.close()
+		else:	
+			photo = ''
+			photoLen = struct.unpack("!I", buffer[7:11])[0]
+			gotPic = 0
+			while (not gotPic):
+				buffer = psSock.recv(4)
+				if buffer == '':
+					raise RuntimeError("socket connection broken")			
+				pktlen = struct.unpack("!i", buffer)[0]
+				if pktlen < 1024:
+					gotPic = 1
+				more2read = 1
+				print "buffer is: ", buffer
+				print "repr(buffer) is: ", repr(buffer)
+				print pktlen
+				while(more2read):
+					block = psSock.recv(pktlen) #returns a string
+					pktlen = pktlen - len(block)
+					photo = photo + block
+					if pktlen == 0:
+						more2read = 0
+						
+			out = open(uname + ".jpg", "wb")
+			out.write(photo)
+			out.close()
+
+			psSock.send("complete!")
+			psSock.close()
 						
 		
 	def run(self, task) :
