@@ -48,7 +48,7 @@ import forest.control.*;
  *  @author Jon Turner
  *  @date 2013
  */
-public class AcctMgr extends MouseAdapter implements ActionListener {
+public class AcctMgr extends MouseAdapter implements ActionListener, FocusListener {
 	public static void main(String[] args) {	
 		SwingUtilities.invokeLater(new Runnable() {
 			public void run() { new AcctMgr(); }
@@ -61,13 +61,21 @@ public class AcctMgr extends MouseAdapter implements ActionListener {
 
 	private boolean loggedIn;		// true when logged in
 
+	// various user interface buttons
+	private JButton connectBtn;
+	private JButton loginBtn;
+	private JButton newAcctBtn;
+	private JButton updateBtn;
+	private JButton modPwdBtn;
+	private JButton uploadBtn;
+
+	// various text fields and the strings use to hold contents
 	private JTextField serverField;
 	private String serverName;
 	private JTextField userField;
 	private String userName;
 	private JPasswordField pwdField;
 	private String password;
-	JTextArea statusArea;
 
 	private JTextField nameField;
 	private String realName;
@@ -83,15 +91,20 @@ public class AcctMgr extends MouseAdapter implements ActionListener {
 	private JPasswordField confirmField;
 	private String confirmPassword;
 
+	private JTextField updateField;
+	private String updateTarget;
 	private JTextField photoField;
+	private String photoFile;
+
+	// text area used to display status messages
+	JTextArea statusArea;
 
 	private Box labeledField(JTextField text, String name) {
 		JLabel label = new JLabel(name);
 		label.setBorder(BorderFactory.createEmptyBorder(0,5,0,0));
 		text.setMinimumSize(text.getPreferredSize());
 		text.setMaximumSize(text.getPreferredSize());
-		text.addActionListener(this);
-		text.setActionCommand(name);
+		text.addFocusListener(this);
 		label.setAlignmentX(Component.LEFT_ALIGNMENT);
 		text.setAlignmentX(Component.LEFT_ALIGNMENT);
 		Box box = Box.createVerticalBox();
@@ -120,6 +133,11 @@ public class AcctMgr extends MouseAdapter implements ActionListener {
 	 *  Setup the various user interface components.
 	 */
 	AcctMgr() {
+		serverName = userName = password = "foo";
+		realName = email = defRates = totRates = "foo";
+		newPassword = "foo"; confirmPassword = "bar";
+		updateTarget = photoFile = "foo";
+
 		JFrame jfrm = new JFrame("Forest account manager");
 		jfrm.setLayout(new FlowLayout());
 		jfrm.setSize(850,400);
@@ -130,7 +148,7 @@ public class AcctMgr extends MouseAdapter implements ActionListener {
 		serverField.setText("forest2.arl.wustl.edu");
 		serverName = "forest2.arl.wustl.edu";
 		Box b1 = labeledField(serverField,"client manager");
-		JButton connectBtn = new JButton("connect");
+		connectBtn = new JButton("connect");
 		connectBtn.addActionListener(this);
 		b1.setAlignmentY(1); connectBtn.setAlignmentY(1);
 		Box box0 = Box.createHorizontalBox();
@@ -144,9 +162,9 @@ public class AcctMgr extends MouseAdapter implements ActionListener {
 		pwdField = new JPasswordField(15);
 		Box b3 = labeledField(pwdField,"password");
 		Box box1 = doubleBox(b2,b3);
-		JButton loginBtn = new JButton("login");
+		loginBtn = new JButton("login");
 		loginBtn.addActionListener(this);
-		JButton newAcctBtn = new JButton("new account");
+		newAcctBtn = new JButton("new account");
 		newAcctBtn.addActionListener(this);
 		box1.setAlignmentY(1);
 		loginBtn.setAlignmentY(1); newAcctBtn.setAlignmentY(1);
@@ -181,20 +199,28 @@ public class AcctMgr extends MouseAdapter implements ActionListener {
 
 		Box box3 = tripleBox(b1,b2,b3);
 
-		JButton updateBtn = new JButton("update");
+		updateField = new JTextField(13);
+		updateField.addFocusListener(this);
+		updateField.setMaximumSize(updateField.getPreferredSize());
+		updateBtn = new JButton("update");
 		updateBtn.addActionListener(this);
-		JButton modPwdBtn = new JButton("change password");
-		modPwdBtn.addActionListener(this);
-		photoField = new JTextField(20);
-		photoField.setText("not working yet");
+		photoField = new JTextField(13);
+		photoField.setText("photofile.jpg");
+		photoField.addFocusListener(this);
 		photoField.setMaximumSize(photoField.getPreferredSize());
-		JButton uploadBtn = new JButton("upload photo");
+		uploadBtn = new JButton("upload photo");
+		uploadBtn.addActionListener(this);
+		modPwdBtn = new JButton("change password");
+		modPwdBtn.addActionListener(this);
 		Box box4 = Box.createHorizontalBox();
 		box4.add(Box.createHorizontalStrut(10));
+		box4.add(updateField);
 		box4.add(updateBtn);
-		box4.add(modPwdBtn);
 		box4.add(photoField);
 		box4.add(uploadBtn);
+		box4.add(Box.createHorizontalGlue());
+		box4.add(modPwdBtn);
+		box4.add(Box.createHorizontalStrut(25));
 
 		// Finally, the sessions area
 		Box box5 = showSessions();
@@ -260,47 +286,53 @@ public class AcctMgr extends MouseAdapter implements ActionListener {
 		return b;
 	}
 
-	private boolean updateProfile() {
-                                "realName: \"" + realName + "\"\n" +
-                                "email: " + email + "\n" +
-                                "defRates: " + defRates + "\n" +
-                                "totalRates: " + totRates + "\n" +
-                                "over\n");
-		if (!sendString("updateProfile\n" +
+	private String updateProfile(String userName) {
+System.out.println("updateProfile " + userName);
+		if (userName.length() == 0) return "empty user name";
+		if (!sendString("updateProfile: " + userName + "\n" +
 			   	"realName: \"" + realName + "\"\n" +
 				"email: " + email + "\n" +
 				"defRates: " + defRates + "\n" +
 				"totalRates: " + totRates + "\n" +
 				"over\n"))
+			return "cannot send request";
+		String s = inBuf.readLine();
+System.out.println("s= " + (s != null ? s : "null"));
+		if (s == null || !s.equals("profile updated")) return s;
+		s = inBuf.readLine();
+System.out.println("s= " + (s != null ? s : "null"));
+		if (s == null || !s.equals("over")) return s;
+		return null;
+	}
+
+	private boolean changePassword(String userName, String pwd) {
+System.out.println("changePassword " + userName);
+		if (userName.length() == 0 || pwd.length() == 0)
 			return false;
-		String s1 = inBuf.readLine();
-		String s2 = inBuf.readLine();
-		if (!s1.equals("profile updated") || !s2.equals("over"))
-		//if (!inBuf.readLine().equals("profile updated") ||
-		 //   !inBuf.readLine().equals("over"))
+		if (!sendString("changePassword: " + userName +
+				"\npassword: " + pwd + "\nover\n"))
 			return false;
+		String s = inBuf.readLine();
+System.out.println("s= " + (s != null ? s : "null"));
+		if (s == null || !s.equals("success")) return false;
+		s = inBuf.readLine();
+System.out.println("s= " + (s != null ? s : "null"));
+		if (s == null || !s.equals("over")) return false;
 		return true;
 	}
 
-	private boolean changePassword(String pwd) {
-		if (!sendString("changePassword\n" + "password: " + pwd +
-				"\n" + "over\n"))
-			return false;
-		String s1 = inBuf.readLine();
-		String s2 = inBuf.readLine();
-		if (!s1.equals("success") || !s2.equals("over")) 
-		//if (!inBuf.readLine().equals("password updated") ||
-		 //   !inBuf.readLine().equals("over"))
-			return false;
-		return true;
-	}
-
-	private boolean readProfile() {
+	private boolean getProfile(String userName) {
 		String s;
 		boolean gotName, gotEmail, gotDefRates, gotTotRates; 
+
+System.out.println("getProfile: " + userName);
+		if (userName.length() == 0) return false;
+		if (!sendString("getProfile: " + userName + "\n"))
+			return false;
 		gotName = gotEmail = gotDefRates = gotTotRates = false; 
 		while (true) {
 			s = inBuf.readAlphas();
+System.out.println("s=" + s);
 			if (s.equals("realName") && inBuf.verify(':')) {
 				realName = inBuf.readString();
 				if (realName == null) return false;
@@ -317,7 +349,7 @@ public class AcctMgr extends MouseAdapter implements ActionListener {
 				defRates = rates.toString();
 				drateField.setText(defRates);
 				gotDefRates = true;
-			} else if (s.equals("totalRates") && inBuf.verify(':')) {
+			} else if (s.equals("totalRates") && inBuf.verify(':')){
 				RateSpec rates = inBuf.readRspec();
 				if (rates == null) return false;
 				totRates = rates.toString();
@@ -349,24 +381,23 @@ public class AcctMgr extends MouseAdapter implements ActionListener {
 	}
 
 	private boolean login(String user, String pwd) {
+System.out.println("login " + user + " " + pwd);
+		if (userName.length() == 0 || pwd.length() == 0)
+			return false;
 		if (!sendString("login: " + user + "\n" +
 			   	"password: " + pwd + "\nover\n"))
 			return false;
-		String s1 = inBuf.readLine();
-		String s2 = inBuf.readLine();
-		if (s1 == null || !s1.equals("login successful") ||
-		    s2 == null || !s2.equals("over")) {
-		//if (!inBuf.readLine().equals("login successful") ||
-		    //!inBuf.readLine().equals("over")) {
-			if (s1 != null) System.out.println(s1);
-			if (s2 != null) System.out.println(s2);
-			return false;
-		}
+System.out.println("sent string");
+		String s = inBuf.readLine();
+System.out.println("s= " + (s != null ? s : "null"));
+		if (s == null || !s.equals("login successful")) return false;
+		s = inBuf.readLine();
+System.out.println("s= " + (s != null ? s : "null"));
+		if (s == null || !s.equals("over")) return false;
 
-		if (!sendString("getProfile\n")) return false;
-
-		if (!readProfile()) return false;
-
+		if (!getProfile(user)) return false;
+		updateField.setText(user);
+		updateTarget = user;
 		return true;
 	}
 
@@ -374,13 +405,11 @@ public class AcctMgr extends MouseAdapter implements ActionListener {
 		if (!sendString("newAccount: " + user + "\n" +
 			   	"password: " + pwd + "\nover\n"))
 			return false;
-
 		if (!inBuf.readLine().equals("success") ||
 		    !inBuf.readLine().equals("over"))
 			return false;
-		if (!sendString("getProfile\n")) return false;
-
-		if (!readProfile()) return false;
+		if (!getProfile(user)) return false;
+		updateField.setText(user);
 		return true;
 	}
 
@@ -390,31 +419,11 @@ public class AcctMgr extends MouseAdapter implements ActionListener {
 
 	/** Respond to user interface events.
 	 *  ae is an action event relating to one of the user interface
-	 *  elements.
+	 *  elements. Handle buttons only.
 	 */
 	public void actionPerformed(ActionEvent ae) {
-		if (ae.getActionCommand().equals("client manager")) {
-			serverName = serverField.getText();
-		} else if (ae.getActionCommand().equals("user name")) {
-			userName = userField.getText();
-		} else if (ae.getActionCommand().equals("password")) {
-			char[] x = pwdField.getPassword();
-			password = new String(x);
-		} else if (ae.getActionCommand().equals("new password")) {
-			char[] x = nupwdField.getPassword();
-			newPassword = new String(x);
-		} else if (ae.getActionCommand().equals("confirm password")) {
-			char[] x = confirmField.getPassword();
-			confirmPassword = new String(x);
-		} else if (ae.getActionCommand().equals("real name")) {
-			realName = nameField.getText();
-		} else if (ae.getActionCommand().equals("email address")) {
-			email = emailField.getText();
-		} else if (ae.getActionCommand().equals("default rates")) {
-			defRates = drateField.getText();
-		} else if (ae.getActionCommand().equals("total rates")) {
-			totRates = drateField.getText();
-		} else if (ae.getActionCommand().equals("connect")) {
+		Object src = ae.getSource();
+		if (src == connectBtn) {
 			if (connect(serverName)) {
 				showStatus("Success\nEnter user name and " +
 					   "password, then login or create " +
@@ -434,28 +443,77 @@ public class AcctMgr extends MouseAdapter implements ActionListener {
 		} else if (ae.getActionCommand().equals("new account")) {
 			if (newAccount(userName,password)) {
 				showStatus("New account created\n" +
-					   "Update profile and change" +
+					   "Update profile and change " +
 				   	   "password below");
 			} else {
 				showStatus("Cannot create account");
 			}
 		} else if (ae.getActionCommand().equals("update")) {
-			if (updateProfile()) {
+			String status = updateProfile(updateTarget);
+			if (status == null) {
 				showStatus("Profile updated");
 			} else {
-				showStatus("Cannot update profile");
+				showStatus("Cannot update profile: " + status);
 			}
 		} else if (ae.getActionCommand().equals("change password")) {
 			if (!newPassword.equals(confirmPassword)) {
-				showStatus("Mismatch. Please re-type password " +
-					   "in both new password and confirm " +
-					   "password boxes");
-			} else if (changePassword(new String(newPassword))) {
+				showStatus("Mismatch. Please re-type password "+
+					  "in both new password and confirm " +
+					  "password boxes");
+			} else if (changePassword(updateTarget,newPassword)) {
 				showStatus("Password changed");
 			} else {
 				showStatus("Cannot change password");
 			}
+		} else if (ae.getActionCommand().equals("upload photo")) {
+System.out.println("uploading " + photoFile);
+			String status = uploadPhoto(photoFile);
+			if (status == null) {
+				showStatus("Photo uploaded");
+			} else {
+				showStatus("Upload failed: " + status);
+			}
 		}
+	}
+
+	public void focusLost(FocusEvent fe) {
+		Object src = fe.getSource();
+		if (src == serverField) {
+			serverName = serverField.getText();
+		} else if (src == userField) {
+			userName = userField.getText();
+		} else if (src == pwdField) {
+			char[] x = pwdField.getPassword();
+			password = new String(x);
+		} else if (src == nupwdField) {
+			char[] x = nupwdField.getPassword();
+			newPassword = new String(x);
+		} else if (src == confirmField) {
+			char[] x = confirmField.getPassword();
+			confirmPassword = new String(x);
+		} else if (src == nameField) {
+			realName = nameField.getText();
+		} else if (src == emailField) {
+			email = emailField.getText();
+		} else if (src == drateField) {
+			defRates = drateField.getText();
+		} else if (src == trateField) {
+			totRates = trateField.getText();
+		} else if (src == updateField) {
+			updateTarget = updateField.getText();
+			if (getProfile(updateTarget)) {
+				showStatus("Got target profile");
+			} else {
+				showStatus("Could not re-target");
+				updateField.setText(userName);
+				updateTarget = userName;
+			}
+		} else if (src == photoField) {
+			photoFile = photoField.getText();
+		}
+	}
+
+	public void focusGained(FocusEvent fe) {
 	}
 
 	/** Respond to mouse click in the panel by turning wall on/off.
@@ -464,89 +522,66 @@ public class AcctMgr extends MouseAdapter implements ActionListener {
 	public void mouseClicked(MouseEvent e) {
 	}
 
-
-/*
-	public static void main(String[] args) {
-		process command line arguments
-		 - cliMgrName/ip
-		 - connect
-		 - setup input and output buffers
-		 - send initial string
-		 - prompt user for login and password
-		 - send to client manager and check response
-		while (true) {
-			prompt
-			read an input line
-			process it
-			display the response
+	/** Upload a photo to the client manager.
+	 *  @param photoFileName is the name of a local file containing
+	 *  the photo to be transferred
+	 *  @return null on success, otherwise a reference to a String
+	 *  object containing an error message
+	 */
+	public String uploadPhoto(String photoFileName) {
+		// check for .jpg extension
+		if (!photoFileName.endsWith(".jpg")) {
+			return "photo file name must have .jpg suffix";
 		}
-		Or, use gui to provide access to parameters.
-		Collection of text boxes.
-		For administrative users, add box for target user.
-		Upload button to transfer photos.
+		// open photo file
+		File photoFile;
+		FileInputStream photoStream;
+		FileChannel photoChan;
+		long length;
+		try {
+			photoFile = new File(photoFileName);
+			photoStream = new FileInputStream(photoFile);
+			photoChan = photoStream.getChannel();
+			length = photoChan.size();
+		} catch(Exception e) {
+			return "cannot open photo file";
+		}
 
-		Reproduce NetBuffer for interaction with ClientMgr?
+		if (!sendString("uploadPhoto: " + length + "\n"))
+			return "could not start transfer";
+		String s = inBuf.readLine();
+		if (s == null || !s.equals("proceed"))
+			return s == null ? "bad response from server" : s;
+
+		ByteBuffer buf = ByteBuffer.allocate(1000);
+		int numSent = 0;
+		try {
+			while (true) {
+				int n = photoChan.read(buf);
+				if (n <= 0) break;
+				buf.flip();
+				int m = serverChan.write(buf);
+				if (m != n) break;
+				numSent += m;
+				if (numSent == length) break;
+				buf.clear();
+			}
+			photoChan.close();
+		} catch(Exception e) {
+			return "failure while transferring photo";
+		}
+		if (numSent != length) {
+			return "could not upload complete file";
+		}
+		if (!sendString("photo finished\nover\n"))
+			return "could not upload complete file";
+
+		s = inBuf.readLine();
+		if (s == null || !s.equals("photo received"))
+			return s == null ? "bad response from server" : s;
+		s = inBuf.readLine();
+		if (s == null || !s.equals("over"))
+			return s == null ? "bad response from server" : s;
+		return null;
 	}
-
-	
-	
-		cmSock.sendall("Forest-login-v1\nlogin: " + uname + \
-			       "\npassword: " + pword + "\nover\n")
-
-
-		buf = ""
-		line,buf = self.readLine(cmSock,buf)
-		if line != "login successful" :
-			return False
-		line,buf = self.readLine(cmSock,buf)
-		if line != "over" :
-			return False
-
-		cmSock.sendall("newSession\nover\n")
-
-		line,buf = self.readLine(cmSock,buf)
-		chunks = line.partition(":")
-		if chunks[0].strip() != "yourAddress" or chunks[1] != ":" :
-			return False
-		self.myFadr = string2fadr(chunks[2].strip())
-
-		line,buf = self.readLine(cmSock,buf)
-		chunks = line.partition(":")
-		if chunks[0].strip() != "yourRouter" or chunks[1] != ":" :
-			return False
-		triple = chunks[2].strip(); triple = triple[1:-1].strip()
-		chunks = triple.split(",")
-		if len(chunks) != 3 : return False
-		self.rtrIp = string2ip(chunks[0].strip())
-		self.rtrPort = int(chunks[1].strip())
-		self.rtrFadr = string2fadr(chunks[2].strip())
-
-		line,buf = self.readLine(cmSock,buf)
-		chunks = line.partition(":")
-		if chunks[0].strip() != "comtCtlAddress" or chunks[1] != ":" :
-			return False
-		self.comtCtlFadr = string2fadr(chunks[2].strip())
-
-		line,buf = self.readLine(cmSock,buf)
-		chunks = line.partition(":")
-		if chunks[0].strip() != "connectNonce" or chunks[1] != ":" :
-			return False
-		self.nonce = int(chunks[2].strip())
-
-		line,buf = self.readLine(cmSock,buf) 
-		if line != "overAndOut" : return False
-
-		cmSock.close()
-
-		if self.debug >= 1 :
-			print "avatar address =", fadr2string(self.myFadr)
-			print "router info = (", ip2string(self.rtrIp), \
-					     str(self.rtrPort), \
-					     fadr2string(self.rtrFadr), ")"
-			print "comtCtl address = ",fadr2string(self.comtCtlFadr)
-			print "nonce = ", self.nonce
-
-		return True
-*/
-
 }
