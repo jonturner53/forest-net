@@ -548,7 +548,6 @@ class Net :
 		"""
 		self.x, self.y, self.direction = self.pWorld.getPosHeading()
 		if isinstance(self.pWorld, PandaWorld):
-			print "we r here"
 			self.audioLevel = self.pWorld.getAudioLevel()
 		self.mcg.updateSubs(self.x,self.y,self.audioAdr)
 		return
