@@ -68,6 +68,8 @@ class PandaWorld(DirectObject):
 				"zoom-in":0, "zoom-out":0, "reset-view":1}
 		self.info = 0
 		self.audioLevel = 1
+		self.card = OnscreenImage(image = 'photo_cache/'+ 'unmute.jpg', pos = (0.67, 0, -0.94), scale=.04)
+		self.card.setTransparency(TransparencyAttrib.MAlpha)
 		base.win.setClearColor(Vec4(0,0,0,1))
 		
 		self.fieldAngle = 40
@@ -125,11 +127,7 @@ class PandaWorld(DirectObject):
  		self.visList = []
          
          
-        #Set audioLevel
-		self.audioLevel = 0
 
-		#Set audio data
-		self.audioData = ''	 
 		
 		# Setup pool of remotes
 		# do not attach to scene yet
@@ -304,8 +302,14 @@ class PandaWorld(DirectObject):
 		#mute / un-mute
 		if self.audioLevel is 0:
 			self.audioLevel = 1
+			self.card.destroy()
+			self.card = OnscreenImage(image = 'photo_cache/'+ 'unmute.jpg', pos = (0.67, 0, -0.94), scale=.04)
+			self.card.setTransparency(TransparencyAttrib.MAlpha)
 		else:
 			self.audioLevel = 0
+			self.card.destroy()
+			self.card = OnscreenImage(image = 'photo_cache/'+ 'mute.jpg', pos = (0.67, 0, -0.93), scale=.04)
+			self.card.setTransparency(TransparencyAttrib.MAlpha)
 					
 	def addRemote(self, x, y, direction, id, name) : 
 		""" Add a remote panda.
