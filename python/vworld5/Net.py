@@ -1,4 +1,3 @@
-from socket import *
 import sys
 import struct
 from time import sleep, time
@@ -19,9 +18,10 @@ from direct.task import Task
 import errno
 import pyaudio
 import wave
+import audioop
+import math
+from PandaWorld import *
 #edit by feng end
-import os
-
 UPDATE_PERIOD = .05 	# number of seconds between status updates
 STATUS_REPORT = 1 	# code for status report packets
 AUDIO = 2 		# code for audio packets
@@ -42,7 +42,8 @@ CHUNK = 512
 BYTES = CHUNK*2
 CHANNELS = 1
 FORMAT = pyaudio.paInt16
-RATE = 11025
+RATE = 10240
+AUDIO_BUFFER_SIZE = 2
 
 class Net :
 	""" Net support.
@@ -70,9 +71,12 @@ class Net :
 		self.count = 0
 
 		#edit by feng
-		self.audioLevel = 0	#if Avatar is talking
+		self.rms = 0		#Avatar volume value
+		self.audioLevel = 0	#if mute or not
 		self.isListening = 0	#if Avatar is listening
 		self.audioAdr = None	#audio multicast address
+		self.audioBuffer = deque(maxlen=AUDIO_BUFFER_SIZE)
+		self.needtoWait = True
 		#edit by feng end
 
 		# setup multicast object to maintain subscriptions
@@ -83,7 +87,6 @@ class Net :
 		self.sock.bind((myIp,0))
 		self.sock.setblocking(0)
 		self.myAdr = self.sock.getsockname()
-
 		self.limit = pWorld.getLimit()
 
 		# set initial position
@@ -209,55 +212,7 @@ class Net :
 			print "nonce = ", self.nonce
 
 		return True
-	
-	# getPhoto communicates with the photo server and get the picture specified by uname
-	
-	def getPhoto(self, uname) :		
-		psSock = socket(AF_INET, SOCK_STREAM)
-		self.photoServerIp = gethostbyname("shell.cec.wustl.edu")
-		print self.photoServerIp
-		psSock.connect((self.photoServerIp, 30124))
-		
-		#send a getPhoto request
-		totalSent = 0
-		msgLen = 10 + len(uname)
-		while totalSent < msgLen:
-			sent = psSock.send("getPhoto: " + uname)
-			if sent == 0:
-				raise RuntimeError("socket connection broken")
-			totalSent = totalSent + sent
-			
-		# receiving the photo	
-		buffer = ''
-		photo = ''
-		photoLen = 0
-		gotPic = false
-		while (not gotPic):
-			buffer = psSock.recv(4)
-			if buffer == '':
-				raise RuntimeError("socket connection broken")			
-			len = struct.unpack("!I", buffer)[0]
-			photoLen = photoLen + len
-			if len < 1024:
-				gotPic = true
-			more2read = true
-			while(more2read):
-				block = psSock.recv(len) #returns a string
-				len = len - len(block)
-				photo = photo + block
-				if len == 0:
-					more2read = false
-					
-		#tuple = struct.unpack(str(photoLen/4) + "I", photo) #endian don't care?
-		out = open(uname + ".jpg", "wb")
-		out.write(photo)
-		out.close()
-		
-		
-		psSock.send("complete!")
-		psSock.close()
-						
-		
+
 	def run(self, task) :
 		""" This is the main method for the Net object.
 		"""
@@ -280,14 +235,34 @@ class Net :
 
 		#record every 50ms, edit by feng
 		try:
-			if self.audioLevel == 1:
-				self.streamin.start_stream()
-				data = self.streamin.read(CHUNK)
+			self.streamin.start_stream()
+			data = self.streamin.read(CHUNK)
+			rms = audioop.rms(data,2)
+			#print rms
+			if rms > 100 :	
 				self.sendAudio(data)
-			else:
-				self.streamin.stop_stream()	
+				self.rms = rms
+				#self.audioLevel = 1
+			#elif rms > 1000:
+			#	self.sendAudio(data)
+				#self.audioLevel = 2
+			#else: 
+				#self.audioLevel = 0
+			#print "datalen:" + str(len(data))
+			#data = struct.unpack("<"+str(len(data)/2)+ "h", data)
+			#print data
 		except IOError:
 			print 'warning: dropped frame'
+		#print "needtoWait:" + str(self.needtoWait)
+		#print "lenth of Buffer:" + str(len(self.audioBuffer))
+		#print "audioLevel:" + str(self.audioLevel)
+		if self.audioLevel == 1:
+			if self.needtoWait == False and len(self.audioBuffer) > 0:
+				data = self.audioBuffer.popleft()
+				self.stream.write(data)
+			elif len(self.audioBuffer) == 0:
+				self.needtoWait = True
+			
 		#edit by feng end
 
 		return task.cont
@@ -355,7 +330,7 @@ class Net :
 		p.payload = struct.pack("!Q",self.nonce)
 		reply = self.sendCtlPkt(p)
 		return reply != None and reply.flags == ACK_FLAG
-		
+
 	def disconnect(self) :
 		p = Packet(); p.type = DISCONNECT
 		p.comtree = CLIENT_CON_COMT
@@ -435,7 +410,7 @@ class Net :
 		p.payload = struct.pack('!IIIIII' + str(namelen) + 'sIi', \
 					STATUS_REPORT, self.now, \
 					int(self.x*GRID), int(self.y*GRID), \
-					self.direction, namelen, self.name, self.audioLevel, self.myFadr)
+					self.direction, namelen, self.name, self.rms, self.myFadr)
 		#edit end by feng
 		self.send(p)
 	
@@ -454,7 +429,7 @@ class Net :
                 if numNear > 5000 or numNear < 0 :
                         print "numNear=", numNear
 		p.payload = struct.pack('!5I'+str(BYTES)+'s', \
-                                        AUDIO,0,0,0,0, data)
+                                        AUDIO,0,int(self.x*GRID), int(self.y*GRID),0, data)
 		self.send(p)
 
 	def subscribe(self,glist) :
@@ -524,7 +499,9 @@ class Net :
 		randomly, avoiding walls and non-walkable squares.
 		"""
 		self.x, self.y, self.direction = self.pWorld.getPosHeading()
-		self.audioLevel = self.pWorld.getAudioLevel()
+		if isinstance(self.pWorld, PandaWorld):
+			print "we r here"
+			self.audioLevel = self.pWorld.getAudioLevel()
 		self.mcg.updateSubs(self.x,self.y,self.audioAdr)
 		return
 	
@@ -547,16 +524,29 @@ class Net :
 		    
 		    	# feng: to assign audio level and addr.
 			tuple = struct.unpack('!Ii',p.payload[24+namelen:32+namelen])
-			audiolvl = tuple[0]
+			rms = tuple[0]
 			audioAdr = tuple[1]
-			if audiolvl == 1 and self.isListening == 0:
+			#print "audiolvl:" + str(audiolvl)
+			
+			man_distance = math.sqrt(math.pow(x1-self.x,2) + math.pow(y1-self.y,2))+1 
+			rms = rms/man_distance	
+			#print "rms" + str(rms)
+			if rms > 100 and rms <1000:
+				audiolvl = 1
+			elif rms > 1000:
+				audiolvl = 2
+			else:
+				audiolvl = 0
+			#print "audiolvl:" + str(audiolvl)
+			if self.isListening < audiolvl:
 				self.audioAdr = audioAdr
-				self.isListening = 1
-			elif audiolvl ==0 and self.isListening == 1:
+				self.isListening = audiolvl
+			elif audiolvl == 0 and self.isListening >0:
 				if audioAdr == self.audioAdr:
 					self.audioAdr = None
 					self.isListening = 0
-				    		
+				    
+		
 		    	avId = p.srcAdr        
 		    	if avId in self.nearRemotes :
 				# update map entry for this remote
@@ -568,16 +558,26 @@ class Net :
 			elif len(self.nearRemotes) < MAXNEAR :
 				# fadr -> x,y,direction,dx,dy,count
 				self.nearRemotes[avId] = [x1,y1,dir1,0,0,0]
-				# download picture for a remote for the 1st time and save it in cache
-				savedPath = os.getcwd()
-				os.chdir("photo_cache")
-				self.getPhoto(name)
-				os.chdir(savedPath)
-				self.pWorld.addRemote(x1, y1, dir1, avId, name)                           		
+				self.pWorld.addRemote(x1, y1, dir1, avId,name)                           
+		
         	#play audio,edit by feng
 		elif tuple[0] == AUDIO :
+			x1 = (tuple[2]+0.0)/GRID; y1 = (tuple[3]+0.0)/GRID;
+			man_distance = math.sqrt(math.pow(x1-self.x,2) + math.pow(y1-self.y,2))+1 
+			#print "man_dis:" + str(man_distance)
 			tuple = struct.unpack('!'+str(BYTES)+'s',p.payload[20:BYTES+20])
-			self.stream.write(tuple[0])
+			if self.needtoWait == True:
+				if len(self.audioBuffer) < AUDIO_BUFFER_SIZE:	
+					data = audioop.mul(tuple[0],2,1/man_distance)
+			#self.stream.write(data)
+			#		print "encode data:" + str(len(data))
+					self.audioBuffer.append(data)
+			#		print "audioSize:" + str(len(self.audioBuffer))
+				else:
+					self.needtoWait = False
+			else:	
+				data = audioop.mul(tuple[0],2,2/man_distance)
+				self.audioBuffer.append(data)
 			return
 		
 
@@ -603,6 +603,11 @@ class Net :
 				dropList.append(avId)
 			remote[5] += 1
 		for avId in dropList :
+			#edit by feng
+			if avId == self.audioAdr:
+				self.audioAdr = None
+				self.isListening = 0
+			#edit end	
 			rem = self.nearRemotes[avId]
 			x = rem[0]; y = rem[1]
 			del self.nearRemotes[avId]
