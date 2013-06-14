@@ -163,10 +163,11 @@ class PandaWorld(DirectObject):
 		self.accept("arrow_right-up", self.setKey, ["right",0])
 		self.accept("arrow_up-up", self.setKey, ["forward",0])
  		self.accept("arrow_down-up", self.setKey, ["backward",0])
-		self.accept("shift-up" or "arrow_up-up", self.setKey, ["cam-up",0])
-		self.accept("shift-up" or "arrow_down-up", self.setKey, ["cam-down",0])
-		self.accept("shift-up" or "arrow_left-up", self.setKey, ["cam-left",0])
-		self.accept("shift-up" or "arrow_right-up", self.setKey, ["cam-right",0])
+		self.accept("shift-up", self.resetCamKeys)
+		# or "arrow_up-up", self.setKey, ["cam-up",0])
+		# self.accept("shift-up" or "arrow_down-up", self.setKey, ["cam-down",0])
+		# self.accept("shift-up" or "arrow_left-up", self.setKey, ["cam-left",0])
+		# self.accept("shift-up" or "arrow_right-up", self.setKey, ["cam-right",0])
 		self.accept("z-up", self.setKey, ["zoom-in",0])
  		self.accept("control-up", self.setKey, ["zoom-out",0])
 		self.accept("t", self.setKey, ["reset-view",0])
@@ -251,6 +252,12 @@ class PandaWorld(DirectObject):
 		self.csTrav = CollisionTraverser('CustomTraverser')
 		self.csTrav.addCollider(self.csNode, self.csHandler)
 
+	def resetCamKeys(self):
+		self.keyMap["cam-up"]=0
+		self.keyMap["cam-down"]=0
+		self.keyMap["cam-left"]=0
+		self.keyMap["cam-right"]=0
+		
 	#to display/hide pictures when the user clicks on the avatar/pic
 	def showPic(self):
 		x = y = 0
@@ -588,7 +595,7 @@ class PandaWorld(DirectObject):
 		# if the key 'o' is held down, zoom out	
 		hpr = self.avatar.getHpr()
 		pos = self.avatar.getPos()
-		hpr[0] += 180; hpr[1] = camAngle; hpr[2] = camAngleX;
+		hpr[0] = hpr[0] + 180 + camAngleX; hpr[1] = camAngle
 		
 		if (self.keyMap["zoom-in"] != 0): 			
 			if self.fieldAngle > 20:
