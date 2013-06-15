@@ -63,7 +63,7 @@ bool Substrate::init() {
 	}
 	listenSock = Np4d::streamSocket();
 	if (listenSock < 0) return false;
-	return	Np4d::bind4d(listenSock,myIp,listenPort) &&
+	return	Np4d::bind4d(listenSock,INADDR_ANY,listenPort) &&
 		Np4d::listen4d(listenSock) && Np4d::nonblock(listenSock);
 }
 
