@@ -67,7 +67,7 @@ class PandaWorld(DirectObject):
  				"cam-up":0, "cam-down":0, "cam-left":0, "cam-right":0, \
 				"zoom-in":0, "zoom-out":0, "reset-view":1}
 		self.info = 0
-		self.audioLevel = 1
+		self.isMute = 0
 		self.card = OnscreenImage(image = 'photo_cache/'+ 'unmute.jpg', pos = (0.67, 0, -0.94), scale=.04)
 		self.card.setTransparency(TransparencyAttrib.MAlpha)
 		base.win.setClearColor(Vec4(0,0,0,1))
@@ -163,11 +163,10 @@ class PandaWorld(DirectObject):
 		self.accept("arrow_right-up", self.setKey, ["right",0])
 		self.accept("arrow_up-up", self.setKey, ["forward",0])
  		self.accept("arrow_down-up", self.setKey, ["backward",0])
-		self.accept("shift-up", self.resetCamKeys)
-		# or "arrow_up-up", self.setKey, ["cam-up",0])
-		# self.accept("shift-up" or "arrow_down-up", self.setKey, ["cam-down",0])
-		# self.accept("shift-up" or "arrow_left-up", self.setKey, ["cam-left",0])
-		# self.accept("shift-up" or "arrow_right-up", self.setKey, ["cam-right",0])
+		self.accept("shift-up" or "arrow_up-up", self.setKey, ["cam-up",0])
+		self.accept("shift-up" or "arrow_down-up", self.setKey, ["cam-down",0])
+		self.accept("shift-up" or "arrow_left-up", self.setKey, ["cam-left",0])
+		self.accept("shift-up" or "arrow_right-up", self.setKey, ["cam-right",0])
 		self.accept("z-up", self.setKey, ["zoom-in",0])
  		self.accept("control-up", self.setKey, ["zoom-out",0])
 		self.accept("t", self.setKey, ["reset-view",0])
@@ -252,12 +251,6 @@ class PandaWorld(DirectObject):
 		self.csTrav = CollisionTraverser('CustomTraverser')
 		self.csTrav.addCollider(self.csNode, self.csHandler)
 
-	def resetCamKeys(self):
-		self.keyMap["cam-up"]=0
-		self.keyMap["cam-down"]=0
-		self.keyMap["cam-left"]=0
-		self.keyMap["cam-right"]=0
-		
 	#to display/hide pictures when the user clicks on the avatar/pic
 	def showPic(self):
 		x = y = 0
@@ -307,13 +300,13 @@ class PandaWorld(DirectObject):
 			
 	def mute(self):
 		#mute / un-mute
-		if self.audioLevel is 0:
-			self.audioLevel = 1
+		if self.isMute is 1:
+			self.isMute = 0
 			self.card.destroy()
 			self.card = OnscreenImage(image = 'photo_cache/'+ 'unmute.jpg', pos = (0.67, 0, -0.94), scale=.04)
 			self.card.setTransparency(TransparencyAttrib.MAlpha)
 		else:
-			self.audioLevel = 0
+			self.isMute = 1
 			self.card.destroy()
 			self.card = OnscreenImage(image = 'photo_cache/'+ 'mute.jpg', pos = (0.67, 0, -0.93), scale=.04)
 			self.card.setTransparency(TransparencyAttrib.MAlpha)
@@ -474,18 +467,11 @@ class PandaWorld(DirectObject):
 		"""
 		return 120
         
-    	def getAudioLevel(self) :
-		""" Get audioLevel to see if Avatar is talking
+    	def isMute(self) :
+		""" Get isMute to see if Avatar is mute
 		"""
-		return self.audioLevel
+		return self.isMute
 
-	def record(self) :
-		try:
-			self.streamin.read(CHUNK)
-		except IOError:
-			print 'warning:dropped frame'
-	def getaudioData(self) :
-		return self.audioData    
 
 	def canSee(self, p1, p2):
 		""" Test if two points are visible from one another
@@ -595,7 +581,7 @@ class PandaWorld(DirectObject):
 		# if the key 'o' is held down, zoom out	
 		hpr = self.avatar.getHpr()
 		pos = self.avatar.getPos()
-		hpr[0] = hpr[0] + 180 + camAngleX; hpr[1] = camAngle
+		hpr[0] += 180; hpr[1] = camAngle; hpr[2] = camAngleX;
 		
 		if (self.keyMap["zoom-in"] != 0): 			
 			if self.fieldAngle > 20:

@@ -72,7 +72,7 @@ class Net :
 
 		#edit by feng
 		self.rms = 0		#Avatar volume value
-		self.audioLevel = 0	#if mute or not
+		self.isMute = 0	#if mute or not
 		self.isListening = 0	#if Avatar is listening
 		self.audioAdr = None	#audio multicast address
 		self.audioBuffer = deque(maxlen=AUDIO_BUFFER_SIZE)
@@ -217,59 +217,48 @@ class Net :
 	
 	def getPhoto(self, uname) :		
 		psSock = socket(AF_INET, SOCK_STREAM)
-		self.photoServerIp = gethostbyname("forest2.arl.wustl.edu")
+		self.photoServerIp = gethostbyname("shell.cec.wustl.edu")
 		print self.photoServerIp
 		psSock.connect((self.photoServerIp, 30124))
 		
 		#send a getPhoto request
-
-		sent = psSock.sendall("getPhoto:" + uname)
-		if sent == 0:
-			raise RuntimeError("socket connection broken")
-
+		totalSent = 0
+		msgLen = 10 + len(uname)
+		while totalSent < msgLen:
+			sent = psSock.send("getPhoto: " + uname)
+			if sent == 0:
+				raise RuntimeError("socket connection broken")
+			totalSent = totalSent + sent
 			
 		# receiving the photo	
-		echo_len = 15
-		echo_recvd = 0
-		while echo_recvd == 0:
-			buffer = psSock.recv(echo_len)
-			print buffer
+		buffer = ''
+		photo = ''
+		photoLen = 0
+		gotPic = false
+		while (not gotPic):
+			buffer = psSock.recv(4)
 			if buffer == '':
-				RuntimeError("broken connection")
-			echo_len = echo_len - len(buffer) 
-			if echo_len == 0:
-				echo_recvd = 1
-		if struct.unpack("7s", buffer[0:7])[0] == "failure":
-			# didn't get pic, give up, may do something more?
-			psSock.close()
-		else:	
-			photo = ''
-			photoLen = struct.unpack("!I", buffer[7:11])[0]
-			gotPic = 0
-			while (not gotPic):
-				buffer = psSock.recv(4)
-				if buffer == '':
-					raise RuntimeError("socket connection broken")			
-				pktlen = struct.unpack("!i", buffer)[0]
-				if pktlen < 1024:
-					gotPic = 1
-				more2read = 1
-				print "buffer is: ", buffer
-				print "repr(buffer) is: ", repr(buffer)
-				print pktlen
-				while(more2read):
-					block = psSock.recv(pktlen) #returns a string
-					pktlen = pktlen - len(block)
-					photo = photo + block
-					if pktlen == 0:
-						more2read = 0
-						
-			out = open(uname + ".jpg", "wb")
-			out.write(photo)
-			out.close()
-
-			psSock.send("complete!")
-			psSock.close()
+				raise RuntimeError("socket connection broken")			
+			len = struct.unpack("!I", buffer)[0]
+			photoLen = photoLen + len
+			if len < 1024:
+				gotPic = true
+			more2read = true
+			while(more2read):
+				block = psSock.recv(len) #returns a string
+				len = len - len(block)
+				photo = photo + block
+				if len == 0:
+					more2read = false
+					
+		#tuple = struct.unpack(str(photoLen/4) + "I", photo) #endian don't care?
+		out = open(uname + ".jpg", "wb")
+		out.write(photo)
+		out.close()
+		
+		
+		psSock.send("complete!")
+		psSock.close()
 						
 		
 	def run(self, task) :
@@ -301,12 +290,12 @@ class Net :
 			if rms > 100 :	
 				self.sendAudio(data)
 				self.rms = rms
-				#self.audioLevel = 1
+				#self.isMute = 1
 			#elif rms > 1000:
 			#	self.sendAudio(data)
-				#self.audioLevel = 2
+				#self.isMute = 2
 			#else: 
-				#self.audioLevel = 0
+				#self.isMute = 0
 			#print "datalen:" + str(len(data))
 			#data = struct.unpack("<"+str(len(data)/2)+ "h", data)
 			#print data
@@ -314,8 +303,8 @@ class Net :
 			print 'warning: dropped frame'
 		#print "needtoWait:" + str(self.needtoWait)
 		#print "lenth of Buffer:" + str(len(self.audioBuffer))
-		#print "audioLevel:" + str(self.audioLevel)
-		if self.audioLevel == 1:
+		#print "isMute:" + str(self.isMute)
+		if self.isMute == 0:
 			if self.needtoWait == False and len(self.audioBuffer) > 0:
 				data = self.audioBuffer.popleft()
 				self.stream.write(data)
@@ -465,7 +454,7 @@ class Net :
 		numNear = len(self.nearRemotes)
 		if numNear > 5000 or numNear < 0 :
 			print "numNear=", numNear
-		#add audioLevel and audioAddress in payload, edit by feng
+		#add isMute and audioAddress in payload, edit by feng
 		p.payload = struct.pack('!IIIIII' + str(namelen) + 'sIi', \
 					STATUS_REPORT, self.now, \
 					int(self.x*GRID), int(self.y*GRID), \
@@ -559,7 +548,7 @@ class Net :
 		"""
 		self.x, self.y, self.direction = self.pWorld.getPosHeading()
 		if isinstance(self.pWorld, PandaWorld):
-			self.audioLevel = self.pWorld.getAudioLevel()
+			self.isMute = self.pWorld.isMute()
 		self.mcg.updateSubs(self.x,self.y,self.audioAdr)
 		return
 	
