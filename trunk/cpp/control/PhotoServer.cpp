@@ -19,7 +19,7 @@ int main() {
 	int listenSock = Np4d::streamSocket();
 	if (listenSock < 0) fatal("can't create socket");
 	ipa_t myIP = Np4d::myIpAddress();
-	if (!Np4d::bind4d(listenSock, myIP, 30124)) fatal("can't bind socket");
+	if (!Np4d::bind4d(listenSock, INADDR_ANY, 30124)) fatal("can't bind socket");
 
 	// prepare to accept connections
 	if (!Np4d::listen4d(listenSock)) fatal("error on listen");
@@ -57,18 +57,14 @@ void* handler(void* sockp) {
 		Np4d::sendString(sock,"1unrecognized input\noverAndOut\n");
 		close(sock); return NULL;
 	}
-	
 	if (buf.verify(':')) {
-		if ( !buf.readAlphas(s1)) {				
-			Np4d::sendString(sock,"unrecognized input\n"
-					      "overAndOut\n");
-			close(sock); return NULL;		
-		} else {
-			fileName = string("clientPhotos/") + s1 +string(".jpg");
-cerr << "opening file " << fileName << endl;
-			//int str_size = fileName.size() + 1;
-			//char pFileName[str_size];
-			//pFileName = fileName.c_str();
+		string s2;
+		if (buf.readAlphas(s2) && s2 != ""){
+			
+			fileName = string("clientPhotos/") + s2 + string(".jpg");
+			std::cout << fileName << std::endl;
+
+			//std::cout << "opening" << s2 << std::endl;
 			ifstream pFile (fileName.c_str(), ios::in | ios::binary | ios::ate);
 			
 			ifstream::pos_type size;
@@ -76,7 +72,7 @@ cerr << "opening file " << fileName << endl;
 			
 			if(pFile.is_open())
 			{ 
-cerr << "file is open\n";
+				std::cout << "file opened" << std::endl;
 				size = pFile.tellg();
 				memblock = new char [size];
 				pFile.seekg (0, ios::beg);
@@ -84,6 +80,16 @@ cerr << "file is open\n";
 				//complete file in its binary form is now in memory
 				pFile.close();
 				int bufSize = (int)size;
+				//std::cout << bufSize << std::endl;
+				stringstream ss;
+				ss << "success:" << bufSize;
+				string echo = ss.str();
+				while (echo.size() < 14)
+				{
+					echo += " ";
+				}
+				echo += '/n';
+				Np4d::sendString(sock, echo);
 				char * ap = &memblock[0];
 				
 				//send from memblock 1024 bytes at a time
@@ -103,11 +109,16 @@ cerr << "file is open\n";
 				delete[] memblock;
 			}
 			else{
-cerr << "file will not open\n";
-				Np4d::sendString(sock,"failed to locate file\n"
-							  "overAndOut\n");
+				std::cout << "didn't open" << std::endl;
+				Np4d::sendString(sock,"failure:00404\n");
 				close(sock); return NULL;
 			}
+		}
+	 	else{
+			std::cout << "hmmmm" << std::endl;				
+			Np4d::sendString(sock,"2unrecognized input\n"
+					      "overAndOut\n");
+			close(sock); return NULL;		
 		}
 	}
 	else{
