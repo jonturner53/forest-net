@@ -142,6 +142,7 @@ bool Avatar::init(ipa_t cmIpAdr, string& uname, string& pword,
  */
 bool Avatar::login(ipa_t cmIpAdr, string uname, string pword) {
 	// open socket to client manager
+cerr << "logging in\n";
 	int loginSock = Np4d::streamSocket();
         if (loginSock < 0 ||
 	    !Np4d::bind4d(loginSock, myIp, 0) ||
@@ -153,6 +154,7 @@ bool Avatar::login(ipa_t cmIpAdr, string uname, string pword) {
 	// start login dialog
 	string s = "Forest-login-v1\nlogin: " + uname +
 		   "\npassword: " + pword + "\nover\n";
+cerr << "login string " << s << endl;
 	Np4d::sendString(loginSock,s);
 	NetBuffer buf(loginSock,1024);
 	string s0, s1, s2;

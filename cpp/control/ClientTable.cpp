@@ -13,13 +13,14 @@ namespace forest {
 
 /** Constructor for ClientTable, allocates space and initializes table. */
 ClientTable::ClientTable(int maxClients, int maxSessions)
-			   : maxCli(maxClients), maxSess(maxSessions) {
-	svec = new Session[maxSessions+1];
-	sessLists = new UiClist(maxSessions);
+		 : maxCli(maxClients), maxSess(maxSessions) {
+	svec = new Session[maxSess+1];
+	sessLists = new UiClist(maxSess);
 	sessMap = new IdMap(maxSess);
-	cvec = new Client[maxClients+1];
-	clients = new UiSetPair(maxClients);
+	cvec = new Client[maxCli+1];
+	clients = new UiSetPair(maxCli);
 	nameMap = new map<string, int>();
+	maxClx = 0;
 	for (int i = 0; i <= maxSess; i++) svec[i].clx = 0;
 	defRates.set(50,500,25,250);
 	totalRates.set(100,1000,50,500);
@@ -190,14 +191,22 @@ int ClientTable::nextClient(int clx) {
  *  @param cname is the client name
  *  @param pwd is the client password
  *  @param priv is the assigned privilege level
+ *  @param clx is an optional argument specifying the client index
+ *  to be used for this new client; if clx == 0, the client index is
+ *  assigned automatically (this is the default behavior)
  *  @return the index of the new table entry or 0 on failure;
  *  can fail if cname clashes with an existing name, or there is no space left
  */
-int ClientTable::addClient(string& cname, string& pwd, privileges priv) {
+int ClientTable::addClient(string& cname, string& pwd,
+			   privileges priv, int clx) {
 	lockMap();
 	map<string,int>::iterator p = nameMap->find(cname);
 	if (p != nameMap->end()) { unlockMap(); return 0; }
-	int clx = clients->firstOut();
+	if (clx != 0) {
+		if (clients->isIn(clx)) clx = 0;
+	} else {
+		clx = clients->firstOut();
+	}
 	if (clx == 0) { unlockMap(); return 0;}
 	nameMap->insert(pair<string,int>(cname,clx));
 	clients->swap(clx);
@@ -209,6 +218,7 @@ int ClientTable::addClient(string& cname, string& pwd, privileges priv) {
 	getDefRates(clx) = getDefRates(); getTotalRates(clx) = getTotalRates();
 	cvec[clx].firstSess = cvec[clx].numSess = 0;
 
+	maxClx = max(clx,maxClx);
 	return clx;
 }
 
@@ -279,28 +289,40 @@ void ClientTable::removeSession(int sess) {
 	unlockMap();
 }
 
-/** Read a client entry from an input stream and initialize its table entry.
- *  The entry must be on a line by itself (possibly with a trailing comment).
- *  An entry consists of a client name, password, real name (in quotes),
- *  an email address and a default rate spec.
- *  @param in is an open input stream
+/** Read a client record from an input file and initialize its table entry.
+ *  A record includes a client name, password, real name (in quotes),
+ *  an email address, a default rate spec and a total rate spec.
+ *  @param in is an open file stream
+ *  @param clx is an optional argument specifying the client index for
+ *  this entry; if zero, a client index is selected automatically
+ *  (this is the default behavior)
  */
-bool ClientTable::readEntry(istream& in) {
+bool ClientTable::readEntry(istream& in, int clx) {
 	string cname, pwd, privString, realName, email;
 	RateSpec defRates, totalRates;
 
-	cerr << "reading entry\n";
-        Misc::skipBlank(in);
-        if (!Misc::readName(in, cname)      || !Misc::verify(in,',') ||
-	    !Misc::readWord(in, pwd)        || !Misc::verify(in,',') || 
-	    !Misc::readWord(in, privString) || !Misc::verify(in,',') || 
-	    !Misc::readString(in, realName) || !Misc::verify(in,',') ||
-	    !Misc::readWord(in, email)      || !Misc::verify(in,',') ||
-	    !defRates.read(in)		    || !Misc::verify(in,',') ||
-	    !totalRates.read(in)) { 
-                return false;
+cerr << "reading entry " << clx << endl;
+	if (!in.good()) return false;
+        if (Misc::verify(in,'+')) {
+	        if (!Misc::readName(in, cname)      || !Misc::verify(in,',') ||
+		    !Misc::readWord(in, pwd)        || !Misc::verify(in,',') || 
+		    !Misc::readWord(in, privString) || !Misc::verify(in,',') || 
+		    !Misc::readString(in, realName) || !Misc::verify(in,',') ||
+		    !Misc::readWord(in, email)      || !Misc::verify(in,',') ||
+		    !defRates.read(in)		    || !Misc::verify(in,',') ||
+		    !totalRates.read(in)) { 
+	                return false;
+		}
+		Misc::cflush(in,'\n');
+cerr << "a\n";
+	} else if (Misc::verify(in,'-')) {
+cerr << "b\n";
+		maxClx = max(clx, maxClx);
+		Misc::cflush(in,'\n'); return true;
+	} else {
+cerr << "c\n";
+		Misc::cflush(in,'\n'); return false;
 	}
-	Misc::cflush(in,'\n');
 
 	privileges priv;
 	     if (privString == "limited")	priv = LIMITED;
@@ -309,8 +331,8 @@ bool ClientTable::readEntry(istream& in) {
 	else if (privString == "root")		priv = ROOT;
 	else					priv = NUL_PRIV;
 
-	int clx = addClient(cname, pwd, priv);
-	if (clx == 0) return false;
+	if (addClient(cname, pwd, priv,clx) == 0) return false;
+cerr << "d\n";
 	setRealName(clx,realName); setEmail(clx,email);
 	getDefRates(clx) = defRates;
 	getTotalRates(clx) = totalRates;
@@ -318,6 +340,48 @@ bool ClientTable::readEntry(istream& in) {
 	releaseClient(clx);
         return true;
 }
+
+/** Read a client entry from a NetBuffer.
+ *  The entry must be on a line by itself.
+ *  An entry consists of a client name, password, real name (in quotes),
+ *  an email address and a default rate spec.
+ *  @param buf is a NetBuffer that contains a valid
+ *  client table entry
+ *  @param clx specifies the client number for this entry
+ *  @return clx on success, 0 if the buf does not contain
+ *  a valid entry and -1 on some other error
+int ClientTable::readRecord(NetBuffer& buf, int clx) {
+	string cname, pwd, privString, realName, email;
+	RateSpec defRates, totalRates;
+
+        if (!buf.skipSpaceInLine(in)) return false;
+        if (!buf.readName(cname)      || !buf.verify(',') ||
+	    !buf.readWord(pwd)        || !buf.verify(',') || 
+	    !buf.readWord(privString) || !buf.verify(',') || 
+	    !buf.readString(realName) || !buf.verify(',') ||
+	    !buf.readWord(email)      || !buf.verify(',') ||
+	    !buf.readRspec(defRates)  || !buf.verify(',') ||
+	    !buf.readRspec(totalRates)) { 
+                return 0;
+	}
+	buf.nextLine();
+
+	privileges priv;
+	     if (privString == "limited")	priv = LIMITED;
+	else if (privString == "standard")	priv = STANDARD;
+	else if (privString == "admin")		priv = ADMIN;
+	else if (privString == "root")		priv = ROOT;
+	else					priv = NUL_PRIV;
+
+	if (addClient(cname, pwd, priv, clx) == 0) return -1;
+	setRealName(clx,realName); setEmail(clx,email);
+	getDefRates(clx) = defRates;
+	getTotalRates(clx) = totalRates;
+	getAvailRates(clx) = totalRates;
+	releaseClient(clx);
+        return 1;
+}
+ */
 
 /** Read client table entries from an input stream.
  *  The first line of the input must contain
@@ -332,8 +396,9 @@ bool ClientTable::readEntry(istream& in) {
  */
 bool ClientTable::read(istream& in) {
 	int i = 0;
-	while (readEntry(in)) i++;
-	cout << "read " << i << " client data entries \n";
+	while (readEntry(in,i)) i++;
+	cout << "read " << i << " client records, producing "
+	     << clients->getNumIn() << "table entries\n";
         return true;
 }
 

@@ -24,6 +24,8 @@ ipa_t rtrIp;		///< IP address for forest router
 ipp_t rtrPort;		///< port number for forest router
 ipa_t nmIp;		///< IP address of NetMgr
 fAdr_t nmAdr;		///< Forest address of NetMgr
+char *dummyRecord;	///< dummy record for padding client file
+int maxRecord;		///< largest record number in client file
 
 PacketStoreTs *ps;	///< pointer to packet store
 
@@ -32,10 +34,13 @@ ClientTable *cliTbl;	///< data about clients and active sessions
 Logger *logger;		///< error message logger
 
 ofstream acctFile;	///< stream for writing accounting records
-ofstream clientLog;	///< stream for writing updates to client data
+fstream clientFile;	///< stream for reading/updating client data
+pthread_mutex_t clientFileLock; ///< so only one thread can update at a time
 
 /** Used to identify the type of an accounting record. */
 enum acctRecType { UNDEF, NEWSESSION, CONNECT_REC, DISCONNECT_REC };
+
+static int const RECORD_SIZE = 256; ///< size of a client file record
 
 bool init(ipa_t,ipa_t);
 bool bootMe(ipa_t, ipa_t, fAdr_t&, fAdr_t&, fAdr_t&, ipa_t&, ipp_t&, uint64_t&);
@@ -47,7 +52,6 @@ bool handleConnDisc(pktx,CtlPkt&,CpHandler&);
 
 // dialogs with client
 bool loginDialog(int,NetBuffer&,string&);
-//void adminDialog(int,CpHandler&,int,NetBuffer&);
 void userDialog(int,CpHandler&,NetBuffer&,string&);
 
 // operations that can be performed by normal clients
@@ -58,19 +62,8 @@ void changePassword(NetBuffer&, string&, string&);
 void uploadPhoto(int, NetBuffer&, string&, string&);
 void addComtree(NetBuffer&, string&, string&);
 
-// privileged operations
-//void addClient(NetBuffer&, string&);
-//void removeClient(NetBuffer&, string&);
-//void modPassword(NetBuffer&, ClientTable::privileges, string&);
-//void modPrivileges(NetBuffer&, ClientTable::privileges, string&);
-//void modRealName(NetBuffer&, string&);
-//void modEmail(NetBuffer&, string&);
-//void modDefRates(NetBuffer&, string&);
-//void modTotalRates(NetBuffer&, string&);
-//void showClient(NetBuffer&, string&);
-
+void writeRecord(int);
 void writeAcctRecord(const string&, fAdr_t, ipa_t, fAdr_t, acctRecType); 
-void writeClientLog(int);
 
 } // ends namespace
 
