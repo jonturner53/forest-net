@@ -467,7 +467,7 @@ class PandaWorld(DirectObject):
 		"""
 		return 120
         
-    	def isMute(self) :
+  	def isMute(self) :
 		""" Get isMute to see if Avatar is mute
 		"""
 		return self.isMute
@@ -499,32 +499,6 @@ class PandaWorld(DirectObject):
 		self.csTrav.traverse(render)
 	
 		return (self.csHandler.getNumEntries() == 0)
-
-#		traverser = CollisionTraverser('CustomTraverser')
-#	
-#		ray = CollisionSegment()
-#		# lift two points a bit above the grouond to prevent the
-#		# collision ray from hiting the edge of shallow terrain;
-#		# also, put them at different level so that the ray has
-#		# nonzero length (a requirement for collisionSegment()).
-#		p1[2] += 0.5
-#		p2[2] += 0.4
-#		ray.setPointA(p1)
-#		ray.setPointB(p2)
-#		fromObj = self.environ.attachNewNode(CollisionNode('visRay'))
-#		fromObj.node().addSolid(ray)
-#		fromObj.node().setFromCollideMask(BitMask32.bit(0))
-#		fromObj.node().setIntoCollideMask(BitMask32.allOff())
-#		handler = CollisionHandlerQueue()
-#	
-#		traverser.addCollider(fromObj, handler)
-#	
-#		traverser.traverse(render)
-#	
-#		if handler.getNumEntries() != 0:
-#			return False
-#		else:
-#			return True
 
 	def move(self, task):
 		""" Update the position of this avatar.
@@ -648,11 +622,11 @@ class PandaWorld(DirectObject):
 
 		return task.cont
 
-# w = PandaWorld()
-# w.addRemote(69, 67, 135, 111, "Vigo")
-# w.addRemote(20, 33, 135, 222, "Chris")
-# w.addRemote(40, 60, 135, 333, "Jon")
-# w.addRemote(90, 79, 135, 444, "Chao")
+w = PandaWorld()
+w.addRemote(69, 67, 135, 111, "Vigo")
+w.addRemote(20, 33, 135, 222, "Chris")
+w.addRemote(52, 46, 135, 333, "Jon")
+w.addRemote(90, 79, 135, 444, "Chao")
 # w.addRemote(30, 79, 135, 555)
 # w.addRemote(20, 39, 135, 666)
-# run()
+run()

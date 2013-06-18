@@ -81,7 +81,6 @@ class AIWorld(DirectObject):
 		self.avatar.reparentTo(render)
 		self.avatar.setScale(.002)
 		self.avatar.setPos(58,67,0)
-		self.avatar.setHpr(random.randint(0,359),0,0) 
 
 		self.rotateDir = -1
 		self.rotateDuration = -1
@@ -102,6 +101,7 @@ class AIWorld(DirectObject):
 		# do not attach to scene yet
 		self.remoteMap = {}
 		self.freeRemotes = []
+		self.remoteNames = {}
 		for i in range(0,self.maxRemotes) : # allow up to 100 remotes
 			self.freeRemotes.append(Actor("models/panda-model", \
 						{"run":"models/panda-walk4"}))
@@ -165,7 +165,7 @@ class AIWorld(DirectObject):
 		self.csTrav = CollisionTraverser('CustomTraverser')
 		self.csTrav.addCollider(self.csNode, self.csHandler)
 
-	def addRemote(self, x, y, direction, id) : 
+	def addRemote(self, x, y, direction, id, name) : 
 		""" Add a remote panda.
 
 		This method is used by the Net object when it starts
@@ -194,9 +194,28 @@ class AIWorld(DirectObject):
 		remote.reparentTo(render)
 		remote.setPos(x,y,0) 
 		remote.setHpr(direction,0,0) 
+		
+		# display name
+		# (x, y, 0) is the 3D position of the target
+		# the screen position is given by a2d
+		
+		p3 = base.cam.getRelativePoint(render, Point3(x,y,0))
+		p2 = Point2()
+		if base.camLens.project(p3, p2):
+		    r2d = Point3(p2[0], 0, p2[1])
+		    a2d = aspect2d.getRelativePoint(render2d, r2d) 
+		    if id not in self.remoteNames.keys():
+				self.remoteNames[id] = OnscreenText(text = name, pos = a2d, scale = 0.07)
+		
+		#off camera's view
+		else:
+			if id in self.remoteNames.keys():
+				if self.remoteNames[id] is not None:
+					self.remoteNames[id].destroy()
+		   
 		remote.loop("run")
 
-	def updateRemote(self, x, y, direction, id) :
+	def updateRemote(self, x, y, direction, id, name) :
 		""" Update location of a remote panda.
 
 		This method is used by the Net object to update the location.
@@ -220,7 +239,28 @@ class AIWorld(DirectObject):
 		# set position and direction of remote
 		remote.setPos(x,y,0)
 		remote.setHpr(direction,0,0) 
-
+		
+		# display name, convert a 3D coordinate to screen
+		# display name
+		# (x, y, 0) is the 3D position of the target
+		# the screen position is given by a2d
+				
+		p3 = base.cam.getRelativePoint(render, Point3(x,y,0))
+		p2 = Point2()
+		if base.camLens.project(p3, p2):
+			r2d = Point3(p2[0], 0, p2[1])
+			a2d = aspect2d.getRelativePoint(render2d, r2d) 
+			if id in self.remoteNames.keys():
+				if self.remoteNames[id] is not None:
+					self.remoteNames[id].destroy()				
+			self.remoteNames[id] = OnscreenText(text = name, pos = a2d, scale = 0.07)
+		
+		#off screen, delete text obj.
+		else:
+			if id in self.remoteNames.keys():
+				if self.remoteNames[id] is not None:
+					self.remoteNames[id].destroy()	
+			
 	def removeRemote(self, id) :
 		""" Remove a remote when it goes out of range.
 		
