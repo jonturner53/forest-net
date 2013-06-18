@@ -141,11 +141,6 @@ class PandaWorld(DirectObject):
 				    "walk":"models/panda-walk"}))
 			self.freeRemotes[i].setScale(.002)
 
-		# Create a floater object.  We use the "floater" as a temporary
-		# variable in a variety of calculations.
-		self.floater = NodePath(PandaNode("floater"))
-		self.floater.reparentTo(render)
-
 		# Accept the control keys for movement and rotation
 		self.accept("escape", sys.exit)
 		self.accept("arrow_left", self.setKey, ["left",1])
@@ -198,8 +193,8 @@ class PandaWorld(DirectObject):
 		self.cTrav = CollisionTraverser()
 
  		"""
- 		CollisionRay that detects walkable region.
- 		A move is illegal if the groundRay hits but the terrain.
+ 		CollisionSphere that detects walkable region.
+ 		A move is legal if the sphere hits but the terrain.
  		"""
 		self.avatarCS = CollisionSphere(0,0,0,1)
 		self.avatarGroundCol = CollisionNode('avatarSphere')
@@ -574,9 +569,8 @@ class PandaWorld(DirectObject):
 		
 		self.cTrav.traverse(render)
 
-		# Adjust avatar's Z coordinate.  If avatar's ray hit terrain,
-		# update his Z. If it hit anything else, or didn't hit 
-		# anything, put him back where he was last frame.
+		# If our avatar hit anything besides the terrain, 
+		# put him back where he was last frame.
 		entries = []
 		for i in range(self.avatarGroundHandler.getNumEntries()):
 			entries.append(self.avatarGroundHandler.getEntry(i))
@@ -587,9 +581,6 @@ class PandaWorld(DirectObject):
 					collide = True
 			if collide == True :
 				self.avatar.setPos(startpos)
-#			else:
-#				self.avatar.setZ( \
-#					entries[0].getSurfacePoint(render).getZ())
 
 		# Check visibility and update visList
 		for id in self.remoteMap:
@@ -622,11 +613,9 @@ class PandaWorld(DirectObject):
 
 		return task.cont
 
-w = PandaWorld()
-w.addRemote(69, 67, 135, 111, "Vigo")
-w.addRemote(20, 33, 135, 222, "Chris")
-w.addRemote(52, 46, 135, 333, "Jon")
-w.addRemote(90, 79, 135, 444, "Chao")
-# w.addRemote(30, 79, 135, 555)
-# w.addRemote(20, 39, 135, 666)
-run()
+#w = PandaWorld()
+#w.addRemote(69, 67, 135, 111, "Vigo")
+#w.addRemote(20, 33, 135, 222, "Chris")
+#w.addRemote(52, 46, 135, 333, "Jon")
+#w.addRemote(90, 79, 135, 444, "Chao")
+#run()
