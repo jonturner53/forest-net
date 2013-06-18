@@ -14,6 +14,7 @@ from math import sin, cos
 import direct.directbase.DirectStart
 from panda3d.core import *
 from direct.task import Task
+
 #edit by feng
 import errno
 import pyaudio
@@ -22,6 +23,7 @@ import audioop
 import math
 from PandaWorld import *
 #edit by feng end
+
 UPDATE_PERIOD = .05 	# number of seconds between status updates
 STATUS_REPORT = 1 	# code for status report packets
 AUDIO = 2 		# code for audio packets
@@ -72,7 +74,7 @@ class Net :
 
 		#edit by feng
 		self.rms = 0		#Avatar volume value
-		self.isMute = 0	#if mute or not
+		self.isMute = 0		#if mute or not
 		self.isListening = 0	#if Avatar is listening
 		self.audioAdr = None	#audio multicast address
 		self.audioBuffer = deque(maxlen=AUDIO_BUFFER_SIZE)
@@ -287,7 +289,7 @@ class Net :
 			data = self.streamin.read(CHUNK)
 			rms = audioop.rms(data,2)
 			#print rms
-			if rms > 100 :	
+			if rms > 100 and not self.isMute:
 				self.sendAudio(data)
 				self.rms = rms
 				#self.isMute = 1
@@ -304,12 +306,11 @@ class Net :
 		#print "needtoWait:" + str(self.needtoWait)
 		#print "lenth of Buffer:" + str(len(self.audioBuffer))
 		#print "isMute:" + str(self.isMute)
-		if self.isMute == 0:
-			if self.needtoWait == False and len(self.audioBuffer) > 0:
-				data = self.audioBuffer.popleft()
-				self.stream.write(data)
-			elif len(self.audioBuffer) == 0:
-				self.needtoWait = True
+		if self.needtoWait == False and len(self.audioBuffer) > 0:
+			data = self.audioBuffer.popleft()
+			self.stream.write(data)
+		elif len(self.audioBuffer) == 0:
+			self.needtoWait = True
 			
 		#edit by feng end
 
@@ -454,7 +455,7 @@ class Net :
 		numNear = len(self.nearRemotes)
 		if numNear > 5000 or numNear < 0 :
 			print "numNear=", numNear
-		#add isMute and audioAddress in payload, edit by feng
+		#add rms and audioAddress in payload, edit by feng
 		p.payload = struct.pack('!IIIIII' + str(namelen) + 'sIi', \
 					STATUS_REPORT, self.now, \
 					int(self.x*GRID), int(self.y*GRID), \
@@ -547,7 +548,7 @@ class Net :
 		randomly, avoiding walls and non-walkable squares.
 		"""
 		self.x, self.y, self.direction = self.pWorld.getPosHeading()
-		if isinstance(self.pWorld, PandaWorld):
+		if isinstance(self.pWorld, PandaWorld): # i.e., ignore AIWorld
 			self.isMute = self.pWorld.isMute()
 		self.mcg.updateSubs(self.x,self.y,self.audioAdr)
 		return
