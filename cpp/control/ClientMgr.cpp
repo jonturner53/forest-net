@@ -61,13 +61,17 @@ bool init(ipa_t nmIp1, ipa_t myIp1) {
 	}
 
 	uint64_t nonce;
+cerr << "calling bootme\n";
 	if (!bootMe(nmIp, myIp, nmAdr, myAdr, rtrAdr, rtrIp, rtrPort, nonce)) {
 		return false;
 	}
+cerr << "success\n";
 
 	sub = new Substrate(myAdr, myIp, rtrAdr, rtrIp, rtrPort, nonce,
 			    500,handler,0,Forest::CM_PORT,ps,logger);
+cerr << "substrate instantiated\n";
 	if (!sub->init()) return false;
+cerr << "and initialized\n";
 	sub->setRtrReady(true);
 
 	dummyRecord = 0; maxRecord = 0;
@@ -95,6 +99,7 @@ bool init(ipa_t nmIp1, ipa_t myIp1) {
 		return false;
 	}
 
+	acctFile.open("acctRecords",fstream::app);
 	if (!acctFile.good()) {
 		logger->log("ClientMgr::init: could not open acctRecords "
 			   "file",2);

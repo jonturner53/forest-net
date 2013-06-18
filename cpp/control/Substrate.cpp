@@ -56,13 +56,19 @@ bool Substrate::init() {
 	}
 
 	// setup sockets
+string s;
+cerr << "binding datagram socket to " << Np4d::ip2string(myIp,s) << ":"
+     << dgPort << endl;
 	dgSock = Np4d::datagramSocket();
 	if (dgSock < 0 || !Np4d::bind4d(dgSock,myIp,dgPort) ||
 	    !Np4d::nonblock(dgSock)) {
 		return false;
 	}
+cerr << "done\n";
 	listenSock = Np4d::streamSocket();
 	if (listenSock < 0) return false;
+cerr << "binding stream socket to " << INADDR_ANY << ":"
+     << listenPort << endl;
 	return	Np4d::bind4d(listenSock,INADDR_ANY,listenPort) &&
 		Np4d::listen4d(listenSock) && Np4d::nonblock(listenSock);
 }

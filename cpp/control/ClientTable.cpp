@@ -301,7 +301,6 @@ bool ClientTable::readEntry(istream& in, int clx) {
 	string cname, pwd, privString, realName, email;
 	RateSpec defRates, totalRates;
 
-cerr << "reading entry " << clx << endl;
 	if (!in.good()) return false;
         if (Misc::verify(in,'+')) {
 	        if (!Misc::readName(in, cname)      || !Misc::verify(in,',') ||
@@ -314,13 +313,10 @@ cerr << "reading entry " << clx << endl;
 	                return false;
 		}
 		Misc::cflush(in,'\n');
-cerr << "a\n";
 	} else if (Misc::verify(in,'-')) {
-cerr << "b\n";
 		maxClx = max(clx, maxClx);
 		Misc::cflush(in,'\n'); return true;
 	} else {
-cerr << "c\n";
 		Misc::cflush(in,'\n'); return false;
 	}
 
@@ -332,7 +328,6 @@ cerr << "c\n";
 	else					priv = NUL_PRIV;
 
 	if (addClient(cname, pwd, priv,clx) == 0) return false;
-cerr << "d\n";
 	setRealName(clx,realName); setEmail(clx,email);
 	getDefRates(clx) = defRates;
 	getTotalRates(clx) = totalRates;
