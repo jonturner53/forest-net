@@ -25,8 +25,13 @@ namespace forest {
 class NetBuffer {
 public:
 	// constructors/destructor
-		NetBuffer(int,int);
+		NetBuffer(int, int);
+		NetBuffer(string&);
+		NetBuffer(char*, int);
 		~NetBuffer();
+
+	void	reset(string&);
+	void	reset(char*, int);
 
 	// predicates
 	bool	full() const;
@@ -60,6 +65,8 @@ private:
 
 	char*	buf;		///< socket used to store input characters
 	int	size;		///< number of bytes in buffer
+
+	bool	noRefill;	///< disables automatic reads from socket
 
 	// internal helper methods
 	void	advance(char*&,int=1);

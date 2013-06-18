@@ -18,16 +18,55 @@ namespace forest {
 NetBuffer::NetBuffer(int socket, int size1) : sock(socket), size(size1) { 
 	buf = new char[size];
 	rp = wp = buf;
+	noRefill = false;
+}
+
+NetBuffer::NetBuffer(string& s) : size(s.length()) { 
+	buf = new char[size+1];
+	s.copy(buf,size);
+	rp = buf; wp = rp + size;
+	noRefill = true;
+}
+
+NetBuffer::NetBuffer(char *p, int size1) : size(size1) { 
+	buf = new char[size+1];
+	memcpy(buf,p,size);
+	rp = buf; wp = rp + size;
+	noRefill = true;
 }
 
 NetBuffer::~NetBuffer() { delete buf; }
+
+/** Replace contents of the buffer.
+ */
+void NetBuffer::reset(string& s) {
+	if (s.length() > size) {
+		delete [] buf;
+		size = s.length();
+		buf = new char[size+1];
+	}
+	s.copy(buf,size);
+	rp = buf; wp = rp + s.length();
+	noRefill = true;
+}
+
+void NetBuffer::reset(char *p, int nuSize) {
+	if (nuSize > size) {
+		delete [] buf;
+		size = nuSize;
+		buf = new char[size+1];
+	}
+	memcpy(buf,p,nuSize);
+	rp = buf; wp = rp + nuSize;
+	noRefill = true;
+}
 
 /** Add more data to the buffer from socket.
  *  @return false if no space available in buffer or connection was
  *  closed by peer
  */
 bool NetBuffer::refill() {
-	if (full()) return false;
+	if (noRefill || full()) return false;
 	int n, len;
 	if (wp < rp) {
 		len = (rp-1) - wp;

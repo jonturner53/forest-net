@@ -54,6 +54,12 @@ bool init(ipa_t nmIp1, ipa_t myIp1) {
 	cliTbl = new ClientTable(10000,30000);
 	logger = new Logger();
 
+	if (!cliTbl->init()) {
+		logger->log("ClientMgr::init: could not initialize "
+			    "client data",2);
+		return false;
+	}
+
 	uint64_t nonce;
 	if (!bootMe(nmIp, myIp, nmAdr, myAdr, rtrAdr, rtrIp, rtrPort, nonce)) {
 		return false;
@@ -64,20 +70,31 @@ bool init(ipa_t nmIp1, ipa_t myIp1) {
 	if (!sub->init()) return false;
 	sub->setRtrReady(true);
 
-	// read client data and open accounting file
-	ifstream ifs("clientData");
-	if (!ifs.good() || !cliTbl->read(ifs)) {
+	dummyRecord = 0; maxRecord = 0;
+
+	// read clientData file
+	clientFile.open("clientData");
+	if (!clientFile.good() || !cliTbl->read(clientFile)) {
 		logger->log("ClientMgr::init: could not read clientData "
 			    "file",2);
 		return false;
 	}
-	clientLog.open("clientLog",ofstream::app);
-	if (!clientLog.good()) {
-		logger->log("ClientMgr::init: could not open clientLog "
-			    "file",2);
+	clientFile.clear();
+
+	// if size of file is not equal to count*RECORD_SIZE
+	// re-write the file using padded records
+	int n = cliTbl->getMaxClx();
+	clientFile.seekp(0,ios_base::end);
+	long len = clientFile.tellp();
+	if (len != (n+1)*RECORD_SIZE) {
+		for (int clx = 0; clx <= n; clx++) writeRecord(clx);
+	}
+	if (pthread_mutex_init(&clientFileLock,NULL) != 0) {
+		logger->log("ClientMgr::init: could not initialize lock "
+			    "on client data file",2);
 		return false;
 	}
-	acctFile.open("acctRecords");
+
 	if (!acctFile.good()) {
 		logger->log("ClientMgr::init: could not open acctRecords "
 			   "file",2);
@@ -273,7 +290,6 @@ bool handleClient(int sock,CpHandler& cph) {
 
 	if (!loginDialog(sock,buf,clientName)) return true;
 	userDialog(sock,cph,buf,clientName);
-	cliTbl->releaseClient(clx);
 	return true;
 }
 
@@ -300,7 +316,6 @@ bool loginDialog(int sock, NetBuffer& buf, string& clientName) {
 		// password: clientPassword
 		// over
 		if (s1 == "login") {
-cerr << "login" << endl;
 			// process remainder of login dialog
 			if (buf.verify(':') && buf.readAlphas(clientName) &&
 			      buf.nextLine() &&
@@ -308,10 +323,8 @@ cerr << "login" << endl;
 			      buf.verify(':') && buf.readWord(pwd) &&
 			      buf.nextLine() &&
 			    buf.readLine(s3) && s3 == "over") {
-cerr << "client=" << client << " pwd=" << pwd << endl;
 				int clx =cliTbl->getClient(clientName);
 				// locks clx
-cerr << "proceeding clx=" << clx << "\n";
 				if (clx == 0) {
 					Np4d::sendString(sock,"login failed: "
 							 "try again\nover\n");
@@ -349,10 +362,10 @@ cerr << "proceeding clx=" << clx << "\n";
 							"over\n");
 					cliTbl->releaseClient(clx);
 				}
-				clx = cliTbl->addClient(client,pwd,
+				clx = cliTbl->addClient(clientName,pwd,
 							ClientTable::STANDARD);
 				if (clx != 0) {
-					writeClientLog(clx);
+					writeRecord(clx);
 					cliTbl->releaseClient(clx);
 					Np4d::sendString(sock,"success\n"
 							      "over\n");
@@ -622,7 +635,7 @@ cerr << "got (" << targetName << ") and I am (" << clientName << ")" << endl;
 	    	    defRates.leq(cliTbl->getTotalRates(tclx)))
 			cliTbl->getTotalRates(tclx) = totRates;
 	}
-	writeClientLog(tclx);
+	writeRecord(tclx);
 	reply = "profile updated";
 	cliTbl->releaseClient(tclx);
 	return;
@@ -677,13 +690,13 @@ cerr << "item=" << item << "\nbuf=" << buf.toString(s);
 			return;
 		}
 	}
-	tclx = cliTbl->getClient(clientName);
+	tclx = cliTbl->getClient(targetName);
 	if (tclx == 0) {
 		reply = "cannot access target client data(" + targetName + ")";
 		return;
 	}
 	cliTbl->setPassword(tclx,pwd);
-	writeClientLog(tclx);
+	writeRecord(tclx);
 	cliTbl->releaseClient(tclx);
 	return;
 }
@@ -790,6 +803,7 @@ void writeAcctRecord(const string& cname, fAdr_t cliAdr, ipa_t cliIp,
 	acctFile.flush();
 }
 
+/*
 void writeClientLog(int clx) {
 	// should really lock while writing
 	if (!clientLog.good()) {
@@ -801,230 +815,60 @@ void writeClientLog(int clx) {
 	clientLog << cliTbl->client2string(clx,s);
 	clientLog.flush();
 }
+*/
 
-/** Handle an administrative login session.
- *  Supports commands for adding clients and modifying parameters.
-void adminDialog(int sock, CpHandler& cph, int clx, NetBuffer& buf) {
-	string cmd; string reply;
-
-	// add code to reject if non-local connection
-	// can still use ssh tunneling for secure remote access
-	while (buf.readAlphas(cmd)) {
-		reply = "success";
-cerr << "cmd=" << cmd << endl;
-		if (cmd == "getProfile" && buf.nextLine()) {
-			getProfile(clx,buf,reply);
-		} else if (cmd == "updateProfile" && buf.nextLine()) {
-			updateProfile(clx,buf,reply);
-		} else if (cmd == "changePassword" && buf.nextLine()) {
-			changePassword(clx,buf,reply);
-		} else if (cmd == "addClient" && buf.verify(':')) {
-			addClient(buf,reply);
-		} else if (cmd == "removeClient" && buf.verify(':')) {
-			removeClient(buf,reply);
-		} else if (cmd == "modPassword" && buf.verify(':')) {
-			ClientTable::privileges priv =
-				cliTbl->getPrivileges(clx);
-			modPassword(buf,priv,reply);
-		} else if (cmd == "modPrivileges" && buf.verify(':')) {
-			ClientTable::privileges priv =
-				cliTbl->getPrivileges(clx);
-			modPrivileges(buf,priv,reply);
-		} else if (cmd == "modRealName" && buf.verify(':')) {
-			modRealName(buf,reply);
-		} else if (cmd == "modEmail" && buf.verify(':')) {
-			modEmail(buf,reply);
-		} else if (cmd == "modDefRates" && buf.verify(':')) {
-			modDefRates(buf,reply);
-		} else if (cmd == "modTotalRates" && buf.verify(':')) {
-			modTotalRates(buf,reply);
-		} else if (cmd == "showClient" && buf.verify(':')) {
-			showClient(buf,reply);
-		} else if (cmd == "over" && buf.nextLine()) {
-			// ignore
-		} else if (cmd == "overAndOut") {
-			buf.nextLine(); break;
-		}
-		reply += "\n"; Np4d::sendString(sock,reply);
-
-		if (!buf.nextLine()) break;
-	}
-}
-
-void addClient(NetBuffer& buf, string& reply) {
-	string cname, pwd, realName, email;
-	RateSpec defRates, totalRates;
-
-	if (buf.readName(cname) && buf.readWord(pwd)) {
-		int clx = cliTbl->addClient(cname,pwd,ClientTable::STANDARD);
-		if (clx == 0) {
-			reply = "unable to add client";
-			return;
-		}
-		cliTbl->setRealName(clx,"none"); cliTbl->setEmail(clx,"none");
-		cliTbl->getDefRates(clx) = cliTbl->getDefRates();
-		cliTbl->getTotalRates(clx) = cliTbl->getTotalRates();
-		writeClientLog(clx);
-		cliTbl->releaseClient(clx);
-	}
-}
-
-void removeClient(NetBuffer& buf, string& reply) {
-	string cname;
-
-	if (buf.readName(cname)) {
-		int clx = cliTbl->getClient(cname);
-		if (clx == 0) {
-			reply = "no such client";
-			return;
-		}
-		cliTbl->removeClient(clx);
-	}
-}
-
-void modPassword(NetBuffer& buf, ClientTable::privileges priv,
-		 string& reply) {
-	string cname, pwd;
-
-	if (buf.readName(cname) && buf.readWord(pwd)) {
-		int clx = cliTbl->getClient(cname);
-		if (clx == 0) {
-			reply = "no such client";
-			return;
-		}
-		ClientTable::privileges cpriv = cliTbl->getPrivileges(clx);
-		if ((priv == ClientTable::ROOT  && cpriv !=ClientTable::ROOT) ||
-		    (priv == ClientTable::ADMIN && cpriv !=ClientTable::ROOT &&
-		     cpriv != ClientTable::ADMIN)) {
-			cliTbl->setPassword(clx,pwd);
-			writeClientLog(clx);
-		} else {
-			reply = "rejected request";
-		}
-		cliTbl->releaseClient(clx);
-	}
-}
-
-void modPrivileges(NetBuffer& buf, ClientTable::privileges priv, string& reply) {
-	string cname, nuprivString;
-
-	if (buf.readName(cname) && buf.readAlphas(nuprivString)) {
-		int clx = cliTbl->getClient(cname);
-		if (clx == 0) {
-			reply = "no such client";
-			return;
-		}
-		ClientTable::privileges nupriv;
-		if (nuprivString == "limited")
-			nupriv = ClientTable::LIMITED;
-		else if (nuprivString == "standard")
-			nupriv = ClientTable::STANDARD;
-		else if (nuprivString == "admin")
-			nupriv = ClientTable::ADMIN;
-		else if (nuprivString == "root")
-			nupriv = ClientTable::ROOT;
-		else {
-			reply = "invalid privilege (" + nuprivString + ")";
-			cliTbl->releaseClient(clx);
-			return;
-		}
-	
-		ClientTable::privileges cpriv = cliTbl->getPrivileges(clx);
-		if (priv == ClientTable::ROOT) {
-			if (cpriv != ClientTable::ROOT) {
-				cliTbl->setPrivileges(clx,nupriv);
-				writeClientLog(clx);
-			}
-		} else if (priv == ClientTable::ADMIN) {
-			if (cpriv !=ClientTable::ROOT &&
-		     	    cpriv != ClientTable::ADMIN && 
-		     	    nupriv != ClientTable::ADMIN && 
-		     	    nupriv != ClientTable::ROOT) {
-				cliTbl->setPrivileges(clx,nupriv);
-				writeClientLog(clx);
-			}
-		} else {
-			reply = "rejected request";
-		}
-		cliTbl->releaseClient(clx);
-	}
-}
-	
-void modRealName(NetBuffer& buf, string& reply) {
-	string cname, realName;
-
-	if (buf.readName(cname) && buf.readString(realName)) {
-		int clx = cliTbl->getClient(cname);
-		if (clx == 0) {
-			reply = "no such client";
-			return;
-		}
-		cliTbl->setRealName(clx,realName);
-		writeClientLog(clx);
-		cliTbl->releaseClient(clx);
-	}
-}
-
-void modEmail(NetBuffer& buf, string& reply) {
-	string cname, email;
-
-	if (buf.readName(cname) && buf.readWord(email)) {
-		int clx = cliTbl->getClient(cname);
-		if (clx == 0) {
-			reply = "no such client";
-			return;
-		}
-		cliTbl->setEmail(clx,email);
-		writeClientLog(clx);
-		cliTbl->releaseClient(clx);
-		return;
-	}
-}
-
-void modDefRates(NetBuffer& buf, string& reply) {
-	string cname; RateSpec rates;
-
-	if (buf.readName(cname) && buf.readRspec(rates)) {
-		int clx = cliTbl->getClient(cname);
-		if (clx == 0) {
-			reply = "no such client";
-			return;
-		}
-		cliTbl->getDefRates(clx) = rates;
-		writeClientLog(clx);
-		cliTbl->releaseClient(clx);
-	}
-}
-
-void modTotalRates(NetBuffer& buf, string& reply) {
-	string cname; RateSpec rates;
-
-	if (buf.readName(cname) && buf.readRspec(rates)) {
-		int clx = cliTbl->getClient(cname);
-		if (clx == 0) {
-			reply = "no such client";
-			return;
-		}
-		cliTbl->getTotalRates(clx) = rates;
-		writeClientLog(clx);
-		cliTbl->releaseClient(clx);
-	}
-}
-
-void showClient(NetBuffer& buf, string& reply) {
-	string cname; 
-
-	if (buf.readName(cname)) {
-		int clx = cliTbl->getClient(cname);
-		if (clx == 0) {
-			reply = "no such client";
-			return;
-		}
-		cliTbl->client2string(clx,reply);
-		writeClientLog(clx);
-		cliTbl->releaseClient(clx);
-	}
-}
+/** Write a client record to clientFile.
+ *  The calling thread is assumed to hold a lock on the client.
+ *  @param clx is a non-negative integer
  */
+void writeRecord(int clx) {
+	if (clx < 0 || clx >= cliTbl->getMaxClients()) return;
+
+	pthread_mutex_lock(&clientFileLock);
+	if (dummyRecord == 0) {
+		// create dummy record, for padding clientFile
+		dummyRecord = new char[RECORD_SIZE];
+		for (char *p = dummyRecord; p < dummyRecord+RECORD_SIZE; p++)
+			*p = ' ';
+		dummyRecord[0] = '-'; dummyRecord[RECORD_SIZE-1] = '\n';
+	}
+	if (maxRecord == 0) {
+		clientFile.seekp(0,ios_base::end);
+		maxRecord = clientFile.tellp()/RECORD_SIZE;
+	}
+
+
+	// position file pointer, adding dummy records if needed
+	if (clx > maxRecord) {
+		clientFile.seekp((maxRecord+1)*RECORD_SIZE);
+		while (clx > maxRecord) {
+			clientFile.write(dummyRecord,RECORD_SIZE);
+			maxRecord++;
+		}
+	}
+	clientFile.seekp(clx*RECORD_SIZE);
+
+	if (cliTbl->validClient(clx)) {
+		string s;
+		cliTbl->client2string(clx,s);
+		s = "+ " + s;
+		if (s.length() > RECORD_SIZE) {
+			s.erase(RECORD_SIZE-1); s += "\n";
+		} else {
+			s.erase(s.length()-1);
+			int len = RECORD_SIZE - s.length();
+			char *p = dummyRecord + s.length();
+			s.append(p,len);
+		}
+		clientFile.write(s.c_str(),RECORD_SIZE);
+	} else {
+		//s.assign(dummyRecord,RECORD_SIZE);
+		clientFile.write(dummyRecord,RECORD_SIZE);
+	}
+	clientFile.flush();
+	maxRecord = max(clx,maxRecord);
+	pthread_mutex_unlock(&clientFileLock);
+	return;
+}
 
 } // ends namespace

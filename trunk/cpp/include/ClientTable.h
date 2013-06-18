@@ -39,6 +39,8 @@ public:
 	const RateSpec& getDefRates() const;
 	const RateSpec& getTotalRates() const;
 
+	bool	validClient(int) const;
+
 	// iteration methods
 	int	firstClient();
 	int	nextClient(int);
@@ -61,6 +63,9 @@ public:
 	bool	checkPassword(int,string&) const;
 
 	// for session info
+	int	getNumClients() const;		
+	int	getMaxClients() const;		
+	int	getMaxClx() const;		
 	int	getClientIndex(int) const;		
 	fAdr_t	getClientAdr(int) const;
 	ipa_t	getClientIp(int) const;
@@ -70,7 +75,7 @@ public:
 	RateSpec& getSessRates(int) const;
 
 	// add/remove/modify table entries
-	int	addClient(string&, string&, privileges);
+	int	addClient(string&, string&, privileges, int=0);
 	void	removeClient(int);
 	int	addSession(fAdr_t, fAdr_t, int);
 	void	removeSession(int);
@@ -88,19 +93,22 @@ public:
 	void	setStartTime(int, time_t);
 
 	// input/output of table contents 
+	//bool 	readRecord(NetBuffer&, int);
+	bool 	readEntry(istream&, int=0);
 	bool 	read(istream&);
-	void 	write(ostream&, bool=false);
 	string&	toString(string&, bool=false);
 	string&	client2string(int, string&, bool=false) const;
 	string&	session2string(int, string&) const;
+	void 	write(ostream&, bool=false);
 
 	// locking/unlocking the internal maps
 	// (client name-to-index, client address-to-session)
 	void	lockMap();
 	void	unlockMap();
 private:
-	int	maxCli;			///< max number of users
+	int	maxCli;			///< max number of clients
 	int	maxSess;		///< max number of active sessions
+	int	maxClx;			///< largest defined clx
 
 	struct Session {
 	fAdr_t	cliAdr;			///< address of user in session
@@ -135,6 +143,9 @@ private:
 	
 	Client *cvec;			///< vector of client structs
 
+	static const int RECORD_SIZE = 256; ///< # of bytes per record
+	fstream	clientFile;		///< file stream for client file
+
 	UiSetPair *clients;		///< active and free client indexes
 	IdMap *sessMap;			///< maps address to a session index
         map<string, int> *nameMap;	///< maps client name to client index
@@ -145,8 +156,20 @@ private:
 	/** helper functions */
 	uint64_t key(fAdr_t) const;
 	bool 	readEntry(istream&);
+	int	fileSize();
 
 };
+
+inline bool ClientTable::validClient(int clx) const {
+	return clients->isIn(clx);
+}
+
+inline int ClientTable::getNumClients() const {
+	return clients->getNumIn();
+}
+
+inline int ClientTable::getMaxClients() const { return maxCli; }
+inline int ClientTable::getMaxClx() const { return maxClx; }
 
 /** Get the intial default rate spec for new clients.
  *  @return a const reference to the initial default rate spec

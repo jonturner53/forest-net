@@ -6,7 +6,7 @@ AROOT = ${FROOT}/../../algolib-jst
 INCLUDES = -I ${FROOT}/include -I ${AROOT}/include
 FLIB = ${FROOT}/lib/lib-forest.a
 LIBS = ${FLIB} ${AROOT}/lib/lib-ds.a ${AROOT}/lib/lib-util.a
-BIN = /forest/bin
+BIN = ~/bin
 WARN = -Wall -Wno-c++11-extensions
 CXXFLAGS = ${WARN} ${ARCH} ${INCLUDES} -O2 -std=c++0x
 JAVAC = javac
