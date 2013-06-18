@@ -65,7 +65,7 @@ class PandaWorld(DirectObject):
 		
 		self.keyMap = {"left":0, "right":0, "forward":0, "backward":0, \
  				"cam-up":0, "cam-down":0, "cam-left":0, "cam-right":0, \
-				"zoom-in":0, "zoom-out":0, "reset-view":1}
+				"zoom-in":0, "zoom-out":0, "reset-view":1, "dash":0}
 		self.info = 0
 		self.isMute = 0
 		self.card = OnscreenImage(image = 'photo_cache/'+ 'unmute.jpg', pos = (0.67, 0, -0.94), scale=.04)
@@ -141,6 +141,11 @@ class PandaWorld(DirectObject):
 				    "walk":"models/panda-walk"}))
 			self.freeRemotes[i].setScale(.002)
 
+		# Create a floater object.  We use the "floater" as a temporary
+		# variable in a variety of calculations.
+		self.floater = NodePath(PandaNode("floater"))
+		self.floater.reparentTo(render)
+
 		# Accept the control keys for movement and rotation
 		self.accept("escape", sys.exit)
 		self.accept("arrow_left", self.setKey, ["left",1])
@@ -151,6 +156,7 @@ class PandaWorld(DirectObject):
 		self.accept("shift-arrow_down", self.setKey, ["cam-down",1])
 		self.accept("shift-arrow_left", self.setKey, ["cam-left",1])
 		self.accept("shift-arrow_right", self.setKey, ["cam-right",1])	
+		self.accept("alt-arrow_up", self.setKey, ["dash", 1])
 		self.accept("z", self.setKey, ["zoom-in",1])
  		self.accept("control-z", self.setKey, ["zoom-out",1])
 		self.accept("r", self.setKey, ["reset-view",1])         
@@ -158,10 +164,12 @@ class PandaWorld(DirectObject):
 		self.accept("arrow_right-up", self.setKey, ["right",0])
 		self.accept("arrow_up-up", self.setKey, ["forward",0])
  		self.accept("arrow_down-up", self.setKey, ["backward",0])
-		self.accept("shift-up" or "arrow_up-up", self.setKey, ["cam-up",0])
-		self.accept("shift-up" or "arrow_down-up", self.setKey, ["cam-down",0])
-		self.accept("shift-up" or "arrow_left-up", self.setKey, ["cam-left",0])
-		self.accept("shift-up" or "arrow_right-up", self.setKey, ["cam-right",0])
+ 		self.accept("alt-up", self.setKey, ["dash", 0])
+		self.accept("shift-up", self.resetCamKeys)
+		# or "arrow_up-up", self.setKey, ["cam-up",0])
+		# self.accept("shift-up" or "arrow_down-up", self.setKey, ["cam-down",0])
+		# self.accept("shift-up" or "arrow_left-up", self.setKey, ["cam-left",0])
+		# self.accept("shift-up" or "arrow_right-up", self.setKey, ["cam-right",0])
 		self.accept("z-up", self.setKey, ["zoom-in",0])
  		self.accept("control-up", self.setKey, ["zoom-out",0])
 		self.accept("t", self.setKey, ["reset-view",0])
@@ -246,6 +254,12 @@ class PandaWorld(DirectObject):
 		self.csTrav = CollisionTraverser('CustomTraverser')
 		self.csTrav.addCollider(self.csNode, self.csHandler)
 
+	def resetCamKeys(self):
+		self.keyMap["cam-up"]=0
+		self.keyMap["cam-down"]=0
+		self.keyMap["cam-left"]=0
+		self.keyMap["cam-right"]=0
+		
 	#to display/hide pictures when the user clicks on the avatar/pic
 	def showPic(self):
 		x = y = 0
@@ -282,7 +296,7 @@ class PandaWorld(DirectObject):
 		# Show a list of instructions
 		if self.info is 0:
 			self.ctrlCmd = printText(0.7)
-			self.ctrlCmd.setText("Z: zoom-in" + '\n' + "Shift+Z: zoom-out" \
+			self.ctrlCmd.setText("Z: zoom-in" + '\n' + "Ctrl+Z: zoom-out" \
 								+ '\n' + "*R: reset view to Panda"\
 								+ '\n' + "*T: toggle Zoom mode" \
 								+ '\n' + "*M: mute/un-mute audio"\
@@ -462,7 +476,7 @@ class PandaWorld(DirectObject):
 		"""
 		return 120
         
-  	def isMute(self) :
+  	def is_Mute(self) :
 		""" Get isMute to see if Avatar is mute
 		"""
 		return self.isMute
@@ -531,6 +545,9 @@ class PandaWorld(DirectObject):
  		if (self.keyMap["backward"]!=0):
  			self.avatar.setY(self.avatar, \
  					 +1000* globalClock.getDt())
+ 		if (self.keyMap["dash"]!=0):
+			self.avatar.setY(self.avatar, \
+					 -3000 * globalClock.getDt())	
 
 		# If avatar is moving, loop the run animation.
 		# If he is standing still, stop the animation.
@@ -550,7 +567,7 @@ class PandaWorld(DirectObject):
 		# if the key 'o' is held down, zoom out	
 		hpr = self.avatar.getHpr()
 		pos = self.avatar.getPos()
-		hpr[0] += 180; hpr[1] = camAngle; hpr[2] = camAngleX;
+		hpr[0] = hpr[0] + 180 + camAngleX; hpr[1] = camAngle
 		
 		if (self.keyMap["zoom-in"] != 0): 			
 			if self.fieldAngle > 20:
