@@ -287,7 +287,6 @@ public class AcctMgr extends MouseAdapter implements ActionListener, FocusListen
 	}
 
 	private String updateProfile(String userName) {
-System.out.println("updateProfile " + userName);
 		if (userName.length() == 0) return "empty user name";
 		if (!sendString("updateProfile: " + userName + "\n" +
 			   	"realName: \"" + realName + "\"\n" +
@@ -297,26 +296,25 @@ System.out.println("updateProfile " + userName);
 				"over\n"))
 			return "cannot send request";
 		String s = inBuf.readLine();
-System.out.println("s= " + (s != null ? s : "null"));
-		if (s == null || !s.equals("profile updated")) return s;
+		if (s == null || !s.equals("profile updated")) {
+			inBuf.nextLine(); return s;
+		}
 		s = inBuf.readLine();
-System.out.println("s= " + (s != null ? s : "null"));
 		if (s == null || !s.equals("over")) return s;
 		return null;
 	}
 
 	private boolean changePassword(String userName, String pwd) {
-System.out.println("changePassword " + userName);
 		if (userName.length() == 0 || pwd.length() == 0)
 			return false;
 		if (!sendString("changePassword: " + userName +
 				"\npassword: " + pwd + "\nover\n"))
 			return false;
 		String s = inBuf.readLine();
-System.out.println("s= " + (s != null ? s : "null"));
-		if (s == null || !s.equals("success")) return false;
+		if (s == null || !s.equals("success")) {
+			inBuf.nextLine(); return false;
+		}
 		s = inBuf.readLine();
-System.out.println("s= " + (s != null ? s : "null"));
 		if (s == null || !s.equals("over")) return false;
 		return true;
 	}
@@ -325,15 +323,15 @@ System.out.println("s= " + (s != null ? s : "null"));
 		String s;
 		boolean gotName, gotEmail, gotDefRates, gotTotRates; 
 
-System.out.println("getProfile: " + userName);
 		if (userName.length() == 0) return false;
 		if (!sendString("getProfile: " + userName + "\n"))
 			return false;
 		gotName = gotEmail = gotDefRates = gotTotRates = false; 
 		while (true) {
 			s = inBuf.readAlphas();
-System.out.println("s=" + s);
-			if (s.equals("realName") && inBuf.verify(':')) {
+			if (s == null) {
+				// skip
+			} else if (s.equals("realName") && inBuf.verify(':')) {
 				realName = inBuf.readString();
 				if (realName == null) return false;
 				nameField.setText(realName);
@@ -375,24 +373,25 @@ System.out.println("s=" + s);
 		} catch(Exception e) {
 			return false;
 		}
+		if (!serverChan.isConnected()) return false;
+// add initial greeting message from ClientMgr so that we can
+// detect when we're really talking to server and not just tunnel
 		if (!sendString("Forest-login-v1\n")) return false;
 		inBuf = new NetBuffer(serverChan,1000);
 		return true;
 	}
 
 	private boolean login(String user, String pwd) {
-System.out.println("login " + user + " " + pwd);
 		if (userName.length() == 0 || pwd.length() == 0)
 			return false;
 		if (!sendString("login: " + user + "\n" +
 			   	"password: " + pwd + "\nover\n"))
 			return false;
-System.out.println("sent string");
 		String s = inBuf.readLine();
-System.out.println("s= " + (s != null ? s : "null"));
-		if (s == null || !s.equals("login successful")) return false;
+		if (s == null || !s.equals("login successful")) {
+			inBuf.nextLine(); return false;
+		}
 		s = inBuf.readLine();
-System.out.println("s= " + (s != null ? s : "null"));
 		if (s == null || !s.equals("over")) return false;
 
 		if (!getProfile(user)) return false;
@@ -405,9 +404,12 @@ System.out.println("s= " + (s != null ? s : "null"));
 		if (!sendString("newAccount: " + user + "\n" +
 			   	"password: " + pwd + "\nover\n"))
 			return false;
-		if (!inBuf.readLine().equals("success") ||
-		    !inBuf.readLine().equals("over"))
-			return false;
+		String s = inBuf.readLine();
+		if (s == null || !s.equals("success")) {
+			inBuf.nextLine(); return false;
+		}
+		s = inBuf.readLine();
+		if (s == null || !s.equals("over")) return false;
 		if (!getProfile(user)) return false;
 		updateField.setText(user);
 		return true;
@@ -466,7 +468,6 @@ System.out.println("s= " + (s != null ? s : "null"));
 				showStatus("Cannot change password");
 			}
 		} else if (ae.getActionCommand().equals("upload photo")) {
-System.out.println("uploading " + photoFile);
 			String status = uploadPhoto(photoFile);
 			if (status == null) {
 				showStatus("Photo uploaded");
@@ -585,3 +586,4 @@ System.out.println("uploading " + photoFile);
 		return null;
 	}
 }
+
