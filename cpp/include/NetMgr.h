@@ -20,6 +20,7 @@
 #include "Queue.h"
 #include "CpHandler.h"
 #include "Substrate.h"
+#include "NetBuffer.h"
 #include "Logger.h"
 #include <map>
 
@@ -68,11 +69,14 @@ bool	init(const char*);
 bool	readPrefixInfo(char*);
 
 void* 	handler(void *);
-bool 	handleConsReq(int,CpHandler&);
+bool 	handleConsole(int,CpHandler&);
 bool 	handleConDisc(int,CtlPkt&,CpHandler&);
 bool 	handleNewSession(int,CtlPkt&,CpHandler&);
 bool 	handleBootLeaf(int,CtlPkt&,CpHandler&);
 bool 	handleBootRouter(int,CtlPkt&,CpHandler&);
+
+void	getNet(NetBuffer&, string&);
+void	getLinkTable(NetBuffer&, string&);
 
 uint64_t generateNonce();
 fAdr_t	setupLeaf(int, pktx, CtlPkt&, int, int, uint64_t,CpHandler&,bool=false);
