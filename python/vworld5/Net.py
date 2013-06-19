@@ -220,7 +220,6 @@ class Net :
 	def getPhoto(self, uname) :		
 		psSock = socket(AF_INET, SOCK_STREAM)
 		self.photoServerIp = gethostbyname("forest2.arl.wustl.edu")
-		print self.photoServerIp
 		psSock.connect((self.photoServerIp, 30124))
 		
 		#send a getPhoto request
@@ -229,13 +228,17 @@ class Net :
 		sent = psSock.sendall(request)
 		if sent == 0:
 			raise RuntimeError("socket connection broken")
-		print "bytes sent:", sent
+		if debug >= 1:
+			print "photo server IP: ", self.photoServerIp
+			print "bytes sent: ", sent
+
 		# receiving the photo	
 		echo_len = 15
 		echo_recvd = 0
 		while echo_recvd == 0:
 			buffer = psSock.recv(echo_len)
-			print "buf= ", buffer
+			if debug >= 1:
+				print "buf= ", buffer
 			if buffer == '':
 				RuntimeError("broken connection")
 			echo_len = echo_len - len(buffer) 
@@ -256,8 +259,9 @@ class Net :
 				if pktlen < 1024:
 					gotPic = 1
 				more2read = 1
-				print "buffer is: ", buffer
-				print "repr(buffer) is: ", repr(buffer)
+				if debug >= 1:
+					print "buffer is: ", buffer
+					print "repr(buffer) is: ", repr(buffer)
 				print pktlen
 				while(more2read):
 					block = psSock.recv(pktlen) #returns a string
