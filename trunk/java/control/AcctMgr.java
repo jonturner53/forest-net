@@ -8,20 +8,6 @@ package forest.control;
  *  See http://www.apache.org/licenses/LICENSE-2.0 for details.
  */
 
-/*
-todo
-button to update profile
-count of number of sessions
-read sessions - forest addr, rtr addr, rate (send all, display up to 5)
-terminate button for each session
-
-in Client manager
-add client type: std, admin (control over std users), master (over admins)
-general handleClient method
-return rateSpec as part of newSession
-in future, return with comtCtl also
-*/
-
 import java.awt.Color;
 import java.awt.*;
 import java.awt.event.*;
@@ -239,7 +225,11 @@ public class AcctMgr extends MouseAdapter implements ActionListener, FocusListen
 		boxAll.add(box5);
 		boxAll.setAlignmentX(Component.LEFT_ALIGNMENT);
 
+		JScrollPane scrollPane = new JScrollPane(boxAll);
+		jfrm.add(scrollPane);
+
 		jfrm.add(boxAll);
+		jfrm.pack();
 		jfrm.setVisible(true);
 
 		loggedIn = false; setupIo();
