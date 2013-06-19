@@ -621,6 +621,7 @@ class Net :
 				savedPath = os.getcwd()
 				os.chdir("photo_cache")
 				self.getPhoto(name)
+				os.chdir(savedPath)
 				self.pWorld.addRemote(x1, y1, dir1, avId,name)                           
 		
         	#play audio,edit by feng
