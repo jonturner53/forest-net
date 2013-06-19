@@ -61,17 +61,13 @@ bool init(ipa_t nmIp1, ipa_t myIp1) {
 	}
 
 	uint64_t nonce;
-cerr << "calling bootme\n";
 	if (!bootMe(nmIp, myIp, nmAdr, myAdr, rtrAdr, rtrIp, rtrPort, nonce)) {
 		return false;
 	}
-cerr << "success\n";
 
 	sub = new Substrate(myAdr, myIp, rtrAdr, rtrIp, rtrPort, nonce,
 			    500,handler,0,Forest::CM_PORT,ps,logger);
-cerr << "substrate instantiated\n";
 	if (!sub->init()) return false;
-cerr << "and initialized\n";
 	sub->setRtrReady(true);
 
 	dummyRecord = 0; maxRecord = 0;
@@ -111,7 +107,6 @@ cerr << "and initialized\n";
 bool bootMe(ipa_t nmIp, ipa_t myIp, fAdr_t& nmAdr, fAdr_t& myAdr,
 	    fAdr_t& rtrAdr, ipa_t& rtrIp, ipp_t& rtrPort, uint64_t& nonce) {
 
-cerr << "A\n";
 	// open boot socket 
 	int bootSock = Np4d::datagramSocket();
 	if (bootSock < 0) return false;
@@ -120,7 +115,6 @@ cerr << "A\n";
 		return false;
 	}
 
-cerr << "B\n";
 	// setup boot leaf packet to net manager
 	Packet p; buffer_t buf1; p.buffer = &buf1;
 	CtlPkt cp(CtlPkt::BOOT_LEAF,CtlPkt::REQUEST,1,p.payload());
@@ -130,7 +124,6 @@ cerr << "B\n";
 	p.flags = 0; p.srcAdr = p.dstAdr = 0; p.comtree = Forest::NET_SIG_COMT;
 	p.pack();
 
-cerr << "C\n";
 	// setup reply packet
 	Packet reply; buffer_t buf2; reply.buffer = &buf2;
 	CtlPkt repCp;
@@ -140,18 +133,15 @@ cerr << "C\n";
 	while (true) {
 		int now = Misc::getTime();
 		if (now > resendTime) {
-cerr << "D\n";
 			if (Np4d::sendto4d(bootSock,(void *) p.buffer, p.length,
 					   nmIp,Forest::NM_PORT) == -1) {
 				close(bootSock); return false;
 			}
-cerr << "E\n";
 			resendTime += 1000000; // retry after 1 second
 		}
 		int nbytes = Np4d::recvfrom4d(bootSock,reply.buffer,1500,
 					      srcIp, srcPort);
 		if (nbytes < 0) { usleep(100000); continue; }
-cerr << "F\n";
 		reply.unpack();
 
 		// do some checking
@@ -167,7 +157,6 @@ cerr << "F\n";
 			close(bootSock); return false;
 		}
 
-cerr << "G\n";
 		// unpack data from packet
 		myAdr = repCp.adr1; rtrAdr = repCp.adr2;
 		rtrIp = repCp.ip1; rtrPort = repCp.port1;
@@ -188,13 +177,11 @@ cerr << "G\n";
 		}
 		break; // proceed to next step
 	}
-cerr << "H\n";
 	// we have the configuration information, now just wait for
 	// final ack
 	while (true) {
 		int now = Misc::getTime();
 		if (now > resendTime) {
-cerr << "I\n";
 			if (Np4d::sendto4d(bootSock,(void *) p.buffer, p.length,
 					   nmIp,Forest::NM_PORT) == -1) {
 				close(bootSock); return false;
@@ -203,7 +190,6 @@ cerr << "I\n";
 		}
 		int nbytes = Np4d::recvfrom4d(bootSock,reply.buffer,1500,
 					      srcIp, srcPort);
-cerr << "J\n";
 		if (nbytes < 0) { usleep(100000); continue; }
 		reply.unpack();
 		if (srcIp != nmIp || reply.type != Forest::NET_SIG) {
@@ -427,6 +413,10 @@ cerr << "cmd=" << cmd << endl;
 			changePassword(buf,clientName,reply);
 		} else if (cmd == "uploadPhoto") {
 			uploadPhoto(sock,buf,clientName,reply);
+		} else if (cmd == "getSessions") {
+			getSessions(buf,clientName,reply);
+		} else if (cmd == "cancelSession") {
+			cancelSession(buf,clientName,reply);
 		} else if (cmd == "addComtree" && buf.nextLine()) {
 			addComtree(buf,clientName,reply);
 		} else if (cmd == "over" && buf.nextLine()) {
@@ -726,7 +716,8 @@ void uploadPhoto(int sock, NetBuffer& buf, string& clientName, string& reply) {
 	}
 	int clx = cliTbl->getClient(clientName);
 	ofstream photoFile;
-	photoFile.open("clientPhotos/" + clientName + ".jpg",ofstream::binary);
+	string photoName = "clientPhotos/"; photoName += clientName + ".jpg";
+	photoFile.open(photoName.c_str(), ofstream::binary);
 	if (!photoFile.good()) {
 		reply = "cannot open photo file"; return;
 	}
@@ -752,6 +743,22 @@ void uploadPhoto(int sock, NetBuffer& buf, string& clientName, string& reply) {
 	photoFile.close();
 	reply = "photo received";
 	return;
+}
+
+void getSessions(NetBuffer& buf, string& clientName, string& reply) {
+	// form a string with one line for each session
+	// where each line starts with word "session",
+	// followed by the fields defined for each session
+	// return this as the value of reply
+}
+
+void cancelSession(NetBuffer& buf, string& clientName, string& reply) {
+	// check buf for ':' followed by a forest address
+	// use the forest address to identify the session
+	// send a cancel session control packet to net manager
+	// and if that completes successfully, remove session from
+	// ClientTable data structure, write account record and return
+	// on failure, set reply to indicate the cause of the failure
 }
 
 void addComtree(NetBuffer& buf, string& clientName, string& reply) {

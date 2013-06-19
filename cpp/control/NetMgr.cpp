@@ -143,7 +143,7 @@ void* handler(void *qp) {
 			// in this case, p is really a negated socket number
 			// for a remote client
 			int sock = -px;
-			success = handleConsReq(sock, cph);
+			success = handleConsole(sock, cph);
 		} else {
 			Packet& p = ps->getPacket(px);
 			CtlPkt cp(p.payload(),p.length-Forest::OVERHEAD);
@@ -188,16 +188,50 @@ void* handler(void *qp) {
 	}
 }
 
-/** Handle a request packet from the remote console.
+/** Handle a connection from the remote console.
  *  This involves forwarding the packet to a remote router.
  *  @param px is the packet number of the request packet
  *  @param cp is the control packet structure for p (already unpacked)
  *  @param return true on successful completion, else false
  */
-bool handleConsReq(int sock, CpHandler& cph) {
-	
-	// rework this using TCP connection and new text protocol
-	return false;
+bool handleConsole(int sock, CpHandler& cph) {
+        NetBuffer buf(sock,1024);
+
+	// login user at remote console using password in netMgrUsers file
+
+	// command processing loop
+	string cmd, reply;
+	while (buf.readAlphas(cmd)) {
+		reply = "success";
+		if (cmd == "getNet") {
+			getNet(buf,reply);
+		} else if (cmd == "getLinkTable") {
+			getLinkTable(buf,reply);
+		// more of these (getIfaceTable, getComtree,...)
+		} else if (cmd == "over" && buf.nextLine()) {
+			// ignore
+		} else if (cmd == "overAndOut" && buf.nextLine()) {
+			break;
+		} else {
+			reply = "unrecognized input";
+		}
+		if (sock == -1) break;
+		reply += "\nover\n";
+		Np4d::sendString(sock,reply);
+	}
+        return true;
+}
+
+void getNet(NetBuffer& buf, string& reply) {
+	// return net->toString(s) where net is the netInfo object
+}
+
+void getLinkTable(NetBuffer& buf, string& reply) {
+	// get list of links from router
+	// for each link in list, get the link table entry from router
+	// return each link to the Console, with one link per line,
+	// each line starting with the word link, followed by the
+	// link number and remaining fields, with spaces separating items
 }
 
 /** Handle a connection/disconnection notification from a router.
