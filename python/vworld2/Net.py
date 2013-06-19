@@ -33,11 +33,10 @@ class Net :
 	""" Net support.
 
 	"""
-	def __init__(self, myIp, cliMgrIp, comtree, numg, subLimit, pWorld, \
+	def __init__(self, cliMgrIp, comtree, numg, subLimit, pWorld, \
 		     debug):
 		""" Initialize a new Net object.
 
-		myIp address is IP address of this host
 		comtree is the number of the comtree to use
 		numg*numg is the number of multicast groups
 		subLimit defines the maximum visibility distance for multicast
@@ -46,7 +45,6 @@ class Net :
 		debugging output
 		"""
 
-		self.myIp = myIp
 		self.cliMgrIp = cliMgrIp
 		self.comtree = comtree
 		self.pWorld = pWorld
@@ -58,7 +56,6 @@ class Net :
 
 		# open and configure socket to be nonblocking
 		self.sock = socket(AF_INET, SOCK_DGRAM);
-		self.sock.bind((myIp,0))
 		self.sock.setblocking(0)
 		self.myAdr = self.sock.getsockname()
 
@@ -77,7 +74,9 @@ class Net :
 		if not self.login(uname, pword) : return False
 		self.rtrAdr = (ip2string(self.rtrIp),self.rtrPort)
 		self.t0 = time(); self.now = 0; self.nextTime = 0;
+		print "connect to router"
 		if not self.connect() : return False
+		print "connect succeeded"
 		sleep(.1)
 		if not self.joinComtree() :
 			sys.stderr.write("Net.run: cannot join comtree\n")
@@ -91,7 +90,7 @@ class Net :
 		""" Return next line in a buffer, refilling buffer as necessary.
 		sock is a blocking stream socket to read from
 		buf is a buffer containing data read from socket but
-		not yet returned as a distinct linke
+		not yet returned as a distinct line.
 		return the string up to (but not including) the next newline
 		"""
 		while True :
@@ -112,14 +111,17 @@ class Net :
 		the client manager returns several configuration parameters
 		as part of the dialog
 		"""
+		print "connecting to client manager"
 		cmSock = socket(AF_INET, SOCK_STREAM);
 		cmSock.connect((self.cliMgrIp,30122))
+		print "connected to client manager"
 	
 		cmSock.sendall("Forest-login-v1\nlogin: " + uname + \
                 	       "\npassword: " + pword + "\nover\n")
 
 
 		buf = ""
+		print "reading line"
 		line,buf = self.readLine(cmSock,buf)
 		if line != "login successful" :
 			return False
@@ -160,6 +162,8 @@ class Net :
 
 		line,buf = self.readLine(cmSock,buf) 
 		if line != "overAndOut" : return False
+
+		print "login successful"
 
 		cmSock.close()
 
@@ -280,8 +284,6 @@ class Net :
 
 		cp = CtlPkt(which,REQUEST,self.seqNum)
 		cp.comtree = self.comtree
-		cp.ip1 = string2ip(self.myIp)
-		cp.port1 = self.myAdr[1]
 		p.payload = cp.pack()
 		self.seqNum += 1
 

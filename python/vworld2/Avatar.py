@@ -1,9 +1,8 @@
 """ Demonstration of simple virtual world using Forest overlay
 
 usage:
-      Avatar myIp cliMgrIp numg subLimit comtree [ debug ] [ auto ]
+      Avatar cliMgrIp numg subLimit comtree [ debug ] [ auto ]
 
-- myIp is the IP address of the user's computer
 - cliMgrIp is the IP address of the client manager's computer
 - numg*numg is the number of multicast groups to use
 - subLimit limits the number of multicast groups that we subscribe to;
@@ -34,19 +33,18 @@ from panda3d.core import Point3
 import random, sys, os, math
 
 # process command line arguments
-if len(sys.argv) < 6 :
-	sys.stderr.write("usage: Avatar myIp cliMgrIp numg " + \
+if len(sys.argv) < 5 :
+	sys.stderr.write("usage: Avatar cliMgrIp numg " + \
 			 "subLimit comtree [ debug ] [ auto ]\n")
         sys.exit(1)
 
-myIp = gethostbyname(sys.argv[1])
-cliMgrIp = gethostbyname(sys.argv[2])
-numg = int(sys.argv[3])
-subLimit = int(sys.argv[4])
-myComtree = int(sys.argv[5])
+cliMgrIp = gethostbyname(sys.argv[1])
+numg = int(sys.argv[2])
+subLimit = int(sys.argv[3])
+myComtree = int(sys.argv[4])
 
 auto = False; debug = 0
-for i in range(6,len(sys.argv)) :
+for i in range(5,len(sys.argv)) :
 	if sys.argv[i] == "debug" : debug = 1
 	elif sys.argv[i] == "debugg" : debug = 2
 	elif sys.argv[i] == "debuggg" : debug = 3
@@ -54,7 +52,7 @@ for i in range(6,len(sys.argv)) :
 		auto = True
 
 pWorld = AIWorld() if auto else PandaWorld()
-net = Net(myIp, cliMgrIp, myComtree, numg, subLimit, pWorld, debug)
+net = Net(cliMgrIp, myComtree, numg, subLimit, pWorld, debug)
 
 if auto : print "type Ctrl-C to terminate"
 
