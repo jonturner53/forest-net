@@ -111,6 +111,7 @@ cerr << "and initialized\n";
 bool bootMe(ipa_t nmIp, ipa_t myIp, fAdr_t& nmAdr, fAdr_t& myAdr,
 	    fAdr_t& rtrAdr, ipa_t& rtrIp, ipp_t& rtrPort, uint64_t& nonce) {
 
+cerr << "A\n";
 	// open boot socket 
 	int bootSock = Np4d::datagramSocket();
 	if (bootSock < 0) return false;
@@ -119,6 +120,7 @@ bool bootMe(ipa_t nmIp, ipa_t myIp, fAdr_t& nmAdr, fAdr_t& myAdr,
 		return false;
 	}
 
+cerr << "B\n";
 	// setup boot leaf packet to net manager
 	Packet p; buffer_t buf1; p.buffer = &buf1;
 	CtlPkt cp(CtlPkt::BOOT_LEAF,CtlPkt::REQUEST,1,p.payload());
@@ -128,6 +130,7 @@ bool bootMe(ipa_t nmIp, ipa_t myIp, fAdr_t& nmAdr, fAdr_t& myAdr,
 	p.flags = 0; p.srcAdr = p.dstAdr = 0; p.comtree = Forest::NET_SIG_COMT;
 	p.pack();
 
+cerr << "C\n";
 	// setup reply packet
 	Packet reply; buffer_t buf2; reply.buffer = &buf2;
 	CtlPkt repCp;
@@ -137,15 +140,18 @@ bool bootMe(ipa_t nmIp, ipa_t myIp, fAdr_t& nmAdr, fAdr_t& myAdr,
 	while (true) {
 		int now = Misc::getTime();
 		if (now > resendTime) {
+cerr << "D\n";
 			if (Np4d::sendto4d(bootSock,(void *) p.buffer, p.length,
 					   nmIp,Forest::NM_PORT) == -1) {
 				close(bootSock); return false;
 			}
+cerr << "E\n";
 			resendTime += 1000000; // retry after 1 second
 		}
 		int nbytes = Np4d::recvfrom4d(bootSock,reply.buffer,1500,
 					      srcIp, srcPort);
 		if (nbytes < 0) { usleep(100000); continue; }
+cerr << "F\n";
 		reply.unpack();
 
 		// do some checking
@@ -161,6 +167,7 @@ bool bootMe(ipa_t nmIp, ipa_t myIp, fAdr_t& nmAdr, fAdr_t& myAdr,
 			close(bootSock); return false;
 		}
 
+cerr << "G\n";
 		// unpack data from packet
 		myAdr = repCp.adr1; rtrAdr = repCp.adr2;
 		rtrIp = repCp.ip1; rtrPort = repCp.port1;
@@ -181,11 +188,13 @@ bool bootMe(ipa_t nmIp, ipa_t myIp, fAdr_t& nmAdr, fAdr_t& myAdr,
 		}
 		break; // proceed to next step
 	}
+cerr << "H\n";
 	// we have the configuration information, now just wait for
 	// final ack
 	while (true) {
 		int now = Misc::getTime();
 		if (now > resendTime) {
+cerr << "I\n";
 			if (Np4d::sendto4d(bootSock,(void *) p.buffer, p.length,
 					   nmIp,Forest::NM_PORT) == -1) {
 				close(bootSock); return false;
@@ -194,6 +203,7 @@ bool bootMe(ipa_t nmIp, ipa_t myIp, fAdr_t& nmAdr, fAdr_t& myAdr,
 		}
 		int nbytes = Np4d::recvfrom4d(bootSock,reply.buffer,1500,
 					      srcIp, srcPort);
+cerr << "J\n";
 		if (nbytes < 0) { usleep(100000); continue; }
 		reply.unpack();
 		if (srcIp != nmIp || reply.type != Forest::NET_SIG) {
