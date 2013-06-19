@@ -60,6 +60,8 @@ void getProfile(NetBuffer&, string&, string&);
 void updateProfile(NetBuffer&, string&, string&);
 void changePassword(NetBuffer&, string&, string&);
 void uploadPhoto(int, NetBuffer&, string&, string&);
+void getSessions(NetBuffer&, string&, string&);
+void cancelSession(NetBuffer&, string&, string&);
 void addComtree(NetBuffer&, string&, string&);
 
 void writeRecord(int);
