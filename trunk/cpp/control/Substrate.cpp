@@ -234,11 +234,11 @@ pktx Substrate::recvFromForest() {
 	if (nbytes < 0) { ps->free(px); return 0; }
 	p.unpack();
 	p.tunIp = srcIp; p.tunPort = srcPort;
-/*
+///*
 string s;
 cerr << "got packet from " << Np4d::ip2string(srcIp,s) << " " << srcPort << endl;
 cerr << p.toString(s) << endl;
-*/
+//*/
 
 	return px;
 }
@@ -256,11 +256,11 @@ void Substrate::sendToForest(pktx px) {
 	} else {
 		ip = rtrIp; port = rtrPort;
 	}
-/*
+///*
 string s;
 cerr << "substrate sending to " << Np4d::ip2string(ip,s) << " " << port << endl;
 cerr << p.toString(s) << endl;
-*/
+//*/
 	if (port == 0) fatal("Substrate::sendToForest: zero port number");
 	int rv = Np4d::sendto4d(dgSock,(void *) p.buffer, p.length,ip,port);
 	if (rv == -1) fatal("Substrate::sendToForest: failure in sendto");

@@ -525,6 +525,8 @@ bool handleBootRouter(pktx px, CtlPkt& cp, CpHandler& cph) {
 
 	// find rtr index based on source address
 	ipa_t rtrAdr = p.srcAdr;
+string s;
+cerr << "got boot request from " << Forest::fAdr2string(rtrAdr,s) << endl;
 	int rtr;
 	for (rtr = net->firstRouter(); rtr != 0; rtr = net->nextRouter(rtr)) {
 		if (net->getNodeAdr(rtr) == rtrAdr) break;
@@ -537,6 +539,7 @@ bool handleBootRouter(pktx px, CtlPkt& cp, CpHandler& cph) {
 		return true;
 	}
 
+cerr << "A\n";
 	if (net->getStatus(rtr) == NetInfo::UP) {
 		// final reply lost or delayed, resend and quit
 		CtlPkt repCp(CtlPkt::BOOT_ROUTER,CtlPkt::POS_REPLY,cp.seqNum);
@@ -544,6 +547,7 @@ bool handleBootRouter(pktx px, CtlPkt& cp, CpHandler& cph) {
 		return true;
 	}
 
+cerr << "B\n";
 	net->setStatus(rtr,NetInfo::BOOTING);
 
 	// configure leaf address range
@@ -556,6 +560,7 @@ bool handleBootRouter(pktx px, CtlPkt& cp, CpHandler& cph) {
 		return false;
 	}
 
+cerr << "C\n";
 	// add/configure interfaces
 	// for each interface in table, do an add iface
 	int nmLnk = net->getLLnum(net->firstLinkAt(netMgr),nmRtr);
