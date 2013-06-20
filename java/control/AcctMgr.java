@@ -129,6 +129,9 @@ public class AcctMgr extends MouseAdapter implements ActionListener, FocusListen
 		jfrm.setSize(850,400);
 		jfrm.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
+		JPanel contentPane = new JPanel(new BorderLayout());
+		jfrm.setContentPane(contentPane);
+
 		// top area with server name connect button
 		serverField = new JTextField(20);
 		serverField.setText("forest2.arl.wustl.edu");
@@ -294,28 +297,30 @@ public class AcctMgr extends MouseAdapter implements ActionListener, FocusListen
 		return null;
 	}
 
-	private boolean changePassword(String userName, String pwd) {
+	private String changePassword(String userName, String pwd) {
 		if (userName.length() == 0 || pwd.length() == 0)
-			return false;
+			return "empty user name or password";
 		if (!sendString("changePassword: " + userName +
 				"\npassword: " + pwd + "\nover\n"))
-			return false;
+			return "cannot send request to server";
 		String s = inBuf.readLine();
 		if (s == null || !s.equals("success")) {
-			inBuf.nextLine(); return false;
+			inBuf.nextLine(); 
+			return s == null ? "unexpected response " : s;
 		}
 		s = inBuf.readLine();
-		if (s == null || !s.equals("over")) return false;
-		return true;
+		if (s == null || !s.equals("over"))
+			return s == null ? "unexpected response " : s;
+		return null;
 	}
 
-	private boolean getProfile(String userName) {
+	private String getProfile(String userName) {
 		String s;
 		boolean gotName, gotEmail, gotDefRates, gotTotRates; 
 
-		if (userName.length() == 0) return false;
+		if (userName.length() == 0) return "empty user name";
 		if (!sendString("getProfile: " + userName + "\n"))
-			return false;
+			return "cannot send request to server";
 		gotName = gotEmail = gotDefRates = gotTotRates = false; 
 		while (true) {
 			s = inBuf.readAlphas();
@@ -323,30 +328,43 @@ public class AcctMgr extends MouseAdapter implements ActionListener, FocusListen
 				// skip
 			} else if (s.equals("realName") && inBuf.verify(':')) {
 				realName = inBuf.readString();
-				if (realName == null) return false;
-				nameField.setText(realName);
+				if (realName != null)
+					nameField.setText(realName);
+				else
+					nameField.setText("noname");
 				gotName = true;
 			} else if (s.equals("email") && inBuf.verify(':')) {
 				email = inBuf.readWord();
-				if (email == null) return false;
-				emailField.setText(email);
+				if (email != null) 
+					emailField.setText(email);
+				else
+					emailField.setText("nomail");
 				gotEmail = true;
 			} else if (s.equals("defRates") && inBuf.verify(':')) {
 				RateSpec rates = inBuf.readRspec();
-				if (rates == null) return false;
-				defRates = rates.toString();
-				drateField.setText(defRates);
+				if (rates != null) {
+					defRates = rates.toString();
+					drateField.setText(defRates);
+				} else
+					drateField.setText("(0,0,0,0)");
 				gotDefRates = true;
 			} else if (s.equals("totalRates") && inBuf.verify(':')){
 				RateSpec rates = inBuf.readRspec();
-				if (rates == null) return false;
-				totRates = rates.toString();
-				trateField.setText(totRates);
+				if (rates != null) {
+					totRates = rates.toString();
+					trateField.setText(defRates);
+				} else
+					trateField.setText("(0,0,0,0)");
 				gotTotRates = true;
 			} else if (s.equals("over")) {
 				inBuf.nextLine();
-				return	gotName && gotEmail &&
-					gotDefRates && gotTotRates;
+				if (gotName && gotEmail &&
+				    gotDefRates && gotTotRates)
+					return null;
+				else
+					return "incomplete response";
+			} else {
+				return s == null ? "unexpected response " : s;
 			}
 			inBuf.nextLine();
 		}
@@ -371,38 +389,45 @@ public class AcctMgr extends MouseAdapter implements ActionListener, FocusListen
 		return true;
 	}
 
-	private boolean login(String user, String pwd) {
+	private String login(String user, String pwd) {
 		if (userName.length() == 0 || pwd.length() == 0)
-			return false;
+			return "missing user name or password";
 		if (!sendString("login: " + user + "\n" +
 			   	"password: " + pwd + "\nover\n"))
-			return false;
+			return "cannot send request to server";
 		String s = inBuf.readLine();
 		if (s == null || !s.equals("login successful")) {
-			inBuf.nextLine(); return false;
+			inBuf.nextLine();
+			return s == null ? "unexpected response" : s;
 		}
 		s = inBuf.readLine();
-		if (s == null || !s.equals("over")) return false;
+		if (s == null || !s.equals("over"))
+			return s == null ? "unexpected response" : s;
 
-		if (!getProfile(user)) return false;
+		s = getProfile(user);
+		if (s != null) return s;
 		updateField.setText(user);
 		updateTarget = user;
-		return true;
+		return null;
 	}
 
-	private boolean newAccount(String user, String pwd) {
+	private String newAccount(String user, String pwd) {
 		if (!sendString("newAccount: " + user + "\n" +
 			   	"password: " + pwd + "\nover\n"))
-			return false;
+			return "cannot send request to server";
 		String s = inBuf.readLine();
 		if (s == null || !s.equals("success")) {
-			inBuf.nextLine(); return false;
+			inBuf.nextLine();
+			return s == null ? "unexpected response" : s;
 		}
 		s = inBuf.readLine();
-		if (s == null || !s.equals("over")) return false;
-		if (!getProfile(user)) return false;
+		if (s == null || !s.equals("over")) 
+			return s == null ? "unexpected response" : s;
+		s = getProfile(user);
+		if (s != null) return s;
 		updateField.setText(user);
-		return true;
+		updateTarget = user;
+		return null;
 	}
 
 	public void showStatus(String s) {
@@ -426,19 +451,23 @@ public class AcctMgr extends MouseAdapter implements ActionListener, FocusListen
 		} else if (ae.getActionCommand().equals("login")) {
 			if (loggedIn) {
 				; // do nothing
-			} else if (login(userName,password)) {
-				loggedIn = true;
-				showStatus("Logged in");
 			} else {
-				showStatus("Login failed");
+				String status = login(userName,password);
+				if (status == null) {
+					loggedIn = true;
+					showStatus("Logged in");
+				} else {
+					showStatus("Login failed: " + status);
+				}
 			}
 		} else if (ae.getActionCommand().equals("new account")) {
-			if (newAccount(userName,password)) {
+			String status = newAccount(userName,password);
+			if (status == null) {
 				showStatus("New account created\n" +
 					   "Update profile and change " +
 				   	   "password below");
 			} else {
-				showStatus("Cannot create account");
+				showStatus("Error: " + status);
 			}
 		} else if (ae.getActionCommand().equals("update")) {
 			String status = updateProfile(updateTarget);
@@ -452,17 +481,21 @@ public class AcctMgr extends MouseAdapter implements ActionListener, FocusListen
 				showStatus("Mismatch. Please re-type password "+
 					  "in both new password and confirm " +
 					  "password boxes");
-			} else if (changePassword(updateTarget,newPassword)) {
-				showStatus("Password changed");
 			} else {
-				showStatus("Cannot change password");
+				String status = changePassword(updateTarget,
+							       newPassword);
+				if (status == null) {
+					showStatus("Password changed");
+				} else {
+					showStatus("Error: " + status);
+				}
 			}
 		} else if (ae.getActionCommand().equals("upload photo")) {
 			String status = uploadPhoto(photoFile);
 			if (status == null) {
 				showStatus("Photo uploaded");
 			} else {
-				showStatus("Upload failed: " + status);
+				showStatus("Error: " + status);
 			}
 		}
 	}
@@ -492,10 +525,11 @@ public class AcctMgr extends MouseAdapter implements ActionListener, FocusListen
 			totRates = trateField.getText();
 		} else if (src == updateField) {
 			updateTarget = updateField.getText();
-			if (getProfile(updateTarget)) {
+			String status = getProfile(updateTarget);
+			if (status == null) {
 				showStatus("Got target profile");
 			} else {
-				showStatus("Could not re-target");
+				showStatus("Error: " + status);
 				updateField.setText(userName);
 				updateTarget = userName;
 			}
@@ -542,7 +576,7 @@ public class AcctMgr extends MouseAdapter implements ActionListener, FocusListen
 			return "could not start transfer";
 		String s = inBuf.readLine();
 		if (s == null || !s.equals("proceed"))
-			return s == null ? "bad response from server" : s;
+			return s == null ? "unexpected response " : s;
 
 		ByteBuffer buf = ByteBuffer.allocate(1000);
 		int numSent = 0;
@@ -569,10 +603,10 @@ public class AcctMgr extends MouseAdapter implements ActionListener, FocusListen
 
 		s = inBuf.readLine();
 		if (s == null || !s.equals("photo received"))
-			return s == null ? "bad response from server" : s;
+			return s == null ? "unexpected response " : s;
 		s = inBuf.readLine();
 		if (s == null || !s.equals("over"))
-			return s == null ? "bad response from server" : s;
+			return s == null ? "unexpected response " : s;
 		return null;
 	}
 }
