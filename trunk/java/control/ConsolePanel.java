@@ -29,7 +29,7 @@ public class ConsolePanel extends JPanel {
 	 */
 	ConsolePanel(int size) {	
 		setOpaque(true);
-		setBorder(BorderFactory.createLineBorder(Color.RED,2));
+		setBorder(BorderFactory.createLineBorder(Color.BLUE,2));
 		setPreferredSize(new Dimension(size,size));
 
 		// initialize local fields
@@ -40,24 +40,8 @@ public class ConsolePanel extends JPanel {
 	 *  @param worldSize defines the number of squares in the x and
 	 *  y dimensions
 	 */
-	protected void setWalls(int[] walls, int worldSize) {
-		this.walls = walls;
-		this.worldSize = worldSize;
-	}
-
-	/** Set the position of the current view in the world.
-	 *  @param x is the new x coordinate of the lower left corner
-	 *  @param y is the new y coordinate of the lower left corner
-	 */
-	protected void setCorner(int x, int y) {
-		cornerX = x; cornerY = y;
-	}
-
-	/** Set the size of the current view.
-	 *  @param vs is the new view size (number of squares in each dimension)
-	 */
-	protected void setViewSize(int vs) {
-		viewSize = vs;
+	protected void setWalls(NetInfo net, ComtInfo comtrees) {
+		this.net = net; this.comtrees = comtrees;
 	}
 
 	/** Paint the component.
@@ -69,42 +53,12 @@ public class ConsolePanel extends JPanel {
 		drawWalls(g);
 	}
 
-	/** Show a menu for a component at a given xy location.
-	 *  @param x is the x-coordinate of a point in user-space
-	 *  @param y is the y-coordinate of a point in user-space
-	 */
-	public void showMenu(int x, int y) {
-		double w = getWidth() - (ins.left+ins.right);
-		double xd = (x - ins.left) / w;
-		double h = getHeight() - (ins.top+ins.bottom);
-		double yd = 1.0 - (y - ins.top) / h;
-
-		double ss = 1.0/viewSize; // size of one square
-		int col = cornerX + (int) (xd/ss);
-		int row = cornerY + (int) (yd/ss);
-
-		if (row < 0 || col < 0 || row >= worldSize || col >= worldSize)
-			return;
-
-		double x0 = (col-cornerX)*ss;
-		double y0 = (row-cornerY)*ss;
-		if ((xd-x0) < (yd-y0) && (xd-x0) < (y0+ss-yd)) {
-			walls[col+row*worldSize] ^= 1;
-		} else if ((xd-x0) < (yd-y0) && (xd-x0) > (y0+ss-yd)) {
-			walls[col+row*worldSize] ^= 2;
-		} else if ((xd-x0) > (yd-y0) && (xd-x0) > (y0+ss-yd)) {
-			if (col < worldSize-1)
-				walls[(col+1)+row*worldSize] ^= 1;
-		} else {
-			if (row > 0)
-				walls[col+(row-1)*worldSize] ^= 2;
-		}
-	}
 
 	/** Draw walls.
 	 */
-	private void drawWalls(Graphics g) {
-		if (walls == null) return;
+	private void drawNet(Graphics g) {
+
+// replace all with code for shwowing network
 
 		Graphics2D g2 = (Graphics2D) g;
 		g2.setStroke(new BasicStroke(1));
