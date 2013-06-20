@@ -14,8 +14,6 @@ CLIENT_LEAVE_COMTREE=15
 
 # selected attribute codes
 COMTREE=50
-IP1=5
-PORT1=9
 
 class CtlPkt:
 	""" Class for working with selected Forest control packets.  """
@@ -40,16 +38,13 @@ class CtlPkt:
 				  self.cpTyp, self.mode, self.seqNum)
 		if (self.cpTyp == CLIENT_JOIN_COMTREE or \
 		    self.cpTyp == CLIENT_LEAVE_COMTREE) and \
-		    self.mode == RR_REQUEST :
-			if self.comtree == 0 or self.ip1 == 0 or \
-			   self.port1 == 0 :
+		    self.mode == REQUEST :
+			if self.comtree == 0 :
 				sys.stderr.write("CtlPkt.pack: missing " + \
 					"required attribute(s)");
 				return None
-			buf += struct.pack('!IIIIII',
-				  COMTREE, self.comtree & 0xffffffff, \
-				  IP1, self.ip1 & 0xffffffff, \
-				  PORT1, self.port1 & 0xffff)
+			buf += struct.pack('!II',
+				  COMTREE, self.comtree & 0xffffffff)
 		else :
 			sys.stderr.write("CtlPkt.pack: unimplemented " + \
 				"control packet type\n" + self.toString() + \
@@ -79,13 +74,10 @@ class CtlPkt:
 				self.errMsg = tuple[0]
 				return True
 			# request type
-			tuple = struct.unpack('!IIIIII',buf)
-			if len(tuple) != 6 or tuple[0] != COMTREE or \
-			   tuple[2] != IP1 or tuple[4] != PORT1 :
+			tuple = struct.unpack('!II',buf)
+			if len(tuple) != 2 or tuple[0] != COMTREE :
 				return False
 			self.comtree = tuple[1]
-			self.ip1 = tuple[3]
-			self.port1 = tuple[5]
 			return True
 		else :
 			sys.stderr.write("CtlPkt.unpack: unimplemented " + \

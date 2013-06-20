@@ -25,10 +25,9 @@ class Net(Thread) :
 	""" Net support.
 
 	"""
-	def __init__(self, myIp, cliMgrIp, comtree, map, debug, auto):
+	def __init__(self, cliMgrIp, comtree, map, debug, auto):
 		""" Initialize a new Net object.
 
-		myIp address is IP address of this host
 		comtree is the number of the comtree to use
 		map is a WorldMap object
 		debug is an integer >=0 that determines amount of
@@ -36,7 +35,6 @@ class Net(Thread) :
 		"""
 		Thread.__init__(self)
 
-		self.myIp = myIp
 		self.cliMgrIp = cliMgrIp
 		self.comtree = comtree
 		self.map = map
@@ -45,7 +43,6 @@ class Net(Thread) :
 
 		# open and configure socket to be nonblocking
 		self.sock = socket(AF_INET, SOCK_DGRAM);
-		self.sock.bind((myIp,0))
 		self.sock.setblocking(0)
 		self.myAdr = self.sock.getsockname()
 
@@ -76,7 +73,7 @@ class Net(Thread) :
 
 	def init(self, uname, pword) :
 		if not self.login(uname, pword) : return False
-		self.rtrAdr = (ip2string(self.rtrIp),ROUTER_PORT)
+		self.rtrAdr = (ip2string(self.rtrIp),self.rtrPort)
 		self.t0 = time(); self.now = 0; self.nextTime = 0;
 		self.connect()
 		sleep(.1)
@@ -86,34 +83,96 @@ class Net(Thread) :
 		self.updateSubs()
 		return True
 
+	def readLine(self,sock,buf) :
+		""" Return next line in a buffer, refilling buffer as necessary.
+		sock is a blocking stream socket to read from
+		buf is a buffer containing data read from socket but
+		not yet returned as a distinct line.
+		return the string up to (but not including) the next newline
+		"""
+		while True :
+			pos = buf.find("\n") 
+			if pos >= 0 :
+				line = buf[0:pos]
+				buf = buf[pos+1:]
+				return line, buf
+			nu = sock.recv(1000)
+			buf += nu
+
+
 	def login(self, uname, pword) :
+		""" Login to connection manager and request session.
+
+		uname is the user name to use when logging in
+		pword is the password to use
+		return True of the login dialog is successful, else False;
+		the client manager returns several configuration parameters
+		as part of the dialog
+		"""
+		print "connecting to client manager"
 		cmSock = socket(AF_INET, SOCK_STREAM);
-		cmSock.connect((self.cliMgrIp,30140))
+		cmSock.connect((self.cliMgrIp,30122))
+		print "connected to client manager"
 	
-		s = uname + " " + pword + " " + str(self.myAdr[1]) + \
-		    " 0 noproxy"
-		blen = 4+len(s)
-		buf = struct.pack("!I" + str(blen) + "s",blen,s);
-		cmSock.sendall(buf)
-		
-		buf = cmSock.recv(4)
-		while len(buf) < 4 : buf += cmSock.recv(4-len(buf))
-		tuple = struct.unpack("!I",buf)
-		if tuple[0] == -1 :
-			sys.stderr.write("Avatar.login: negative reply from " \
-					 "client manager");
+		cmSock.sendall("Forest-login-v1\nlogin: " + uname + \
+                	       "\npassword: " + pword + "\nover\n")
+
+
+		buf = ""
+		print "reading line"
+		line,buf = self.readLine(cmSock,buf)
+		if line != "login successful" :
 			return False
-	
-		self.rtrFadr = tuple[0]
-	
-		buf = cmSock.recv(12)
-		while len(buf) < 12 : buf += cmSock.recv(12-len(buf))
-		tuple = struct.unpack("!III",buf)
-	
-		self.myFadr = tuple[0]
-		self.rtrIp = tuple[1]
-		self.comtCtlFadr = tuple[2]
-	
+		line,buf = self.readLine(cmSock,buf)
+		if line != "over" :
+			return False
+
+		cmSock.sendall("newSession\nover\n")
+
+		line,buf = self.readLine(cmSock,buf)
+		chunks = line.partition(":")
+		if chunks[0].strip() != "yourAddress" or chunks[1] != ":" :
+			return False
+		self.myFadr = string2fadr(chunks[2].strip())
+
+		line,buf = self.readLine(cmSock,buf)
+		chunks = line.partition(":")
+		if chunks[0].strip() != "yourRouter" or chunks[1] != ":" :
+			return False
+		triple = chunks[2].strip(); triple = triple[1:-1].strip()
+		chunks = triple.split(",")
+		if len(chunks) != 3 : return False
+		self.rtrIp = string2ip(chunks[0].strip())
+		self.rtrPort = int(chunks[1].strip())
+		self.rtrFadr = string2fadr(chunks[2].strip())
+
+		line,buf = self.readLine(cmSock,buf)
+		chunks = line.partition(":")
+		if chunks[0].strip() != "comtCtlAddress" or chunks[1] != ":" :
+			return False
+		self.comtCtlFadr = string2fadr(chunks[2].strip())
+
+		line,buf = self.readLine(cmSock,buf)
+		chunks = line.partition(":")
+		if chunks[0].strip() != "connectNonce" or chunks[1] != ":" :
+			return False
+		self.nonce = int(chunks[2].strip())
+
+		line,buf = self.readLine(cmSock,buf) 
+		if line != "overAndOut" : return False
+
+		print "login successful"
+
+		cmSock.close()
+
+		if self.debug >= 1 :
+			print "avatar address =", fadr2string(self.myFadr)
+			print "router info = (", ip2string(self.rtrIp), \
+					     str(self.rtrPort), \
+					     fadr2string(self.rtrFadr), ")"
+			print "comtCtl address = ",fadr2string(self.comtCtlFadr)
+			print "nonce = ", self.nonce
+
 		return True
 
 	def run(self) :
@@ -203,13 +262,17 @@ class Net(Thread) :
 		p = Packet(); p.type = CONNECT
 		p.comtree = CLIENT_CON_COMT
 		p.srcAdr = self.myFadr; p.dstAdr = self.rtrFadr
-		self.send(p)
+		p.payload = struct.pack("!Q",self.nonce)
+		reply = self.sendCtlPkt(p)
+		return reply != None and reply.flags == ACK_FLAG
 
 	def disconnect(self) :
 		p = Packet(); p.type = DISCONNECT
 		p.comtree = CLIENT_CON_COMT
 		p.srcAdr = self.myFadr; p.dstAdr = self.rtrFadr
-		self.send(p)
+		p.payload = struct.pack("!Q",self.nonce)
+		reply = self.sendCtlPkt(p)
+		return reply != None and reply.flags == ACK_FLAG
 
 	def joinComtree(self) :
 		return self.sendJoinLeave(CLIENT_JOIN_COMTREE)
@@ -224,8 +287,6 @@ class Net(Thread) :
 
 		cp = CtlPkt(which,REQUEST,self.seqNum)
 		cp.comtree = self.comtree
-		cp.ip1 = string2ip(self.myIp)
-		cp.port1 = self.myAdr[1]
 		p.payload = cp.pack()
 		self.seqNum += 1
 
