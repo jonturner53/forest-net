@@ -38,6 +38,6 @@ def string2fadr(fas) :
 	return the corresponding integer forest address
 	"""
 	if fas[0] == '-' : return int(fas)
-	parts = ipstring.split(".")
+	parts = fas.split(".")
 	if len(parts) != 2 : return 0
-	return  (int(parts[0]) & 0xffff) << 16 | (int(parts[1]) & 0xffff) << 16
+	return  (int(parts[0]) & 0xffff) << 16 | (int(parts[1]) & 0xffff)

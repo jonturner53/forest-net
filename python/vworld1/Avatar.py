@@ -1,9 +1,8 @@
 """ Demonstration of simple virtual world using Forest overlay
 
 usage:
-      Avatar myIp cliMgrIp mapFile comtree [ debug ] [ auto tlim ]
+      Avatar cliMgrIp mapFile comtree [ debug ] [ auto tlim ]
 
-- myIp is the IP address of the user's computer
 - cliMgrIp is the IP address of the client manager's computer
 - mapFile is a text file that defines which parts of the world are
   walkable and which are visible from each other
@@ -21,17 +20,16 @@ from WorldMap import *
 
 # process command line arguments
 if len(sys.argv) < 5 :
-	sys.stderr.write("usage: Avatar myIp cliMgrIp mapFile " + \
+	sys.stderr.write("usage: Avatar cliMgrIp mapFile " + \
 			 "comtree [ debug ] [ auto tlim ]\n")
         sys.exit(1)
 
-myIp = gethostbyname(sys.argv[1])
-cliMgrIp = gethostbyname(sys.argv[2])
-mapFile = sys.argv[3]
-myComtree = int(sys.argv[4])
+cliMgrIp = gethostbyname(sys.argv[1])
+mapFile = sys.argv[2]
+myComtree = int(sys.argv[3])
 
 auto = False; debug = 0
-for i in range(5,len(sys.argv)) :
+for i in range(4,len(sys.argv)) :
 	if sys.argv[i] == "debug" : debug = 1
 	elif sys.argv[i] == "debugg" : debug = 2
 	elif sys.argv[i] == "debuggg" : debug = 3
@@ -44,7 +42,7 @@ if not map.init(mapFile) :
 	sys.stderr.write("cannot initialize map from mapFile\n");
 	sys.exit(1)
 
-net = Net(myIp, cliMgrIp, myComtree, map, debug, auto)
+net = Net(cliMgrIp, myComtree, map, debug, auto)
 
 # setup net thread and start it running
 if not net.init("user", "pass") :
