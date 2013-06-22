@@ -123,7 +123,8 @@ class Net :
 		buf = ""
 		print "reading line"
 		line,buf = self.readLine(cmSock,buf)
-		if line != "login successful" :
+		if line != "success" :
+			print "oops", line
 			return False
 		line,buf = self.readLine(cmSock,buf)
 		if line != "over" :
