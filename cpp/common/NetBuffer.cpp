@@ -150,7 +150,8 @@ bool NetBuffer::readLine(string& line) {
 }
 
 /** Read next word.
- *  A word contains letters, numbers, underscores, @-signs, periods, slashes.
+ *  A word contains letters, numbers, underscores, @-signs, periods, slashes,
+ *  and hyphens.
  *  @param s is a reference to a string in which result is returned
  *  @return true on success, false on failure
  *  on the current line and return it in s. Return true on success,
