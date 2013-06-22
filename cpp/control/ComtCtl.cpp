@@ -583,7 +583,6 @@ bool handleJoinComtReq(pktx px, CtlPkt& cp, CpHandler& cph) {
 	Packet& p = ps->getPacket(px);
 	fAdr_t cliAdr = p.srcAdr;
 	comt_t comt = cp.comtree;
-	ipa_t cliIp = cp.ip1; ipp_t cliPort = cp.port1;
 
 	// find the client's router, based on its forest address
 	int cliRtr;
@@ -732,7 +731,6 @@ bool handleLeaveComtReq(pktx px, CtlPkt& cp, CpHandler& cph) {
 	Packet& p = ps->getPacket(px);
 	fAdr_t cliAdr = p.srcAdr;
 	comt_t comt = cp.comtree;
-	ipa_t cliIp = cp.ip1; ipp_t cliPort = cp.port1;
 
 	// find the client's router, based on its forest address
 	int cliRtr;
