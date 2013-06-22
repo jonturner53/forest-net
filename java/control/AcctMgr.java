@@ -45,8 +45,6 @@ public class AcctMgr extends MouseAdapter implements ActionListener, FocusListen
 	private SocketChannel serverChan;
 	private NetBuffer inBuf;
 
-	private boolean loggedIn;		// true when logged in
-
 	// various user interface buttons
 	private JButton connectBtn;
 	private JButton loginBtn;
@@ -235,7 +233,7 @@ public class AcctMgr extends MouseAdapter implements ActionListener, FocusListen
 		jfrm.pack();
 		jfrm.setVisible(true);
 
-		loggedIn = false; setupIo();
+		setupIo();
 	}
 
 	Charset ascii;
@@ -289,7 +287,7 @@ public class AcctMgr extends MouseAdapter implements ActionListener, FocusListen
 				"over\n"))
 			return "cannot send request";
 		String s = inBuf.readLine();
-		if (s == null || !s.equals("profile updated")) {
+		if (s == null || !s.equals("success")) {
 			inBuf.nextLine(); return s;
 		}
 		s = inBuf.readLine();
@@ -319,7 +317,7 @@ public class AcctMgr extends MouseAdapter implements ActionListener, FocusListen
 		boolean gotName, gotEmail, gotDefRates, gotTotRates; 
 
 		if (userName.length() == 0) return "empty user name";
-		if (!sendString("getProfile: " + userName + "\n"))
+		if (!sendString("getProfile: " + userName + "\nover\n"))
 			return "cannot send request to server";
 		gotName = gotEmail = gotDefRates = gotTotRates = false; 
 		while (true) {
@@ -396,7 +394,7 @@ public class AcctMgr extends MouseAdapter implements ActionListener, FocusListen
 			   	"password: " + pwd + "\nover\n"))
 			return "cannot send request to server";
 		String s = inBuf.readLine();
-		if (s == null || !s.equals("login successful")) {
+		if (s == null || !s.equals("success")) {
 			inBuf.nextLine();
 			return s == null ? "unexpected response" : s;
 		}
@@ -449,16 +447,11 @@ public class AcctMgr extends MouseAdapter implements ActionListener, FocusListen
 				showStatus("Cannot connect");
 			}
 		} else if (ae.getActionCommand().equals("login")) {
-			if (loggedIn) {
-				; // do nothing
+			String status = login(userName,password);
+			if (status == null) {
+				showStatus("Logged in");
 			} else {
-				String status = login(userName,password);
-				if (status == null) {
-					loggedIn = true;
-					showStatus("Logged in");
-				} else {
-					showStatus("Login failed: " + status);
-				}
+				showStatus("Login failed: " + status);
 			}
 		} else if (ae.getActionCommand().equals("new account")) {
 			String status = newAccount(userName,password);
@@ -602,8 +595,10 @@ public class AcctMgr extends MouseAdapter implements ActionListener, FocusListen
 			return "could not upload complete file";
 
 		s = inBuf.readLine();
-		if (s == null || !s.equals("photo received"))
+		if (s == null || !s.equals("success")) {
+			inBuf.nextLine();
 			return s == null ? "unexpected response " : s;
+		}
 		s = inBuf.readLine();
 		if (s == null || !s.equals("over"))
 			return s == null ? "unexpected response " : s;
