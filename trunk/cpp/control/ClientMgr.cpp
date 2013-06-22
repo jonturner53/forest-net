@@ -22,7 +22,6 @@ using namespace forest;
  *  myIp - IP address of the preferred interface for client manager
  *  finTime - how many seconds this program should run before terminating
  */
-
 int main(int argc, char *argv[]) {
 	ipa_t nmIp, myIp; uint32_t finTime = 0;
 
@@ -104,6 +103,22 @@ bool init(ipa_t nmIp1, ipa_t myIp1) {
 	return true;
 }
 
+/** Send a boot request to NetMgr and process configuraton packets.
+ *  @param nmIp is the ip address of the network manager
+ *  @param myIp is the ip address to bind to the local socket
+ *  @param nmAdr is a reference to a forest address in which the network
+ *  manager's address is returned
+ *  @param myAdr is a reference to a forest address in which this client
+ *  manager's address is returned
+ *  @param rtrAdr is a reference to a forest address in which this client
+ *  manager's access router's address is returned
+ *  @param rtrIp is a reference to an ip address in which this client
+ *  manager's access router's ip address is returned
+ *  @param rtrPort is a reference to an ip port number in which this client
+ *  manager's access router's port number is returned
+ *  @param nonce is a reference to a 64 bit nonce in which the nonce used
+ *  by this client manager to connect to the forest network is returned
+ */
 bool bootMe(ipa_t nmIp, ipa_t myIp, fAdr_t& nmAdr, fAdr_t& myAdr,
 	    fAdr_t& rtrAdr, ipa_t& rtrIp, ipp_t& rtrPort, uint64_t& nonce) {
 
@@ -225,20 +240,12 @@ bool bootMe(ipa_t nmIp, ipa_t myIp, fAdr_t& nmAdr, fAdr_t& myAdr,
 	close(bootSock); return true;
 }
 
-/** Control packet handler.
- *  This method is run as a separate thread and does not terminate
- *  until the process does. It communicates with the main thread
- *  through a pair of queues, passing packet numbers back and forth
- *  across the thread boundary. When a packet number is passed to
- *  a handler, the handler "owns" the corresponding packet and can
- *  read/write it without locking. The handler is required to free any
- *  packets that it no longer needs to the packet store.
- *  When the handler has completed the requested operation, it sends
- *  a 0 value back to the main thread, signalling that it is available
- *  to handle another task.
- *  If the main thread passes a negative number through the queue,
+/** Control packet handler for client manager.
+ *  On receiving a control packet in its input queue, it calls the
+ *  appropriate individual handler.
+ *  If a negative number is received through the queue,
  *  it is interpreted as a negated socket number, for an accepted
- *  stream socket to a remote display application.
+ *  stream socket.
  *  @param qp is a pair of queues; one is the input queue to the
  *  handler, the other is its output queue
  */
@@ -283,6 +290,9 @@ cerr << "handler, got packet " << p.toString(s) << endl;
 }
 
 /** Handle a connection from a client.
+ *  Interprets variety of requests from a remote client,
+ *  including requests to login, get profile information,
+ *  change a password, and so forth.
  *  @param sock is a socket number for an open stream socket
  *  @return true if the interaction proceeds normally, followed
  *  by a normal close; return false if an error occurs
@@ -292,11 +302,13 @@ bool handleClient(int sock,CpHandler& cph) {
 	string cmd, reply, clientName;
 	bool loggedIn;
 
+	// verify initial "greeting"
 	if (!buf.readLine(cmd) || cmd != "Forest-login-v1") {
 		Np4d::sendString(sock,"misformatted user dialog\n"
 				      "overAndOut\n");
 		return false;
 	}
+	// main processing loop for requests from client
 	loggedIn = false;
 	while (buf.readAlphas(cmd)) {
 cerr << "cmd=" << cmd << endl;
@@ -339,6 +351,15 @@ cerr << "sending reply: " << reply << endl;
 cerr << "terminating" << endl;
 }
 
+/** Handle a login request.
+ *  Reads from the socket to identify client and obtain password
+ *  @param buf is a NetBuffer associated with the stream socket to a client
+ *  @param clientName is a reference to a string in which the name of the
+ *  client is returned
+ *  @param reply is a reference to a string in which an error message may be
+ *  returned if the operation does not succeed.
+ *  @return true on success, else false
+ */
 bool login(NetBuffer& buf, string& clientName, string& reply) {
 	string pwd, s1, s2;
 	if (buf.verify(':') && buf.readName(clientName) && buf.nextLine() &&
@@ -365,6 +386,15 @@ cerr << "login succeeded " << clientName << endl;
 	}
 }
 
+/** Handle a new account request.
+ *  Reads from the socket to identify client and obtain password
+ *  @param buf is a NetBuffer associated with the stream socket to a client
+ *  @param clientName is a reference to a string in which the name of the
+ *  client is returned
+ *  @param reply is a reference to a string in which an error message may be
+ *  returned if the operation does not succeed.
+ *  @return true on success, else false
+ */
 bool newAccount(NetBuffer& buf, string& clientName, string& reply) {
 	string pwd, s1, s2;
 	if (buf.verify(':') && buf.readName(clientName) && buf.nextLine() &&
@@ -393,26 +423,33 @@ bool newAccount(NetBuffer& buf, string& clientName, string& reply) {
 	}
 }
 
+/** Handle a request for a new forest session.
+ *  Reads from the socket to get an optional rate spec.
+ *  @param sock is the socket number for the socket to the client
+ *  @param cph is a reference to the control packet handler, used for
+ *  sending control packets to the NetMgr
+ *  @param buf is a NetBuffer associated with the stream socket to a client
+ *  @param clientName is the name of the currently logged-in client
+ *  @param reply is a reference to a string in which an error message may be
+ *  returned if the operation does not succeed.
+ *  @return true on success, else false
+ */
 bool newSession(int sock, CpHandler& cph, NetBuffer& buf,
 		string& clientName, string& reply) {
 	string s1;
 	RateSpec rs;
-cerr << "new session\n";
 	if (buf.verify(':')) {
 		if (!buf.readRspec(rs) || !buf.nextLine() ||
 		    !buf.readLine(s1)  || s1 != "over") {
-cerr << "A\n";
 			reply = "misformatted new session request";
 			return false;
 		}
 	} else {
 		if (!buf.nextLine() || !buf.readLine(s1)  || s1 != "over") {
-cerr << "B\n";
 			reply = "misformatted new session request";
 			return false;
 		}
 	}
-cerr << "C\n";
 	int clx = cliTbl->getClient(clientName);
 	if (clx == 0) {
 		reply = "cannot access client data(" + clientName + ")";
@@ -426,7 +463,6 @@ cerr << "C\n";
 		return true;
 	}
 	cliTbl->releaseClient(clx);
-cerr << "D\n";
 	// proceed with new session setup
 	CtlPkt repCp;
 	ipa_t clientIp = Np4d::getSockIp(sock);
@@ -435,14 +471,12 @@ cerr << "D\n";
 		reply = "cannot setup session: NetMgr never responded";
 		return false;
 	}
-cerr << "E\n";
 	if (repCp.mode != CtlPkt::POS_REPLY) {
 		reply = "cannot complete login: NetMgr failed (" +
 			 repCp.errMsg + ")";
 		ps->free(rpx); 
 		return false;
 	}
-cerr << "F\n";
 	clx = cliTbl->getClient(clientName);
 	if (clx == 0) {
 		reply = "cannot update client data(" + clientName + ")";
@@ -457,7 +491,6 @@ cerr << "F\n";
 	}
 	cliTbl->setState(sess, ClientTable::PENDING);
 
-cerr << "G\n";
 	// set session information
 	cliTbl->setClientIp(sess,clientIp);
 	cliTbl->setRouterAdr(sess,repCp.adr2);
@@ -466,7 +499,6 @@ cerr << "G\n";
 	cliTbl->getAvailRates(sess).subtract(rs);
 	cliTbl->releaseClient(clx);
 
-cerr << "H\n";
 	// output accounting record
 	writeAcctRecord(clientName,repCp.adr1,clientIp,repCp.adr2,NEWSESSION);
 
@@ -484,14 +516,21 @@ cerr << "H\n";
 	return true;
 }
 
+/** Handle a get profile request.
+ *  Reads from the socket to identify the target client. This operation
+ *  requires either that the target client is the currently logged-in
+ *  client, or that the logged-in client has administrative privileges.
+ *  @param buf is a NetBuffer associated with the stream socket to a client
+ *  @param clientName is the name of the currently logged-in client
+ *  @param reply is a reference to a string in which an error message may be
+ *  returned if the operation does not succeed.
+ */
 void getProfile(NetBuffer& buf, string& clientName, string& reply) {
 	string s, targetName;
-cerr << "reading target name\n";
 	if (!buf.verify(':') || !buf.readAlphas(targetName) ||
 	    !buf.nextLine() || !buf.readLine(s) || s != "over") {
 		reply = "misformatted get profile request"; return;
 	}
-cerr << "clientName=" << clientName << " targetName=" << targetName << endl;
 	int clx = cliTbl->getClient(clientName);
 	if (clx == 0) {
 		reply = "cannot access client data(" + clientName + ")";
@@ -530,9 +569,17 @@ cerr << "clientName=" << clientName << " targetName=" << targetName << endl;
 	if (tclx != clx) cliTbl->releaseClient(tclx);
 }
 
+/** Handle an update profile request.
+ *  Reads from the socket to identify the target client. This operation
+ *  requires either that the target client is the currently logged-in
+ *  client, or that the logged-in client has administrative privileges.
+ *  @param buf is a NetBuffer associated with the stream socket to a client
+ *  @param clientName is the name of the currently logged-in client
+ *  @param reply is a reference to a string in which an error message may be
+ *  returned if the operation does not succeed.
+ */
 void updateProfile(NetBuffer& buf, string& clientName, string& reply) {
 	string s, targetName;
-cerr << "reading target name\n";
 	if (!buf.verify(':') || !buf.readAlphas(targetName) ||
 	    !buf.nextLine()) {
 		reply = "misformatted updateProfile request"; return;
@@ -542,7 +589,6 @@ cerr << "reading target name\n";
 		reply = "cannot access client data(" + clientName + ")";
 		return;
 	}
-cerr << "got (" << targetName << ") and I am (" << clientName << ")" << endl;
 	int tclx;
 	if (targetName == clientName) {
 		tclx = clx;
@@ -618,6 +664,15 @@ cerr << "got (" << targetName << ") and I am (" << clientName << ")" << endl;
 	return;
 }
 
+/** Handle a change password request.
+ *  Reads from the socket to identify the target client. This operation
+ *  requires either that the target client is the currently logged-in
+ *  client, or that the logged-in client has administrative privileges.
+ *  @param buf is a NetBuffer associated with the stream socket to a client
+ *  @param clientName is the name of the currently logged-in client
+ *  @param reply is a reference to a string in which an error message may be
+ *  returned if the operation does not succeed.
+ */
 void changePassword(NetBuffer& buf, string& clientName, string& reply) {
 	string s, targetName;
 	if (!buf.verify(':') || !buf.readAlphas(targetName) || 
@@ -656,7 +711,6 @@ void changePassword(NetBuffer& buf, string& clientName, string& reply) {
 	}
 	string item, pwd;
 	while (buf.readAlphas(item)) {
-cerr << "item=" << item << "\nbuf=" << buf.toString(s);
 		if (item == "password" && buf.verify(':') &&
 		    buf.readWord(pwd) && buf.nextLine()) {
 			// nothing more for now
@@ -678,6 +732,16 @@ cerr << "item=" << item << "\nbuf=" << buf.toString(s);
 	return;
 }
 
+/** Handle an upload photo request.
+ *  Reads from the socket to identify the target client. This operation
+ *  requires either that the target client is the currently logged-in
+ *  client, or that the logged-in client has administrative privileges.
+ *  @param sock is the socket number for the stream socket to the client
+ *  @param buf is a NetBuffer associated with the stream socket to a client
+ *  @param clientName is the name of the currently logged-in client
+ *  @param reply is a reference to a string in which an error message may be
+ *  returned if the operation does not succeed.
+ */
 void uploadPhoto(int sock, NetBuffer& buf, string& clientName, string& reply) {
 	int length;
 	if (!buf.verify(':') || !buf.readInt(length) || !buf.nextLine()) {
@@ -735,6 +799,12 @@ void cancelSession(NetBuffer& buf, string& clientName, string& reply) {
 void addComtree(NetBuffer& buf, string& clientName, string& reply) {
 }
 	
+/** Handle a connect or disconnect message from the NetBgr.
+ *  @param px is the index of the packet
+ *  @param cp is the control packet contained in px
+ *  @param cph is a reference to the control packet handler for this
+ *  thread
+ */
 bool handleConnDisc(pktx px, CtlPkt& cp, CpHandler& cph) {
 	Packet& p = ps->getPacket(px);
 	if (p.srcAdr != nmAdr || cp.mode != CtlPkt::REQUEST) {
@@ -795,20 +865,6 @@ void writeAcctRecord(const string& cname, fAdr_t cliAdr, ipa_t cliIp,
 	acctFile << Forest::fAdr2string(rtrAdr,s) << "\n";
 	acctFile.flush();
 }
-
-/*
-void writeClientLog(int clx) {
-	// should really lock while writing
-	if (!clientLog.good()) {
-		logger->log("ClientMgr::writeClientLog: cannot write "
-		   	   "to client log file",2);
-			return;
-	}
-	string s;
-	clientLog << cliTbl->client2string(clx,s);
-	clientLog.flush();
-}
-*/
 
 /** Write a client record to clientFile.
  *  The calling thread is assumed to hold a lock on the client.
