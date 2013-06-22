@@ -50,11 +50,9 @@ void* handler(void *);
 bool handleClient(int,CpHandler&);
 bool handleConnDisc(pktx,CtlPkt&,CpHandler&);
 
-// dialogs with client
-bool loginDialog(int,NetBuffer&,string&);
-void userDialog(int,CpHandler&,NetBuffer&,string&);
-
-// operations that can be performed by normal clients
+// methods that implement requests from remote clients
+bool login(NetBuffer&,string&,string&);
+bool newAccount(NetBuffer&,string&,string&);
 bool newSession(int, CpHandler&, NetBuffer&, string&, string&);
 void getProfile(NetBuffer&, string&, string&);
 void updateProfile(NetBuffer&, string&, string&);

@@ -258,6 +258,8 @@ void* handler(void *qp) {
 			close(sock);
 		} else {
 			Packet& p = ps->getPacket(px);
+string s;
+cerr << "handler, got packet " << p.toString(s) << endl;
 			CtlPkt cp(p);
 			switch (cp.type) {
 			case CtlPkt::CLIENT_CONNECT: 
@@ -286,124 +288,31 @@ void* handler(void *qp) {
  *  by a normal close; return false if an error occurs
  */
 bool handleClient(int sock,CpHandler& cph) {
-	int clx; string clientName;
 	NetBuffer buf(sock,1024);
+	string cmd, reply, clientName;
+	bool loggedIn;
 
-	if (!loginDialog(sock,buf,clientName)) return true;
-	userDialog(sock,cph,buf,clientName);
-	return true;
-}
-
-/** Carry out login dialog and verify that client/password is correct.
- *  @param sock is an open socket to the client
- *  @param buf is a reference to a NetBuffer bound to the socket
- *  @param clientName is a reference to a string in which user's name is retured
- *  @param return true on success, false on failure
- */
-bool loginDialog(int sock, NetBuffer& buf, string& clientName) {
-	string client, pwd, s0, s1, s2, s3;
-	int numFailures = 0;
-	if (!buf.readWord(s0) || s0 != "Forest-login-v1" ||
-	    !buf.nextLine() || !buf.readAlphas(s1)) {
-		Np4d::sendString(sock,"misformatted login dialog\n"
+	if (!buf.readLine(cmd) || cmd != "Forest-login-v1") {
+		Np4d::sendString(sock,"misformatted user dialog\n"
 				      "overAndOut\n");
-		return 0;
+		return false;
 	}
-	while (true) {
-		// process up to 3 login attempts
-		// expected form for login
-		// Forest-login-v1
-		// login: clientName
-		// password: clientPassword
-		// over
-		if (s1 == "login") {
-			// process remainder of login dialog
-			if (buf.verify(':') && buf.readAlphas(clientName) &&
-			      buf.nextLine() &&
-			    buf.readAlphas(s2) && s2 == "password" &&
-			      buf.verify(':') && buf.readWord(pwd) &&
-			      buf.nextLine() &&
-			    buf.readLine(s3) && s3 == "over") {
-				int clx =cliTbl->getClient(clientName);
-				// locks clx
-				if (clx == 0) {
-					Np4d::sendString(sock,"login failed: "
-							 "try again\nover\n");
-				} else if (cliTbl->checkPassword(clx,pwd)) {
-					cliTbl->releaseClient(clx);
-					Np4d::sendString(sock,"login successful"
-							      "\nover\n");
-					return true;
-				} else {
-					cliTbl->releaseClient(clx);
-					Np4d::sendString(sock,"login failed, "
-							 "try again\nover\n");
-					if (!buf.readAlphas(s1)) {
-						Np4d::sendString(sock,
-							"misformatted login "
-							"dialog\n"
-					      		"overAndOut\n");
-						return false;
-					}
-				}
-			}
-		} else if (s1 == "newAccount") {
-			// attempt to add account
-			if (buf.verify(':') && buf.readAlphas(clientName) &&
-			      buf.nextLine() &&
-			    buf.readAlphas(s2) && s2 == "password" &&
-			      buf.verify(':') && buf.readWord(pwd) &&
-			      buf.nextLine() &&
-			    buf.readLine(s3) && s3 == "over") {
-				int clx = cliTbl->getClient(clientName);
-				//locks clx
-				if (clx != 0) {
-					Np4d::sendString(sock,"client name not "
-							"available: try again\n"
-							"over\n");
-					cliTbl->releaseClient(clx);
-				}
-				clx = cliTbl->addClient(clientName,pwd,
-							ClientTable::STANDARD);
-				if (clx != 0) {
-					writeRecord(clx);
-					cliTbl->releaseClient(clx);
-					Np4d::sendString(sock,"success\n"
-							      "over\n");
-					return true;
-				} else {
-					Np4d::sendString(sock,"unable to add "
-							 "client\nover\n");
-					if (!buf.readAlphas(s1)) {
-						Np4d::sendString(sock,
-							"misformatted login "
-							"dialog\n"
-					      		"overAndOut\n");
-						return false;
-					}
-				}
-			}
-		} else {
-			Np4d::sendString(sock,"misformatted login dialog\n"
-					      "overAndOut\n");
-			return false;
-		}
-		numFailures++;
-		if (numFailures >= 3) {
-			Np4d::sendString(sock,"login failed: you're done\n"
-				 	 "overAndOut\n");
-			return false;
-		}
-	}
-}
-
-void userDialog(int sock, CpHandler& cph, NetBuffer& buf, string& clientName) {
-	string cmd, reply;
-cerr << "entering userDialog\n";
+	loggedIn = false;
 	while (buf.readAlphas(cmd)) {
 cerr << "cmd=" << cmd << endl;
 		reply = "success";
-		if (cmd == "newSession") {
+		if (cmd == "over") {
+			// shouldn't happen, but ignore it, if it does
+			buf.nextLine(); continue;
+		} else if (cmd == "overAndOut") {
+			buf.nextLine(); return true;
+		} else if (cmd == "login") {
+			loggedIn = login(buf,clientName,reply);
+		} else if (cmd == "newAccount") {
+			loggedIn = newAccount(buf,clientName,reply);
+		} else if (!loggedIn) {
+			continue; // must login before anything else
+		} else if (cmd == "newSession") {
 			newSession(sock,cph,buf,clientName,reply);
 		} else if (cmd == "getProfile") {
 			getProfile(buf,clientName,reply);
@@ -419,37 +328,91 @@ cerr << "cmd=" << cmd << endl;
 			cancelSession(buf,clientName,reply);
 		} else if (cmd == "addComtree" && buf.nextLine()) {
 			addComtree(buf,clientName,reply);
-		} else if (cmd == "over" && buf.nextLine()) {
-			// ignore
-		} else if (cmd == "overAndOut" && buf.nextLine()) {
-			break;
 		} else {
 			reply = "unrecognized input";
 		}
-		if (sock == -1) break;
 cerr << "sending reply: " << reply << endl;
 		reply += "\nover\n";
 		Np4d::sendString(sock,reply);
 	}
+	return true;
 cerr << "terminating" << endl;
+}
+
+bool login(NetBuffer& buf, string& clientName, string& reply) {
+	string pwd, s1, s2;
+	if (buf.verify(':') && buf.readName(clientName) && buf.nextLine() &&
+	    buf.readAlphas(s1) && s1 == "password" &&
+	      buf.verify(':') && buf.readWord(pwd) && buf.nextLine() &&
+	    buf.readLine(s2) && s2 == "over") {
+		int clx =cliTbl->getClient(clientName);
+		// locks clx
+		if (clx == 0) {
+			reply = "login failed: try again";
+			return false;
+		} else if (cliTbl->checkPassword(clx,pwd)) {
+cerr << "login succeeded " << clientName << endl;
+			cliTbl->releaseClient(clx);
+			return true;
+		} else {
+			cliTbl->releaseClient(clx);
+			reply = "login failed: try again";
+			return false;
+		}
+	} else {
+		reply = "misformatted login request";
+		return false;
+	}
+}
+
+bool newAccount(NetBuffer& buf, string& clientName, string& reply) {
+	string pwd, s1, s2;
+	if (buf.verify(':') && buf.readName(clientName) && buf.nextLine() &&
+	    buf.readAlphas(s1) && s1 == "password" &&
+	      buf.verify(':') && buf.readWord(pwd) && buf.nextLine() &&
+	    buf.readLine(s2) && s2 == "over") {
+		int clx =cliTbl->getClient(clientName);
+		// locks clx
+		if (clx != 0) {
+			cliTbl->releaseClient(clx);
+			reply = "name not available, select another";
+			return false;
+		}
+		clx = cliTbl->addClient(clientName,pwd,ClientTable::STANDARD);
+		if (clx != 0) {
+			writeRecord(clx);
+			cliTbl->releaseClient(clx);
+			return true;
+		} else {
+			reply = "unable to add client";
+			return false;
+		}
+	} else {
+		reply = "misformatted new account request";
+		return false;
+	}
 }
 
 bool newSession(int sock, CpHandler& cph, NetBuffer& buf,
 		string& clientName, string& reply) {
 	string s1;
 	RateSpec rs;
+cerr << "new session\n";
 	if (buf.verify(':')) {
 		if (!buf.readRspec(rs) || !buf.nextLine() ||
 		    !buf.readLine(s1)  || s1 != "over") {
-			reply = "unrecognized input";
+cerr << "A\n";
+			reply = "misformatted new session request";
 			return false;
 		}
 	} else {
 		if (!buf.nextLine() || !buf.readLine(s1)  || s1 != "over") {
-			reply = "unrecognized input";
+cerr << "B\n";
+			reply = "misformatted new session request";
 			return false;
 		}
 	}
+cerr << "C\n";
 	int clx = cliTbl->getClient(clientName);
 	if (clx == 0) {
 		reply = "cannot access client data(" + clientName + ")";
@@ -462,20 +425,27 @@ bool newSession(int sock, CpHandler& cph, NetBuffer& buf,
 		reply = "session rate exceeds available capacity";
 		return true;
 	}
+	cliTbl->releaseClient(clx);
+cerr << "D\n";
 	// proceed with new session setup
 	CtlPkt repCp;
 	ipa_t clientIp = Np4d::getSockIp(sock);
 	pktx rpx = cph.newSession(nmAdr, clientIp, rs, repCp);
 	if (rpx == 0) {
-		cliTbl->releaseClient(clx);
-		reply = "cannot complete login: NetMgr never responded";
+		reply = "cannot setup session: NetMgr never responded";
 		return false;
 	}
+cerr << "E\n";
 	if (repCp.mode != CtlPkt::POS_REPLY) {
-		cliTbl->releaseClient(clx);
 		reply = "cannot complete login: NetMgr failed (" +
 			 repCp.errMsg + ")";
 		ps->free(rpx); 
+		return false;
+	}
+cerr << "F\n";
+	clx = cliTbl->getClient(clientName);
+	if (clx == 0) {
+		reply = "cannot update client data(" + clientName + ")";
 		return false;
 	}
 	int sess = cliTbl->addSession(repCp.adr1, repCp.adr2, clx);
@@ -487,8 +457,8 @@ bool newSession(int sock, CpHandler& cph, NetBuffer& buf,
 	}
 	cliTbl->setState(sess, ClientTable::PENDING);
 
+cerr << "G\n";
 	// set session information
-	const string& cliName = cliTbl->getClientName(clx);
 	cliTbl->setClientIp(sess,clientIp);
 	cliTbl->setRouterAdr(sess,repCp.adr2);
 	cliTbl->setState(sess,ClientTable::PENDING);
@@ -496,8 +466,9 @@ bool newSession(int sock, CpHandler& cph, NetBuffer& buf,
 	cliTbl->getAvailRates(sess).subtract(rs);
 	cliTbl->releaseClient(clx);
 
+cerr << "H\n";
 	// output accounting record
-	writeAcctRecord(cliName, repCp.adr1, clientIp, repCp.adr2, NEWSESSION);
+	writeAcctRecord(clientName,repCp.adr1,clientIp,repCp.adr2,NEWSESSION);
 
 	// send information back to client
 	stringstream ss; string s;
@@ -516,8 +487,9 @@ bool newSession(int sock, CpHandler& cph, NetBuffer& buf,
 void getProfile(NetBuffer& buf, string& clientName, string& reply) {
 	string s, targetName;
 cerr << "reading target name\n";
-	if (!buf.verify(':') || !buf.readAlphas(targetName) || !buf.nextLine()){
-		reply = "could not read target name"; return;
+	if (!buf.verify(':') || !buf.readAlphas(targetName) ||
+	    !buf.nextLine() || !buf.readLine(s) || s != "over") {
+		reply = "misformatted get profile request"; return;
 	}
 cerr << "clientName=" << clientName << " targetName=" << targetName << endl;
 	int clx = cliTbl->getClient(clientName);
@@ -561,8 +533,9 @@ cerr << "clientName=" << clientName << " targetName=" << targetName << endl;
 void updateProfile(NetBuffer& buf, string& clientName, string& reply) {
 	string s, targetName;
 cerr << "reading target name\n";
-	if (!buf.verify(':') || !buf.readAlphas(targetName) || !buf.nextLine()){
-		reply = "could not read target name"; return;
+	if (!buf.verify(':') || !buf.readAlphas(targetName) ||
+	    !buf.nextLine()) {
+		reply = "misformatted updateProfile request"; return;
 	}
 	int clx = cliTbl->getClient(clientName);
 	if (clx == 0) {
@@ -617,11 +590,11 @@ cerr << "got (" << targetName << ") and I am (" << clientName << ")" << endl;
 		} else if (item == "totalRates" && buf.verify(':') &&
 			   buf.readRspec(totRates) && buf.nextLine()) {
 			// that's all for now
-		} else if ((item == "over" && buf.nextLine()) ||
-			   (item == "overAndOut" && buf.nextLine())) {
+		} else if (item == "over" && buf.nextLine()) {
 			break;
 		} else {
-			reply = "misformatted request (" + item + ")";
+			reply = "misformatted update profile request (" +
+				item + ")";
 			return;
 		}
 	}
@@ -641,15 +614,15 @@ cerr << "got (" << targetName << ") and I am (" << clientName << ")" << endl;
 			cliTbl->getTotalRates(tclx) = totRates;
 	}
 	writeRecord(tclx);
-	reply = "profile updated";
 	cliTbl->releaseClient(tclx);
 	return;
 }
 
 void changePassword(NetBuffer& buf, string& clientName, string& reply) {
 	string s, targetName;
-	if (!buf.verify(':') || !buf.readAlphas(targetName) || !buf.nextLine()){
-		reply = "could not read target name"; return;
+	if (!buf.verify(':') || !buf.readAlphas(targetName) || 
+	    !buf.nextLine() || !buf.readLine(s) || s != "over") {
+		reply = "misformatted change password request"; return;
 	}
 	int clx = cliTbl->getClient(clientName);
 	if (clx == 0) {
@@ -687,8 +660,7 @@ cerr << "item=" << item << "\nbuf=" << buf.toString(s);
 		if (item == "password" && buf.verify(':') &&
 		    buf.readWord(pwd) && buf.nextLine()) {
 			// nothing more for now
-		} else if ((item == "over" && buf.nextLine()) ||
-			  (item == "overAndOut" && buf.nextLine())) {
+		} else if (item == "over" && buf.nextLine()) {
 			break;
 		} else {
 			reply = "misformatted request (" + item + ")";
@@ -709,7 +681,7 @@ cerr << "item=" << item << "\nbuf=" << buf.toString(s);
 void uploadPhoto(int sock, NetBuffer& buf, string& clientName, string& reply) {
 	int length;
 	if (!buf.verify(':') || !buf.readInt(length) || !buf.nextLine()) {
-		reply = "cannot read length"; return;
+		reply = "misformatted upload photo request"; return;
 	}
 	if (length > 50000) {
 		reply = "photo file exceeds 50000 byte limit"; return;
@@ -738,10 +710,9 @@ void uploadPhoto(int sock, NetBuffer& buf, string& clientName, string& reply) {
 	string s1, s2;
 	if (!buf.readLine(s1) || s1 != "photo finished" ||
 	    !buf.readLine(s2) || s2 != "over") {
-		reply = "file transfer incomplete"; return;
+		reply = "misformatted photo request"; return;
 	}
 	photoFile.close();
-	reply = "photo received";
 	return;
 }
 
