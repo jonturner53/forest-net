@@ -51,11 +51,10 @@ class Net :
 	""" Net support.
 
 	"""
-	def __init__(self, myIp, cliMgrIp, comtree, numg, subLimit, pWorld, name, \
+	def __init__(self, cliMgrIp, comtree, numg, subLimit, pWorld, name, \
 		     debug):
 		""" Initialize a new Net object.
 
-		myIp address is IP address of this host
 		comtree is the number of the comtree to use
 		numg*numg is the number of multicast groups
 		subLimit defines the maximum visibility distance for multicast
@@ -64,7 +63,6 @@ class Net :
 		debugging output
 		"""
 
-		self.myIp = myIp
 		self.cliMgrIp = cliMgrIp
 		self.comtree = comtree
 		self.pWorld = pWorld
@@ -86,7 +84,6 @@ class Net :
 
 		# open and configure socket to be nonblocking
 		self.sock = socket(AF_INET, SOCK_DGRAM);
-		self.sock.bind((myIp,0))
 		self.sock.setblocking(0)
 		self.myAdr = self.sock.getsockname()
 		self.limit = pWorld.getLimit()
@@ -163,7 +160,7 @@ class Net :
 
 		buf = ""
 		line,buf = self.readLine(cmSock,buf)
-		if line != "login successful" :
+		if line != "success" :
 			return False
 		line,buf = self.readLine(cmSock,buf)
 		if line != "over" :
@@ -416,8 +413,6 @@ class Net :
 
 		cp = CtlPkt(which,REQUEST,self.seqNum)
 		cp.comtree = self.comtree
-		cp.ip1 = string2ip(self.myIp)
-		cp.port1 = self.myAdr[1]
 		p.payload = cp.pack()
 		self.seqNum += 1
 
