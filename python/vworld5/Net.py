@@ -225,7 +225,7 @@ class Net :
 		sent = psSock.sendall(request)
 		if sent == 0:
 			raise RuntimeError("socket connection broken")
-		if debug >= 1:
+		if self.debug >= 1:
 			print "photo server IP: ", self.photoServerIp
 			print "bytes sent: ", sent
 
@@ -234,7 +234,7 @@ class Net :
 		echo_recvd = 0
 		while echo_recvd == 0:
 			buffer = psSock.recv(echo_len)
-			if debug >= 1:
+			if self.debug >= 1:
 				print "buf= ", buffer
 			if buffer == '':
 				RuntimeError("broken connection")
@@ -256,7 +256,7 @@ class Net :
 				if pktlen < 1024:
 					gotPic = 1
 				more2read = 1
-				if debug >= 1:
+				if self.debug >= 1:
 					print "buffer is: ", buffer
 					print "repr(buffer) is: ", repr(buffer)
 				print pktlen
