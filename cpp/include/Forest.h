@@ -86,6 +86,32 @@ public:
 		RTR_CTL=200,
 		VOQSTATUS=201
 	};
+	
+	/** Comtree configuration modes.
+	 *  This enumeration lists the distinct configuration modes for
+	 *  the backbone links in a comtree.
+	 */
+	enum ComtConfigMode {
+		NUL_CFG=0,
+		// client packet types
+		STATIC=1,		///< no automatic adjustment
+		LEAFADJUST=2,		///< adjust every time leaf joins/drops
+		STEPADJUST=3		///< adjust in discrete steps
+					//   adjust up by 30% when "full"
+					//   adjust down by 20% when 60% full
+	};
+	
+	/** Comtree access method.
+	 *  This enumeration lists the distinct access methods for
+	 *  the joining a comtree.
+	 */
+	enum AccessMethod {
+		NUL_AXS=0,
+		// client packet types
+		OPEN=1,			///< Anyone can join
+		BYPERMISSION=2,		///< requires permission of supervisor
+		BYPASSWORD=3		///< client needs comtree password
+	};
 
 	// constants related to packet formats 
 	static const uint8_t FOREST_VERSION = 1;///< version of forest protocol
