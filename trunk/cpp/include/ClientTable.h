@@ -60,6 +60,7 @@ public:
 	RateSpec& getDefRates(int) const;
 	RateSpec& getTotalRates(int) const;
 	RateSpec& getAvailRates(int) const;
+	int	getNumSess(int) const;		
 	bool	checkPassword(int,string&) const;
 
 	// for session info
@@ -230,6 +231,14 @@ inline const string& ClientTable::getPassword(int clx) const {
  */
 inline const string& ClientTable::getClientName(int clx) const {
 	return cvec[clx].cname;
+}
+
+/** Get the number of sessions for a client.
+ *  @param clx is a valid client index
+ *  @return a the number of active or pending sessions for this client.
+ */
+inline int ClientTable::getNumSess(int clx) const {
+	return cvec[clx].numSess;
 }
 
 /** Get a client's password.

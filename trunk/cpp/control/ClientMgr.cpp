@@ -462,41 +462,48 @@ bool newSession(int sock, CpHandler& cph, NetBuffer& buf,
 		reply = "session rate exceeds available capacity";
 		return true;
 	}
+	cliTbl->getAvailRates(clx).subtract(rs);
 	cliTbl->releaseClient(clx);
 	// proceed with new session setup
 	CtlPkt repCp;
 	ipa_t clientIp = Np4d::getSockIp(sock);
 	pktx rpx = cph.newSession(nmAdr, clientIp, rs, repCp);
+	clx = cliTbl->getClient(clientName);
+	if (clx == 0) {
+		reply = "cannot update client data(" + clientName + ")";
+		logger->log("ClientMgr::newSession: cannot update session data "
+			    "session state may be inconsistent",2);
+		return false;
+	}
 	if (rpx == 0) {
+		cliTbl->getAvailRates(clx).add(rs);
+		cliTbl->releaseClient(clx);
 		reply = "cannot setup session: NetMgr never responded";
 		return false;
 	}
 	if (repCp.mode != CtlPkt::POS_REPLY) {
+		cliTbl->getAvailRates(clx).add(rs);
+		cliTbl->releaseClient(clx);
 		reply = "cannot complete login: NetMgr failed (" +
 			 repCp.errMsg + ")";
 		ps->free(rpx); 
 		return false;
 	}
-	clx = cliTbl->getClient(clientName);
-	if (clx == 0) {
-		reply = "cannot update client data(" + clientName + ")";
-		return false;
-	}
 	int sess = cliTbl->addSession(repCp.adr1, repCp.adr2, clx);
 	if (sess == 0) {
+		cliTbl->getAvailRates(clx).add(rs);
 		cliTbl->releaseClient(clx);
 		reply = "cannot complete login: could not create "
 			"session record";
 		return false;
 	}
-	cliTbl->setState(sess, ClientTable::PENDING);
 
 	// set session information
 	cliTbl->setClientIp(sess,clientIp);
 	cliTbl->setRouterAdr(sess,repCp.adr2);
 	cliTbl->setState(sess,ClientTable::PENDING);
 	cliTbl->setStartTime(sess,Misc::currentTime());
-	cliTbl->getAvailRates(sess).subtract(rs);
+	cliTbl->getSessRates(sess) = rs;
 	cliTbl->releaseClient(clx);
 
 	// output accounting record
