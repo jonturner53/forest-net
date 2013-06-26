@@ -105,4 +105,35 @@ public class Console extends MouseAdapter implements ActionListener {
 	public void mouseClicked(MouseEvent e) {
 	}
 
+	Charset ascii;
+        CharsetEncoder enc;
+	CharBuffer cbuf;
+	ByteBuffer bbuf;
+
+	/** Setup to transfer ASCII characters on socket to client manager.
+	 */
+	private void setupIo() {
+		ascii = Charset.forName("US-ASCII");
+                enc = ascii.newEncoder();
+		enc.onMalformedInput(CodingErrorAction.IGNORE);
+		enc.onUnmappableCharacter(CodingErrorAction.IGNORE);
+		cbuf = CharBuffer.allocate(1000);
+		bbuf = ByteBuffer.allocate(1000);
+	}
+
+	/** Send a string to the network manager socket.
+	 *  @param s is the string to be sent; should use only ASCII characters
+	 */
+	private boolean sendString(String s) {
+		cbuf.clear(); bbuf.clear();
+		cbuf.put(s); cbuf.flip();
+		enc.encode(cbuf,bbuf,false); bbuf.flip();
+		try {
+			serverChan.write(bbuf);
+		} catch(Exception e) {
+			showStatus("cannot write to network manager");
+			return false;
+		}
+		return true;
+	}
 }
