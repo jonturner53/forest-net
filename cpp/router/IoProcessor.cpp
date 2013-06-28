@@ -50,6 +50,11 @@ bool IoProcessor::setup(int i) {
                 return false;
         }
 	ift->setPort(i,Np4d::getSockPort(sock[i]));
+
+	// send dummy packet to NetMgr - hack to trigger NAT in SPP
+	int zero = 0;
+	Np4d::sendto4d(sock[i], (void *) &zero, sizeof(zero),
+				nmIp, Forest::NM_PORT);
 	return true;
 }
 

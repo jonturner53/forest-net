@@ -27,6 +27,8 @@ bool Packet::unpack() {
 	uint32_t x = ntohl(b[0]);
 	version = (x >> 28) & 0xf;
 	length = (x >> 16) & 0xfff;
+	if (version != 1 || length < Forest::OVERHEAD)
+		return false;
 	type = (Forest::ptyp_t) ((x >> 8) & 0xff);
 	flags = (x & 0xff);
 	comtree = ntohl(b[1]);
