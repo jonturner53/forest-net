@@ -81,9 +81,8 @@ private:
 	comt_t	comtree;		///< comtree number
 	string	owner;			///< owner's client name
 	string	password;		///< password used for access
+	fAdr_t	rootZip;		///< zip code for comtree root
 	fAdr_t	supervisor;		///< server that supervises comtree
-	RateSpec defBbRates;		///< default rates for backbone links
-	RateSpec defLeafRates;		///< default rates for access links
 	Forest::ConfigMode cfgMode;	///< backbone rate configuration mode
 	Forest::AccessMethod axsMethod;	///< access method for joining
 	int	reportInterval;		///< how often to report status (sec)

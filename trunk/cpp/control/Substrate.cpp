@@ -231,8 +231,9 @@ pktx Substrate::recvFromForest() {
 
 	ipa_t srcIp; ipp_t srcPort;
 	int nbytes = Np4d::recvfrom4d(dgSock,p.buffer,1500,srcIp,srcPort);
-	if (nbytes < 0) { ps->free(px); return 0; }
-	p.unpack();
+	if (nbytes < Forest::OVERHEAD || !p.unpack()) {
+		ps->free(px); return 0;
+	}
 	p.tunIp = srcIp; p.tunPort = srcPort;
 ///*
 string s;
