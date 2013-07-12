@@ -205,7 +205,6 @@ class Net :
 	def wrapup(self, task) :
 		self.leaveComtree()
 		self.disconnect()
-		print "Done with Net"
 
 	def send(self, p) :
 		""" Send a packet to the router.

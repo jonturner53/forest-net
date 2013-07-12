@@ -8,9 +8,9 @@ To run it without network, uncomment the last six lines of this code:
 and type "python PandaWorld.py"
  
 control:
-	Move   -> Up, Left, Right, Down
-	Rotate -> A, S
-	Strafe -> Z, X
+	Move              -> Up, Left, Right, Down
+	Look Up/Down      -> A / S
+	Strafe Left/Right -> Z / X
 
 Last Updated: 7/12/2013
 Author: Chao Wang and Jon Turner
@@ -71,19 +71,7 @@ class PandaWorld(DirectObject):
 	
 		
 		# Set up the environment
-		#
-		# This environment model contains collision meshes.  If you look
-		# in the egg file, you will see the following:
-		#
-		#	<Collide> { Polyset keep descend }
-		#
-		# This tag causes the following mesh to be converted to a 
-		# collision mesh -- a mesh which is optimized for collision,
-		# not rendering. It also keeps the original mesh, so there
-		# are now two copies --- one optimized for rendering,
-		# one for collisions.  
-
-		self.environ = loader.loadModel("models/test0711-h")
+		self.environ = loader.loadModel("models/vworld24grid")
 		self.environ.reparentTo(render)
 		self.environ.setPos(0,0,0)
 		
@@ -128,8 +116,6 @@ class PandaWorld(DirectObject):
 		for i in range(0,self.maxRemotes) : # allow up to 100 remotes
 			self.freeRemotes.append(Actor("models/panda-model", \
 						{"run":"models/panda-walk4"}))
-			#self.freeRemotes.append(Actor("models/cube", \
-			#			{"run":"models/cube-Anim0"}))
 			self.freeRemotes[i].setScale(0.002)
 
 		# Accept the control keys for movement and rotation
@@ -382,13 +368,13 @@ class PandaWorld(DirectObject):
 		if (self.keyMap["right"]!=0):
 			newH -= 50 * globalClock.getDt()
 		if (self.keyMap["forward"]!=0):
-			newY -= 5000 * globalClock.getDt()
+			newY -= 1000 * globalClock.getDt()
  		if (self.keyMap["backward"]!=0):
- 			newY += 5000 * globalClock.getDt()
+ 			newY += 1000 * globalClock.getDt()
  		if (self.keyMap["strafe-left"]!=0):
- 			newX += 5000 * globalClock.getDt()
+ 			newX += 1000 * globalClock.getDt()
  		if (self.keyMap["strafe-right"]!=0):
- 			newX -= 5000 * globalClock.getDt()
+ 			newX -= 1000 * globalClock.getDt()
 
 		self.avatar.setH(newH)
 		self.avatar.setFluidPos(self.avatar, newX,newY,self.avatar.getZ())
@@ -434,11 +420,12 @@ class PandaWorld(DirectObject):
 
 		return task.cont
 
-"""
+# uncomment the following lines to test this code without networking support
+#"""
 w = PandaWorld()
 w.addRemote(69, 67, 135, 111)
 w.addRemote(20, 33, 135, 222)
 w.addRemote(54, 46, 135, 333)
 w.addRemote(90, 79, 135, 444)
 run()
-"""
+#"""
