@@ -421,11 +421,11 @@ class PandaWorld(DirectObject):
 		return task.cont
 
 # uncomment the following lines to test this code without networking support
-#"""
+"""
 w = PandaWorld()
 w.addRemote(69, 67, 135, 111)
 w.addRemote(20, 33, 135, 222)
 w.addRemote(54, 46, 135, 333)
 w.addRemote(90, 79, 135, 444)
 run()
-#"""
+"""
