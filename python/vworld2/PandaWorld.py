@@ -12,7 +12,7 @@ control:
 	Rotate -> A, S
 	Strafe -> Z, X
 
-Last Updated: 6/19/2013
+Last Updated: 7/12/2013
 Author: Chao Wang and Jon Turner
 World Model: Chao Wang
  
@@ -83,7 +83,7 @@ class PandaWorld(DirectObject):
 		# are now two copies --- one optimized for rendering,
 		# one for collisions.  
 
-		self.environ = loader.loadModel("models/vworld-grid-24")
+		self.environ = loader.loadModel("models/test0711-h")
 		self.environ.reparentTo(render)
 		self.environ.setPos(0,0,0)
 		
@@ -128,7 +128,9 @@ class PandaWorld(DirectObject):
 		for i in range(0,self.maxRemotes) : # allow up to 100 remotes
 			self.freeRemotes.append(Actor("models/panda-model", \
 						{"run":"models/panda-walk4"}))
-			self.freeRemotes[i].setScale(.002)
+			#self.freeRemotes.append(Actor("models/cube", \
+			#			{"run":"models/cube-Anim0"}))
+			self.freeRemotes[i].setScale(0.002)
 
 		# Accept the control keys for movement and rotation
 		self.accept("escape", sys.exit)
@@ -160,15 +162,16 @@ class PandaWorld(DirectObject):
  		1. prevent the avatar from passing through a wall
 		2. keep the avatar on the ground (we skip it for now)
  		"""
-		self.cTrav = CollisionTraverser()
-		#base.cTrav.setRespectPrevTransform(True)
+		base.cTrav = CollisionTraverser()
+		base.cTrav.setRespectPrevTransform(True)
 
 		self.avatarSpNp = \
 			self.avatar.attachNewNode(CollisionNode('avatarSphere'))
-
+		
 		self.csSphere = self.avatarSpNp.node().addSolid(
 			CollisionSphere(0.0/self.avatar.getScale().getX(),
-							-1.0/self.avatar.getScale().getY(),
+							-0.5/self.avatar.getScale().getY(),
+						#	-1.0/self.avatar.getScale().getY(),
 							0.5/self.avatar.getScale().getZ(),
 							0.8/self.avatar.getScale().getX()))
 		# format above: (x,y,z,radius)
@@ -177,10 +180,12 @@ class PandaWorld(DirectObject):
 		self.avatarSpNp.node().setIntoCollideMask(BitMask32.allOff())
 
 		# uncomment the following line to show the collisionSphere
-		self.avatarSpNp.show()
+		#self.avatarSpNp.show()
 
-		self.avatarGroundHandler = CollisionHandlerQueue()
-		self.cTrav.addCollider(self.avatarSpNp,	self.avatarGroundHandler)
+		self.avatarGroundHandler = CollisionHandlerPusher()
+		self.avatarGroundHandler.setHorizontal(True)
+		self.avatarGroundHandler.addCollider(self.avatarSpNp, self.avatar)
+		base.cTrav.addCollider(self.avatarSpNp,	self.avatarGroundHandler)
 
 
 		# setup a collision solid for the canSee method
@@ -194,6 +199,10 @@ class PandaWorld(DirectObject):
 		self.csTrav = CollisionTraverser('CustomTraverser')
 		self.csTrav.addCollider(self.auxCSNp, self.csHandler)
 
+		# uncomment the following line to show where collision occurs
+		#self.csTrav.showCollisions(render)
+
+
 		"""
 		Finally, let there be some light
 		"""
@@ -201,8 +210,9 @@ class PandaWorld(DirectObject):
 		self.ambientLight.node().setColor(Vec4(.8,.8,.8,1))
 		render.setLight(self.ambientLight)
 
+		
 		dLight1 = DirectionalLight("dLight1")
-		dLight1.setColor(Vec4(1,.6,.7,1))
+		dLight1.setColor(Vec4(6,5,7,1))
 		dLight1.setDirection(Vec3(1,1,1))
 		dlnp1 = render.attachNewNode(dLight1)
 		dlnp1.setHpr(30,-160,0)
@@ -215,7 +225,7 @@ class PandaWorld(DirectObject):
 		self.dlnp2.node().setScene(render)
 		self.dlnp2.setHpr(-70,-60,0)
 		render.setLight(self.dlnp2)
-
+		
 
 
 	def setKey(self, key, value):
@@ -252,6 +262,7 @@ class PandaWorld(DirectObject):
 		remote.reparentTo(render)
 		remote.setPos(x,y,0) 
 		remote.setHpr(direction,0,0) 
+		remote.loop("run")
 
 	def updateRemote(self, x, y, direction, id) :
 		""" Update location of a remote panda.
@@ -268,8 +279,6 @@ class PandaWorld(DirectObject):
 		   direction == remote.getHpr()[0] :
 			remote.stop(); remote.pose("run",5)
 			self.remoteMap[id][1] = False
-			#return
-		#elif not isMoving :
 		else:
 			remote.loop("run")
 			self.remoteMap[id][1] = True
@@ -348,35 +357,6 @@ class PandaWorld(DirectObject):
 		elif (self.keyMap["cam-down"]!=0): camAngle = -10
 		else: camAngle = 0
 
-		# save avatar's initial position so that we can restore it,
-		# in case he falls off the map or runs into something.
-		startpos = self.avatar.getPos()
-
-
-		# If a move-key is pressed, move avatar in the specified 
-		# direction.
-		newH = self.avatar.getH()
-		newY = 0
-		newX = 0
-		
-		
-		if (self.keyMap["left"]!=0):
-			newH += 50 * globalClock.getDt()
-		if (self.keyMap["right"]!=0):
-			newH -= 50 * globalClock.getDt()
-		if (self.keyMap["forward"]!=0):
-			newY -= 1000 * globalClock.getDt()
- 		if (self.keyMap["backward"]!=0):
- 			newY += 1000 * globalClock.getDt()
- 		if (self.keyMap["strafe-left"]!=0):
- 			newX += 1000 * globalClock.getDt()
- 		if (self.keyMap["strafe-right"]!=0):
- 			newX -= 1000 * globalClock.getDt()
-
-
-		self.avatar.setH(newH)
-		self.avatar.setFluidPos(self.avatar, newX,newY,self.avatar.getZ())
-
 		# If avatar is moving, loop the run animation.
 		# If he is standing still, stop the animation.
 		
@@ -390,27 +370,36 @@ class PandaWorld(DirectObject):
 				self.avatar.stop()
 				self.avatar.pose("run",5)
 				self.isMoving = False
-		
-		# Now check for collisions.
-		self.cTrav.traverse(render)
 
-		# If our avatar hits anything besides the terrain, 
-		# put him back to where he was last frame.
-		entries = []
-		for i in range(self.avatarGroundHandler.getNumEntries()):
-			entries.append(self.avatarGroundHandler.getEntry(i))
-		collide = False
-		if (len(entries)>0) :
-			for entry in entries :
-				if entry.getIntoNode().getName() != "ID257" : # terrain ID
-					collide = True
-			if collide == True :
-				self.avatar.setPos(startpos)
+		# If a move-key is pressed, move avatar in the specified 
+		# direction.
+		newH = self.avatar.getH()
+		newY = 0
+		newX = 0
+		
+		if (self.keyMap["left"]!=0):
+			newH += 50 * globalClock.getDt()
+		if (self.keyMap["right"]!=0):
+			newH -= 50 * globalClock.getDt()
+		if (self.keyMap["forward"]!=0):
+			newY -= 5000 * globalClock.getDt()
+ 		if (self.keyMap["backward"]!=0):
+ 			newY += 5000 * globalClock.getDt()
+ 		if (self.keyMap["strafe-left"]!=0):
+ 			newX += 5000 * globalClock.getDt()
+ 		if (self.keyMap["strafe-right"]!=0):
+ 			newX -= 5000 * globalClock.getDt()
+
+		self.avatar.setH(newH)
+		self.avatar.setFluidPos(self.avatar, newX,newY,self.avatar.getZ())
 
 		# position the camera to where the avatar is
 		pos = self.avatar.getPos()
 		hpr = self.avatar.getHpr()
-		hpr[0] += 180; hpr[1] = camAngle
+		hpr[0] += 180
+		hpr[1] = camAngle
+# to debug, uncomment the following line, and comment out the line next to it
+#		base.camera.setPos(pos.getX(),pos.getY()+15,pos.getZ()+1)
 		base.camera.setPos(pos.getX(),pos.getY(),pos.getZ()+1)
 		base.camera.setHpr(hpr)
 		
@@ -445,10 +434,11 @@ class PandaWorld(DirectObject):
 
 		return task.cont
 
-
-#w = PandaWorld()
-#w.addRemote(69, 67, 135, 111)
-#w.addRemote(20, 33, 135, 222)
-#w.addRemote(54, 46, 135, 333)
-#w.addRemote(90, 79, 135, 444)
-#run()
+"""
+w = PandaWorld()
+w.addRemote(69, 67, 135, 111)
+w.addRemote(20, 33, 135, 222)
+w.addRemote(54, 46, 135, 333)
+w.addRemote(90, 79, 135, 444)
+run()
+"""
