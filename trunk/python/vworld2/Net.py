@@ -340,7 +340,7 @@ class Net :
 			print "numNear=", numNear
 		p.payload = struct.pack('!IIIII', \
 					STATUS_REPORT, now, \
-					int(self.x), int(self.y), \
+					int(self.x*GRID), int(self.y*GRID), \
 					int(self.direction))
 		self.send(p)
 
@@ -424,7 +424,8 @@ class Net :
 		tuple = struct.unpack('!IIIII',p.payload[0:20])
 
 		if tuple[0] != STATUS_REPORT : return
-		x1 = tuple[2]+0.0; y1 = tuple[3]+0.0;
+		x1 = (tuple[2]+0.0)/GRID
+		y1 = (tuple[3]+0.0)/GRID
 		dir1 = tuple[4]
 		avId = p.srcAdr
 
