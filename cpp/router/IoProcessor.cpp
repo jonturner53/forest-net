@@ -78,14 +78,11 @@ bool IoProcessor::setupBootSock(ipa_t bootIp, ipa_t nmIp1) {
 		return false;
 	}
 	// bind it to the bootIp
-string s;
-cerr << "binding to " << Np4d::ip2string(bootIp,s) << endl;
         if (!Np4d::bind4d(bootSock, bootIp, 0)) {
 		cerr << "IoProcessor::setupBootIp: bind call failed, "
 		     << "check boot IP address\n";
                 return false;
         }
-cerr << "success\n";
 	return true;
 }
 
