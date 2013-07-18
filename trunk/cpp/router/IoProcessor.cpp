@@ -19,7 +19,7 @@ namespace forest {
  *  @param lt1 is a pointer to the router's LinkTable object
  *  @param sm1 is a pointer to the router's StatsModule object
  */
-IoProcessor::IoProcessor(int maxIface1, int portNum1, IfaceTable *ift1,
+IoProcessor::IoProcessor(int maxIface1, ipp_t portNum1, IfaceTable *ift1,
 			 LinkTable *lt1, PacketStore *ps1, StatsModule *sm1)
 			 : maxIface(maxIface1), portNum(portNum1), ift(ift1),
 			   lt(lt1), ps(ps1), sm(sm1) {
