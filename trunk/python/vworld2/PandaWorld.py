@@ -12,13 +12,10 @@ control:
 	Look Up/Down      -> A / S
 	Strafe Left/Right -> Z / X
 
-Last Updated: 7/12/2013
 Author: Chao Wang and Jon Turner
 World Model: Chao Wang
  
 Adapted from "Roaming Ralph", a tutorial included in Panda3D package.
-Author: Ryan Myers
-Models: Jeff Styers, Reagan Heller
 """  
 
 import direct.directbase.DirectStart
@@ -260,14 +257,16 @@ class PandaWorld(DirectObject):
 		"""
 		if id not in self.remoteMap : return
 		remote, isMoving, dot = self.remoteMap[id]
-		if abs(x - remote.getX()) < .001 and \
-		   abs(y - remote.getY()) < .001 and \
-		   direction == remote.getHpr()[0] :
-			remote.stop(); remote.pose("run",5)
-			self.remoteMap[id][1] = False
-		else:
-			remote.loop("run")
-			self.remoteMap[id][1] = True
+#		if abs(x - remote.getX()) < .0001 and \
+#		   abs(y - remote.getY()) < .0001 and \
+#		   direction == remote.getHpr()[0] :
+#			remote.stop(); remote.pose("run",5)
+#			self.remoteMap[id][1] = False
+#		else:
+#			remote.loop("run")
+#			# seems that everytime we call loop the animation starts over,
+#			# which essentially makes the avatar stand still
+#			self.remoteMap[id][1] = True
 		
 		# set position and direction of remote
 		remote.setPos(x,y,0)
