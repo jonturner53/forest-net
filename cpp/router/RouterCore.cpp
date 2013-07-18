@@ -61,7 +61,7 @@ bool processArgs(int argc, char *argv[], RouterInfo& args) {
 		} else if (s.compare(0,9,"statSpec=") == 0) {
 			args.statSpec = &argv[i][9];
 		} else if (s.compare(0,8,"portNum=") == 0) {
-			sscanf(&argv[i][8],"%d",&args.portNum);
+			sscanf(&argv[i][8],"%hd",&args.portNum);
 		} else if (s.compare(0,8,"finTime=") == 0) {
 			sscanf(&argv[i][8],"%d",&args.finTime);
 		} else {
@@ -133,7 +133,7 @@ RouterCore::RouterCore(bool booting1, const RouterInfo& config)
 	ctt = new ComtreeTable(nComts,10*nComts,lt);
 	rt = new RouteTable(nRts,myAdr,ctt);
 	sm = new StatsModule(1000, nLnks, nQus, ctt);
-	iop = new IoProcessor(nIfaces, args.portNum, ift, lt, ps, sm);
+	iop = new IoProcessor(nIfaces, config.portNum, ift, lt, ps, sm);
 	qm = new QuManager(nLnks, nPkts, nQus, min(50,5*nPkts/nLnks), ps, sm);
 	pktLog = new PacketLog(20000,500,ps);
 
