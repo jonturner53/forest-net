@@ -7,18 +7,10 @@ To run it independently, uncomment the end of this code:
  	# run()
 and type "python PandaWorld.py"
  
-control:
-	Move   -> Up, Left, Right, Down
-	Rotate -> A, S
-	Strafe -> Z, X
-
-Last Updated: 3/14/2013
 Author: Chao Wang and Jon Turner
 World Model: Chao Wang
  
 Adapted from "Roaming Ralph", a tutorial included in Panda3D package.
-Author: Ryan Myers
-Models: Jeff Styers, Reagan Heller
 """  
 
 import direct.directbase.DirectStart
@@ -198,27 +190,58 @@ class PandaWorld(DirectObject):
 		#base.camera.setPos(self.avatar.getX(),self.avatar.getY(),.2)
 		#base.camera.setHpr(self.avatar.getHpr()[0],0,0)
 		
-		self.cTrav = CollisionTraverser()
-
  		"""
- 		CollisionSphere that detects walkable region.
- 		A move is legal if the sphere hits but the terrain.
+ 		Setup collision Solids for the two purpose:
+ 		1. prevent the avatar from passing through a wall
+		2. keep the avatar on the ground (we skip it for now)
  		"""
-		self.avatarCS = CollisionSphere(0,0,0,1)
-		self.avatarGroundCol = CollisionNode('avatarSphere')
-		self.avatarGroundCol.addSolid(self.avatarCS)
-		self.avatarGroundCol.setFromCollideMask(BitMask32.bit(0))
-		self.avatarGroundCol.setIntoCollideMask(BitMask32.allOff())
-		self.avatarGroundColNp = \
-			self.avatar.attachNewNode(self.avatarGroundCol)
-		self.avatarCS.setRadius(500)
-		self.avatarCS.setCenter(0,-80,300)
-		self.avatarGroundHandler = CollisionHandlerQueue()
-		self.cTrav.addCollider(self.avatarGroundColNp, \
-			self.avatarGroundHandler)
+		base.cTrav = CollisionTraverser()
+		base.cTrav.setRespectPrevTransform(True)
+
+		self.avatarSpNp = \
+			self.avatar.attachNewNode(CollisionNode('avatarSphere'))
+		
+		self.csSphere = self.avatarSpNp.node().addSolid(
+			CollisionSphere(0.0/self.avatar.getScale().getX(),
+							-0.5/self.avatar.getScale().getY(),
+						#	-1.0/self.avatar.getScale().getY(),
+							0.5/self.avatar.getScale().getZ(),
+							0.8/self.avatar.getScale().getX()))
+		# format above: (x,y,z,radius)
+
+		self.avatarSpNp.node().setFromCollideMask(BitMask32.bit(0))
+		self.avatarSpNp.node().setIntoCollideMask(BitMask32.allOff())
+
+		# uncomment the following line to show the collisionSphere
+		#self.avatarSpNp.show()
+
+		self.avatarGroundHandler = CollisionHandlerPusher()
+		self.avatarGroundHandler.setHorizontal(True)
+		self.avatarGroundHandler.addCollider(self.avatarSpNp, self.avatar)
+		base.cTrav.addCollider(self.avatarSpNp,	self.avatarGroundHandler)
+
+		"""
+		setup collision detection objects used to implement
+		the canSee method
+		"""
+		self.csSeg = CollisionSegment()
+		self.csSeg.setPointA(Point3(0,0,0))
+		self.csSeg.setPointB(Point3(0,0,.5))
+
+		self.csNode = self.environ.attachNewNode(CollisionNode('csSeg'))
+		self.csNode.node().addSolid(self.csSeg)
+		self.csNode.node().setFromCollideMask(BitMask32.bit(0))
+		self.csNode.node().setIntoCollideMask(BitMask32.allOff())
+
+		self.csHandler = CollisionHandlerQueue()
+
+		self.csTrav = CollisionTraverser('CustomTraverser')
+		self.csTrav.addCollider(self.csNode, self.csHandler)
 
 
-		# Create some lighting
+		"""
+		Finally, let there be light
+		"""
 		self.ambientLight = render.attachNewNode( AmbientLight( "ambientLight" ) )
 		self.ambientLight.node().setColor( Vec4( .8, .8, .8, 1 ) )
 		render.setLight(self.ambientLight)
@@ -238,21 +261,6 @@ class PandaWorld(DirectObject):
 		self.dlnp2.setHpr(-70,-60,0)
 		render.setLight(self.dlnp2)
 
-		# setup collision detection objects used to implement
-		# canSee method
-		self.csSeg = CollisionSegment()
-		self.csSeg.setPointA(Point3(0,0,0))
-		self.csSeg.setPointB(Point3(0,0,.5))
-
-		self.csNode = self.environ.attachNewNode(CollisionNode('csSeg'))
-		self.csNode.node().addSolid(self.csSeg)
-		self.csNode.node().setFromCollideMask(BitMask32.bit(0))
-		self.csNode.node().setIntoCollideMask(BitMask32.allOff())
-
-		self.csHandler = CollisionHandlerQueue()
-
-		self.csTrav = CollisionTraverser('CustomTraverser')
-		self.csTrav.addCollider(self.csNode, self.csHandler)
 
 	def resetCamKeys(self):
 		self.keyMap["cam-up"]=0
@@ -582,22 +590,7 @@ class PandaWorld(DirectObject):
 			base.camera.setPos(pos); base.camera.setHpr(hpr)
 			base.camLens.setFov(40)
 			
-		# Now check for collisions.
-		
-		self.cTrav.traverse(render)
 
-		# If our avatar hit anything besides the terrain, 
-		# put him back where he was last frame.
-		entries = []
-		for i in range(self.avatarGroundHandler.getNumEntries()):
-			entries.append(self.avatarGroundHandler.getEntry(i))
-		collide = False
-		if (len(entries)>0) :
-			for entry in entries :
-				if entry.getIntoNode().getName() != "ID257" : # tag of terrain
-					collide = True
-			if collide == True :
-				self.avatar.setPos(startpos)
 
 		# Check visibility and update visList
 		for id in self.remoteMap:
@@ -630,9 +623,11 @@ class PandaWorld(DirectObject):
 
 		return task.cont
 
-#w = PandaWorld()
-#w.addRemote(69, 67, 135, 111, "Vigo")
-#w.addRemote(20, 33, 135, 222, "Chris")
-#w.addRemote(52, 46, 135, 333, "Jon")
-#w.addRemote(90, 79, 135, 444, "Chao")
-#run()
+#"""
+w = PandaWorld()
+w.addRemote(69, 67, 135, 111, "Vigo")
+w.addRemote(20, 33, 135, 222, "Chris")
+w.addRemote(52, 46, 135, 333, "Jon")
+w.addRemote(90, 79, 135, 444, "Chao")
+run()
+#"""
