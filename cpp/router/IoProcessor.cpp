@@ -11,10 +11,17 @@
 namespace forest {
 
 
-// Constructor for IoProcessor, allocates space and initializes private data
-IoProcessor::IoProcessor(int maxIface1, IfaceTable *ift1, LinkTable *lt1,
-			 PacketStore *ps1, StatsModule *sm1)
-			 : maxIface(maxIface1), ift(ift1),
+/** Constructor for IoProcessor, allocates space and initializes private data.
+ *  @param maxIface1 is the maximum interface number for this router
+ *  @param portNum1 is the port number to be bound to interface sockets;
+ *  if 0, use system-assigned socket number
+ *  @param ift1 is a pointer to the router's InterfaceTable object
+ *  @param lt1 is a pointer to the router's LinkTable object
+ *  @param sm1 is a pointer to the router's StatsModule object
+ */
+IoProcessor::IoProcessor(int maxIface1, int portNum1, IfaceTable *ift1,
+			 LinkTable *lt1, PacketStore *ps1, StatsModule *sm1)
+			 : maxIface(maxIface1), portNum(portNum1), ift(ift1),
 			   lt(lt1), ps(ps1), sm(sm1) {
 	nRdy = 0; maxSockNum = -1;
 	sockets = new fd_set;
@@ -31,7 +38,10 @@ IoProcessor::~IoProcessor() {
 	delete sockets;
 }
 
-// Setup an interface. Return true on success, false on failure.
+/** Setup an interface.
+ *  @param i is the number of a new interface to be configured
+ *  @return true on success, false on failure.
+ */
 bool IoProcessor::setup(int i) {
 	// create datagram socket
 	sock[i] = Np4d::datagramSocket();
@@ -42,11 +52,12 @@ bool IoProcessor::setup(int i) {
 	maxSockNum = max(maxSockNum, sock[i]);
 
 	// bind it to an address
-        if (!Np4d::bind4d(sock[i], ift->getIpAdr(i),0)) {
+        if (!Np4d::bind4d(sock[i], ift->getIpAdr(i), portNum)) {
 		string s;
-		cerr << "IoProcessor::setup: bind call failed for "
+		cerr << "IoProcessor::setup: bind call failed for ("
 		     << Np4d::ip2string(ift->getIpAdr(i),s)
-		     << " check interface's IP address\n";
+		     << ", " << portNum << ") check interface's IP "
+		     << "address and port\n";
                 return false;
         }
 	ift->setPort(i,Np4d::getSockPort(sock[i]));

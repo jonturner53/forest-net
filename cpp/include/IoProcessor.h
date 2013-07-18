@@ -20,7 +20,7 @@ namespace forest {
 
 class IoProcessor {
 public:
-		IoProcessor(int, IfaceTable*, LinkTable*,
+		IoProcessor(int, ipp_t, IfaceTable*, LinkTable*,
 			    PacketStore*, StatsModule*);
 		~IoProcessor();
 
@@ -36,6 +36,7 @@ private:
 	ipp_t	bootIp;			///< IP address used to boot router
 	ipa_t	nmIp;			///< IP address used by netMgr
 	int	bootSock;		///< associated socket
+	ipp_t	portNum;		///< port# for iface sockets
 
 	int	maxIface;		///< largest interface number
 	int	maxSockNum;		///< largest socket num opened by ioProc
