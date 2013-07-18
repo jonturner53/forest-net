@@ -33,7 +33,8 @@ struct RouterInfo {
         string  mode; 		///< router operation mode (local or remote)
 
         fAdr_t  myAdr; 		///< forest address of the router
-        ipa_t   bootIp; 		///< IP address of the router 
+        ipa_t   bootIp; 	///< IP address used for booting
+        ipp_t   portNum; 	///< port # for all interfaces (default=0)
         fAdr_t  nmAdr; 		///< forest address of the network manager
         ipa_t   nmIp; 		///< IP address of the network manager
         fAdr_t  ccAdr; 		///< forest address of the comtree controller
