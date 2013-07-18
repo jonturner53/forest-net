@@ -25,7 +25,7 @@ int main(int argc, char *argv[]) {
 
 	if (argc != 4 ||
 	     sscanf(argv[3],"%d", &finTime) != 1)
-		fatal("usage: NetMgr myIp topoFile prefixFile finTime");
+		fatal("usage: NetMgr topoFile prefixFile finTime");
 	if (!init(argv[1])) {
 		fatal("NetMgr: initialization failure");
 	}
