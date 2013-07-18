@@ -88,7 +88,7 @@ class PandaWorld(DirectObject):
 		# are now two copies --- one optimized for rendering,
 		# one for collisions.  
 
-		self.environ = loader.loadModel("models/vworld-grid-24")
+		self.environ = loader.loadModel("models/vworld24grid")
 		self.environ.reparentTo(render)
 		self.environ.setPos(0,0,0)
 		
@@ -247,7 +247,7 @@ class PandaWorld(DirectObject):
 		render.setLight(self.ambientLight)
 
 		dLight1 = DirectionalLight("dLight1")
-		dLight1.setColor(Vec4(1, .6, .7, 1))
+		dLight1.setColor(Vec4(6,5,7,1))
 		dLight1.setDirection(Vec3(1,1,1))
 		dlnp1 = render.attachNewNode(dLight1)
 		dlnp1.setHpr(30,-160,0)
@@ -623,11 +623,11 @@ class PandaWorld(DirectObject):
 
 		return task.cont
 
-#"""
+"""
 w = PandaWorld()
 w.addRemote(69, 67, 135, 111, "Vigo")
 w.addRemote(20, 33, 135, 222, "Chris")
 w.addRemote(52, 46, 135, 333, "Jon")
 w.addRemote(90, 79, 135, 444, "Chao")
 run()
-#"""
+"""
