@@ -9,6 +9,6 @@ vworld1 - the original virtual world demo
 vworld2 - a basic panda demo for others who may want to build
 	  their own games; we'll keep it simple
 
-vworld3 - include a fast visibility calculation; this has been
-	  integrated into vworld2. The content will be replaced
-	  by that in vworld4
+vworld3 - a version for testing a scalable communication mechanism
+
+vworld4 - adding more feature to vworld2
