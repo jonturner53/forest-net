@@ -282,23 +282,30 @@ class AIWorld(DirectObject):
 			self.rotateDuration = random.randint(200,400)
 
 		# guide the moving direction of the bot
-		if self.rotateDir <= 2 : # turn left
+		if self.rotateDir <= 3 : # turn left
 			self.avatar.setH(self.avatar.getH() + \
-							 50 * globalClock.getDt())
+							 40 * globalClock.getDt())
 			self.rotateDuration -= 1
 			if self.rotateDuration <= 0:
 				self.rotateDuration = -1
 				self.rotateDir = -1
-		elif self.rotateDir <= 4 : # turn right
+		elif self.rotateDir <= 6 : # turn right
 			self.avatar.setH(self.avatar.getH() - \
 							 50 * globalClock.getDt())
 			self.rotateDuration -= 1
 			if self.rotateDuration <= 0:
 				self.rotateDuration = -1
 				self.rotateDir = -1
-		elif self.rotateDir == 5 : # turn big left
+		elif self.rotateDir == 7 : # turn big left
 			self.avatar.setH(self.avatar.getH() + \
-							 252 * globalClock.getDt())
+							 102 * globalClock.getDt())
+			self.rotateDuration -= 1
+			if self.rotateDuration <= 0:
+				self.rotateDuration = -1
+				self.rotateDir = -1
+		elif self.rotateDir == 8 : # turn big right
+			self.avatar.setH(self.avatar.getH() - \
+							 102 * globalClock.getDt())
 			self.rotateDuration -= 1
 			if self.rotateDuration <= 0:
 				self.rotateDuration = -1
@@ -310,12 +317,12 @@ class AIWorld(DirectObject):
 				self.rotateDir = -1
 			self.avatar.setFluidPos(self.avatar,
 									0,
-									-400 * globalClock.getDt(),
+									-60 * globalClock.getDt(),
 									self.avatar.getZ() )
 		# moving forward
 		self.avatar.setFluidPos(self.avatar,
 								0,
-								-50 * globalClock.getDt(),
+								-420 * globalClock.getDt(),
 								self.avatar.getZ() )
 
 

@@ -80,7 +80,7 @@ class PandaWorld(DirectObject):
 				    "walk":"models/panda-walk"})
 		self.avatar.reparentTo(render)
 		self.avatar.setScale(.002)
-		self.avatar.setPos(58,67,0)
+		self.avatar.setPos(58,81,0)
 
 		# Set up the camera
 		base.disableMouse()
