@@ -292,8 +292,9 @@ int CtlPkt::pack() {
 		break;
 	case DROP_LINK:
 		if (mode == REQUEST) {
-			if (link == 0) return 0;
-			packPair(LINK,link);
+			if (link == 0 && adr1 == 0) return 0;
+			if (link != 0) packPair(LINK,link);
+			if (adr1 != 0) packPair(ADR1,adr1);
 		}
 		break;
 	case GET_LINK:
@@ -475,6 +476,11 @@ int CtlPkt::pack() {
 			packNonce(NONCE,nonce);
 		}
 		break;
+	case CANCEL_SESSION:
+		if (mode == REQUEST) {
+			if (adr1 == 0 || adr2 == 0) return 0;
+			packPair(ADR1,adr1); packPair(ADR2,adr2);
+		}
 	case CLIENT_CONNECT:
 		if (mode == REQUEST) {
 			if (adr1 == 0 || adr2 == 0) return 0;
@@ -646,7 +652,7 @@ bool CtlPkt::unpack() {
 			return false;
 		break;
 	case DROP_LINK:
-		if (mode == REQUEST && link == 0)
+		if (mode == REQUEST && link == 0 && adr1 == 0)
 			return false;
 		break;
 	case GET_LINK:
@@ -739,6 +745,10 @@ bool CtlPkt::unpack() {
 		    (mode == POS_REPLY &&
 		     (adr1 == 0 || adr2 == 0 || adr3 == 0 ||
 		      ip1 == 0 || nonce == 0)))
+			return false;
+		break;
+	case CANCEL_SESSION:
+		if (mode == REQUEST && (adr1 == 0 || adr2 == 0))
 			return false;
 		break;
 	case CLIENT_CONNECT:
@@ -879,6 +889,7 @@ string& CtlPkt::typeName(string& s) {
 	case ADD_ROUTE_LINK: s = "add route link"; break;
 	case DROP_ROUTE_LINK: s = "drop route link"; break;
 	case NEW_SESSION: s = "new session"; break;
+	case CANCEL_SESSION: s = "cancel session"; break;
 	case CLIENT_CONNECT: s = "client connect"; break;
 	case CLIENT_DISCONNECT: s = "client disconnect"; break;
 	case CONFIG_LEAF: s = "config leaf"; break;
@@ -1025,7 +1036,8 @@ string& CtlPkt::toString(string& s) {
 		break;
 	case DROP_LINK:
 		if (mode == REQUEST) {
-			ss << " " << avPair2string(LINK,s);
+			if (link != 0) ss << " " << avPair2string(LINK,s);
+			if (adr1 != 0) ss << " " << avPair2string(ADR1,s);
 		}
 		break;
 	case GET_LINK:
@@ -1173,6 +1185,12 @@ string& CtlPkt::toString(string& s) {
 			ss << " " << avPair2string(PORT1,s);
 			ss << " " << avPair2string(NONCE,s);
 		}
+		break;
+	case CANCEL_SESSION:
+		if (mode == REQUEST) {
+			ss << " " << avPair2string(ADR1,s);
+			ss << " " << avPair2string(ADR2,s);
+		} 
 		break;
 	case CLIENT_CONNECT:
 		if (mode == REQUEST) {
