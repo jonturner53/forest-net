@@ -1237,11 +1237,20 @@ bool RouterCore::addLink(CtlPkt& cp, CtlPkt& reply) {
 }
 
 bool RouterCore::dropLink(CtlPkt& cp, CtlPkt& reply) {
-	dropLink(cp.link);
+	dropLink(cp.link, cp.adr1);
 	return true;
 }
 
-void RouterCore::dropLink(int lnk) {
+/** Drop a specified link at this router.
+ *  First, remove all comtree links associated with this link.
+ *  This also removes the comtree link from all multicast routes.
+ *  @param lnk is the link number of the link to be dropped
+ *  @param peerAdr is the address of the peer of the remote end of the
+ *  link, if lnk == 0; in this case, the link number is looked up using
+ *  the peerAdr value
+ */
+void RouterCore::dropLink(int lnk, fAdr_t peerAdr) {
+	if (lnk == 0) lnk = lt->lookup(peerAdr);
 	int *comtVec = new int[lt->getComtSet(lnk).size()];
 	int i = 0;
 	for (int comt : lt->getComtSet(lnk)) comtVec[i++] = comt;

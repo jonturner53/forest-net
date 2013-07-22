@@ -147,7 +147,7 @@ private:
 
 	bool	addLink(CtlPkt&, CtlPkt&);
 	bool	dropLink(CtlPkt&, CtlPkt&);
-	void	dropLink(int);
+	void	dropLink(int,fAdr_t=0);
 	bool	getLink(CtlPkt&, CtlPkt&);
 	bool	modLink(CtlPkt&, CtlPkt&);
 

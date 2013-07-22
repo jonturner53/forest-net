@@ -72,6 +72,7 @@ void* 	handler(void *);
 bool 	handleConsole(int,CpHandler&);
 bool 	handleConDisc(int,CtlPkt&,CpHandler&);
 bool 	handleNewSession(int,CtlPkt&,CpHandler&);
+bool 	handleCancelSession(int,CtlPkt&,CpHandler&);
 bool 	handleBootLeaf(int,CtlPkt&,CpHandler&);
 bool 	handleBootRouter(int,CtlPkt&,CpHandler&);
 

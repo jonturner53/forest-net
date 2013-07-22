@@ -48,7 +48,7 @@ public:
 
 	pktx addLink(fAdr_t,Forest::ntyp_t,int,int,ipa_t,ipp_t,					     fAdr_t,uint64_t,CtlPkt&);
 	pktx addLink(fAdr_t,Forest::ntyp_t,int,uint64_t,CtlPkt&);
-	pktx dropLink(fAdr_t,int,CtlPkt&);
+	pktx dropLink(fAdr_t,int,fAdr_t,CtlPkt&);
 	pktx modLink(fAdr_t,int,RateSpec&,CtlPkt&);
 	pktx getLink(fAdr_t,int,CtlPkt&);
 

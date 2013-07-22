@@ -156,6 +156,9 @@ void* handler(void *qp) {
 			case CtlPkt::NEW_SESSION:
 				success = handleNewSession(px,cp,cph);
 				break;
+			case CtlPkt::CANCEL_SESSION:
+				success = handleCancelSession(px,cp,cph);
+				break;
 			case CtlPkt::BOOT_LEAF:
 				cph.setTunnel(p.tunIp,p.tunPort);
 				// allow just one node to boot at a time
@@ -413,6 +416,42 @@ fAdr_t setupLeaf(int leaf, pktx px, CtlPkt& cp, int rtr, int iface,
 			  "signaling comtree"))
 		return 0;
 	return leafAdr;
+}
+
+/** Handle a cancel session request.
+ *  @param px is the packet number of the request packet
+ *  @param cp is the control packet structure for p (already unpacked)
+ *  @param cph is the control packet handler for this thread
+ *  @return true if the operation is completed successfully, else false
+ */
+bool handleCancelSession(pktx px, CtlPkt& cp, CpHandler& cph) {
+	Packet& p = ps->getPacket(px);
+	fAdr_t clientAdr = cp.adr1;
+	fAdr_t rtrAdr = cp.adr2;
+
+	// verify that clientAdr is in range for router
+	int rtr = net->getNodeNum(rtrAdr);
+	if (rtr == 0) {
+		cph.errReply(px,cp,"no router with specified address");
+		return 0;
+	}
+	pair<fAdr_t,fAdr_t> range;
+	net->getLeafRange(rtr, range);
+	if (clientAdr < range.first || clientAdr > range.second) {
+		cph.errReply(px,cp,"client address not in router's range");
+		return false;
+	}
+
+	pktx reply; CtlPkt repCp;
+	reply = cph.dropLink(rtrAdr,0,clientAdr,repCp);
+	if (!processReply(px,cp,reply,repCp,cph,"could not drop link "
+			  "at router"))
+		return false;
+
+	// send positive reply back to sender
+	repCp.reset(CtlPkt::CANCEL_SESSION,CtlPkt::POS_REPLY,cp.seqNum);
+	cph.sendReply(repCp,p.srcAdr);
+	return true;
 }
 
 /** Handle boot process for a pre-configured leaf node.
