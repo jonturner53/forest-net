@@ -10,6 +10,9 @@ from CtlPkt import *
 from math import sin, cos
 from direct.task import Task
 
+import direct.directbase.DirectStart
+from panda3d.core import *
+
 UPDATE_PERIOD = .05 	# number of seconds between status updates
 STATUS_REPORT = 1 	# code for status report packets
 #NUM_ITEMS = 10		# number of items in status report
@@ -60,22 +63,23 @@ class Net :
 	""" Net support.
 
 	"""
-	def __init__(self, myIp, cliMgrIp, comtree, pWorld, debug, auto):
+	def __init__(self, cliMgrIp, comtree, numg, subLimit, pWorld, debug):
 		""" Initialize a new Net object.
 
-		myIp address is IP address of this host
 		comtree is the number of the comtree to use
-		map is a WorldMap object
 		debug is an integer >=0 that determines amount of
 		debugging output
+		numg*numg is the number of multicast groups
+		subLimit defines the maximum visibility distance for multicast
+		groups
 		"""
 
-		self.myIp = myIp
+#		self.myIp = myIp
 		self.cliMgrIp = cliMgrIp
 		self.comtree = comtree
 		self.pWorld = pWorld
 		self.debug = debug
-		self.auto = auto
+#		self.auto = auto
 
 		# open and configure socket to be nonblocking
 		self.sock = socket(AF_INET, SOCK_DGRAM);
@@ -235,7 +239,7 @@ class Net :
 		""" Receive a packet from the router.
 
 		If the socket has a packet available, it is unpacked
-		and returned. Othereise, None is returned.
+		and returned. Otherwise, None is returned.
 		"""
 		try :
 			buf, senderAdr = self.sock.recvfrom(2000)
