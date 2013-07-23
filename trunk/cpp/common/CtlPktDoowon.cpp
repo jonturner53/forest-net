@@ -292,8 +292,9 @@ int CtlPkt::pack() {
 		break;
 	case DROP_LINK:
 		if (mode == REQUEST) {
-			if (link == 0) return 0;
-			packPair(LINK,link);
+			if (link == 0 && adr1 == 0) return 0;
+			if (link != 0) packPair(LINK,link);
+			if (adr1 != 0) packPair(ADR1,adr1);
 		}
 		break;
 	case GET_LINK:
@@ -475,6 +476,11 @@ int CtlPkt::pack() {
 			packNonce(NONCE,nonce);
 		}
 		break;
+	case CANCEL_SESSION:
+		if (mode == REQUEST) {
+			if (adr1 == 0 || adr2 == 0) return 0;
+			packPair(ADR1,adr1); packPair(ADR2,adr2);
+		}
 	case CLIENT_CONNECT:
 		if (mode == REQUEST) {
 			if (adr1 == 0 || adr2 == 0) return 0;
@@ -504,27 +510,25 @@ int CtlPkt::pack() {
 			packPair(ADR1,adr1); packPair(ADR2,adr2);
 		}
 		break;
-	//Fend and Doowon
-	case GET_LINK_SET:
-		if (mode != REQUEST) {
-			int num = 0;
+	case GET_LINK_SET: //Fend and Doowon
+		if (mode == POS_REPLY) { //POS_REPLY
+			int num = 0, i = 0;
 			payload[pp++] = htonl(CtlPkt::NLINK);
             pp++; //for the space for number of links.
-            for (int i = lt->firstLink(); i != 0; i = lt->nextLink(i)) {
-                payload[pp++] = htonl(i);
-                payload[pp++] = htonl(lt->getPeerIpAdr(i));
-                payload[pp++] = htonl(lt->getPeerPort(i));
-                payload[pp++] = htonl(lt->getNonce(i));
-                payload[pp++] = htonl(lt->getIface(i));
-                payload[pp++] = htonl(lt->getPeerType(i));
-                payload[pp++] = htonl(lt->getPeerAdr(i));
-                payload[pp++] = htonl(lt->getRates(i).bitRateUp);
-                payload[pp++] = htonl(lt->getRates(i).bitRateDown);
-                payload[pp++] = htonl(lt->getRates(i).pktRateUp);
-                payload[pp++] = htonl(lt->getRates(i).pktRateDown);
+            for (i = lt->firstLink(); i != 0; i = lt->nextLink(i)) {
+                packPair(LINK, 		i);
+                packPair(IFACE, 	lt->getIface(i));
+                packPair(IP1, 		lt->getPeerIpAdr(i));
+                packPair(PORT1, 	lt->getPeerPort(i));
+                packPair(NODE_TYPE, lt->getPeerType(i));
+                packPair(ADR1, 		lt->getPeerAdr(i));
+                packRspec(RSPEC1, 	lt->getRates(i));
+                packNonce(NONCE, 	nonce);
+                payload[pp++] = htonl(CtlPkt::LINKSET);
                 num++;
             }
             payload[5] = htonl(num);
+		} else if(mode == REQUEST){ //packing first link # and # of links
 		}
 
 	case BOOT_ROUTER:
@@ -535,6 +539,7 @@ int CtlPkt::pack() {
 	default: break;
 	}
 	paylen = 4*pp;
+	cout << "paylen " << paylen << endl;
 	return paylen;
 }
 
@@ -565,11 +570,11 @@ bool CtlPkt::unpack() {
 		}
 		return true;
 	}
-
+	RateSpec Rates;
+	uint32_t attr = 0, numLinks = 0;
 	while (4*pp < paylen) { 
-		uint32_t attr;
 		unpackWord(attr);
-		RateSpec Rates;
+		
 		switch (attr) {
 		case ADR1:	unpackWord(adr1); break;
 		case ADR2:	unpackWord(adr2); break;
@@ -591,36 +596,21 @@ bool CtlPkt::unpack() {
 		case COMTREE_OWNER: unpackWord(comtreeOwner); break;
 		case COUNT:	unpackWord(count); break;
 		case QUEUE:	unpackWord(queue); break;
-		case ZIPCODE:	unpackWord(zipCode); break;
+		case ZIPCODE:	unpackWord(zipCode); break;		
 		case NLINK: //Feng and Doowon
-				uint32_t nlnk;
-				int lnk;
-				ipa_t peerIpAdr;
-				ipp_t peerPort;
-				uint64_t nonce;	
-				fAdr_t peerAdr;
-				int iface;
-				Forest::ntyp_t peerType;
-
-				unpackWord(nlnk);
-				lt = new LinkTable(nlnk);
-				for (int i = 1; i <= nlnk; i++) {
-		            unpackWord(lnk);
-		            unpackWord(peerIpAdr);
-		            unpackWord(peerPort);
-		            unpackWord(nonce);
-		            unpackWord(iface);
-		            peerType =(Forest::ntyp_t) ntohl(payload[pp++]);
-		            unpackWord(peerAdr);
-		            unpackRspec(Rates);
-		            
-		            lt->addEntry(lnk, peerIpAdr, peerPort, nonce);
-		            lt->setIface(lnk,iface);
-		            lt->setPeerType(lnk, peerType);
-		            lt->setPeerAdr(lnk,peerAdr);
-		            lt->getRates(lnk).set(Rates.bitRateUp, Rates.bitRateDown, Rates.pktRateUp, Rates.pktRateDown);
-				} 
-				break; 
+			if (mode == REQUEST){
+			} else if (mode == POS_REPLY) { //POS_REPLY
+				unpackWord(numLinks);
+				lt = new LinkTable(numLinks);
+			}
+			break;
+		case LINKSET: //Doowon
+			lt->addEntry(link, ip1, port1, nonce);
+			lt->setIface(link, iface);
+			lt->setPeerType(link, nodeType);
+			lt->setPeerAdr(link, adr1);
+			lt->getRates(link).set(rspec1.bitRateUp, rspec1.bitRateDown, rspec1.pktRateUp, rspec1.pktRateDown);
+			break;
 		default:	return false;
 		}
 	}
@@ -699,7 +689,7 @@ bool CtlPkt::unpack() {
 			return false;
 		break;
 	case DROP_LINK:
-		if (mode == REQUEST && link == 0)
+		if (mode == REQUEST && link == 0 && adr1 == 0)
 			return false;
 		break;
 	case GET_LINK:
@@ -792,6 +782,10 @@ bool CtlPkt::unpack() {
 		    (mode == POS_REPLY &&
 		     (adr1 == 0 || adr2 == 0 || adr3 == 0 ||
 		      ip1 == 0 || nonce == 0)))
+			return false;
+		break;
+	case CANCEL_SESSION:
+		if (mode == REQUEST && (adr1 == 0 || adr2 == 0))
 			return false;
 		break;
 	case CLIENT_CONNECT:
@@ -934,6 +928,7 @@ string& CtlPkt::typeName(string& s) {
 	case ADD_ROUTE_LINK: s = "add route link"; break;
 	case DROP_ROUTE_LINK: s = "drop route link"; break;
 	case NEW_SESSION: s = "new session"; break;
+	case CANCEL_SESSION: s = "cancel session"; break;
 	case CLIENT_CONNECT: s = "client connect"; break;
 	case CLIENT_DISCONNECT: s = "client disconnect"; break;
 	case CONFIG_LEAF: s = "config leaf"; break;
@@ -1080,7 +1075,8 @@ string& CtlPkt::toString(string& s) {
 		break;
 	case DROP_LINK:
 		if (mode == REQUEST) {
-			ss << " " << avPair2string(LINK,s);
+			if (link != 0) ss << " " << avPair2string(LINK,s);
+			if (adr1 != 0) ss << " " << avPair2string(ADR1,s);
 		}
 		break;
 	case GET_LINK:
@@ -1228,6 +1224,12 @@ string& CtlPkt::toString(string& s) {
 			ss << " " << avPair2string(PORT1,s);
 			ss << " " << avPair2string(NONCE,s);
 		}
+		break;
+	case CANCEL_SESSION:
+		if (mode == REQUEST) {
+			ss << " " << avPair2string(ADR1,s);
+			ss << " " << avPair2string(ADR2,s);
+		} 
 		break;
 	case CLIENT_CONNECT:
 		if (mode == REQUEST) {

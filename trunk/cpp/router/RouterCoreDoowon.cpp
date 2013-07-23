@@ -27,7 +27,7 @@ bool processArgs(int argc, char *argv[], RouterInfo& args) {
 	args.ccAdr = args.firstLeafAdr = args.lastLeafAdr = 0;
 	args.ifTbl = ""; args.lnkTbl = ""; args.comtTbl = "";
 	args.rteTbl = ""; args.statSpec = ""; 
-	args.finTime = 0;
+	args.portNum = 0; args.finTime = 0;
 
 	string s;
 	for (int i = 1; i < argc; i++) {
@@ -60,6 +60,8 @@ bool processArgs(int argc, char *argv[], RouterInfo& args) {
 			args.rteTbl = &argv[i][7];
 		} else if (s.compare(0,9,"statSpec=") == 0) {
 			args.statSpec = &argv[i][9];
+		} else if (s.compare(0,8,"portNum=") == 0) {
+			sscanf(&argv[i][8],"%hd",&args.portNum);
 		} else if (s.compare(0,8,"finTime=") == 0) {
 			sscanf(&argv[i][8],"%d",&args.finTime);
 		} else {
@@ -131,7 +133,7 @@ RouterCore::RouterCore(bool booting1, const RouterInfo& config)
 	ctt = new ComtreeTable(nComts,10*nComts,lt);
 	rt = new RouteTable(nRts,myAdr,ctt);
 	sm = new StatsModule(1000, nLnks, nQus, ctt);
-	iop = new IoProcessor(nIfaces, ift, lt, ps, sm);
+	iop = new IoProcessor(nIfaces, config.portNum, ift, lt, ps, sm);
 	qm = new QuManager(nLnks, nPkts, nQus, min(50,5*nPkts/nLnks), ps, sm);
 	pktLog = new PacketLog(20000,500,ps);
 
@@ -1238,11 +1240,20 @@ bool RouterCore::addLink(CtlPkt& cp, CtlPkt& reply) {
 }
 
 bool RouterCore::dropLink(CtlPkt& cp, CtlPkt& reply) {
-	dropLink(cp.link);
+	dropLink(cp.link, cp.adr1);
 	return true;
 }
 
-void RouterCore::dropLink(int lnk) {
+/** Drop a specified link at this router.
+ *  First, remove all comtree links associated with this link.
+ *  This also removes the comtree link from all multicast routes.
+ *  @param lnk is the link number of the link to be dropped
+ *  @param peerAdr is the address of the peer of the remote end of the
+ *  link, if lnk == 0; in this case, the link number is looked up using
+ *  the peerAdr value
+ */
+void RouterCore::dropLink(int lnk, fAdr_t peerAdr) {
+	if (lnk == 0) lnk = lt->lookup(peerAdr);
 	int *comtVec = new int[lt->getComtSet(lnk).size()];
 	int i = 0;
 	for (int comt : lt->getComtSet(lnk)) comtVec[i++] = comt;

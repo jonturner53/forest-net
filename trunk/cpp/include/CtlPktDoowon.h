@@ -72,7 +72,7 @@ public:
 		//feng
 		GET_LINK_SET = 76,
 
-		NEW_SESSION = 100,
+		NEW_SESSION = 100, CANCEL_SESSION = 103,
 		CLIENT_CONNECT = 101, CLIENT_DISCONNECT = 102,
 
 		SET_LEAF_RANGE = 110, CONFIG_LEAF = 111,
@@ -99,6 +99,7 @@ public:
 		QUEUE = 71,
 		ZIPCODE = 72,
 		NLINK = 73, //feng
+		LINKSET = 74, //Doowon
 		ERRMSG = 100
 	};
 	static const int MAX_STRING = 200;
@@ -152,6 +153,11 @@ public:
 	LinkTable *lt; 			///< table defining links
 	uint32_t* payload;		///< pointer to start of packet payload
 	int	paylen;			///< payload length in bytes
+
+	//dwkim
+	int firstLinkNum; // first link #
+	int numOfLinks; // # of links
+	int nextLinkNum; // the next link #
 
 	string	errMsg;			///< buffer for error messages
 
