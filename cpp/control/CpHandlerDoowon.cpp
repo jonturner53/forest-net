@@ -174,14 +174,16 @@ pktx CpHandler::addLink(fAdr_t dest, Forest::ntyp_t peerType, int iface,
 
 /** Send a drop link request packet.
  *  @param dest is the destination address for the packet
- *  @param link is the number of the link to be dropped
+ *  @param link is the number of the link to be dropped (may be 0)
+ *  @param peerAdr is the address of the peer at the end of the link (may be 0)
  *  @param repCp is a reference to a control packet in which the control
  *  packet in the response is returned (if response is != 0)
  *  @return the index of the response packet or 0 if there is no response
  */
-pktx CpHandler::dropLink(fAdr_t dest, int link,CtlPkt& repCp) {
+pktx CpHandler::dropLink(fAdr_t dest, int link, fAdr_t peerAdr, CtlPkt& repCp) {
 	CtlPkt reqCp(CtlPkt::DROP_LINK,CtlPkt::REQUEST,0);
-	reqCp.link = link;
+	if (link != 0) reqCp.link = link;
+	if (peerAdr != 0) reqCp.adr1 = peerAdr;
 	return sendRequest(reqCp,dest,repCp);
 }
 
@@ -557,15 +559,19 @@ pktx CpHandler::sendRequest(CtlPkt& cp, fAdr_t dest, CtlPkt& repCp) {
 	return reply;
 }
 
-//feng
+//Feng and Doowon
 /** Send a get link table request packet.
  *  @param dest is the destination address for the packet
  *  @param repCp is a reference to a control packet i nwhich the control
+ *  @param firstLinkNum is the first link number
+ *  @param numOfLinks is the number of links sent
  *  packet in the response is returned (if reponse is != 0)
  *  @return the index of the response packet or 0 if there is no response
  */
-pktx CpHandler::getLinkSet(fAdr_t dest, CtlPkt& repCp) {
+pktx CpHandler::getLinkSet(fAdr_t dest, CtlPkt& repCp, int firstLinkNum, int numOfLinks) {
     CtlPkt reqCp(CtlPkt::GET_LINK_SET, CtlPkt::REQUEST, 0);
+    reqCp.firstLinkNum = firstLinkNum;
+    reqCp.numOfLinks = numOfLinks;
     return sendRequest(reqCp,dest,repCp);
 }
 

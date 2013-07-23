@@ -23,9 +23,8 @@ using namespace forest;
 int main(int argc, char *argv[]) {
 	uint32_t finTime;
 	//std::cout << "argv: "<<argv[0] << " " << argv[1] << " " << argv[2] << " " << argv[3] << endl; 
-	if (argc != 4 ||
-	     sscanf(argv[3],"%d", &finTime) != 1)
-		fatal("usage: NetMgr myIp topoFile prefixFile finTime!!");
+	if (argc != 4 || sscanf(argv[3],"%d", &finTime) != 1)
+		fatal("usage: NetMgr topoFile prefixFile finTime");
 	if (!init(argv[1])) {
 		fatal("NetMgr: initialization failure");
 	}
@@ -159,6 +158,9 @@ void* handler(void *qp) {
 			case CtlPkt::NEW_SESSION:
 				success = handleNewSession(px,cp,cph);
 				break;
+			case CtlPkt::CANCEL_SESSION:
+				success = handleCancelSession(px,cp,cph);
+				break;
 			case CtlPkt::BOOT_LEAF:
 				cph.setTunnel(p.tunIp,p.tunPort);
 				// allow just one node to boot at a time
@@ -203,10 +205,10 @@ bool handleConsole(int sock, CpHandler& cph) {
 
 	// login user at remote console using password in netMgrUsers file
 	// command processing loop
-	string cmd, reply;
+	string cmd, reply = "";
 	while (buf.readAlphas(cmd)) {
 		std::cout << "[DEBUG] -- CMD: " << cmd << std::endl;
-		reply = "success";
+		// reply = "success";
 		if (cmd == "getNet") {
 			getNet(buf,reply);
 		} else if (cmd == "getLinkTable") {
@@ -245,10 +247,14 @@ void getLinkSet(NetBuffer& buf, string& reply, CpHandler& cph) {
 	pktx rp; 
 	CtlPkt repCp;
 	if (buf.verify(':') && buf.readName(router) && !router.empty() && router.size() >= 2){
-		std::cout << "[DEBUG] -- " << __FUNCTION__ << "() \n" << router << std::endl;
+		std::cout << "[DEBUG] -- " << __FUNCTION__ << "() \n" << router << std::endl;		
 		int rNum = net->getNodeNum(router);
 		std::cout << "[DEBUG] -- " << __FUNCTION__ << "() \n" << net->getNodeAdr(rNum) << std::endl;
-		rp = cph.getLinkSet(net->getNodeAdr(rNum), repCp);
+		int firstLinkNum = 1;
+		int numOfLinks = 10; //default is 10
+		// while (firstLinkNum != 0){
+		rp = cph.getLinkSet(net->getNodeAdr(rNum), repCp, firstLinkNum, numOfLinks);
+		firstLinkNum = repCp.nextLinkNum;
 		if (repCp.lt == NULL) {
 			std::cout << "[DEBUG] -- " << __FUNCTION__ << "() \n" << "No information for "  << router << std::endl;
 			reply = "No information for " + router + "\n";
@@ -265,8 +271,10 @@ void getLinkSet(NetBuffer& buf, string& reply, CpHandler& cph) {
 				ss << "(" << repCp.lt->getRates(i).bitRateUp << "," << repCp.lt->getRates(i).bitRateDown\
 					<< "," << repCp.lt->getRates(i).pktRateUp << "," << repCp.lt->getRates(i).pktRateDown << ")"<< "\r\n";
 			}
-			reply = ss.str();
+			reply += ss.str();
+			cout << reply << endl;
 		}
+		// }
 	} else {
 		reply = "Unrecognized input - for example r1";
 	}
@@ -452,6 +460,42 @@ fAdr_t setupLeaf(int leaf, pktx px, CtlPkt& cp, int rtr, int iface,
 			  "signaling comtree"))
 		return 0;
 	return leafAdr;
+}
+
+/** Handle a cancel session request.
+ *  @param px is the packet number of the request packet
+ *  @param cp is the control packet structure for p (already unpacked)
+ *  @param cph is the control packet handler for this thread
+ *  @return true if the operation is completed successfully, else false
+ */
+bool handleCancelSession(pktx px, CtlPkt& cp, CpHandler& cph) {
+	Packet& p = ps->getPacket(px);
+	fAdr_t clientAdr = cp.adr1;
+	fAdr_t rtrAdr = cp.adr2;
+
+	// verify that clientAdr is in range for router
+	int rtr = net->getNodeNum(rtrAdr);
+	if (rtr == 0) {
+		cph.errReply(px,cp,"no router with specified address");
+		return 0;
+	}
+	pair<fAdr_t,fAdr_t> range;
+	net->getLeafRange(rtr, range);
+	if (clientAdr < range.first || clientAdr > range.second) {
+		cph.errReply(px,cp,"client address not in router's range");
+		return false;
+	}
+
+	pktx reply; CtlPkt repCp;
+	reply = cph.dropLink(rtrAdr,0,clientAdr,repCp);
+	if (!processReply(px,cp,reply,repCp,cph,"could not drop link "
+			  "at router"))
+		return false;
+
+	// send positive reply back to sender
+	repCp.reset(CtlPkt::CANCEL_SESSION,CtlPkt::POS_REPLY,cp.seqNum);
+	cph.sendReply(repCp,p.srcAdr);
+	return true;
 }
 
 /** Handle boot process for a pre-configured leaf node.
