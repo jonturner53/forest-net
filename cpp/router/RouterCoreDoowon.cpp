@@ -1052,7 +1052,7 @@ void RouterCore::handleCtlPkt(int px) {
 	// setting parameters
 	case CtlPkt::SET_LEAF_RANGE:	setLeafRange(cp,reply); break;
 	//feng get link table info
-	case CtlPkt::GET_LINK_SET:	getLinkSet(px,reply); break;
+	case CtlPkt::GET_LINK_SET:	getLinkSet(cp,reply); break;
 	default:
 		cerr << "unrecognized control packet type " << cp.type
 		     << endl;
@@ -1718,8 +1718,11 @@ bool RouterCore::getRoute(CtlPkt& cp, CtlPkt& reply) {
 /**
  * Get a LinkTable by Feng and Doowon
  */
-bool RouterCore::getLinkSet(pktx px, CtlPkt& reply) {
+bool RouterCore::getLinkSet(CtlPkt& cp, CtlPkt& reply) {
 	reply.lt = lt;
+	reply.firstLinkNum = cp.firstLinkNum;
+	reply.numOfLinks = cp.numOfLinks;
+	cout << "RouterCore " << __FUNCTION__ << endl;
 	return true;
 }
 

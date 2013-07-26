@@ -562,16 +562,17 @@ pktx CpHandler::sendRequest(CtlPkt& cp, fAdr_t dest, CtlPkt& repCp) {
 //Feng and Doowon
 /** Send a get link table request packet.
  *  @param dest is the destination address for the packet
- *  @param repCp is a reference to a control packet i nwhich the control
+ *  @param repCp is a reference to a control packet in which the control
+ *  packet in the response is returned (if reponse is != 0) 
  *  @param firstLinkNum is the first link number
  *  @param numOfLinks is the number of links sent
- *  packet in the response is returned (if reponse is != 0)
  *  @return the index of the response packet or 0 if there is no response
  */
 pktx CpHandler::getLinkSet(fAdr_t dest, CtlPkt& repCp, int firstLinkNum, int numOfLinks) {
     CtlPkt reqCp(CtlPkt::GET_LINK_SET, CtlPkt::REQUEST, 0);
     reqCp.firstLinkNum = firstLinkNum;
     reqCp.numOfLinks = numOfLinks;
+    cout << __FUNCTION__ << endl;
     return sendRequest(reqCp,dest,repCp);
 }
 

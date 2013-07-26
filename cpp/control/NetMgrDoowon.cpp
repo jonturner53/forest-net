@@ -225,7 +225,7 @@ bool handleConsole(int sock, CpHandler& cph) {
 		if (sock == -1) break;
 		
 		reply += "over\n";
-		cout << reply << endl;
+		cout << "TOTAL\n" << reply << endl;
 		Np4d::sendString(sock,reply);
 	}
         return true;
@@ -233,7 +233,7 @@ bool handleConsole(int sock, CpHandler& cph) {
 
 void getNet(NetBuffer& buf, string& reply) {
 	// return net->toString(s) where net is the netInfo object
-	net->toString(reply);
+	// net->toString(reply);
 	std::cout << "[DEBUG] -- " << __FUNCTION__ << "() \n" << reply << std::endl;
 }
 
@@ -244,37 +244,39 @@ void getLinkSet(NetBuffer& buf, string& reply, CpHandler& cph) {
 	// each line starting with the word link, followed by the
 	// link number and remaining fields, with spaces separating items
 	string router;
-	pktx rp; 
-	CtlPkt repCp;
+	CtlPkt repCp; pktx rp;
 	if (buf.verify(':') && buf.readName(router) && !router.empty() && router.size() >= 2){
 		std::cout << "[DEBUG] -- " << __FUNCTION__ << "() \n" << router << std::endl;		
 		int rNum = net->getNodeNum(router);
 		std::cout << "[DEBUG] -- " << __FUNCTION__ << "() \n" << net->getNodeAdr(rNum) << std::endl;
 		int firstLinkNum = 1;
-		int numOfLinks = 10; //default is 10
-		// while (firstLinkNum != 0){
-		rp = cph.getLinkSet(net->getNodeAdr(rNum), repCp, firstLinkNum, numOfLinks);
-		firstLinkNum = repCp.nextLinkNum;
-		if (repCp.lt == NULL) {
-			std::cout << "[DEBUG] -- " << __FUNCTION__ << "() \n" << "No information for "  << router << std::endl;
-			reply = "No information for " + router + "\n";
-		}
-		else{
-			stringstream ss; 
-			string ip, fAdr, peerType;
-			for (int i = repCp.lt->firstLink(); i != 0; i = repCp.lt->nextLink(i)) {	
-				Np4d::ip2string(repCp.lt->getPeerIpAdr(i),ip);
-				Forest::fAdr2string(repCp.lt->getPeerAdr(i), fAdr);
-				Forest::nodeType2string(repCp.lt->getPeerType(i), peerType);
-				ss << i << " " << repCp.lt->getIface(i) << " " << ip << " " << repCp.lt->getPeerPort(i);
-				ss << " " << peerType << " " << fAdr << " ";
-				ss << "(" << repCp.lt->getRates(i).bitRateUp << "," << repCp.lt->getRates(i).bitRateDown\
-					<< "," << repCp.lt->getRates(i).pktRateUp << "," << repCp.lt->getRates(i).pktRateDown << ")"<< "\r\n";
+		int numOfLinks = 3; //default is 10
+		while (firstLinkNum != 0){
+			rp = cph.getLinkSet(net->getNodeAdr(rNum), repCp, firstLinkNum, numOfLinks);
+			cout << __FILE__ << " " << __FUNCTION__ << " first link num " << firstLinkNum << " numOfLinks " << numOfLinks << endl;
+			firstLinkNum = repCp.nextLinkNum;
+			cout << __FILE__ << " " << __FUNCTION__ << " Next link num " << repCp.nextLinkNum << endl;
+			if (repCp.lt == NULL) {
+				reply = "No information for " + router + "\n";
 			}
-			reply += ss.str();
-			cout << reply << endl;
+			else{
+				stringstream ss;
+				string ip, fAdr, peerType;
+				cout << __FUNCTION__ << " " << repCp.lt << endl;
+				cout << __FUNCTION__ << " first " << repCp.lt->firstLink() << endl;
+				for (int i = repCp.lt->firstLink(); i != 0; i = repCp.lt->nextLink(i)) {	
+					Np4d::ip2string(repCp.lt->getPeerIpAdr(i),ip);
+					Forest::fAdr2string(repCp.lt->getPeerAdr(i), fAdr);
+					Forest::nodeType2string(repCp.lt->getPeerType(i), peerType);
+					ss << i << " " << repCp.lt->getIface(i) << " " << ip << " " << repCp.lt->getPeerPort(i);
+					ss << " " << peerType << " " << fAdr << " ";
+					ss << "(" << repCp.lt->getRates(i).bitRateUp << "," << repCp.lt->getRates(i).bitRateDown\
+						<< "," << repCp.lt->getRates(i).pktRateUp << "," << repCp.lt->getRates(i).pktRateDown << ")"<< "\r\n";
+				}
+				cout << __FILE__ << " " << ss.str();
+				reply += ss.str();
+			}
 		}
-		// }
 	} else {
 		reply = "Unrecognized input - for example r1";
 	}

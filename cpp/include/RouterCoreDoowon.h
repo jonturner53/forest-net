@@ -166,7 +166,7 @@ private:
 	bool	getRoute(CtlPkt&, CtlPkt&);
 	bool	modRoute(CtlPkt&, CtlPkt&);
 	//feng
-	bool 	getLinkSet(pktx, CtlPkt&);
+	bool 	getLinkSet(CtlPkt&, CtlPkt&);
 	bool	setLeafRange(CtlPkt&, CtlPkt&);
 
 	void	sendConnDisc(int,Forest::ptyp_t);
