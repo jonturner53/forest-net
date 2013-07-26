@@ -114,6 +114,8 @@ void CtlPkt::reset() {
 	zipCode = 0;
 	errMsg.clear();
 	payload = 0; paylen = 0;
+	lt = new LinkTable(100);
+	firstLinkNum = 0; numOfLinks = 0; nextLinkNum = 0;
 }
 
 #define packPair(x,y) ((payload[pp++] = htonl(x)), (payload[pp++] = htonl(y)))
@@ -513,9 +515,12 @@ int CtlPkt::pack() {
 	case GET_LINK_SET: //Fend and Doowon
 		if (mode == POS_REPLY) { //POS_REPLY
 			int num = 0, i = 0;
-			payload[pp++] = htonl(CtlPkt::NLINK);
+			payload[pp++] = htonl(CtlPkt::LINKTABLE);
             pp++; //for the space for number of links.
-            for (i = lt->firstLink(); i != 0; i = lt->nextLink(i)) {
+            (firstLinkNum == 1) ? i = lt->firstLink() : i = firstLinkNum; //1 means the first
+            cout << __FILE__ <<  " " << __FUNCTION__ << " REPLY - first link num " << firstLinkNum << " numOfLinks " << numOfLinks << endl;
+            while (true){
+            // for (i = lt->firstLink(); i != 0; i = lt->nextLink(i)) {
                 packPair(LINK, 		i);
                 packPair(IFACE, 	lt->getIface(i));
                 packPair(IP1, 		lt->getPeerIpAdr(i));
@@ -525,10 +530,22 @@ int CtlPkt::pack() {
                 packRspec(RSPEC1, 	lt->getRates(i));
                 packNonce(NONCE, 	nonce);
                 payload[pp++] = htonl(CtlPkt::LINKSET);
-                num++;
+                string peerType;
+                Forest::nodeType2string(lt->getPeerType(i), peerType);
+                cout << __FUNCTION__ << " GET_LINK_SET " << peerType << endl;
+                i = lt->nextLink(i);
+                cout << __FUNCTION__ << " GET_LINK_SET " << i << " Num " << num << " numOfLinks " << numOfLinks << endl;
+                if ((++num >= numOfLinks) || i == 0){
+                	packPair(NEXT_LINK_NUM, i);
+                	cout << __FUNCTION__ << " next link num " << i << endl;
+                	break;
+                }
             }
             payload[5] = htonl(num);
-		} else if(mode == REQUEST){ //packing first link # and # of links
+		} else if (mode == REQUEST){ //packing first link # and # of links
+			packPair(FIRST_LINK_NUM, firstLinkNum);
+			packPair(NUM_OF_LINK, numOfLinks);
+			cout << "REQUEST -" << " first link num " << firstLinkNum << " numOfLinks " << numOfLinks << endl;
 		}
 
 	case BOOT_ROUTER:
@@ -539,7 +556,6 @@ int CtlPkt::pack() {
 	default: break;
 	}
 	paylen = 4*pp;
-	cout << "paylen " << paylen << endl;
 	return paylen;
 }
 
@@ -597,19 +613,22 @@ bool CtlPkt::unpack() {
 		case COUNT:	unpackWord(count); break;
 		case QUEUE:	unpackWord(queue); break;
 		case ZIPCODE:	unpackWord(zipCode); break;		
-		case NLINK: //Feng and Doowon
-			if (mode == REQUEST){
-			} else if (mode == POS_REPLY) { //POS_REPLY
-				unpackWord(numLinks);
-				lt = new LinkTable(numLinks);
-			}
+		case LINKTABLE: //Feng and Doowon
+			unpackWord(numLinks);
+			// lt = new LinkTable(numLinks);
+			// cout << "Num of Links " << numLinks << endl; 
 			break;
+		case FIRST_LINK_NUM: unpackWord(firstLinkNum); break;
+		case NUM_OF_LINK: unpackWord(numOfLinks); break;
+		case NEXT_LINK_NUM: unpackWord(nextLinkNum); break;
 		case LINKSET: //Doowon
+			cout << __FUNCTION__ << " " << link << " " << ip1 << " " << port1 << endl; 
 			lt->addEntry(link, ip1, port1, nonce);
 			lt->setIface(link, iface);
 			lt->setPeerType(link, nodeType);
 			lt->setPeerAdr(link, adr1);
 			lt->getRates(link).set(rspec1.bitRateUp, rspec1.bitRateDown, rspec1.pktRateUp, rspec1.pktRateDown);
+			cout << __FUNCTION__ << " " << lt << endl;
 			break;
 		default:	return false;
 		}

@@ -98,8 +98,11 @@ public:
 		COUNT = 70,
 		QUEUE = 71,
 		ZIPCODE = 72,
-		NLINK = 73, //feng
+		LINKTABLE = 73, //feng
 		LINKSET = 74, //Doowon
+		FIRST_LINK_NUM = 75, //Doowon
+		NUM_OF_LINK = 76, //Doowon
+		NEXT_LINK_NUM = 78, //Doowon
 		ERRMSG = 100
 	};
 	static const int MAX_STRING = 200;
