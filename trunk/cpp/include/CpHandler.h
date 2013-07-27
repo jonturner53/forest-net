@@ -64,6 +64,7 @@ public:
 	pktx getComtreeLink(fAdr_t,comt_t,int,CtlPkt&);
 
 	pktx newSession(fAdr_t,ipa_t,RateSpec&,CtlPkt&);
+	pktx cancelSession(fAdr_t,fAdr_t,fAdr_t,CtlPkt&);
 	pktx clientConnect(fAdr_t,fAdr_t,fAdr_t,CtlPkt&);
 	pktx clientDisconnect(fAdr_t,fAdr_t,fAdr_t,CtlPkt&);
 

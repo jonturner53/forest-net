@@ -38,7 +38,9 @@ fstream clientFile;	///< stream for reading/updating client data
 pthread_mutex_t clientFileLock; ///< so only one thread can update at a time
 
 /** Used to identify the type of an accounting record. */
-enum acctRecType { UNDEF, NEWSESSION, CONNECT_REC, DISCONNECT_REC };
+enum acctRecType {
+	UNDEF, NEWSESSION, CANCELSESSION, CONNECT_REC, DISCONNECT_REC
+};
 
 static int const RECORD_SIZE = 256; ///< size of a client file record
 
@@ -53,13 +55,14 @@ bool handleConnDisc(pktx,CtlPkt&,CpHandler&);
 // methods that implement requests from remote clients
 bool login(NetBuffer&,string&,string&);
 bool newAccount(NetBuffer&,string&,string&);
-bool newSession(int, CpHandler&, NetBuffer&, string&, string&);
+void newSession(int, CpHandler&, NetBuffer&, string&, string&);
 void getProfile(NetBuffer&, string&, string&);
 void updateProfile(NetBuffer&, string&, string&);
 void changePassword(NetBuffer&, string&, string&);
 void uploadPhoto(int, NetBuffer&, string&, string&);
 void getSessions(NetBuffer&, string&, string&);
-void cancelSession(NetBuffer&, string&, string&);
+void cancelSession(NetBuffer&, string&, CpHandler&, string&);
+void cancelAllSessions(NetBuffer&, string&, CpHandler&, string&);
 void addComtree(NetBuffer&, string&, string&);
 
 void writeRecord(int);

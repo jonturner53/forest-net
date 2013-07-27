@@ -442,7 +442,6 @@ string& ClientTable::session2string(int sess, string& s) const {
 	s += getSessRates(sess).toString(s1) + ", ";
 	time_t t = getStartTime(sess);
 	s += ctime(&t);
-	s += "\n";
 	return s;
 }
 
