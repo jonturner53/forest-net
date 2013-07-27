@@ -22,7 +22,7 @@ import java.nio.*;
 import java.nio.channels.*;
 import java.nio.charset.*;
 import java.util.Scanner;
-import javax.swing.*;
+import javax.swing.*;		
 
 import algoLib.dataStructures.basic.*;
 import algoLib.dataStructures.graphs.*;
@@ -52,6 +52,9 @@ public class AcctMgr extends MouseAdapter implements ActionListener, FocusListen
 	private JButton updateBtn;	///< update profile
 	private JButton modPwdBtn;	///< modify password
 	private JButton uploadBtn;	///< upload photo
+	private JButton getSessBtn; ///< get session information
+	private JButton cancelBtn;  ///< cancel session button
+	private JButton cancelAllBtn; ///< cancel all open sessions
 
 	// various text fields and the strings use to hold contents
 	private JTextField serverField;	///< client mgr server name/ip
@@ -81,6 +84,12 @@ public class AcctMgr extends MouseAdapter implements ActionListener, FocusListen
 	private String photoFile;
 
 	JTextArea statusArea;	///< text area used to display status messages
+
+
+	JTextArea sessionDisplay; ///< text area used to display sessions
+	private JTextField cancelField;
+	private String cancelAdr;  ///< string to record canceling forest address
+	private String checkDisplay;
 
 	/** Add a label to a text field and align them.
 	 *  @param text is the text field
@@ -225,8 +234,39 @@ public class AcctMgr extends MouseAdapter implements ActionListener, FocusListen
 		box4.add(Box.createHorizontalStrut(25));
 
 		// Finally, the sessions area
-		Box box5 = showSessions();
+		//Overall box structures
+		Box box5a = Box.createHorizontalBox();
+		Box box5 = Box.createVerticalBox();
+		box5.setBorder(BorderFactory.createEmptyBorder(10,13,10,15));
 
+		//Create session text area and add scroll bars to it
+		sessionDisplay = new JTextArea(10,60);
+		sessionDisplay.setEditable(false);
+		sessionDisplay.append("session information will be here");
+		JScrollPane scroll = new JScrollPane(sessionDisplay);
+
+		//Create button to retrieve user sessions
+		getSessBtn = new JButton("get sessions");
+		getSessBtn.addActionListener(this);
+		// Create area for forest address and cancel button to 
+		// cancel user session
+		cancelField = new JTextField(13);
+		cancelField.setText("forest ID");
+		cancelField.addFocusListener(this);
+		cancelBtn = new JButton("cancel");
+		cancelBtn.addActionListener(this);
+		cancelAllBtn = new JButton("cancel all");
+		cancelAllBtn.addActionListener(this);
+		getSessBtn.setAlignmentX(Component.LEFT_ALIGNMENT);
+		//Finalize box area designs
+		box5a.add(getSessBtn);
+		box5a.add(cancelField);
+		box5a.add(cancelBtn);
+		box5a.add(cancelAllBtn);
+		box5a.add(Box.createHorizontalStrut(250));
+		box5.add(box5a);
+		box5.add(scroll);
+		
 		// Putting it together
 		box0.setAlignmentX(Component.LEFT_ALIGNMENT);
 		box1a.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -234,6 +274,7 @@ public class AcctMgr extends MouseAdapter implements ActionListener, FocusListen
 		box2.setAlignmentX(Component.LEFT_ALIGNMENT);
 		box3.setAlignmentX(Component.LEFT_ALIGNMENT);
 		box4.setAlignmentX(Component.LEFT_ALIGNMENT);
+		box5.setAlignmentX(Component.LEFT_ALIGNMENT);
 
 		Box boxAll = Box.createVerticalBox();
 		boxAll.add(box0); boxAll.add(box1a); boxAll.add(statusBox);
@@ -322,6 +363,31 @@ public class AcctMgr extends MouseAdapter implements ActionListener, FocusListen
 			} else {
 				showStatus("Error: " + status);
 			}
+		} else if (ae.getActionCommand().equals("get sessions")) {
+			//get session information
+			String status = getSession(updateTarget);
+			if (status == null) {
+				showStatus("All active sessions shown below");
+			} else {
+				showSessions("Error: " + status);
+			}
+		} else if (ae.getActionCommand().equals("cancel")) {
+			//cancel session
+			String status = cancelSession(updateTarget, cancelAdr);
+			if (status == null) {
+				getSession(updateTarget);
+			} else {
+				showStatus("Cancel session failed: " + status);
+			}
+		} else if (ae.getActionCommand().equals("cancel all")) {
+			//cancel all sessions
+			//test for cancel all button working
+			String status = cancelAllSessions(updateTarget);
+			if (status == null) {
+				showSessions("All sessions canceled");
+			} else {
+				showStatus("Cancel session failed: " + status);
+			}
 		}
 	}
 
@@ -366,6 +432,8 @@ public class AcctMgr extends MouseAdapter implements ActionListener, FocusListen
 			}
 		} else if (src == photoField) {
 			photoFile = photoField.getText();
+		} else if (src == cancelField) {
+			cancelAdr = cancelField.getText();
 		}
 	}
 
@@ -423,11 +491,62 @@ public class AcctMgr extends MouseAdapter implements ActionListener, FocusListen
 	 *  rate spec. Include a cancel button at the end of the line.
 	 *  When pressed, this causes the session to be terminated.
 	 */
-	private Box showSessions() {
-		JLabel sessLabel = new JLabel("sessions");
-		Box b = Box.createVerticalBox();
-		b.add(sessLabel);
-		return b;
+	public void showSessions(String s) {
+		sessionDisplay.selectAll();
+		sessionDisplay.replaceSelection(s);
+	}
+
+	private String getSession(String userName) {
+		if (!sendString("getSessions: " + userName + "\nover\n"))
+			return "cannot send request to server";
+System.out.println("getSession : " + userName);
+		String s = inBuf.readLine();
+System.out.println("reply=" + s);
+		if (s == null || !s.equals("success")) {
+			inBuf.nextLine();
+			return s == null ? "unexpected response" : s;
+		}
+		s = inBuf.readLine();
+		String sessionList = "";
+		while (!s.equals("over")) {
+System.out.println("session=" + s);
+			sessionList += s + "\n";
+			s = inBuf.readLine();
+		}
+		showSessions(sessionList);
+		if (s == null || !s.equals("over"))
+			return s == null ? "unexpected response" : s;
+		return null;
+	}
+
+	private String cancelSession(String userName, String cancelAdr) {
+                if (!sendString("cancelSession: " + userName + " " +
+				 cancelAdr + "\nover\n")) {
+                        return "cannot send request to server";
+		}
+                String s = inBuf.readLine();
+                if (s == null || !s.equals("success")) {
+                        inBuf.nextLine();
+                        return s == null ? "unexpected response" : s;
+                }
+                s = inBuf.readLine();
+                if (s == null || !s.equals("over"))
+                        return s == null ? "unexpected response" : s;
+                return null;
+        }
+
+	private String cancelAllSessions(String userName) {
+		if (!sendString("cancelAllSessions: " + userName + "\nover\n"))
+                        return "cannot send request to server";
+                String s = inBuf.readLine();
+                if (s == null || !s.equals("success")) {
+                        inBuf.nextLine();
+                        return s == null ? "unexpected response" : s;
+               	}
+                s = inBuf.readLine();
+                if (s == null || !s.equals("over"))
+                        return s == null ? "unexpected response" : s;
+                return null;
 	}
 
 	/** Connect to the server for the client manager.
