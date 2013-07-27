@@ -1,6 +1,8 @@
 /** @file ClientMgr.cpp 
  *
  *  @author Jonathan Turner (based on earlier version by Logan Stafman)
+ *  @author Andrew Kelley and Sam Jonesi added extensions to display
+ *  and cancel sessions
  *  @date 2013
  *  This is open source software licensed under the Apache 2.0 license.
  *  See http://www.apache.org/licenses/LICENSE-2.0 for details.
@@ -337,7 +339,9 @@ cerr << "cmd=" << cmd << endl;
 		} else if (cmd == "getSessions") {
 			getSessions(buf,clientName,reply);
 		} else if (cmd == "cancelSession") {
-			cancelSession(buf,clientName,reply);
+			cancelSession(buf,clientName,cph,reply);
+		} else if (cmd == "cancelAllSessions") {
+			cancelAllSessions(buf,clientName,cph,reply);
 		} else if (cmd == "addComtree" && buf.nextLine()) {
 			addComtree(buf,clientName,reply);
 		} else {
@@ -434,7 +438,7 @@ bool newAccount(NetBuffer& buf, string& clientName, string& reply) {
  *  returned if the operation does not succeed.
  *  @return true on success, else false
  */
-bool newSession(int sock, CpHandler& cph, NetBuffer& buf,
+void newSession(int sock, CpHandler& cph, NetBuffer& buf,
 		string& clientName, string& reply) {
 	string s1;
 	RateSpec rs;
@@ -442,25 +446,25 @@ bool newSession(int sock, CpHandler& cph, NetBuffer& buf,
 		if (!buf.readRspec(rs) || !buf.nextLine() ||
 		    !buf.readLine(s1)  || s1 != "over") {
 			reply = "misformatted new session request";
-			return false;
+			return;
 		}
 	} else {
 		if (!buf.nextLine() || !buf.readLine(s1)  || s1 != "over") {
 			reply = "misformatted new session request";
-			return false;
+			return;
 		}
 	}
 	int clx = cliTbl->getClient(clientName);
 	if (clx == 0) {
 		reply = "cannot access client data(" + clientName + ")";
-		return false;
+		return;
 	}
 	if (!rs.isSet()) rs = cliTbl->getDefRates(clx);
 	// make sure we have sufficient capacity
 	if (!rs.leq(cliTbl->getAvailRates(clx))) {
 		cliTbl->releaseClient(clx);
 		reply = "session rate exceeds available capacity";
-		return true;
+		return;
 	}
 	cliTbl->getAvailRates(clx).subtract(rs);
 	cliTbl->releaseClient(clx);
@@ -473,29 +477,28 @@ bool newSession(int sock, CpHandler& cph, NetBuffer& buf,
 		reply = "cannot update client data(" + clientName + ")";
 		logger->log("ClientMgr::newSession: cannot update session data "
 			    "session state may be inconsistent",2);
-		return false;
+		return;
 	}
 	if (rpx == 0) {
 		cliTbl->getAvailRates(clx).add(rs);
 		cliTbl->releaseClient(clx);
 		reply = "cannot setup session: NetMgr never responded";
-		return false;
+		return;
 	}
 	if (repCp.mode != CtlPkt::POS_REPLY) {
 		cliTbl->getAvailRates(clx).add(rs);
 		cliTbl->releaseClient(clx);
-		reply = "cannot complete login: NetMgr failed (" +
+		reply = "cannot setup new session: NetMgr failed (" +
 			 repCp.errMsg + ")";
-		ps->free(rpx); 
-		return false;
+		ps->free(rpx); return;
 	}
 	int sess = cliTbl->addSession(repCp.adr1, repCp.adr2, clx);
 	if (sess == 0) {
 		cliTbl->getAvailRates(clx).add(rs);
 		cliTbl->releaseClient(clx);
-		reply = "cannot complete login: could not create "
+		reply = "cannot setup new session: could not create "
 			"session record";
-		return false;
+		return;
 	}
 
 	// set session information
@@ -519,8 +522,39 @@ bool newSession(int sock, CpHandler& cph, NetBuffer& buf,
 	ss << "connectNonce: " << repCp.nonce << "\noverAndOut\n";
 	reply = ss.str();
 
-	ps->free(rpx);
-	return true;
+	ps->free(rpx); return;
+}
+
+/** Verify that a client may perform privileged operations on a target.
+ *  @param clientName is the name of the client who is currently logged in
+ *  @param targetName is the name of the client on which some privileged
+ *  operation is to be performed
+ *  @return 0 if targetName != clientName and clientName lacks the
+ *  privileges needed to perform a privileged operation, or if either
+ *  of the names does not match a client in the table; otherwise
+ *  return the client table index (clx) for targetName and lock the
+ *  entry (the calling program must release the entry when done)
+ */
+int checkPrivileges(string clientName, string targetName) {
+	// if names match, get and return client index (or 0 if no match)
+	if (targetName == clientName) return cliTbl->getClient(clientName);
+
+	// get client's privileges and check if privileged
+	int clx = cliTbl->getClient(clientName);
+	if (clx == 0) return 0;
+	ClientTable::privileges priv = cliTbl->getPrivileges(clx);
+	cliTbl->releaseClient(clx);
+	if (priv != ClientTable::ADMIN && priv != ClientTable::ROOT) return 0;
+
+	// get target's privileges
+	int tclx = cliTbl->getClient(targetName);
+	if (tclx == 0) return 0;
+	ClientTable::privileges tpriv = cliTbl->getPrivileges(tclx);
+	if (priv == ClientTable::ADMIN && 
+	    (tpriv == ClientTable::ADMIN || tpriv == ClientTable::ROOT)) {
+		cliTbl->releaseClient(tclx); return 0;
+	}
+	return tclx;
 }
 
 /** Handle a get profile request.
@@ -534,46 +568,20 @@ bool newSession(int sock, CpHandler& cph, NetBuffer& buf,
  */
 void getProfile(NetBuffer& buf, string& clientName, string& reply) {
 	string s, targetName;
-	if (!buf.verify(':') || !buf.readAlphas(targetName) ||
+	if (!buf.verify(':') || !buf.readName(targetName) ||
 	    !buf.nextLine() || !buf.readLine(s) || s != "over") {
 		reply = "misformatted get profile request"; return;
 	}
-	int clx = cliTbl->getClient(clientName);
-	if (clx == 0) {
-		reply = "cannot access client data(" + clientName + ")";
+	int tclx = checkPrivileges(clientName, targetName);
+	if (tclx == 0) {
+		reply = "insufficient privileges for requested operation";
 		return;
-	}
-	int tclx;
-	if (targetName == clientName) {
-		tclx = clx;
-	} else {
-		tclx = cliTbl->getClient(targetName);
-		if (tclx == 0) {
-			cliTbl->releaseClient(clx);
-			reply = "no such target client"; return;
-		}
-		ClientTable::privileges priv = cliTbl->getPrivileges(clx);
-		if (priv != ClientTable::ADMIN && priv != ClientTable::ROOT) {
-			reply = "this operation requires administrative "
-				"privileges";
-			cliTbl->releaseClient(clx);
-			cliTbl->releaseClient(tclx);
-			return;
-		}
-		ClientTable::privileges tpriv = cliTbl->getPrivileges(tclx);
-		if (priv != ClientTable::ROOT && tpriv == ClientTable::ROOT) {
-			reply = "this operation requires root privileges";
-			cliTbl->releaseClient(clx);
-			cliTbl->releaseClient(tclx);
-			return;
-		}
 	}
 	reply  = "realName: \"" + cliTbl->getRealName(tclx) + "\"\n";
 	reply += "email: " + cliTbl->getEmail(tclx) + "\n";
 	reply += "defRates: " + cliTbl->getDefRates(tclx).toString(s) + "\n";
 	reply += "totalRates: " + cliTbl->getTotalRates(tclx).toString(s) +"\n";
-	cliTbl->releaseClient(clx);
-	if (tclx != clx) cliTbl->releaseClient(tclx);
+	cliTbl->releaseClient(tclx);
 }
 
 /** Handle an update profile request.
@@ -587,48 +595,12 @@ void getProfile(NetBuffer& buf, string& clientName, string& reply) {
  */
 void updateProfile(NetBuffer& buf, string& clientName, string& reply) {
 	string s, targetName;
-	if (!buf.verify(':') || !buf.readAlphas(targetName) ||
+	if (!buf.verify(':') || !buf.readName(targetName) ||
 	    !buf.nextLine()) {
 		reply = "misformatted updateProfile request"; return;
 	}
-	int clx = cliTbl->getClient(clientName);
-	if (clx == 0) {
-		reply = "cannot access client data(" + clientName + ")";
-		return;
-	}
-	int tclx;
-	if (targetName == clientName) {
-		tclx = clx;
-	} else {
-		tclx = cliTbl->getClient(targetName);
-		if (tclx == 0) {
-			cliTbl->releaseClient(clx);
-			reply = "no such target client";
-			return;
-		}
-		ClientTable::privileges priv = cliTbl->getPrivileges(clx);
-		if (priv != ClientTable::ADMIN && priv != ClientTable::ROOT) {
-			reply = "this operation requires administrative "
-				"privileges";
-			cliTbl->releaseClient(clx);
-			cliTbl->releaseClient(tclx);
-			return;
-		}
-		ClientTable::privileges tpriv = cliTbl->getPrivileges(tclx);
-		if (priv != ClientTable::ROOT &&
-		    (tpriv == ClientTable::ROOT ||
-		     tpriv == ClientTable::ADMIN)) {
-			reply = "this operation requires root privileges";
-			cliTbl->releaseClient(clx);
-			cliTbl->releaseClient(tclx);
-			return;
-		}
-	}
+	// read profile information from client
 	string item; RateSpec rates;
-	ClientTable::privileges priv = cliTbl->getPrivileges(clx);
-	// release locks while getting profile data
-	cliTbl->releaseClient(clx);
-	if (tclx != clx) cliTbl->releaseClient(tclx);
 	string realName, email; RateSpec defRates, totRates;
 	while (buf.readAlphas(item)) {
 		if (item == "realName" && buf.verify(':') &&
@@ -651,14 +623,15 @@ void updateProfile(NetBuffer& buf, string& clientName, string& reply) {
 			return;
 		}
 	}
-	tclx = cliTbl->getClient(targetName);
+	int tclx = checkPrivileges(clientName, targetName);
 	if (tclx == 0) {
-		reply = "could not update target client data";
+		reply = "insufficient privileges for requested operation";
 		return;
 	}
 	if (realName.length() > 0) cliTbl->setRealName(tclx,realName);
 	if (email.length() > 0) cliTbl->setEmail(tclx,email);
-	if (priv != ClientTable::LIMITED) {
+	ClientTable::privileges tpriv = cliTbl->getPrivileges(tclx);
+	if (tpriv != ClientTable::LIMITED) {
 		if (defRates.isSet() && 
 		    defRates.leq(cliTbl->getTotalRates(tclx)))
 			cliTbl->getDefRates(tclx) = defRates;
@@ -681,56 +654,14 @@ void updateProfile(NetBuffer& buf, string& clientName, string& reply) {
  *  returned if the operation does not succeed.
  */
 void changePassword(NetBuffer& buf, string& clientName, string& reply) {
-	string s, targetName;
-	if (!buf.verify(':') || !buf.readAlphas(targetName) || 
-	    !buf.nextLine() || !buf.readLine(s) || s != "over") {
+	string targetName, pwd;
+	if (!buf.verify(':') || !buf.readName(targetName) || !buf.nextLine() ||
+	    !buf.readWord(pwd) && buf.nextLine()) {
 		reply = "misformatted change password request"; return;
 	}
-	int clx = cliTbl->getClient(clientName);
-	if (clx == 0) {
-		reply = "cannot access client data(" + clientName + ")";
-		return;
-	}
-	int tclx;
-	if (targetName == clientName) {
-		tclx = clx;
-		cliTbl->releaseClient(clx);
-	} else {
-		tclx = cliTbl->getClient(targetName);
-		if (tclx == 0) {
-			reply = "no such target"; return;
-		}
-		ClientTable::privileges priv = cliTbl->getPrivileges(clx);
-		ClientTable::privileges tpriv = cliTbl->getPrivileges(tclx);
-		cliTbl->releaseClient(clx);
-		cliTbl->releaseClient(tclx);
-		if (priv != ClientTable::ADMIN && priv != ClientTable::ROOT) {
-			reply = "this operation requires administrative "
-				"privileges";
-			return;
-		}
-		if (priv != ClientTable::ROOT &&
-		    (tpriv == ClientTable::ROOT ||
-		     tpriv == ClientTable::ADMIN)) {
-			reply = "this operation requires root privileges";
-			return;
-		}
-	}
-	string item, pwd;
-	while (buf.readAlphas(item)) {
-		if (item == "password" && buf.verify(':') &&
-		    buf.readWord(pwd) && buf.nextLine()) {
-			// nothing more for now
-		} else if (item == "over" && buf.nextLine()) {
-			break;
-		} else {
-			reply = "misformatted request (" + item + ")";
-			return;
-		}
-	}
-	tclx = cliTbl->getClient(targetName);
+	int tclx = checkPrivileges(clientName, targetName);
 	if (tclx == 0) {
-		reply = "cannot access target client data(" + targetName + ")";
+		reply = "insufficient privileges for requested operation";
 		return;
 	}
 	cliTbl->setPassword(tclx,pwd);
@@ -787,20 +718,144 @@ void uploadPhoto(int sock, NetBuffer& buf, string& clientName, string& reply) {
 	return;
 }
 
+/** Respond to getSessions request from a client.
+ *  @param buf is a NetBuffer for the socket to the client.
+ *  @param clientName is the client's name
+ *  @param reply is a string in which a reply to the client can be
+ *  returned
+ */
 void getSessions(NetBuffer& buf, string& clientName, string& reply) {
-	// form a string with one line for each session
-	// where each line starts with word "session",
-	// followed by the fields defined for each session
-	// return this as the value of reply
+	string s, targetName;
+ 	if (!buf.verify(':') || !buf.readName(targetName) ||
+	    !buf.nextLine() || !buf.readLine(s) || s != "over") {
+		reply = "misformatted get sessions request"; return;
+	}
+	int tclx = checkPrivileges(clientName, targetName);
+	if (tclx == 0) {
+		reply = "insufficient privileges for requested operation";
+		return;
+	}
+	int sess = cliTbl->firstSession(tclx);
+	reply += "\n";
+	while (sess != 0) {
+		string sessString;
+		cliTbl->session2string(sess, sessString);
+		reply += sessString;
+		sess = cliTbl->nextSession(sess,tclx);
+	}
+	reply.erase(reply.end()-1);
+	cliTbl->releaseClient(tclx);
+	return;
 }
 
-void cancelSession(NetBuffer& buf, string& clientName, string& reply) {
-	// check buf for ':' followed by a forest address
-	// use the forest address to identify the session
-	// send a cancel session control packet to net manager
-	// and if that completes successfully, remove session from
-	// ClientTable data structure, write account record and return
-	// on failure, set reply to indicate the cause of the failure
+/** Respond to cancelSessions request from a client.
+ *  @param buf is a NetBuffer for the socket to the client.
+ *  @param clientName is the client's name
+ *  @param cph is the control packet handler for this thread
+ *  @param reply is a string in which a reply to the client can be
+ *  returned
+ */
+void cancelSession(NetBuffer& buf, string& clientName, CpHandler& cph,
+		   string& reply) {
+	string s, targetName, cancelAdrStr;
+ 	if (!buf.verify(':') || !buf.readName(targetName) ||
+	    !buf.readForestAddress(cancelAdrStr) || !buf.nextLine() ||
+	    !buf.readLine(s) || s != "over") {
+		reply = "misformatted cancel session request"; return;
+	}
+	fAdr_t cancelAdr = Forest::forestAdr(cancelAdrStr.c_str());
+	if (cancelAdr == 0) {
+		reply = "misformatted address"; return;
+	}
+	int tclx = checkPrivileges(clientName, targetName);
+	if (tclx == 0) {
+		reply = "insufficient privileges for requested operation";
+		return;
+	}
+	cliTbl->releaseClient(tclx); // release before calling getSession()
+	int sess = cliTbl->getSession(cancelAdr); // locked again
+	if (sess == 0) {
+		reply = "invalid session address"; return;
+	}
+	if (cliTbl->getClientIndex(sess) != tclx) {
+		reply = "session address belongs to another client"; return;
+	}
+	ipa_t  cliIp  = cliTbl->getClientIp(sess);
+	fAdr_t rtrAdr = cliTbl->getRouterAdr(sess);
+
+	// release lock on entry while waiting for reply from NetMgr
+	cliTbl->releaseClient(tclx);
+
+	CtlPkt repCp;
+	pktx rpx = cph.cancelSession(nmAdr, cancelAdr, rtrAdr, repCp);
+	if (rpx == 0) {
+		reply = "cannot cancel session: NetMgr never responded";
+		return;
+	}
+	if (repCp.mode != CtlPkt::POS_REPLY) {
+		reply = "cannot complete cancelSession: NetMgr failed (" +
+			 repCp.errMsg + ")";
+		ps->free(rpx); return;
+	}
+	tclx = cliTbl->getClient(targetName); // re-acquire lock on entry
+	if (tclx == 0) {
+		reply = "cannot update session data for " + targetName;
+		logger->log("ClientMgr::cancelSession: cannot update session "
+			    "data session state may be inconsistent",2);
+		return;
+	}
+	cliTbl->getAvailRates(tclx).add(cliTbl->getSessRates(sess));
+	writeAcctRecord(clientName,cancelAdr,cliIp,rtrAdr,CANCELSESSION);
+	cliTbl->removeSession(sess);
+	cliTbl->releaseClient(tclx); 
+	return;
+}
+
+/** Respond to cancelAllSessions request from a client.
+ *  @param buf is a NetBuffer for the socket to the client.
+ *  @param clientName is the client's name
+ *  @param reply is a string in which a reply to the client can be
+ *  returned
+ */
+void cancelAllSessions(NetBuffer& buf, string& clientName, CpHandler& cph,
+			string& reply) {
+	string s, targetName;
+	if (!buf.verify(':') || !buf.readName(targetName) || !buf.nextLine() ||
+	    !buf.readLine(s) || s != "over") {
+                reply = "misformatted cancel all sessions request"; return;
+        }
+	int tclx = checkPrivileges(clientName, targetName);
+	if (tclx == 0) {
+		reply = "insufficient privileges for requested operation";
+		return;
+	}
+        int sess = cliTbl->firstSession(tclx);
+        while (sess != 0) {
+		fAdr_t cliAdr = cliTbl->getClientAdr(sess);
+		ipa_t  cliIp  = cliTbl->getClientIp(sess);
+		fAdr_t rtrAdr = cliTbl->getRouterAdr(sess);
+
+		cliTbl->releaseClient(tclx); // release while waiting for reply
+		CtlPkt repCp;
+		pktx rpx = cph.cancelSession(nmAdr, cliAdr, rtrAdr, repCp);
+		if (rpx == 0) {
+			reply = "cannot cancel session: NetMgr never responded";
+			return;
+		}
+		if (repCp.mode != CtlPkt::POS_REPLY) {
+			reply = "cannot complete cancelSession: NetMgr failed "
+				"(" + repCp.errMsg + ")";
+			ps->free(rpx); return;
+		}
+		tclx = cliTbl->getClient(targetName); // re-acquire lock 
+
+		cliTbl->getAvailRates(tclx).add(cliTbl->getSessRates(sess));
+		writeAcctRecord(clientName,cliAdr,cliIp,rtrAdr,CANCELSESSION);
+		cliTbl->removeSession(sess);
+        	sess = cliTbl->firstSession(tclx);
+        }
+        cliTbl->releaseClient(tclx);
+        return;
 }
 
 void addComtree(NetBuffer& buf, string& clientName, string& reply) {
@@ -829,7 +884,9 @@ bool handleConnDisc(pktx px, CtlPkt& cp, CpHandler& cph) {
 	ipa_t cliIp = cliTbl->getClientIp(sess);
 	fAdr_t rtrAdr = cliTbl->getRouterAdr(sess);
 
-	if (cp.type == CtlPkt::CLIENT_DISCONNECT) {
+	if (cp.type == CtlPkt::CLIENT_CONNECT) {
+		cliTbl->setState(sess,ClientTable::CONNECTED);
+	} else {
 		cliTbl->removeSession(sess);
 	}
 
@@ -860,9 +917,10 @@ void writeAcctRecord(const string& cname, fAdr_t cliAdr, ipa_t cliIp,
 			return;
 	}
 	string typeStr = (recType == NEWSESSION ? "new session" :
-			  (recType == CONNECT_REC ? "connect" :
-			   (recType == DISCONNECT_REC ?
-			    "disconnect" : "undefined record")));
+			  (recType == CANCELSESSION ? "cancel session" :
+			   (recType == CONNECT_REC ? "connect" :
+			    (recType == DISCONNECT_REC ?
+			     "disconnect" : "undefined record"))));
 	time_t t = Misc::currentTime();
 	string now = string(ctime(&t)); now.erase(now.end()-1);
 	string s;

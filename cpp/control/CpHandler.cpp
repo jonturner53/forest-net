@@ -405,6 +405,21 @@ pktx CpHandler::newSession(fAdr_t dest, ipa_t clientIp, RateSpec& rates, CtlPkt&
 	return sendRequest(reqCp,dest,repCp);
 }
 
+/** Send a cancel session request packet.
+ *  @param dest is the destination address for the packet
+ *  @param clientAdr is the forest address of the client
+ *  @param rtAdr is the forest address of the client's router
+ *  @param repCp is a reference to a control packet in which the control
+ *  packet in the response is returned (if response is != 0)
+ *  @return the index of the response packet or 0 if there is no response
+ */
+pktx CpHandler::cancelSession(fAdr_t dest, fAdr_t clientAdr, fAdr_t rtrAdr,
+			      CtlPkt& repCp) {
+	CtlPkt reqCp(CtlPkt::CANCEL_SESSION,CtlPkt::REQUEST,0);
+	reqCp.adr1 = clientAdr; reqCp.adr2 = rtrAdr;
+	return sendRequest(reqCp,dest,repCp);
+}
+
 /** Send a client connect request packet.
  *  @param dest is the destination address for the packet
  *  @param clientAdr is the address of the client
