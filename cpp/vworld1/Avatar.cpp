@@ -167,14 +167,12 @@ cerr << "login string " << s << endl;
 	s = "newSession\nover\n";
 	Np4d::sendString(loginSock,s);
 
-cerr << "a\n";
 	// process reply - expecting my forest address
 	if (!buf.readAlphas(s0) || s0 != "yourAddress" || !buf.verify(':') ||
 	    !buf.readForestAddress(s1) || !buf.nextLine()) 
 		return false;
 	myAdr = Forest::forestAdr(s1.c_str());
 
-cerr << "b\n";
 	// continuing - expecting info for my forest access router
 	int port;
 	if (!buf.readAlphas(s0) || s0 != "yourRouter" || !buf.verify(':') ||
@@ -186,14 +184,12 @@ cerr << "b\n";
 	rtrPort = (ipp_t) port;
 	rtrAdr = Forest::forestAdr(s2.c_str());
 
-cerr << "c\n";
 	// continuing - expecting address of comtree controller
 	if (!buf.readAlphas(s0) || s0 != "comtCtlAddress" || !buf.verify(':') ||
 	    !buf.readForestAddress(s1) || !buf.nextLine()) 
 		return false;
 	ccAdr = Forest::forestAdr(s1.c_str());
 	
-cerr << "d\n";
 	// continuing - expecting connection nonce
 	if (!buf.readAlphas(s0) || s0 != "connectNonce" || !buf.verify(':') ||
 	    !buf.readInt(nonce) || !buf.nextLine())
@@ -201,7 +197,6 @@ cerr << "d\n";
 	if (!buf.readLine(s0) || (s0 != "over" && s0 != "overAndOut"))
 		return false;
 	
-cerr << "e\n";
 	close(loginSock);
 
 	cout << "avatar address=" << Forest::fAdr2string(myAdr,s) << endl;

@@ -17,15 +17,10 @@ namespace forest {
  */
 PacketStore::PacketStore(int N1, int M1) : N(N1), M(M1) {
 	n = m = 0;
-cerr << "u\n";
 	pkt = new Packet[N+1]; pb = new int[N+1];
-cerr << "w M=" << M << " sizeof=" << sizeof(buffer_t) << "\n";
 	buff = new buffer_t[M+1];
-cerr << "x\n";
 	ref = new int[M+1];
-cerr << "y\n";
 	freePkts = new UiList(N); freeBufs = new UiList(M);
-cerr << "zz\n";
 
 	int i;
 	for (i = 1; i <= N; i++) { freePkts->addLast(i); pb[i] = 0; }
