@@ -87,8 +87,8 @@ public class AcctMgr extends MouseAdapter implements ActionListener, FocusListen
 
 
 	JTextArea sessionDisplay; ///< text area used to display sessions
-	private JTextField cancelField;
-	private String cancelAdr;  ///< string to record canceling forest address
+	private JTextField cancelField; ///< field used to cancel a session
+	private String cancelAdr;  ///< forest address for session to cancel
 	private String checkDisplay;
 
 	/** Add a label to a text field and align them.
@@ -499,9 +499,7 @@ public class AcctMgr extends MouseAdapter implements ActionListener, FocusListen
 	private String getSession(String userName) {
 		if (!sendString("getSessions: " + userName + "\nover\n"))
 			return "cannot send request to server";
-System.out.println("getSession : " + userName);
 		String s = inBuf.readLine();
-System.out.println("reply=" + s);
 		if (s == null || !s.equals("success")) {
 			inBuf.nextLine();
 			return s == null ? "unexpected response" : s;
@@ -509,7 +507,6 @@ System.out.println("reply=" + s);
 		s = inBuf.readLine();
 		String sessionList = "";
 		while (!s.equals("over")) {
-System.out.println("session=" + s);
 			sessionList += s + "\n";
 			s = inBuf.readLine();
 		}
@@ -723,7 +720,7 @@ System.out.println("session=" + s);
 				RateSpec rates = inBuf.readRspec();
 				if (rates != null) {
 					totRates = rates.toString();
-					trateField.setText(defRates);
+					trateField.setText(totRates);
 				} else
 					trateField.setText("(0,0,0,0)");
 				gotTotRates = true;
