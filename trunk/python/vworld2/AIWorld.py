@@ -93,6 +93,11 @@ class AIWorld(DirectObject):
 						{"run":"models/panda-walk4"}))
 			self.freeRemotes[i].setScale(.002)
 
+		# Create a floater object.  We use the "floater" as a temporary
+		# variable in a variety of calculations.
+		self.floater = NodePath(PandaNode("floater"))
+		self.floater.reparentTo(render)
+
 		# Accept the control keys for movement and rotation
 		self.accept("escape", sys.exit)
 

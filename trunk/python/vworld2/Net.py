@@ -33,7 +33,7 @@ class Net :
 	""" Net support.
 
 	"""
-	def __init__(self, cliMgrIp, comtree, numg, subLimit, pWorld, \
+	def __init__(self, cliMgrIp, comtree,  actualRegionSizeX, actualRegionSizeY, subLimit, pWorld, \
 		     debug):
 		""" Initialize a new Net object.
 
@@ -52,7 +52,7 @@ class Net :
 		self.count = 0
 
 		# setup multicast object to maintain subscriptions
-		self.mcg = Mcast(numg, subLimit, self, self.pWorld)
+		self.mcg = Mcast(actualRegionSizeX, actualRegionSizeY, subLimit, self, self.pWorld)
 
 		# open and configure socket to be nonblocking
 		self.sock = socket(AF_INET, SOCK_DGRAM);
@@ -424,8 +424,7 @@ class Net :
 		tuple = struct.unpack('!IIIII',p.payload[0:20])
 
 		if tuple[0] != STATUS_REPORT : return
-		x1 = (tuple[2]+0.0)/GRID
-		y1 = (tuple[3]+0.0)/GRID
+		x1 = (tuple[2]+0.0)/GRID; y1 = (tuple[3]+0.0)/GRID;
 		dir1 = tuple[4]
 		avId = p.srcAdr
 
