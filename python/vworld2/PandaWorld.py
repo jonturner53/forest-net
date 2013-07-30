@@ -72,6 +72,14 @@ class PandaWorld(DirectObject):
 		self.environ.reparentTo(render)
 		self.environ.setPos(0,0,0)
 		
+		#dwkim
+		self.minBounds, self.maxBounds = self.environ.getTightBounds()
+		# print self.minBounds, self.maxBounds
+		self.size = self.maxBounds - self.minBounds
+		self.modelSizeX = self.size.getXy().getX()
+		self.modelSizeY = self.size.getXy().getY()
+		print 'Size is ', self.size
+
  		base.setBackgroundColor(0.2,0.23,0.4,1)
 		
 		# Create the panda

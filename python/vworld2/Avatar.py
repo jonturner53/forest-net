@@ -1,10 +1,10 @@
 """ Demonstration of simple virtual world using Forest overlay
 
 usage:
-      Avatar cliMgrIp numg subLimit comtree [ debug ] [ auto ]
+      Avatar cliMgrIp targetSize subLimit comtree [ debug ] [ auto ]
 
 - cliMgrIp is the IP address of the client manager's computer
-- numg*numg is the number of multicast groups to use
+- targetSize is the size of a target region
 - subLimit limits the number of multicast groups that we subscribe to;
   we'll subscribe to a group is it's L_0 distance is at most subLimit
 - comtree is the number of a pre-configured Forest comtree
@@ -34,12 +34,11 @@ import random, sys, os, math
 
 # process command line arguments
 if len(sys.argv) < 5 :
-	sys.stderr.write("usage: Avatar cliMgrIp numg " + \
-			 "subLimit comtree [ debug ] [ auto ]\n")
+	sys.stderr.write("usage: Avatar cliMgrIp targetSize subLimit comtree [ debug ] [ auto ]\n")
         sys.exit(1)
 
 cliMgrIp = gethostbyname(sys.argv[1])
-numg = int(sys.argv[2])
+targetSize = int(sys.argv[2])
 subLimit = int(sys.argv[3])
 myComtree = int(sys.argv[4])
 
@@ -52,7 +51,11 @@ for i in range(5,len(sys.argv)) :
 		auto = True
 
 pWorld = AIWorld() if auto else PandaWorld()
-net = Net(cliMgrIp, myComtree, numg, subLimit, pWorld, debug)
+regionSizeX = pWorld.modelSizeX / int(pWorld.modelSizeX / targetSize)
+regionSizeY = pWorld.modelSizeY / int(pWorld.modelSizeY / targetSize)
+print "Actual Region Size", regionSizeX, regionSizeY
+
+net = Net(cliMgrIp, myComtree, regionSizeX, regionSizeY, subLimit, pWorld, debug)
 
 if auto : print "type Ctrl-C to terminate"
 
