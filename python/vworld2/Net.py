@@ -451,7 +451,7 @@ class Net :
 		"""
 		dropList = []
 		for avId, remote in self.nearRemotes.iteritems() :
-			if remote[0] > 0 : # implies missing update
+			if remote[5] > 0 : # implies missing update
 				# update position based on dx, dy
 				remote[0] += remote[3]; remote[1] += remote[4]
 				remote[0] = max(0,remote[0])
