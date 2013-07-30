@@ -493,7 +493,7 @@ class Net :
 			print "numNear=", numNear
 
 ####		p.payload = struct.pack('!IIIIII' + str(namelen) + 'sI' + str(msglen) + 'sIi', \
-		p.payload = struct.pack('!IIiiiII' + str(namelen) + 'sIi', \
+		p.payload = struct.pack('!IIIIIII' + str(namelen) + 'sIi', \
 					STATUS_REPORT, now, \
 					int(self.x*GRID), int(self.y*GRID), \
 					int(self.z*GRID),
@@ -513,7 +513,7 @@ class Net :
 		numNear = len(self.nearRemotes)
 		if numNear > 5000 or numNear < 0 :
 			print "numNear=", numNear
-		p.payload = struct.pack('!IIiiI'+str(BYTES)+'s', \
+		p.payload = struct.pack('!IIIII'+str(BYTES)+'s', \
 		AUDIO,0,int(self.x*GRID), int(self.y*GRID),0, data)
 		self.send(p)
 
@@ -635,15 +635,15 @@ class Net :
 		Could be extended to change the state of this avatar
 		(say, process a "kill packet")
 		"""
-		print "updateNearby"
-		tuple = struct.unpack('!IIiiiI',p.payload[0:24])
+#		print "updateNearby"
+		tuple = struct.unpack('!IIIIII',p.payload[0:24])
 		if tuple[0] == STATUS_REPORT:
 		
 			x1 = (tuple[2]+0.0)/GRID
 			y1 = (tuple[3]+0.0)/GRID
 			z1 = (tuple[4]+0.0)/GRID
 			dir1 = tuple[5]
-			print "Got STATUS_REPORT: (x,y,z) = (%r, %r, %r)" % (x1, y1, z1)
+#			print "Got STATUS_REPORT: (x,y,z) = (%r, %r, %r)" % (x1, y1, z1)
 			
 			avId = p.srcAdr
 

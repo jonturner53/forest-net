@@ -57,7 +57,7 @@ def addTitle(text):
 	""" Put title on the screen
 	"""
 	return OnscreenText(text=text, style=1, fg=(1,1,1,1), \
-		pos=(1.3,-0.95), align=TextNode.ARight, scale = .07)
+		pos=(1.2,-0.95), align=TextNode.ARight, scale = .07)
 
 def printText(pos):
 	""" Print text on the screen
@@ -117,8 +117,8 @@ class userWorld(DirectObject):
 		self.currViewRegion = 2
 
 		self.fieldAngle = 40
-		self.card = OnscreenImage(image = 'photo_cache/'+ 'unmute.jpg', pos = (0.67, 0, -0.94), scale=.04)
-		self.card.setTransparency(TransparencyAttrib.MAlpha)
+#		self.card = OnscreenImage(image = 'photo_cache/'+ 'unmute.jpg', pos = (0.67, 0, -0.94), scale=.04)
+#		self.card.setTransparency(TransparencyAttrib.MAlpha)
 		base.win.setClearColor(Vec4(0,0,0,1))
 
 		self.title = addTitle("WashU Campus Tour")
@@ -177,6 +177,7 @@ class userWorld(DirectObject):
 			self.freeRemotes[i].setScale(0.002)
 		self.msgs = {}
 
+		"""
 		self.entry = DirectEntry(width = 15,
 					initialText = "enter text here...",
                     numLines = 1,
@@ -186,7 +187,7 @@ class userWorld(DirectObject):
                     pos = (-1, 0, -0.9),                 
                     command = self.newMsg,
                     focusInCommand = self.clearText)	
-
+		"""
 
 		# Setup the keyboard inputs
 		self.accept("escape", sys.exit)
@@ -339,8 +340,8 @@ class userWorld(DirectObject):
 			print "too many messages in the queue."
 
 
-	def clearText(self):
-		self.entry.enterText('')
+#	def clearText(self):
+#		self.entry.enterText('')
 
 	def getMsg(self):
 		print "being called..."
@@ -763,7 +764,7 @@ class userWorld(DirectObject):
 	def getLimit(self) :
 		""" Get the limit on the xy coordinates.
 		"""
-		return 1000
+		return 1200
 
   	def is_Mute(self) :
 		""" Get isMute to see if Avatar is mute
@@ -855,7 +856,7 @@ class userWorld(DirectObject):
 			if DEBUG:
 				base.camera.setPos(self.avatarNP,0,15,2)
 			else:
-				base.camera.setPos(self.avatarNP,0,0,2)
+				base.camera.setPos(self.avatarNP,0,0,1.8)
 			base.camera.setHpr(hpr)
 			base.camLens.setFov(40)
 
@@ -889,11 +890,9 @@ class userWorld(DirectObject):
 
 		# Update the text showing panda's position on 
 		# the screen
-		self.avPos.setText("Your location: (%d, %d, %d, %d)"%\
+		self.avPos.setText("Your location (x, y, z): (%d, %d, %d)"%\
 			(self.avatarNP.getX(), self.avatarNP.getY(),
-			 self.avatarNP.getZ(),
-			 (self.avatarNP.getHpr()[0])%360)
-			)
+			 self.avatarNP.getZ()))
 
 		"""
 		# map the avatar's position to the 2D map on the top-right
