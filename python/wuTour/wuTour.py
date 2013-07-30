@@ -36,7 +36,7 @@ import random, sys, os, math, getpass
 # process command line arguments
 if len(sys.argv) < 6 :
 	sys.stderr.write("usage: python wuTour.py cliMgrIp numg " + \
-			 "subLimit comtree name|-u name[ debug ] [ auto ]\n")
+			 "subLimit comtree name|-u name[ debug ] [ auto ] [autos]\n")
         sys.exit(1)
 
 cliMgrIp = gethostbyname(sys.argv[1])
@@ -58,24 +58,41 @@ else:
 	password = "pass"
 	myName = sys.argv[5]
 
-auto = False; debug = 0
+auto = False
+autos = False
+debug = 0
 for i in range(5,len(sys.argv)) :
 	if sys.argv[i] == "debug" : debug = 1
 	elif sys.argv[i] == "debugg" : debug = 2
 	elif sys.argv[i] == "debuggg" : debug = 3
-	elif sys.argv[i] == "auto" :
-		auto = True
+	elif sys.argv[i] == "auto" : auto = True
+	elif sys.argv[i] == "autos" : autos = True
 
-pWorld = NPCWorld() if auto else userWorld()
-net = Net(cliMgrIp, myComtree, numg, subLimit, pWorld, uName, debug)
+#pWorld = NPCWorld() if auto else userWorld()
+#net = Net(cliMgrIp, myComtree, numg, subLimit, pWorld, uName, debug)
 
-if auto : print "type Ctrl-C to terminate"
+if auto == False and autos == False:
+	pWorld = userWorld()
+	net = Net(cliMgrIp, myComtree, numg, subLimit, pWorld, uName, debug)
+	# setup tasks
+	if not net.init(uName, password) :
+		sys.stderr.write("cannot initialize net object\n")
+		sys.exit(1)
+	net.sendStatus()
+else :
+	if autos : botNum = 1
+	else : botNum = 1
+	vworld = {}; vnet = {}
+	for i in range(0,botNum) :
+		vworld[i] = NPCWorld()
+		vnet[i] = Net(cliMgrIp, myComtree, numg, subLimit, vworld[i], uName, debug)
+		if not vnet[i].init(uName, password) :
+			sys.stderr.write("cannot initialize net object\n")
+			sys.exit(1)
+		vnet[i].sendStatus()
+	print "type Ctrl-C to terminate"
 
-# setup tasks
-if not net.init(uName, password) :
-	sys.stderr.write("cannot initialize net object\n");
-	sys.exit(1)
-net.sendStatus();
+
 loadPrcFileData("", "parallax-mapping-samples 3")
 loadPrcFileData("", "parallax-mapping-scale 0.1")
 loadPrcFileData("", "window-type none")

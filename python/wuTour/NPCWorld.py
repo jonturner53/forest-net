@@ -1,14 +1,18 @@
-""" AIWorld - a virtual environment for each bot.
-Uncomment codes to show window display (see wuTour.py)
+""" NPCWorld - a tour on Danforth Campus, WashU (for bots)
 
-Last Updated: 6/13/2013
-Author: Chao Wang and Jon Turner
-World Model: Chao Wang
+This module shall be called by wuTour.py
+
+Author: Chao Wang, Jon Turner, Vigo Wei
+World Model: Chao Wang, Vigo Wei
  
 Adapted from "Roaming Ralph", a tutorial included in Panda3D package.
-Author: Ryan Myers
-Models: Jeff Styers, Reagan Heller
 """  
+
+
+
+""" Set DEBUG=True to turn on the display
+"""
+DEBUG = False
 
 import direct.directbase.DirectStart
 from panda3d.core import *
@@ -19,69 +23,82 @@ from direct.showbase.DirectObject import DirectObject
 from direct.interval.IntervalGlobal import Sequence
 from panda3d.core import Point3
 import random, sys, os, math, re
-
+from panda3d.core import loadPrcFileData
 from Util import *
+from direct.directbase.DirectStart import *
+from pandac.PandaModules import *
+from direct.gui.DirectGui import *
 
-#def addTitle(text):
-#	""" Put title on the screen
-#	"""
-#	return OnscreenText(text=text, style=1, fg=(1,1,1,1), \
-#		pos=(0,-0.95), align=TextNode.ACenter, scale = .07)
-#
-#def printText(pos):
-#	""" Print text on the screen
-#	"""
-#	return OnscreenText( \
-#		text=" ", \
-#		style=2, fg=(1,0.8,0.7,1), pos=(-1.3, pos), \
-#		align=TextNode.ALeft, scale = .06, mayChange = True)
+from collections import deque
+
+import pyaudio
+import wave
+
+map_x = 1.3
+map_y = 1
+
+
+x_offset = float(574.5)
+y_offset = float(740.0)
+
+def addTitle(text):
+	""" Put title on the screen
+	"""
+	return OnscreenText(text=text, style=1, fg=(1,1,1,1), \
+		pos=(1.2,-0.95), align=TextNode.ARight, scale = .07)
 
 
 class NPCWorld(DirectObject):
+
 	def __init__(self):
+		if DEBUG:
+			base.windowType = 'onscreen' 
+			wp = WindowProperties.getDefault() 
+			base.openDefaultWindow(props = wp)
+ 			#Change resolution 
+			# loadPrcFileData("", "win-size 1300 1000")
+			props = WindowProperties()
+			props.setSize(800, 616)
+			base.win.requestProperties(props)
+			base.win.setClearColor(Vec4(0,0,0,1))
 
-#		base.windowType = 'onscreen' 
-#		wp = WindowProperties.getDefault() 
-#		base.openDefaultWindow(props = wp)
- 
-#		base.win.setClearColor(Vec4(0,0,0,1))
 
-		# Add title and show map
-#		self.title = addTitle("AI's viewpoint")
-#		self.Dmap = OnscreenImage(image = 'models/2Dmap.png', \
-#					  pos = (.8,0,.6), scale = .4)
-#		self.Dmap.setTransparency(TransparencyAttrib.MAlpha)
-#		self.dot = OnscreenImage(image = 'models/dot.png', \
-#					 pos = (1,0,1), scale = .01)
-	
+		self.currRegion = 2
+		self.currViewRegion = 2
+
+		self.fieldAngle = 40
+
+		self.title = addTitle("WashU Campus viewed from AI")
 		
-		# Set up the environment
-		#
-		# This environment model contains collision meshes.  If you look
-		# in the egg file, you will see the following:
-		#
-		#	<Collide> { Polyset keep descend }
-		#
-		# This tag causes the following mesh to be converted to a 
-		# collision mesh -- a mesh which is optimized for collision,
-		# not rendering. It also keeps the original mesh, so there
-		# are now two copies --- one optimized for rendering,
-		# one for collisions.  
+		# Setup the environment
 
-		self.environ = loader.loadModel("models/wuTour")
+		self.environ = loader.loadModel("models/campus/danforthBoxForAI")
 		self.environ.reparentTo(render)
 		self.environ.setPos(0,0,0)
+#		size = max - min 
+#		print size
+
+
+ 		base.setBackgroundColor(0.8,0.46,0.4,1)
+		self.ambientLight = render.attachNewNode( AmbientLight( "ambientLight" ) )
+		self.ambientLight.node().setColor( Vec4( 4, 4, 7, 1 ) )
+		render.setLight(self.ambientLight)
 		
-# 		base.setBackgroundColor(0.7,0.23,0.4,1)
-		
-		# Create the panda
+		# Create the panda, our avatar
+		self.avatarNP = NodePath("ourAvatarNP")
+		self.avatarNP.reparentTo(render)
 		self.avatar = Actor("models/panda-model", \
 				    {"run":"models/panda-walk4", \
 				    "walk":"models/panda-walk"})
-		self.avatar.reparentTo(render)
+		self.avatar.reparentTo(self.avatarNP)
 		self.avatar.setScale(.002)
-		self.avatar.setPos(-229,54,0)
-		self.avatar.setHpr(random.randint(0,359),0,0) 
+		self.avatar.setPos(0,0,0)
+#		self.avatarNP.setPos(-231,-58,14)
+		self.avatarNP.setPos(645,170,19)
+		self.avatarNP.setH(230)
+		self.dot = OnscreenImage(image = 'models/dot.png', \
+			pos = (1,0,1), scale = 0)
+
 
 		self.rotateDir = -1
 		self.rotateDuration = -1
@@ -90,95 +107,126 @@ class NPCWorld(DirectObject):
 		self.isAvoidingCollision = False
 		self.inBigRotate = False # if True, do not move forward; only rotate
 
-		# Set the dot's position
-#		self.dot.setPos(self.avatar.getX()/(120.0+self.Dmap.getX()), \
-#				0,self.avatar.getY()/(120.0+self.Dmap.getZ()))
-#		self.dotOrigin = self.dot.getPos()
+
+#		# Show avatar's position on the screen
+#		self.avPos = printText(0.9)
 
 		# Set the upper bound of # of remote avatars
 		self.maxRemotes = 100
+
+# 		# Show a list of visible NPCs
+# 		self.showNumVisible = printText(0.8)
+ 		self.visList = []
 
 		# Setup pool of remotes
 		# do not attach to scene yet
 		self.remoteMap = {}
 		self.freeRemotes = []
+		self.remotePics = {}
 		for i in range(0,self.maxRemotes) : # allow up to 100 remotes
 			self.freeRemotes.append(Actor("models/panda-model", \
 						{"run":"models/panda-walk4"}))
-			self.freeRemotes[i].setScale(.002)
+			self.freeRemotes[i].setScale(0.002)
+		self.msgs = {}
 
-		# Create a floater object.  We use the "floater" as a temporary
-		# variable in a variety of calculations.
-		self.floater = NodePath(PandaNode("floater"))
-		self.floater.reparentTo(render)
 
-		# Accept the control keys for movement and rotation
+		# Setup the keyboard inputs
 		self.accept("escape", sys.exit)
 
 		taskMgr.add(self.move,"moveTask")
 
-#		# Create some lighting
-#		self.ambientLight = render.attachNewNode( AmbientLight( "ambientLight" ) )
-#		self.ambientLight.node().setColor( Vec4( .8, .8, .8, 1 ) )
-#		render.setLight(self.ambientLight)
+
 
 		# Game state variables
 		self.isMoving = False
+		self.isListening = False
 
-		# Set up the camera
-#		base.disableMouse()
-#		base.camera.setPos(self.avatar.getX(),self.avatar.getY(),.2)
-#		base.camera.setHpr(self.avatar.getHpr()[0],0,0)
+#		p = pyaudio.PyAudio()
+#		print p.get_device_info_by_index(0)['defaultSampleRate']
+
+		if DEBUG:
+			# Set up the camera
+			base.disableMouse()
+			base.camera.setPos(self.avatar.getX(),self.avatar.getY(),1)
+			base.camera.setHpr(self.avatar.getHpr()[0],0,0)
 		
-		self.cTrav = CollisionTraverser()
-
  		"""
- 		CollisionSphere that detects walkable region.
- 		A move is illegal if the groundRay hits but the terrain.
+ 		Setup collision systems for the two purposes:
+ 		1. prevent the avatar from passing through a wall
+			(using collisionSphere + collisionHandlerPusher)
+		2. keep the avatar on the ground
+			(using collisionRay + collisionHandlerFloor)
  		"""
-		self.avatarCS = CollisionSphere(0,0,0,1)
-		self.avatarGroundCol = CollisionNode('avatarSphere')
-		self.avatarGroundCol.addSolid(self.avatarCS)
-		self.avatarGroundCol.setFromCollideMask(BitMask32.bit(0))
-		self.avatarGroundCol.setIntoCollideMask(BitMask32.allOff())
-		self.avatarGroundColNp = \
-			self.avatar.attachNewNode(self.avatarGroundCol)
-		self.avatarCS.setRadius(500)
-		self.avatarCS.setCenter(0,-80,300)
-		self.avatarGroundHandler = CollisionHandlerQueue()
-		self.cTrav.addCollider(self.avatarGroundColNp, \
-			self.avatarGroundHandler)
+		# Setup collisionBitMasks
+		FLOOR_MASK = BitMask32.bit(1)
+		WALL_MASK = BitMask32.bit(2)
+		self.floorCollider = self.environ.find("**/terrainCol")
+		if DEBUG: self.floorCollider.show()
+		self.floorCollider.node().setIntoCollideMask(FLOOR_MASK)
+		self.buildingCollider = self.environ.find("**/buildingCol")
+		if DEBUG: self.buildingCollider.show()
+		self.buildingCollider.node().setIntoCollideMask(WALL_MASK)
+		
+		base.cTrav = CollisionTraverser()
+		base.cTrav.setRespectPrevTransform(True)
 
-		# setup collisionRay for the Z adjustment
-		self.avatarRay = CollisionRay()
-		self.avatarRay.setOrigin(0,0,500)
-		self.avatarRay.setDirection(0,0,-1)
-		self.avatarRayNode = self.avatar.attachNewNode(CollisionNode('avatarRay'))
-		self.avatarRayNode.node().addSolid(self.avatarRay)
-		self.avatarRayNode.node().setFromCollideMask(BitMask32.bit(0))
-		self.avatarRayNode.node().setIntoCollideMask(BitMask32.allOff())
-		self.avatarRayHandler = CollisionHandlerQueue()
-		self.rayTrav = CollisionTraverser('rayTraverser')
-		self.rayTrav.addCollider(self.avatarRayNode, self.avatarRayHandler)
+		""" The difference between this code and below
+			is whether we attach atavarSpNp to avatar or avatarNP.
+			Because avatar is scaling down,
+			we need to adjust the parameters accordingly
+		self.avatarSpNp = \
+			self.avatar.attachNewNode(CollisionNode('avatarSphere'))
+		self.csSphere = self.avatarSpNp.node().addSolid(
+			CollisionSphere(0.0/self.avatar.getScale().getX(),
+							0.0/self.avatar.getScale().getY(),
+							5.5/self.avatar.getScale().getZ(),
+							0.8/self.avatar.getScale().getX()))
+		"""
+		self.avatarSpNp = \
+			self.avatarNP.attachNewNode(CollisionNode('avatarSphere'))
+		self.csSphere = self.avatarSpNp.node().addSolid(
+			CollisionSphere(0,0,1.3,.8))
+		# format above: (x,y,z,radius)
+		self.avatarSpNp.node().setFromCollideMask(WALL_MASK)
+		self.avatarSpNp.node().setIntoCollideMask(BitMask32.allOff())
+		if DEBUG: self.avatarSpNp.show()
+		self.avatarGroundHandler = CollisionHandlerPusher()
+		self.avatarGroundHandler.setHorizontal(True)
+		self.avatarGroundHandler.addCollider(self.avatarSpNp, self.avatarNP)
+		base.cTrav.addCollider(self.avatarSpNp,	self.avatarGroundHandler)
+
+		# setup collisionRay for the Z axis adjustment
+
+		self.avatarRayNp = \
+			self.avatarNP.attachNewNode(CollisionNode('avatarRay'))
+		self.csRay = self.avatarRayNp.node().addSolid(
+			CollisionRay(0,0,1,0,0,-1))
+		self.avatarRayNp.node().setFromCollideMask(FLOOR_MASK)
+		self.avatarRayNp.node().setIntoCollideMask(BitMask32.allOff())
+		if DEBUG: self.avatarRayNp.show()
+		self.avatarRayHandler = CollisionHandlerFloor()
+		self.avatarRayHandler.setMaxVelocity(14)
+		self.avatarRayHandler.addCollider(self.avatarRayNp, self.avatarNP)
+		base.cTrav.addCollider(self.avatarRayNp, self.avatarRayHandler)
+		if DEBUG: base.cTrav.showCollisions(render)
 
 
-		# setup collision detection objects used to implement
-		# canSee method
+		# setup collisionSegment for the method canSee()
 		self.csSeg = CollisionSegment()
 		self.csSeg.setPointA(Point3(0,0,0))
 		self.csSeg.setPointB(Point3(0,0,.5))
-
 		self.csNode = self.environ.attachNewNode(CollisionNode('csSeg'))
+		if DEBUG: self.csNode.show()
 		self.csNode.node().addSolid(self.csSeg)
-		self.csNode.node().setFromCollideMask(BitMask32.bit(0))
+		self.csNode.node().setFromCollideMask(WALL_MASK)
 		self.csNode.node().setIntoCollideMask(BitMask32.allOff())
-
 		self.csHandler = CollisionHandlerQueue()
-
 		self.csTrav = CollisionTraverser('CustomTraverser')
 		self.csTrav.addCollider(self.csNode, self.csHandler)
+		if DEBUG: self.csTrav.showCollisions(render)
 
-	def addRemote(self, x, y, direction, id) : 
+
+	def addRemote(self, x, y, z, direction, id, name) : 
 		""" Add a remote panda.
 
 		This method is used by the Net object when it starts
@@ -190,26 +238,32 @@ class NPCWorld(DirectObject):
 
 		New remotes are included in the scene graph.
 		"""
-		if id in self.remoteMap :
-			self.updateRemote(x,y,direction,id); return
+		if id in self.remoteMap:
+			self.updateRemote(x,y,z,direction,id, name); return
 		if len(self.freeRemotes) == 0 :
 			sys.stderr.write("PandaWorld.addRemote: no unused " + \
 					 "remotes\n")
 			sys.exit(1)
 		remote = self.freeRemotes.pop()
-		self.remoteMap[id] = [remote, True
-	#	self.remoteMap[id] = [remote, True ,
-	#			OnscreenImage(image = 'models/dot1.png', \
-	#					pos = (0,0,0), scale = .01)
+		self.remoteMap[id] = [remote, True ,
+				OnscreenImage(image = 'models/dot1.png', \
+						pos = (0,0,0), scale = 0)
 				]
+		"""
+				OnscreenImage(image = 'models/dot1.png', \
+						pos = (0,0,0), scale = 0),\
+						None ### what's this for?
+				]
+		"""
 
 		# set position and direction of remote and make it visible
 		remote.reparentTo(render)
-		remote.setPos(x,y,0) 
-		remote.setHpr(direction,0,0) 
+		remote.setPos(x, y, z) ### 
+		remote.setHpr(direction, 0, 0) 
+
 		remote.loop("run")
 
-	def updateRemote(self, x, y, direction, id) :
+	def updateRemote(self, x, y, z, direction, id, name) :
 		""" Update location of a remote panda.
 
 		This method is used by the Net object to update the location.
@@ -218,8 +272,7 @@ class NPCWorld(DirectObject):
 		id is an identifier used to distinguish this remote from others
 		"""
 		if id not in self.remoteMap : return
-#		remote, isMoving, dot = self.remoteMap[id]
-		remote, isMoving = self.remoteMap[id]
+		remote, isMoving, dot = self.remoteMap[id]
 		if abs(x - remote.getX()) < .001 and \
 		   abs(y - remote.getY()) < .001 and \
 		   direction == remote.getHpr()[0] :
@@ -231,8 +284,9 @@ class NPCWorld(DirectObject):
 			self.remoteMap[id][1] = True
 		
 		# set position and direction of remote
-		remote.setPos(x,y,0)
+		remote.setPos(x,y,z)
 		remote.setHpr(direction,0,0) 
+
 
 	def removeRemote(self, id) :
 		""" Remove a remote when it goes out of range.
@@ -240,11 +294,19 @@ class NPCWorld(DirectObject):
 		id is the identifier for the remote
 		"""
 		if id not in self.remoteMap : return
-#		self.remoteMap[id][2].destroy()
+
+		if id in self.remotePics.keys():
+			if self.remotePics[id]:
+				self.remotePics[id].destroy()
+				self.remotePics[id] = None	
+
+		self.remoteMap[id][2].destroy()
 		remote = self.remoteMap[id][0]
 		remote.detachNode() # ??? check this
 		self.freeRemotes.append(remote)
 		del self.remoteMap[id]
+		if id in self.visList:
+			self.visList.remove(id)
 
 	def getPosHeading(self) :
 		""" Get the position and heading.
@@ -253,13 +315,21 @@ class NPCWorld(DirectObject):
 		position return a tuple containing the x-coordinate,
 		y-coordinate, heading.
 		"""
-		return (self.avatar.getX(), self.avatar.getY(), \
-			(self.avatar.getHpr()[0])%360)
+		"""
+		print "PosNHeading"
+		print self.avatarNP.getX()
+		print self.avatarNP.getY()
+		print (self.avatarNP.getHpr()[0])%360
+		"""
+		return (self.avatarNP.getX(), self.avatarNP.getY(), \
+			self.avatarNP.getZ(), (self.avatarNP.getHpr()[0])%360)
+###			self.avatar.getZ())
 
 	def getLimit(self) :
 		""" Get the limit on the xy coordinates.
 		"""
-		return 120
+		return 1200
+
 
 	def canSee(self, p1, p2):
 		""" Test if two points are visible from one another
@@ -293,105 +363,77 @@ class NPCWorld(DirectObject):
 		""" Update the position of this avatar.
 
 		This method is called by the task scheduler on every frame.
-		It guides the AI.
+		It responds to keys to move the avatar/camera
 		"""
 
-		# save avatar's initial position so that we can restore it,
-		# in case he falls off or runs into something.
-		startpos = self.avatar.getPos()
+		""" Updating the position of avatar
+		"""
+		newH = self.avatarNP.getH()
 
 		if self.rotateDir == -1:
-			self.rotateDir = random.randint(1,20) # 10% chance to rotate
+			self.rotateDir = random.randint(1,25) # chances to rotate
 		if self.rotateDuration == -1:
 			self.rotateDuration = random.randint(200,400)
 
-		# if am not trying to avoid collision, randomly move
-		if not self.isAvoidingCollision :
-			if self.rotateDir == 1 : # turn left
-		#		if self.rotateDuration > 500 : self.inBigRotate = True
-				self.avatar.setH(self.avatar.getH() + \
-								 10 * globalClock.getDt())
-				self.rotateDuration -= 1
-				if self.rotateDuration <= 0:
-					self.rotateDuration = -1
-					self.rotateDir = -1
-		#			self.inBigRotate = False
-			elif self.rotateDir == 2 : # turn right
-		#		if self.rotateDuration > 500 : self.inBigRotate = True
-				self.avatar.setH(self.avatar.getH() - \
-								 10 * globalClock.getDt())
-				self.rotateDuration -= 1
-				if self.rotateDuration <= 0:
-					self.rotateDuration = -1
-					self.rotateDir = -1
-		#			self.inBigRotate = False
-			else : # do not rotate; keep moving forward
-				self.rotateDuration -= 1
-				if self.rotateDuration <= 0:
-					self.rotateDuration = -1
-					self.rotateDir = -1
-
-			# move forward
-#			if not self.inBigRotate and not self.isAvoidingCollision:
-			if not self.isAvoidingCollision:
-				self.avatar.setY(self.avatar, -200 * globalClock.getDt())
-
-		# position the camera where the avatar is
-#		pos = self.avatar.getPos(); pos[2] += 1
-#		hpr = self.avatar.getHpr();
-#		hpr[0] += 180; hpr[1] = 0 #camAngle
-#		base.camera.setPos(pos); base.camera.setHpr(hpr)
-
-
-
-
-		
-		# Now check for collisions.
-		self.cTrav.traverse(render)
-
-		# Adjust avatar's Z coordinate.  If avatar's ray hit terrain,
-		# update his Z. If it hit anything else, or didn't hit 
-		# anything, put him back where he was last frame.
-		entries = []
-		for i in range(self.avatarGroundHandler.getNumEntries()):
-			entries.append(self.avatarGroundHandler.getEntry(i))
-		collide = False
-		if (len(entries)>0) :
-			for entry in entries :
-				if entry.getIntoNode().getName() != "ID565" : # tag of terrain
-					collide = True
-			if collide == True :
-				self.isAvoidingCollision = True
-				self.avatar.setPos(startpos)
-				# take a left turn
-				self.avatar.setH(self.avatar.getH() + \
-						 120 * globalClock.getDt())
+		# guide the moving direction of the bot
+		if self.rotateDir <= 4 : # turn left
+			self.avatarNP.setH(self.avatarNP.getH() + \
+							 8 * globalClock.getDt())
+			self.rotateDuration -= 1
+			if self.rotateDuration <= 0:
 				self.rotateDuration = -1
 				self.rotateDir = -1
+		elif self.rotateDir <= 7 : # turn right
+			self.avatarNP.setH(self.avatarNP.getH() - \
+							 8 * globalClock.getDt())
+			self.rotateDuration -= 1
+			if self.rotateDuration <= 0:
+				self.rotateDuration = -1
+				self.rotateDir = -1
+		elif self.rotateDir == 8 : # turn big left
+			self.avatarNP.setH(self.avatarNP.getH() + \
+							 20 * globalClock.getDt())
+			self.rotateDuration -= 1
+			if self.rotateDuration <= 0:
+				self.rotateDuration = -1
+				self.rotateDir = -1
+		elif self.rotateDir == 9 : # turn big right
+			self.avatarNP.setH(self.avatarNP.getH() - \
+							 20 * globalClock.getDt())
+			self.rotateDuration -= 1
+			if self.rotateDuration <= 0:
+				self.rotateDuration = -1
+				self.rotateDir = -1
+		else :
+			self.rotateDuration -= 1
+			if self.rotateDuration <= 0:
+				self.rotateDuration = -1
+				self.rotateDir = -1
+			self.avatarNP.setFluidY(self.avatarNP,
+									-0.3 * globalClock.getDt())
+		# moving forward
+		self.avatarNP.setFluidY(self.avatarNP,
+								-1 * globalClock.getDt())
+
+
+	#	self.avatarNP.setH(newH)
+	#	self.avatarNP.setFluidY(self.avatarNP, newY)
+
+
+		if DEBUG:
+			""" Updating camera
+			"""
+			hpr = self.avatarNP.getHpr()
+			pos = self.avatarNP.getPos()
+			hpr[0] = hpr[0] + 180
+			hpr[1] = 0
+			if DEBUG:
+				base.camera.setPos(self.avatarNP,0,15,2)
 			else:
-				self.isAvoidingCollision = False
-	#			self.avatar.setZ( \
-	#				entries[0].getSurfacePoint(render).getZ())
-		entries = []
-		for i in range(self.avatarRayHandler.getNumEntries()):
-			entries.append(self.avatarRayHandler.getEntry(i))
-		entries.sort(lambda x,y: cmp(y.getSurfacePoint(render).getZ(),
-						x.getSurfacePoint(render).getZ()))
-		#collide = False
-		# in below, add condition entries[x].getIntoNode().getName()
-		# if we want to restrict the avatar walks on a particular material
-		if (len(entries)>0):
-				self.avatar.setZ(entries[0].getSurfacePoint(render).getZ())
+				base.camera.setPos(self.avatarNP,0,0,2)
+			base.camera.setHpr(hpr)
+			base.camLens.setFov(40)
 
-
-
-#		# map the avatar's position to the 2D map on the top-right 
-#		# corner of the screen
-#		self.dot.setPos((self.avatar.getX()/120.0)*0.7+0.45, \
-#				0,(self.avatar.getY()/120.0)*0.7+0.25)
-#		for id in self.remoteMap:
-#			self.remoteMap[id][2].setPos((self.remoteMap[id][0].getX()/120.0)*0.7+0.45, \
-#				0,(self.remoteMap[id][0].getY()/120.0)*0.7+0.25)
 
 		return task.cont
 
