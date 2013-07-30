@@ -1,0 +1,14 @@
+Supporting multiple avatars
+
+1. Add command line argument to give serial number of model files.
+   Use names of form ava1234.egg and walk1234.egg.
+   Pass serial number to PandaWorld and Net.
+
+2. Net includes avatar serial number in reports and passes the
+   serial number of received reports to PandaWorld.
+
+3. Maintain a list of lists called actorCache. Entry i is a list of unused 
+   Actor objects with serial number i. When a new avatar shows up in the
+   scene we look in actorCache for an unused Actor. If we don't find one,
+   we create one. When an avatar goes out of view, we places its Actor
+   back in actorCache.
