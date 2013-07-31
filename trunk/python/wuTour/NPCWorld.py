@@ -50,7 +50,7 @@ def addTitle(text):
 
 class NPCWorld(DirectObject):
 
-	def __init__(self):
+	def __init__(self, myAvaNum):
 		if DEBUG:
 			base.windowType = 'onscreen' 
 			wp = WindowProperties.getDefault() 
@@ -61,6 +61,7 @@ class NPCWorld(DirectObject):
 			props.setSize(800, 616)
 			base.win.requestProperties(props)
 			base.win.setClearColor(Vec4(0,0,0,1))
+			self.title = addTitle("WashU Campus viewed from AI")
 
 
 		self.currRegion = 2
@@ -68,7 +69,8 @@ class NPCWorld(DirectObject):
 
 		self.fieldAngle = 40
 
-		self.title = addTitle("WashU Campus viewed from AI")
+
+		self.myAvaNum = myAvaNum
 		
 		# Setup the environment
 
@@ -226,7 +228,7 @@ class NPCWorld(DirectObject):
 		if DEBUG: self.csTrav.showCollisions(render)
 
 
-	def addRemote(self, x, y, z, direction, id, name) : 
+	def addRemote(self, x, y, z, direction, id, name, avaNum) : 
 		""" Add a remote panda.
 
 		This method is used by the Net object when it starts

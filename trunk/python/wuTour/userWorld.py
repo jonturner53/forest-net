@@ -1,23 +1,14 @@
-""" userWorld - a tour on Danforth Campus, WashU
+""" userWorld - a tour on the Danforth campus, WashU
 
 This module is intended to be called by wuTour.py;
-To run it independently, uncomment the end of this code:
-	# w = userWorld()
-	# (spawning NPCs...)
- 	# run()
-and type "python PandaWorld.py"
+To run it independently, uncomment the end of this code
+and type "python userWorld.py"
  
-control:
-	Move   -> Up, Left, Right, Down
-	Rotate -> A, S
-	Strafe -> Z, X
-
 Author: Chao Wang, Jon Turner, Vigo Wei
 World Model: Chao Wang, Vigo Wei
  
 Adapted from "Roaming Ralph", a tutorial included in Panda3D package.
 """  
-
 
 
 
@@ -71,7 +62,7 @@ def printText(pos):
 
 class userWorld(DirectObject):
 
-	def __init__(self):
+	def __init__(self, myAvaNum):
 		base.windowType = 'onscreen' 
 		wp = WindowProperties.getDefault() 
 		base.openDefaultWindow(props = wp)
@@ -121,6 +112,8 @@ class userWorld(DirectObject):
 #		self.card.setTransparency(TransparencyAttrib.MAlpha)
 		base.win.setClearColor(Vec4(0,0,0,1))
 
+		self.myAvaNum = myAvaNum
+
 		self.title = addTitle("WashU Campus Tour")
 		
 		# Setup the environment
@@ -137,17 +130,25 @@ class userWorld(DirectObject):
 		self.ambientLight.node().setColor( Vec4( 4, 4, 7, 1 ) )
 		render.setLight(self.ambientLight)
 		
-		# Create the panda, our avatar
+		# Create the panda, our avatar (mainly for collision detection)
 		self.avatarNP = NodePath("ourAvatarNP")
 		self.avatarNP.reparentTo(render)
-		self.avatar = Actor("models/panda-model", \
-				    {"run":"models/panda-walk4", \
-				    "walk":"models/panda-walk"})
+		s = str(self.myAvaNum)
+		self.avatar = Actor("models/ava" + s,{"walk":"models/walk" + s})
 		self.avatar.reparentTo(self.avatarNP)
-		self.avatar.setScale(.002)
-		self.avatar.setPos(0,0,0)
-#		self.avatarNP.setPos(-231,-58,14)
-		self.avatarNP.setPos(645,170,19)
+  		if self.myAvaNum == 1 :
+  			self.avatar.setScale(.002)
+  			self.avatar.setPos(0,0,0)
+  		elif self.myAvaNum == 2 :
+  			self.avatar.setScale(.2)
+  			self.avatar.setPos(0,0,0)
+  		elif self.myAvaNum == 3 :
+  			self.avatar.setScale(.2)
+  			self.avatar.setPos(0,0,.5)
+  		elif self.myAvaNum == 4 :
+  			self.avatar.setScale(.2)
+  			self.avatar.setPos(0,0,.5)
+		self.avatarNP.setPos(645,170,17)
 		self.avatarNP.setH(230)
 		self.dot = OnscreenImage(image = 'models/dot.png', \
 			pos = (1,0,1), scale = 0)
@@ -164,6 +165,10 @@ class userWorld(DirectObject):
  		# Show a list of visible NPCs
  		self.showNumVisible = printText(0.8)
  		self.visList = []
+
+		# Create cache of Actor objects for serial numbers 1..1000
+		self.actorCache = []
+		for i in range(1,1001): self.actorCache.append([])
 
 		# Setup pool of remotes
 		# do not attach to scene yet
@@ -230,8 +235,6 @@ class userWorld(DirectObject):
 
 
 		# Game state variables
-		# Chao: I comment it out,
-		# 	since it is irrelvant if we use the first-person viewpoint
 		self.isMoving = False
 		self.isListening = False
 
@@ -281,10 +284,10 @@ class userWorld(DirectObject):
 		self.avatarSpNp.node().setFromCollideMask(WALL_MASK)
 		self.avatarSpNp.node().setIntoCollideMask(BitMask32.allOff())
 		if DEBUG: self.avatarSpNp.show()
-		self.avatarGroundHandler = CollisionHandlerPusher()
-		self.avatarGroundHandler.setHorizontal(True)
-		self.avatarGroundHandler.addCollider(self.avatarSpNp, self.avatarNP)
-		base.cTrav.addCollider(self.avatarSpNp,	self.avatarGroundHandler)
+		self.avatarWallHandler = CollisionHandlerPusher()
+		self.avatarWallHandler.setHorizontal(True)
+		self.avatarWallHandler.addCollider(self.avatarSpNp, self.avatarNP)
+		base.cTrav.addCollider(self.avatarSpNp,	self.avatarWallHandler)
 
 		# setup collisionRay for the Z axis adjustment
 
@@ -491,18 +494,24 @@ class userWorld(DirectObject):
 			print "has mouse @: " + str(x) + " " + str(y)
 		responded = 0	
 		for id in self.remoteNames.keys():
-			if abs(self.remoteNames[id].getPos()[0]- x) < 0.1 and abs(self.remoteNames[id].getPos()[1] - y) < 0.1:
-				# click occurs close enough to the name of the avatar, try to create pic 
-				if id not in self.remotePics.keys() or (id in self.remotePics.keys() and self.remotePics[id] is None):
+			if abs(self.remoteNames[id].getPos()[0]- x) < 0.1 and \
+				abs(self.remoteNames[id].getPos()[1] - y) < 0.1:
+				# click occurs close enough to the name of the \
+				# avatar, try to create pic 
+				if id not in self.remotePics.keys() or \
+					(id in self.remotePics.keys() and \
+					 self.remotePics[id] is None):
 					name = self.remoteNames[id].getText()
-					card = OnscreenImage(image = '/'+ name +'.jpg', pos = (x, 0, y), scale = (0.2, 1, 0.2))
+					card = OnscreenImage(image = '/'+ name +'.jpg', \
+							pos = (x, 0, y), scale = (0.2, 1, 0.2))
 					self.remotePics[id] = card
 					responded = 1
 		if responded is not 1:
 			for id in self.remotePics.keys():
 				if self.remotePics[id]:
 					card = self.remotePics[id]
-					if abs(self.remoteNames[id].getX() - x) < 1 and abs(self.remoteNames[id].getY() < y) < 1:
+					if abs(self.remoteNames[id].getX() - x) < 1 and \
+						abs(self.remoteNames[id].getY() < y) < 1:
 					# the user clicked on the card
 						if card:
 						#if card is not None:
@@ -602,7 +611,40 @@ class userWorld(DirectObject):
 		"""
 		self.keyMap[key] = value
 
-	def addRemote(self, x, y, z, direction, id, name) : 
+  	def getActor(self, avaNum) :
+  		""" Get an Actor object using a specfied model.
+  
+  		We first check the actorCache, and if no model is currently
+  		available, we create one.
+  		avaNum is the avatar serial number for the desired Actor
+  		"""
+  		actor = None
+  		if len(self.actorCache[avaNum]) > 0 :
+  			actor = self.actorCache[avaNum].pop()
+  		else :
+  			s = str(avaNum)
+  			actor = Actor("models/ava" + s, \
+  				      {"walk":"models/walk" + s})
+  			if avaNum == 1 :
+  				actor.setScale(.002)
+  			elif avaNum == 2 :
+  				actor.setScale(.2)
+  			elif avaNum == 3 :
+  				actor.setScale(.25)
+  			elif avaNum == 4 :
+  				actor.setScale(.25)
+  		return actor
+  
+  	def recycleActor(self, actor, avaNum) :
+  		""" Recycle an Actor object.
+  
+  		Just put it back in the cache.
+  		actor is an Actor object that is not currently needed
+  		avaNum is the serial number for the actor's model
+  		"""
+  		self.actorCache[avaNum].append(actor)
+
+	def addRemote(self, x, y, z, direction, id, name, avaNum) : 
 		""" Add a remote panda.
 
 		This method is used by the Net object when it starts
@@ -611,17 +653,14 @@ class userWorld(DirectObject):
 		x,y gives the remote's position
 		direction gives its heading
 		id is an identifier used to distinguish this remote from others
+		avaNum is the serial number for this avatar's model
 
 		New remotes are included in the scene graph.
 		"""
 		if id in self.remoteMap:
 			self.updateRemote(x,y,z,direction,id, name); return
-		if len(self.freeRemotes) == 0 :
-			sys.stderr.write("PandaWorld.addRemote: no unused " + \
-					 "remotes\n")
-			sys.exit(1)
-		remote = self.freeRemotes.pop()
-		self.remoteMap[id] = [remote, True ,
+		remote = self.getActor(avaNum)
+		self.remoteMap[id] = [remote, avaNum, True,
 				OnscreenImage(image = 'models/dot1.png', \
 						pos = (0,0,0), scale = 0)
 				]
@@ -647,8 +686,9 @@ class userWorld(DirectObject):
 		    r2d = Point3(p2[0], 0, p2[1])
 		    a2d = aspect2d.getRelativePoint(render2d, r2d) 
 		    if id not in self.remoteNames.keys():
-				self.remoteNames[id] = OnscreenText( text = name, pos = a2d, scale = 0.04, \
-												fg = (1, 1, 1 ,1), shadow = (0, 0, 0, 0.5) )
+				self.remoteNames[id] = OnscreenText( \
+					text = name, pos = a2d, scale = 0.04, \
+					fg = (1, 1, 1 ,1), shadow = (0, 0, 0, 0.5) )
 		
 		# if off view
 		else:
@@ -656,7 +696,7 @@ class userWorld(DirectObject):
 				if self.remoteNames[id]:
 					self.remoteNames[id].destroy()	
 
-		remote.loop("run")
+		####remote.loop("run")
 
 	def updateRemote(self, x, y, z, direction, id, name) :
 		""" Update location of a remote panda.
@@ -667,16 +707,16 @@ class userWorld(DirectObject):
 		id is an identifier used to distinguish this remote from others
 		"""
 		if id not in self.remoteMap : return
-		remote, isMoving, dot = self.remoteMap[id]
-		if abs(x - remote.getX()) < .001 and \
-		   abs(y - remote.getY()) < .001 and \
+		remote, avaNum, isMoving, dot = self.remoteMap[id]
+		if 	x == remote.getX() and \
+			y == remote.getY() and \
 		   direction == remote.getHpr()[0] :
-			remote.stop(); remote.pose("run",5)
-			self.remoteMap[id][1] = False
+			remote.stop(); remote.pose("walk",5)
+			self.remoteMap[id][2] = False
 			return
 		elif not isMoving :
-			remote.loop("run")
-			self.remoteMap[id][1] = True
+			remote.loop("walk")
+			self.remoteMap[id][2] = True
 		
 		# set position and direction of remote
 		remote.setPos(x,y,z)
@@ -694,14 +734,15 @@ class userWorld(DirectObject):
 			if id in self.remoteNames.keys():
 				if self.remoteNames[id]:
 					self.remoteNames[id].destroy()
-			self.remoteNames[id] = OnscreenText(text = name, pos = a2d, scale = 0.04, \
-									fg = (1, 1, 1, 1), shadow = (0, 0, 0, 0.5))
+			self.remoteNames[id] = OnscreenText(text = name, \
+						pos = a2d, scale = 0.04, \
+						fg = (1, 1, 1, 1), shadow = (0, 0, 0, 0.5))
 
-			if id in self.remotePics.keys():
-				if self.remotePics[id]:
+	#		if id in self.remotePics.keys():
+	#			if self.remotePics[id]:
 					#try:
-					self.remotePics[id].setPos(a2d[0], 0, a2d[1]) 
-					# if pic happens to have been removed by the user
+					#self.remotePics[id].setPos(a2d[0], 0, a2d[1]) 
+					## if pic happens to have been removed by the user
 					# except Exception as e:
 						# pass
 					
@@ -726,6 +767,8 @@ class userWorld(DirectObject):
 		id is the identifier for the remote
 		"""
 		if id not in self.remoteMap : return
+		self.remoteMap[id][3].destroy()
+		remote = self.remoteMap[id][0]
 
 		if id in self.remoteNames.keys():
 			if self.remoteNames[id]:
@@ -736,10 +779,9 @@ class userWorld(DirectObject):
 				self.remotePics[id].destroy()
 				self.remotePics[id] = None	
 
-		self.remoteMap[id][2].destroy()
-		remote = self.remoteMap[id][0]
-		remote.detachNode() # ??? check this
-		self.freeRemotes.append(remote)
+		remote.detachNode()
+		avaNum = self.remoteMap[id][1]
+		self.recycleActor(remote, avaNum)
 		del self.remoteMap[id]
 		if id in self.visList:
 			self.visList.remove(id)
@@ -759,7 +801,6 @@ class userWorld(DirectObject):
 		"""
 		return (self.avatarNP.getX(), self.avatarNP.getY(), \
 			self.avatarNP.getZ(), (self.avatarNP.getHpr()[0])%360)
-###			self.avatar.getZ())
 
 	def getLimit(self) :
 		""" Get the limit on the xy coordinates.
@@ -860,18 +901,18 @@ class userWorld(DirectObject):
 			base.camera.setHpr(hpr)
 			base.camLens.setFov(40)
 
-		# If avatar is moving, loop the run animation.
+		# If avatar is moving, loop the walk animation.
 		# If he is standing still, stop the animation.
-		""" irrelvant if we use first-person viewpoint
+		""" irrelvant if we use the first-person viewpoint
 		if (self.keyMap["forward"]!=0) or (self.keyMap["left"]!=0) or \
 		   (self.keyMap["right"]!=0):
 			if self.isMoving is False:
-				self.avatar.loop("run")
+				self.avatar.loop("walk")
 				self.isMoving = True
 		else:
 			if self.isMoving:
 				self.avatar.stop()
-				self.avatar.pose("run",5)
+				self.avatar.pose("walk",5)
 				self.isMoving = False
 		"""
 		

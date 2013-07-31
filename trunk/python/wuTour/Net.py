@@ -53,14 +53,15 @@ class Net :
 	""" Net support.
 
 	"""
-	def __init__(self, cliMgrIp, comtree, numg, subLimit, pWorld, name, \
-		     debug):
+	def __init__(self, cliMgrIp, comtree, numg, subLimit, myAvaNum, \
+			pWorld, name, debug):
 		""" Initialize a new Net object.
 
 		comtree is the number of the comtree to use
 		numg*numg is the number of multicast groups
 		subLimit defines the maximum visibility distance for multicast
 		groups
+		myAvaNum is the serial number of this avatar's model
 		debug is an integer >=0 that determines amount of
 		debugging output
 		"""
@@ -71,6 +72,7 @@ class Net :
 		self.debug = debug
 		self.name = name
 		self.count = 0
+		self.myAvaNum = myAvaNum
 
 		self.rms = 0		#Avatar volume value
 		self.isMute = 0		#if mute or not
@@ -362,7 +364,8 @@ class Net :
 		try :
 			buf, senderAdr = self.sock.recvfrom(2000)
 		except error as e :
-			if e.errno == 35 or e.errno == 11 or e.errno == 10035: return None
+			if e.errno == 35 or e.errno == 11 or \
+			   e.errno == 10035: return None
 			# 11, 35 both imply no data to read
 			# treat anything else as fatal error
 			sys.stderr.write("Substrate: socket " \
@@ -493,13 +496,11 @@ class Net :
 			print "numNear=", numNear
 
 ####		p.payload = struct.pack('!IIIIII' + str(namelen) + 'sI' + str(msglen) + 'sIi', \
-		p.payload = struct.pack('!IIIIIII' + str(namelen) + 'sIi', \
+		p.payload = struct.pack('!8I' + str(namelen) + 'sIi', \
 					STATUS_REPORT, now, \
-					int(self.x*GRID), int(self.y*GRID), \
-					int(self.z*GRID),
-					int(self.direction), namelen,
-					self.name,
-					self.rms, self.myFadr)
+					int(self.x*GRID), int(self.y*GRID), int(self.z*GRID), \
+					int(self.direction), self.myAvaNum, \
+					namelen, self.name, self.rms, self.myFadr)
 ####					msglen, self.msg, self.rms, self.myFadr)
 		self.send(p)
 
@@ -636,23 +637,24 @@ class Net :
 		(say, process a "kill packet")
 		"""
 #		print "updateNearby"
-		tuple = struct.unpack('!IIIIII',p.payload[0:24])
+		tuple = struct.unpack('!7I',p.payload[0:28])
 		if tuple[0] == STATUS_REPORT:
 		
 			x1 = (tuple[2]+0.0)/GRID
 			y1 = (tuple[3]+0.0)/GRID
 			z1 = (tuple[4]+0.0)/GRID
 			dir1 = tuple[5]
+			avaNum = tuple[6]
 #			print "Got STATUS_REPORT: (x,y,z) = (%r, %r, %r)" % (x1, y1, z1)
 			
 			avId = p.srcAdr
 
-			tuple = struct.unpack('!I', p.payload[24:28])
+			tuple = struct.unpack('!I', p.payload[28:32])
 			namelen = tuple[0]
-			tuple = struct.unpack(str(namelen) + 's', p.payload[28: 28+namelen])
+			tuple = struct.unpack(str(namelen) + 's', p.payload[32: 32+namelen])
 			if namelen != 0:
 				name = tuple[0]
-			tuple = struct.unpack('!Ii',p.payload[28+namelen:36+namelen])
+			tuple = struct.unpack('!Ii',p.payload[32+namelen:40+namelen])
 			rms = tuple[0]
 			audioAdr = tuple[1]
 			#print "audiolvl:" + str(audiolvl)
@@ -695,7 +697,7 @@ class Net :
 		###		os.chdir("photo_cache")
 		###		self.getPhoto(name)
 		###		os.chdir(savedPath)
-				self.pWorld.addRemote(x1, y1, z1, dir1, avId,name)
+				self.pWorld.addRemote(x1, y1, z1, dir1, avId, name, avaNum)
 
 		#play audio	
 		elif tuple[0] == AUDIO :
