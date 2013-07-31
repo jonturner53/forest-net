@@ -143,10 +143,10 @@ class userWorld(DirectObject):
   			self.avatar.setScale(.2)
   			self.avatar.setPos(0,0,0)
   		elif self.myAvaNum == 3 :
-  			self.avatar.setScale(.2)
+  			self.avatar.setScale(.3)
   			self.avatar.setPos(0,0,.5)
   		elif self.myAvaNum == 4 :
-  			self.avatar.setScale(.2)
+  			self.avatar.setScale(.3)
   			self.avatar.setPos(0,0,.5)
 		self.avatarNP.setPos(645,170,17)
 		self.avatarNP.setH(230)
@@ -630,9 +630,9 @@ class userWorld(DirectObject):
   			elif avaNum == 2 :
   				actor.setScale(.2)
   			elif avaNum == 3 :
-  				actor.setScale(.25)
+  				actor.setScale(.3)
   			elif avaNum == 4 :
-  				actor.setScale(.25)
+  				actor.setScale(.3)
   		return actor
   
   	def recycleActor(self, actor, avaNum) :
