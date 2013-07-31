@@ -14,9 +14,9 @@ from panda3d.core import *
 from direct.task import Task
 
 import errno
-import pyaudio
-import wave
-import audioop
+#FENGP import pyaudio
+#FENGP import wave
+#FENGP import audioop
 import math
 
 from userWorld import *
@@ -45,7 +45,7 @@ FAST    = 50    	# fast avatar speed
 CHUNK = 512
 BYTES = CHUNK*2
 CHANNELS = 1
-FORMAT = pyaudio.paInt16
+#FENGP FORMAT = pyaudio.paInt16
 RATE = 10240
 AUDIO_BUFFER_SIZE = 2
 
@@ -100,7 +100,7 @@ class Net :
 		self.nearRemotes = {}	# map: fadr -> [x,y,dir,dx,dy,count]
 
 		self.seqNum = 1		# sequence # for control packets
-
+		"""FENGP
 		self.p1 = pyaudio.PyAudio()
                 self.stream = self.p1.open(format=FORMAT,
                         channels=CHANNELS,
@@ -113,6 +113,7 @@ class Net :
 				start=False,
                                 input=True,
                                 frames_per_buffer=CHUNK)
+		FENGP"""
 
 	def init(self, uname, pword) :
 		if not self.login(uname, pword) : return False

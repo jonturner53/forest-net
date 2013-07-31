@@ -31,8 +31,8 @@ from direct.gui.DirectGui import *
 
 from collections import deque
 
-import pyaudio
-import wave
+#import pyaudio
+#import wave
 
 map_x = 1.3
 map_y = 1
