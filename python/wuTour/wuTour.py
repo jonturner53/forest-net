@@ -1,7 +1,7 @@
 """ Virtual Tour on Danforth Campus, Washington University in St. Louis
 
 usage:
-      python wuTour.py myIp cliMgrIp numg subLimit comtree name[ debug ] [ auto ]
+      python wuTour.py cliMgrIp numg subLimit comtree avaNum name[ debug ] [ auto ]
 
 - myIp is the IP address of the user's computer
 - cliMgrIp is the IP address of the client manager's computer
@@ -9,6 +9,7 @@ usage:
 - subLimit limits the number of multicast groups that we subscribe to;
   we'll subscribe to a group is it's L_0 distance is at most subLimit
 - comtree is the number of a pre-configured Forest comtree
+- avaNum is the serial number of the model used for this avatar
 - the debug option, if present controls the amount of debugging output;
   use "debug" for a little debugging output, "debuggg" for lots
 - the auto option, if present, starts an avatar that wanders aimlessly
@@ -34,21 +35,22 @@ from panda3d.core import Point3
 import random, sys, os, math, getpass
 
 # process command line arguments
-if len(sys.argv) < 6 :
+if len(sys.argv) < 7 :
 	sys.stderr.write("usage: python wuTour.py cliMgrIp numg " + \
-			 "subLimit comtree name|-u name[ debug ] [ auto ] [autos]\n")
+			 "subLimit comtree avaNum name|-u name[ debug ] [ auto ] [autos]\n")
         sys.exit(1)
 
 cliMgrIp = gethostbyname(sys.argv[1])
 numg = int(sys.argv[2])
 subLimit = int(sys.argv[3])
 myComtree = int(sys.argv[4])
+myAvaNum = int(sys.argv[5])
 
 uName = None
 myName = None
 password = None
 
-if sys.argv[5] == '-u':
+if sys.argv[6] == '-u':
 	uName = sys.argv[6]
 	myName = uName
 	password = getpass.getpass()
@@ -56,12 +58,12 @@ else:
 	print "use default username and password"
 	uName = "user"
 	password = "pass"
-	myName = sys.argv[5]
+	myName = sys.argv[6]
 
 auto = False
 autos = False
 debug = 0
-for i in range(5,len(sys.argv)) :
+for i in range(7,len(sys.argv)) :
 	if sys.argv[i] == "debug" : debug = 1
 	elif sys.argv[i] == "debugg" : debug = 2
 	elif sys.argv[i] == "debuggg" : debug = 3
@@ -72,8 +74,8 @@ for i in range(5,len(sys.argv)) :
 #net = Net(cliMgrIp, myComtree, numg, subLimit, pWorld, uName, debug)
 
 if auto == False and autos == False:
-	pWorld = userWorld()
-	net = Net(cliMgrIp, myComtree, numg, subLimit, pWorld, uName, debug)
+	pWorld = userWorld(myAvaNum)
+	net = Net(cliMgrIp, myComtree, numg, subLimit, myAvaNum, pWorld, uName, debug)
 	# setup tasks
 	if not net.init(uName, password) :
 		sys.stderr.write("cannot initialize net object\n")
@@ -84,8 +86,8 @@ else :
 	else : botNum = 1
 	vworld = {}; vnet = {}
 	for i in range(0,botNum) :
-		vworld[i] = NPCWorld()
-		vnet[i] = Net(cliMgrIp, myComtree, numg, subLimit, vworld[i], uName, debug)
+		vworld[i] = NPCWorld(myAvaNum)
+		vnet[i] = Net(cliMgrIp, myComtree, numg, subLimit, myAvaNum, vworld[i], uName, debug)
 		if not vnet[i].init(uName, password) :
 			sys.stderr.write("cannot initialize net object\n")
 			sys.exit(1)
