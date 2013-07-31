@@ -34,8 +34,8 @@ from direct.gui.DirectGui import *
 
 from collections import deque
 
-import pyaudio
-import wave
+#FENGP import pyaudio
+#FENGP import wave
 
 map_x = 1.3
 map_y = 1
@@ -238,8 +238,8 @@ class userWorld(DirectObject):
 		self.isMoving = False
 		self.isListening = False
 
-		p = pyaudio.PyAudio()
-		print p.get_device_info_by_index(0)['defaultSampleRate']
+#FENGP		p = pyaudio.PyAudio()
+#FENGP		print p.get_device_info_by_index(0)['defaultSampleRate']
 
 		# Set up the camera
 		base.disableMouse()
