@@ -131,10 +131,10 @@ class PandaWorld(DirectObject):
 		self.audioData = ''	 
 		
 		# Show a list of instructions
-		self.zoomCmd = printText(0.7)
-		self.zoomCmd.setText("*I: zoom-in" + '\n' + "*O: zoom-out" \
-					+ '\n' + "*R: reset view"\
-					+ '\n' + "*T: toggle Zoom mode")
+		#self.zoomCmd = printText(0.7)
+		#self.zoomCmd.setText("*I: zoom-in" + '\n' + "*O: zoom-out" \
+		#			+ '\n' + "*R: reset view"\
+		#			+ '\n' + "*T: toggle Zoom mode")
 
 		# setup maps for remote avatars - key is remote's id
 		# do not attach to scene yet
@@ -197,17 +197,23 @@ class PandaWorld(DirectObject):
 		self.avatarSpNp = \
 			self.avatar.attachNewNode(CollisionNode('avatarSphere'))
 		
-		self.csSphere = self.avatarSpNp.node().addSolid(
-			CollisionSphere(0.0/self.avatar.getScale().getX(),
+		if self.myAvaNum <= 2 :
+			self.csSphere = self.avatarSpNp.node().addSolid(
+				CollisionSphere(0.0,
 					-0.5/self.avatar.getScale().getY(),
-					0.5/self.avatar.getScale().getZ(),
-					0.8/self.avatar.getScale().getX()))
+					0.5/self.avatar.getScale().getZ(),400))
+		else :
+			self.csSphere = self.avatarSpNp.node().addSolid(
+				CollisionSphere(0.0,
+					-0.5/self.avatar.getScale().getY(),
+					0,400))
 		# format above: (x,y,z,radius)
 
 		self.avatarSpNp.node().setFromCollideMask(BitMask32.bit(0))
 		self.avatarSpNp.node().setIntoCollideMask(BitMask32.allOff())
 
-		# uncomment the following line to show the collisionSphere
+		
+# uncomment the following line to show the collisionSphere
 		self.avatarSpNp.show()
 
 		self.avatarGroundHandler = CollisionHandlerPusher()
