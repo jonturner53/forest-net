@@ -13,7 +13,7 @@
 }
 
 <Texture> Tex.006 {
-  "./tex/OMO1.PNG"
+  "./tex/omo1.png"
   <Scalar> envtype { MODULATE }
   <Scalar> minfilter { LINEAR_MIPMAP_LINEAR }
   <Scalar> magfilter { LINEAR_MIPMAP_LINEAR }

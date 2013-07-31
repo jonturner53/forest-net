@@ -324,7 +324,7 @@ class NPCWorld(DirectObject):
 		print (self.avatarNP.getHpr()[0])%360
 		"""
 		return (self.avatarNP.getX(), self.avatarNP.getY(), \
-			self.avatarNP.getZ(), (self.avatarNP.getHpr()[0])%360)
+			self.avatarNP.getZ()+0.5, (self.avatarNP.getHpr()[0])%360)
 ###			self.avatar.getZ())
 
 	def getLimit(self) :
