@@ -13,7 +13,7 @@
 }
 
 <Texture> Texture {
-  "./tex/Col1.png"
+  "./tex/col1.png"
   <Scalar> envtype { MODULATE }
   <Scalar> minfilter { LINEAR_MIPMAP_LINEAR }
   <Scalar> magfilter { LINEAR_MIPMAP_LINEAR }
@@ -21,7 +21,7 @@
 }
 
 <Texture> Texture.001 {
-  "./tex/SPECULAR.PNG"
+  "./tex/specular.png"
   <Scalar> envtype { GLOSS }
   <Scalar> minfilter { LINEAR_MIPMAP_LINEAR }
   <Scalar> magfilter { LINEAR_MIPMAP_LINEAR }
