@@ -18,7 +18,7 @@ from direct.task import Task
 UPDATE_PERIOD = .05 	# number of seconds between status updates
 STATUS_REPORT = 1 	# code for status report packets
 NUM_ITEMS = 10		# number of items in status report
-GRID = 10000  		# xy extent of one grid square
+GRID = 10000.0  		# xy extent of one grid square
 MAXNEAR = 1000		# max # of nearby avatars
 MAX_VIS = 20		# visibility range (measured in cells)
 
@@ -76,9 +76,7 @@ class Net :
 		if not self.login(uname, pword) : return False
 		self.rtrAdr = (ip2string(self.rtrIp),self.rtrPort)
 		self.t0 = time(); self.now = 0; self.nextTime = 0;
-		print "connect to router"
 		if not self.connect() : return False
-		print "connect succeeded"
 		sleep(.1)
 		if not self.joinComtree() :
 			sys.stderr.write("Net.run: cannot join comtree\n")
@@ -113,24 +111,19 @@ class Net :
 		the client manager returns several configuration parameters
 		as part of the dialog
 		"""
-		print "connecting to client manager"
 		cmSock = socket(AF_INET, SOCK_STREAM);
 		cmSock.connect((self.cliMgrIp,30122))
-		print "connected to client manager"
 	
 		cmSock.sendall("Forest-login-v1\nlogin: " + uname + \
                 	       "\npassword: " + pword + "\nover\n")
 
 
 		buf = ""
-		print "reading line"
 		line,buf = self.readLine(cmSock,buf)
 		if line != "success" :
-			print "oops", line
 			return False
 		line,buf = self.readLine(cmSock,buf)
 		if line != "over" :
-			print "oops", line
 			return False
 
 		cmSock.sendall("newSession\nover\n")
@@ -167,8 +160,6 @@ class Net :
 
 		line,buf = self.readLine(cmSock,buf) 
 		if line != "overAndOut" : return False
-
-		print "login successful"
 
 		cmSock.close()
 
@@ -339,12 +330,11 @@ class Net :
 		now = int(1000000 * self.now)
 	
 		numNear = len(self.nearRemotes)
-		if numNear > 5000 or numNear < 0 :
-			print "numNear=", numNear
 		p.payload = struct.pack('!IIIIII', \
 					STATUS_REPORT, now, \
 					int(self.x*GRID), int(self.y*GRID), \
-					int(self.direction), self.myAvaNum)
+					int(self.direction),
+					int(self.myAvaNum))
 		self.send(p)
 
 	def subscribe(self,glist) :
