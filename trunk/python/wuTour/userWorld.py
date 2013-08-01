@@ -660,7 +660,7 @@ class userWorld(DirectObject):
 		if id in self.remoteMap:
 			self.updateRemote(x,y,z,direction,id, name); return
 		remote = self.getActor(avaNum)
-		self.remoteMap[id] = [remote, avaNum, True,
+		self.remoteMap[id] = [remote, avaNum, False,
 				OnscreenImage(image = 'models/dot1.png', \
 						pos = (0,0,0), scale = 0)
 				]
@@ -708,6 +708,25 @@ class userWorld(DirectObject):
 		"""
 		if id not in self.remoteMap : return
 		remote, avaNum, isMoving, dot = self.remoteMap[id]
+
+
+
+
+		""" jst start """
+		if abs(x-remote.getX()) > .01 or abs(y-remote.getY()) > .01 or \
+		   abs(direction-remote.getHpr()[0]) > .01 :
+			if not isMoving :
+				remote.loop("walk")
+				self.remoteMap[id][2] = True
+			remote.setHpr(direction,0,0) 
+			remote.setX(x); remote.setY(y)
+		else :
+			remote.stop(); remote.pose("walk",1)
+			self.remoteMap[id][2] = False 
+		""" jst end """
+
+
+		"""
 		if 	x == remote.getX() and \
 			y == remote.getY() and \
 		   direction == remote.getHpr()[0] :
@@ -721,6 +740,7 @@ class userWorld(DirectObject):
 		# set position and direction of remote
 		remote.setPos(x,y,z)
 		remote.setHpr(direction,0,0) 
+		"""
 
 		# display name, similar to in addRemote()
 		# (x, y, 0) is the 3D position of the target
