@@ -1,0 +1,20 @@
+New version of vworld2 that will enventually integrate all new
+features added by students over the summer. Not there yet.
+
+Code for names and downloading pictures
+- add command-line argument, pass to Net
+- add missing components to UserWorld (take from wuTour)
+
+Zoom-in/out
+- take from wuTour
+
+Audio
+- add command-line flag so can easily turn on/off
+
+Doowon's code to set size of world
+
+For now, stick with distributing avatars through svn.
+Let users just do an svn up, whenever they want.
+Accept new avatars from anyone interested and add to repo.
+
+Standard names: ava-123.egg, walk-123.egg, tex-123.egg
