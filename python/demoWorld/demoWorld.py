@@ -26,8 +26,8 @@ from Net import *
 from Mcast import *
 from Packet import *
 from Util import *
-from PandaWorld import *
-from AIWorld import *
+from Avatar import *
+#from AIWorld import *
 
 import direct.directbase.DirectStart
 from panda3d.core import *
@@ -61,7 +61,7 @@ for i in range(7,len(sys.argv)) :
 	elif sys.argv[i] == "auto" : auto = True
 
 password = "pass"
-if user != "user" :
+if userName != "user" :
 	password = getpass.getpass()
 
 myAvatar = Bot() if auto else Avatar(userName, avaModel)
@@ -71,7 +71,7 @@ net = Net(cliMgrIp, myComtree, numg, subLimit, userName, avaModel,
 if auto : print "type Ctrl-C to terminate"
 
 # setup tasks
-if not net.init(user, password) :
+if not net.init(userName, password) :
 	sys.stderr.write("cannot initialize net object\n");
 	sys.exit(1)
 

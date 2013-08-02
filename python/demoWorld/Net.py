@@ -59,7 +59,7 @@ class Net :
 
 	"""
 	def __init__(self, cliMgrIp, comtree, numg, subLimit, \
-			userName, avaModel, theAvatar, name, debug):
+			userName, avaModel, theAvatar, debug):
 		""" Initialize a new Net object.
 
 		comtree is the number of the comtree to use
@@ -703,7 +703,7 @@ class Net :
 	###		self.getPhoto(name)
 	###		os.chdir(savedPath)
 
-	def updateRemoteSpeaker(self, x, y, rms, remoteSpeaker)
+	def updateRemoteSpeaker(self, x, y, rms, remoteSpeaker) :
 		""" Determine apparent sound energy level for remoteSpeaker
 		    and if louder than that of current remote speaker
 		    then make this the new remote speaker
@@ -737,7 +737,8 @@ class Net :
 
 		tuple = struct.unpack('!3I',p.payload[4:16])
 		sendTime = tuple[0]/1000000.0
-		x1 = (tuple[1]+0.0)/GRID y1 = (tuple[2]+0.0)/GRID
+		x1 = (tuple[1]+0.0)/GRID
+		y1 = (tuple[2]+0.0)/GRID
 
 		man_distance = math.sqrt(math.pow(x1-self.x,2) +
 					 math.pow(y1-self.y,2))+1 
