@@ -141,7 +141,7 @@ class Avatar(DirectObject):
 		self.accept("arrow_up-up", self.setKey, ["forward",0])
  		self.accept("arrow_down-up", self.setKey, ["backward",0])
  		self.accept("alt-up", self.setKey, ["dash", 0])
-		self.accept("shift-up", self.resetCamKeys)
+#		self.accept("shift-up", self.resetCamKeys)
 		# or "arrow_up-up", self.setKey, ["cam-up",0])
 		# self.accept("shift-up" or "arrow_down-up", self.setKey, ["cam-down",0])
 		# self.accept("shift-up" or "arrow_left-up", self.setKey, ["cam-left",0])
@@ -152,8 +152,8 @@ class Avatar(DirectObject):
 #		self.accept("mouse1", self.calling)
 #		self.accept("mouse2", self.showPic)
 #		self.accept("mouse3", self.teleport)
-		self.accept("f1", self.showInfo)
-		self.accept("m", self.mute)
+#		self.accept("f1", self.showInfo)
+#		self.accept("m", self.mute)
 #		self.accept("v", self.view)
 #		self.accept("s", self.switchRegion)
 #		self.accept("control-s", self.switchView)
@@ -165,11 +165,6 @@ class Avatar(DirectObject):
 		self.zoomCmd.setText("i: zoom-in" + '\n' + "o: zoom-out" \
 					+ '\n' + "r: reset view"\
 					+ '\n' + "t: toggle Zoom mode")
-
-		# Create a floater object.  We use the "floater" as a temporary
-		# variable in a variety of calculations.
-		self.floater = NodePath(PandaNode("floater"))
-		self.floater.reparentTo(render)
 
  		# Setup collision Solids for the two purposes:
  		# 1. prevent the avatar from passing through a wall
