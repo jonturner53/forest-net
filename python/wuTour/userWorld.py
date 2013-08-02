@@ -118,7 +118,7 @@ class userWorld(DirectObject):
 		
 		# Setup the environment
 
-		self.environ = loader.loadModel("models/campus/danforthBox")
+		self.environ = loader.loadModel("models/campus/danforth")
 		self.environ.reparentTo(render)
 		self.environ.setPos(0,0,0)
 #		size = max - min 
@@ -143,12 +143,15 @@ class userWorld(DirectObject):
   			self.avatar.setScale(.2)
   			self.avatar.setPos(0,0,0)
   		elif self.myAvaNum == 3 :
-  			self.avatar.setScale(.3)
-  			self.avatar.setPos(0,0,.5)
+#  			self.avatar.setScale(.4)
+  			self.avatar.setPos(0,0,0)
   		elif self.myAvaNum == 4 :
-  			self.avatar.setScale(.3)
-  			self.avatar.setPos(0,0,.5)
-		self.avatarNP.setPos(645,170,17)
+#  			self.avatar.setScale(.4)
+  			self.avatar.setPos(0,0,0)
+#  		elif self.myAvaNum == 5 :
+#  			self.avatar.setScale(.4)
+#  			self.avatar.setPos(0,0,0)
+		self.avatarNP.setPos(540,160,15)
 		self.avatarNP.setH(230)
 		self.dot = OnscreenImage(image = 'models/dot.png', \
 			pos = (1,0,1), scale = 0)
@@ -173,13 +176,8 @@ class userWorld(DirectObject):
 		# Setup pool of remotes
 		# do not attach to scene yet
 		self.remoteMap = {}
-		self.freeRemotes = []
 		self.remoteNames = {}
 		self.remotePics = {}
-		for i in range(0,self.maxRemotes) : # allow up to 100 remotes
-			self.freeRemotes.append(Actor("models/panda-model", \
-						{"run":"models/panda-walk4"}))
-			self.freeRemotes[i].setScale(0.002)
 		self.msgs = {}
 
 		"""
@@ -629,10 +627,8 @@ class userWorld(DirectObject):
   				actor.setScale(.002)
   			elif avaNum == 2 :
   				actor.setScale(.2)
-  			elif avaNum == 3 :
-  				actor.setScale(.3)
-  			elif avaNum == 4 :
-  				actor.setScale(.3)
+  		#	elif avaNum == 3 :
+  		#	elif avaNum == 4 :
   		return actor
   
   	def recycleActor(self, actor, avaNum) :
@@ -710,8 +706,6 @@ class userWorld(DirectObject):
 		remote, avaNum, isMoving, dot = self.remoteMap[id]
 
 
-
-
 		""" jst start """
 		if abs(x-remote.getX()) > .01 or abs(y-remote.getY()) > .01 or \
 		   abs(direction-remote.getHpr()[0]) > .01 :
@@ -719,28 +713,12 @@ class userWorld(DirectObject):
 				remote.loop("walk")
 				self.remoteMap[id][2] = True
 			remote.setHpr(direction,0,0) 
-			remote.setX(x); remote.setY(y)
+			remote.setPos(x,y,z)
 		else :
 			remote.stop(); remote.pose("walk",1)
 			self.remoteMap[id][2] = False 
 		""" jst end """
 
-
-		"""
-		if 	x == remote.getX() and \
-			y == remote.getY() and \
-		   direction == remote.getHpr()[0] :
-			remote.stop(); remote.pose("walk",5)
-			self.remoteMap[id][2] = False
-			return
-		elif not isMoving :
-			remote.loop("walk")
-			self.remoteMap[id][2] = True
-		
-		# set position and direction of remote
-		remote.setPos(x,y,z)
-		remote.setHpr(direction,0,0) 
-		"""
 
 		# display name, similar to in addRemote()
 		# (x, y, 0) is the 3D position of the target
@@ -811,16 +789,11 @@ class userWorld(DirectObject):
 	
 		Intended for use by a Net object that must track avatar's 
 		position return a tuple containing the x-coordinate,
-		y-coordinate, heading.
-		"""
-		"""
-		print "PosNHeading"
-		print self.avatarNP.getX()
-		print self.avatarNP.getY()
-		print (self.avatarNP.getHpr()[0])%360
+		y-coordinate, z-coordinate, and heading.
 		"""
 		return (self.avatarNP.getX(), self.avatarNP.getY(), \
-			self.avatarNP.getZ()+0.5, (self.avatarNP.getHpr()[0])%360)
+			self.avatarNP.getZ(), \
+			(self.avatarNP.getHpr()[0])%360)
 
 	def getLimit(self) :
 		""" Get the limit on the xy coordinates.
@@ -878,11 +851,11 @@ class userWorld(DirectObject):
 		if (self.keyMap["right"]!=0):
 			newH -= 50 * globalClock.getDt()
 		if (self.keyMap["forward"]!=0):
-			newY -= 20 * globalClock.getDt()
+			newY -= 1.3 * globalClock.getDt()
  		if (self.keyMap["backward"]!=0):
- 			newY += 20 * globalClock.getDt()
+ 			newY += 1.3 * globalClock.getDt()
  		if (self.keyMap["dash"]!=0):
- 			newY -= 100 * globalClock.getDt()
+ 			newY -= 60 * globalClock.getDt()
 
 		self.avatarNP.setH(newH)
 		self.avatarNP.setFluidY(self.avatarNP, newY)
