@@ -74,7 +74,7 @@ class NPCWorld(DirectObject):
 		
 		# Setup the environment
 
-		self.environ = loader.loadModel("models/campus/danforthBoxForAI")
+		self.environ = loader.loadModel("models/campus/danforthForAI")
 		self.environ.reparentTo(render)
 		self.environ.setPos(0,0,0)
 #		size = max - min 
@@ -89,14 +89,20 @@ class NPCWorld(DirectObject):
 		# Create the panda, our avatar
 		self.avatarNP = NodePath("ourAvatarNP")
 		self.avatarNP.reparentTo(render)
-		self.avatar = Actor("models/panda-model", \
-				    {"run":"models/panda-walk4", \
-				    "walk":"models/panda-walk"})
+		s = str(self.myAvaNum)
+		self.avatar = Actor("models/ava" + s,{"walk":"models/walk" + s})
 		self.avatar.reparentTo(self.avatarNP)
-		self.avatar.setScale(.002)
-		self.avatar.setPos(0,0,0)
-#		self.avatarNP.setPos(-231,-58,14)
-		self.avatarNP.setPos(645,170,19)
+  		if self.myAvaNum == 1 :
+  			self.avatar.setScale(.002)
+  			self.avatar.setPos(0,0,0)
+  		elif self.myAvaNum == 2 :
+  			self.avatar.setScale(.2)
+  			self.avatar.setPos(0,0,0)
+  		elif self.myAvaNum == 3 :
+  			self.avatar.setPos(0,0,0)
+  		elif self.myAvaNum == 4 :
+  			self.avatar.setPos(0,0,0)
+		self.avatarNP.setPos(540,160,15)
 		self.avatarNP.setH(230)
 		self.dot = OnscreenImage(image = 'models/dot.png', \
 			pos = (1,0,1), scale = 0)
@@ -127,7 +133,7 @@ class NPCWorld(DirectObject):
 		self.remotePics = {}
 		for i in range(0,self.maxRemotes) : # allow up to 100 remotes
 			self.freeRemotes.append(Actor("models/panda-model", \
-						{"run":"models/panda-walk4"}))
+						{"walk":"models/panda-walk4"}))
 			self.freeRemotes[i].setScale(0.002)
 		self.msgs = {}
 
@@ -263,7 +269,7 @@ class NPCWorld(DirectObject):
 		remote.setPos(x, y, z) ### 
 		remote.setHpr(direction, 0, 0) 
 
-		remote.loop("run")
+		remote.loop("walk")
 
 	def updateRemote(self, x, y, z, direction, id, name) :
 		""" Update location of a remote panda.
@@ -275,19 +281,21 @@ class NPCWorld(DirectObject):
 		"""
 		if id not in self.remoteMap : return
 		remote, isMoving, dot = self.remoteMap[id]
-		if abs(x - remote.getX()) < .001 and \
-		   abs(y - remote.getY()) < .001 and \
-		   direction == remote.getHpr()[0] :
-			remote.stop(); remote.pose("run",5)
-			self.remoteMap[id][1] = False
-			return
-		elif not isMoving :
-			remote.loop("run")
-			self.remoteMap[id][1] = True
-		
-		# set position and direction of remote
-		remote.setPos(x,y,z)
-		remote.setHpr(direction,0,0) 
+
+
+
+		""" jst start """
+		if abs(x-remote.getX()) > .01 or abs(y-remote.getY()) > .01 or \
+		   abs(direction-remote.getHpr()[0]) > .01 :
+			if not isMoving :
+				remote.loop("walk")
+				self.remoteMap[id][1] = True
+			remote.setHpr(direction,0,0) 
+			remote.setPos(x,y,z)
+		else :
+			remote.stop(); remote.pose("walk",1)
+			self.remoteMap[id][1] = False 
+		""" jst end """
 
 
 	def removeRemote(self, id) :
@@ -324,8 +332,8 @@ class NPCWorld(DirectObject):
 		print (self.avatarNP.getHpr()[0])%360
 		"""
 		return (self.avatarNP.getX(), self.avatarNP.getY(), \
-			self.avatarNP.getZ()+0.5, (self.avatarNP.getHpr()[0])%360)
-###			self.avatar.getZ())
+			self.avatarNP.getZ(), \
+			(self.avatarNP.getHpr()[0])%360)
 
 	def getLimit(self) :
 		""" Get the limit on the xy coordinates.
