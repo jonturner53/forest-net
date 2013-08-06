@@ -44,6 +44,12 @@ public class NetMgrConsole {
     private String nmAddr;
 
     private String routerName;
+    private String table;
+
+    private ComtreeTableModel comtreeTableModel;
+    private LinkTableModel linkTableModel;
+    private IfaceTableModel ifaceTableModel;
+    private RouteTableModel routeTableModel;
 
     public NetMgrConsole(String nmAddr, int nmPort){
         this.nmPort = nmPort;
@@ -111,7 +117,12 @@ public class NetMgrConsole {
      * Display Net Manager Console
      */
     private void displayNetMgr(){
-        initNetMgrConnection();//initial Connection to NetMgr
+        //initNetMgrConnection();//initial Connection to NetMgr
+        
+        comtreeTableModel = new ComtreeTableModel();
+        linkTableModel = new LinkTableModel();
+        ifaceTableModel = new IfaceTableModel();
+        routeTableModel = new RouteTableModel();
 
         JPanel mainPanel = new JPanel();
         BoxLayout boxLayout = new BoxLayout(mainPanel, BoxLayout.Y_AXIS);
@@ -138,74 +149,99 @@ public class NetMgrConsole {
         comtreeDisplayPanel.setPreferredSize(new Dimension(MAIN_WIDTH, 400));
         
 
-        //Link Table Menu
-        final LinkTableModel linkTableModel = new LinkTableModel();
-        JPanel linkTableMenuPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        linkTableMenuPanel.setBorder(BorderFactory.createTitledBorder(""));
-        linkTableMenuPanel.setPreferredSize(new Dimension(MAIN_WIDTH, 45));
-        linkTableMenuPanel.setMaximumSize(linkTableMenuPanel.getPreferredSize());
+        //Router Info Menu
+        final JTable infoTable = new JTable(comtreeTableModel); //initially comtreeTableModel
+        JPanel routerInfoMenuPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        routerInfoMenuPanel.setBorder(BorderFactory.createTitledBorder(""));
+        routerInfoMenuPanel.setPreferredSize(new Dimension(MAIN_WIDTH, 45));
+        routerInfoMenuPanel.setMaximumSize(routerInfoMenuPanel.getPreferredSize());
         JLabel routerNameLabel = new JLabel("Router:");
-        linkTableMenuPanel.add(routerNameLabel);
+        routerInfoMenuPanel.add(routerNameLabel);
         String[] routers = {"r1", "r2"}; //comtree combobox
-        final JComboBox routersComboBox = new JComboBox(routers);
-        linkTableMenuPanel.add(routersComboBox);
-        JButton linkTableUpdateButton = new JButton("Update");
-        linkTableUpdateButton.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                routerName = routersComboBox.getSelectedItem().toString();
-                if(!sendString("getLinkTable: " + routerName +"\n")){
-                    JOptionPane.showMessageDialog(null, "Error at sending a message to NetMgr");
-                }
-                linkTableModel.clear();
-                while(true){
-                    String s = inBuf.readLine();
-                    System.out.println(s);
-                    if(s.equals("over")){
-                        System.out.println("Over!");
-                        break;
-                    } else {
-                        String[] tokens = s.split(" ");
-                        linkTableModel.addLinkTable(new LinkTable(tokens[0], tokens[1], 
-                            new String(tokens[2] + ":" + tokens[3]), tokens[4], tokens[5], tokens[6]));
-                        linkTableModel.fireTableDataChanged();
+        final JComboBox routersComboBox = new JComboBox(routers); //router selection
+        routerInfoMenuPanel.add(routersComboBox);
+        String[] tables = {"Comtree", "Link", "Iface", "Route"};
+        final JComboBox tablesComboBox = new JComboBox(tables); //info selection
+        tablesComboBox.addItemListener(new ItemListener(){
+            public void itemStateChanged(ItemEvent e){
+                if (e.getStateChange() == 1){
+                    if(e.getItem().equals("Comtree")) {
+                        infoTable.setModel(comtreeTableModel);
                     }
+                    else if(e.getItem().equals("Link")) {
+                        infoTable.setModel(linkTableModel);
+                    }
+                    else if(e.getItem().equals("Iface")) {
+                        infoTable.setModel(ifaceTableModel);
+                    }
+                    else if(e.getItem().equals("Route")) {
+                        infoTable.setModel(routeTableModel);
+                    }
+                    setPreferredWidth(infoTable);
                 }
             }
         });
-        JButton linkTableClearButton = new JButton("Clear");
-        linkTableClearButton.addActionListener(new ActionListener() {
+        routerInfoMenuPanel.add(tablesComboBox);  
+        JButton routerInfoUpdateButton = new JButton("Update");
+        routerInfoUpdateButton.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) {
+                table = tablesComboBox.getSelectedItem().toString();
+                routerName = routersComboBox.getSelectedItem().toString();
+                if (table.equals("Link")){
+                    if(!sendString("getLinkTable: " + routerName +"\n")){
+                        JOptionPane.showMessageDialog(null, "Error at sending a message to NetMgr");
+                    }
+                    linkTableModel.clear();
+                    while(true){
+                        String s = inBuf.readLine();
+                        System.out.println(s);
+                        if(s.equals("over")){
+                            System.out.println("Over!");
+                            break;
+                        } else {
+                            String[] tokens = s.split(" ");
+                            linkTableModel.addLinkTable(new LinkTable(tokens[0], tokens[1], 
+                                new String(tokens[2] + ":" + tokens[3]), tokens[4], tokens[5], tokens[6]));
+                            linkTableModel.fireTableDataChanged();
+                        }
+                    }
+                } else if (table.equals("Comtree")) {
+
+                } else if (table.equals("Iface")) {
+
+                } else if (table.equals("Route")) {
+
+                }
+            }
+        });
+        JButton routerInfoClearButton = new JButton("Clear");
+        routerInfoClearButton.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
                 linkTableModel.clear();
                 linkTableModel.fireTableDataChanged();
             }
         });
-        linkTableMenuPanel.add(linkTableUpdateButton);
-        linkTableMenuPanel.add(linkTableClearButton);
+        routerInfoMenuPanel.add(routerInfoUpdateButton);
+        routerInfoMenuPanel.add(routerInfoClearButton);
 
 
         //Link Table
-        JPanel linkTablePanel = new JPanel();
-        linkTablePanel.setBorder(BorderFactory.createTitledBorder(""));
-        JTable linkTable = new JTable(linkTableModel);
-        JTableHeader linkTableHeader = linkTable.getTableHeader();
-        linkTableHeader.setDefaultRenderer(new HeaderRenderer(linkTable));
-        linkTable.setAutoResizeMode(JTable.AUTO_RESIZE_OFF); //size
-        linkTable.getColumnModel().getColumn(0).setPreferredWidth((int)(MAIN_WIDTH * 0.1));
-        linkTable.getColumnModel().getColumn(1).setPreferredWidth((int)(MAIN_WIDTH * 0.1));
-        linkTable.getColumnModel().getColumn(2).setPreferredWidth((int)(MAIN_WIDTH * 0.3));
-        linkTable.getColumnModel().getColumn(3).setPreferredWidth((int)(MAIN_WIDTH * 0.1));
-        linkTable.getColumnModel().getColumn(4).setPreferredWidth((int)(MAIN_WIDTH * 0.1));
-        linkTable.getColumnModel().getColumn(5).setPreferredWidth((int)(MAIN_WIDTH * 0.3));
+        JPanel routerInfoPanel = new JPanel();
+        routerInfoPanel.setBorder(BorderFactory.createTitledBorder(""));
+        
+        JTableHeader linkTableHeader = infoTable.getTableHeader();
+        linkTableHeader.setDefaultRenderer(new HeaderRenderer(infoTable));
+        infoTable.setAutoResizeMode(JTable.AUTO_RESIZE_OFF); //size
         DefaultTableCellRenderer centerRenderer = new DefaultTableCellRenderer();
         centerRenderer.setHorizontalAlignment(JLabel.CENTER);
-        for ( int i = 0; i < linkTableModel.getColumnCount(); ++i){
-            linkTable.getColumnModel().getColumn(i).setCellRenderer(centerRenderer);
+        for ( int i = 0; i < infoTable.getModel().getColumnCount(); ++i){
+            infoTable.getColumnModel().getColumn(i).setCellRenderer(centerRenderer);
         }
-        linkTable.setFillsViewportHeight(true);
+        infoTable.setFillsViewportHeight(true);
         
-        JScrollPane linkTableScrollPane = new JScrollPane(linkTable);
-        linkTableScrollPane.setPreferredSize(new Dimension(MAIN_WIDTH, 100));
-        linkTablePanel.add(linkTableScrollPane);
+        JScrollPane infoTableScrollPane = new JScrollPane(infoTable);
+        infoTableScrollPane.setPreferredSize(new Dimension(MAIN_WIDTH, 100));
+        routerInfoPanel.add(infoTableScrollPane);
         
         //Log Menu
         JPanel logMenuPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
@@ -227,8 +263,8 @@ public class NetMgrConsole {
 
         mainPanel.add(comtreeMenuPanel);
         mainPanel.add(comtreeDisplayPanel);
-        mainPanel.add(linkTableMenuPanel);
-        mainPanel.add(linkTablePanel);
+        mainPanel.add(routerInfoMenuPanel);
+        mainPanel.add(routerInfoPanel);
         mainPanel.add(logMenuPanel);
         mainPanel.add(logDisplayPanel);
         
@@ -236,7 +272,22 @@ public class NetMgrConsole {
         mainFrame.pack();
         mainFrame.repaint();
     }
+    /**
+     * Set preferred column header's width 
+     * @param infoTable information table
+     */
+    private void setPreferredWidth(JTable infoTable){
+        for(int i = 0 ; i < infoTable.getModel().getColumnCount() ; ++i){
+            // int j = (infoTable.getModel().getWidth(i);
+            // infoTable.getColumnModel().getColumn(i).setPreferredWidth((int)(MAIN_WIDTH * j * 0.1));
+        }
+    }
 
+    /**
+     * Check if given password is correct
+     * @param  input password
+     * @return if correct
+     */
     private static boolean isPasswordCorrect(char[] input) {
         boolean isCorrect = true;
         char[] correctPassword = { 'p', 'a', 's', 's'};
@@ -324,23 +375,19 @@ public class NetMgrConsole {
 }
 
 /**
- * This class for the model for Link Table 
+ * This class is for the model for Link Table (JTable)
  */
 class LinkTableModel extends AbstractTableModel {
     private String[] columnNames = {"link", "iface", "peerIp:port", "peerType", "peerAdr", "rates"};
+    private int[] widths = {1, 1, 3, 1, 1, 3};
     private ArrayList<LinkTable> data;
-    // private Object[][] data = {{"1", "1", "123.123.123.123:1234", "router", "2.10", "1000,1000"}};
-    public LinkTableModel(){
-        data = new ArrayList<LinkTable>();
-    }
+    public LinkTableModel(){ data = new ArrayList<LinkTable>(); }
     public int getColumnCount() { return columnNames.length; }
     public int getRowCount() { return data.size(); }
     public String getColumnName(int col) { return columnNames[col];}
     public Object getValueAt(int row, int col) { 
         LinkTable lt = data.get(row);
-        if(lt == null){
-            return null;
-        }
+        if(lt == null) return null;
         switch (col){
             case 0: return lt.getLink(); 
             case 1: return lt.getIface();
@@ -353,28 +400,139 @@ class LinkTableModel extends AbstractTableModel {
     }
     public void addLinkTable(LinkTable lt) { data.add(lt); }
     public void clear(){ data.clear(); }
+    public int getWidth(int i) { return widths[i];}
 }
 
 /**
- * Link Table class
+ * This class is for the model for Comtree Table (JTable)
  */
-class LinkTable {
+class ComtreeTableModel extends AbstractTableModel {
+    private String[] columnNames = {"comtree", "inCore", "pLink", "link"};
+    private int[] widths = {1, 1, 3, 1};
+    private ArrayList<ComtreeTable> data;
+    public ComtreeTableModel(){ data = new ArrayList<ComtreeTable>(); }
+    public int getColumnCount() { return columnNames.length; }
+    public int getRowCount() { return data.size(); }
+    public String getColumnName(int col) { return columnNames[col];}
+    public Object getValueAt(int row, int col) { 
+        ComtreeTable ct = data.get(row);
+        if(ct == null) return null;
+        switch (col){
+            case 0: return ct.getComtree(); 
+            case 1: return ct.getInCore();
+            case 2: return ct.getpLink();
+            case 3: return ct.getLink();
+            default: return null;
+        }
+    }
+    public void addComtreeTable(ComtreeTable ct) { data.add(ct); }
+    public void clear(){ data.clear(); }
+    public int getWidth(int i) { return widths[i];}
+}
+
+/**
+ * This class is for the model for Iface Table (JTable)
+ */
+class IfaceTableModel extends AbstractTableModel {
+    private String[] columnNames = {"iface", "ip", "rates"};
+    private int[] widths = {1, 1, 3};
+    private ArrayList<IfaceTable> data;
+    public IfaceTableModel(){ data = new ArrayList<IfaceTable>(); }
+    public int getColumnCount() { return columnNames.length; }
+    public int getRowCount() { return data.size(); }
+    public String getColumnName(int col) { return columnNames[col];}
+    public Object getValueAt(int row, int col) { 
+        IfaceTable it = data.get(row);
+        if(it == null) return null;
+        switch (col){
+            case 0: return it.getIface(); 
+            case 1: return it.getIp();
+            case 2: return it.getRates();
+            default: return null;
+        }
+    }
+    public void addIfaceTable(IfaceTable it) { data.add(it); }
+    public void clear(){ data.clear(); }
+    public int getWidth(int i) { return widths[i];}
+}
+
+/**
+ * This class is for the model for Route Table (JTable)
+ */
+class RouteTableModel extends AbstractTableModel {
+    private String[] columnNames = {"comtree", "Addr", "test", "test", "test", "test"};
+    private int[] widths = {1, 1, 3, 1, 1, 3};
+    private ArrayList<RouteTable> data;
+    public RouteTableModel(){ data = new ArrayList<RouteTable>(); }
+    public int getColumnCount() { return columnNames.length; }
+    public int getRowCount() { return data.size(); }
+    public String getColumnName(int col) { return columnNames[col];}
+    public Object getValueAt(int row, int col) { 
+        RouteTable rt = data.get(row);
+        if(rt == null) return null;
+        switch (col){
+            case 0: return rt.getComtree(); 
+            case 1: return rt.getAddr();
+            default: return null;
+        }
+    }
+    public void addIfaceTable(RouteTable rt) { data.add(rt); }
+    public void clear(){ data.clear(); }
+    public int getWidth(int i) { return widths[i];}
+}
+
+class LinkTable{
     private String link;
     private String iface;
     private String peerIpAndPort;
     private String peerType;
     private String peerAdr;
     private String rates;
-    
     public LinkTable(String link, String iface, String peerIpAndPort, String peerType, String peerAdr, String rates) {
         this.link = link; this.iface = iface; this.peerIpAndPort = peerIpAndPort;
         this.peerType = peerType; this.peerAdr = peerAdr; this.rates = rates;
     }
-
     public String getLink() { return link; }
     public String getIface() { return iface; }
     public String getPeerIpAndPort() { return peerIpAndPort; }
     public String getPeerType() { return peerType; }
     public String getPeerAdr() { return peerAdr; }
     public String getRates() { return rates; }
+}
+
+class ComtreeTable{
+    private String comtree;
+    private String inCore;
+    private String pLink;
+    private String link;
+    public ComtreeTable(String comtree, String inCore, String pLink, String link){
+        this.comtree = comtree; this.inCore = inCore;
+        this.pLink = pLink; this.link = link;
+    }
+    public String getComtree() {return comtree;}
+    public String getInCore() {return inCore;}
+    public String getpLink() {return pLink;}
+    public String getLink() {return link;}
+}
+
+class IfaceTable{
+    private String iface;
+    private String ip;
+    private String rates;
+    public IfaceTable(String iface, String ip, String rates){
+        this.iface = iface; this.ip = ip; this.rates = rates;
+    }
+    public String getIface() {return iface;}
+    public String getIp() {return ip;}
+    public String getRates() {return rates;}
+}
+
+class RouteTable{
+    private String comtree;
+    private String addr;
+    public RouteTable(String comtree, String addr){
+        this.comtree = comtree; this.addr = addr;
+    }
+    public String getComtree() {return comtree;}
+    public String getAddr() {return addr;}
 }
