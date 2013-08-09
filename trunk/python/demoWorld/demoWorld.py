@@ -1,33 +1,29 @@
 """ Demonstration of simple virtual world using Forest overlay
 
 usage:
-      demoWorld cliMgr numg subLimit comtree userName avaModel
-		[ audio ] [ debug ] [ auto ]
+      demoWorld cliMgr comtree userName avaModel
+		[ auto ] [ show ] [ audio ] [ debug ]
 
 - cliMgrIp is the host name or IP address of the client manager's server
-- numg*numg is the number of multicast groups to use
-- subLimit limits the number of multicast groups that we subscribe to;
-  we'll subscribe to a group is it's L_0 distance is at most subLimit
 - comtree is the number of a pre-configured Forest comtree
 - userName is your forest user name; if you specify user, you will be
   connected using the demo account called "user"; for any other choice,
   you will be prompted for a password
 - avaModel is the serial number of the 3d-model used for this avatar
-- the audio option, if string "audio" is present, sending/receiving audio
-  is enabled; to use this option, you must have pyaudio and portaudio installed
+- the auto option, if present, starts an avatar that wanders aimlessly
+- the show option, if present, opens a window showing the world from
+  the avatar's viewpoint; for auto avatars, this is required to see what
+  the avatar sees; for manually controlled avatars, a window is always opened
+- the audio option, if present, sending/receiving audio
+  is enabled; to use this option, you must have pyaudio and portaudio installed;
+  this is always disabled for auto avatars
 - the debug option, if present controls the amount of debugging output;
   use "debug" for a little debugging output, "debuggg" for lots
-- the auto option, if present, starts an avatar that wanders aimlessly
 """
 
 import sys
 from socket import *
-from Net import *
-from Mcast import *
-from Packet import *
-from Util import *
-from Avatar import *
-from Bot import *
+import random, sys, os, math
 
 import direct.directbase.DirectStart
 from panda3d.core import *
@@ -37,38 +33,43 @@ from direct.actor.Actor import Actor
 from direct.showbase.DirectObject import DirectObject
 from direct.interval.IntervalGlobal import Sequence
 from panda3d.core import Point3
-import random, sys, os, math
+
+import Util
+from Util import *
+from Net import *
+from Avatar import *
 
 # process command line arguments
 if len(sys.argv) < 5 :
-	sys.stderr.write("usage: DemoWorld cliMgr numg subLimit comtree " + \
-			 "userName avaModel [ audio ] [ debug ] [ auto ]")
+	sys.stderr.write("usage: DemoWorld cliMgr comtree userName avaModel" + \
+			 " [ auto ] [ show ] [ audio ] [ debug ]")
         sys.exit(1)
 
 cliMgrIp = gethostbyname(sys.argv[1])
-numg = int(sys.argv[2])
-subLimit = int(sys.argv[3])
-myComtree = int(sys.argv[4])
-userName = sys.argv[5]
-avaModel = int(sys.argv[6])
+myComtree = int(sys.argv[2])
+userName = sys.argv[3]
+avaModel = int(sys.argv[4])
 
-AUDIO = False; auto = False; debug = 0
-for i in range(7,len(sys.argv)) :
-	if sys.argv[i] == "audio" : AUDIO = True
-	elif sys.argv[i] == "debug"   : debug = 1
-	elif sys.argv[i] == "debugg"  : debug = 2
-	elif sys.argv[i] == "debuggg" : debug = 3
-	elif sys.argv[i] == "auto" : auto = True
+Util.AUTO = False; Util.SHOW = False; Util.AUDIO = False; Util.DEBUG = 0
+for i in range(5,len(sys.argv)) :
+	if   sys.argv[i] == "auto" : Util.AUTO = True
+	elif sys.argv[i] == "show" : Util.SHOW = True
+	elif sys.argv[i] == "audio" : Util.AUDIO = True
+	elif sys.argv[i] == "debug"   : Util.DEBUG = 1
+	elif sys.argv[i] == "debugg"  : Util.DEBUG = 2
+	elif sys.argv[i] == "debuggg" : Util.DEBUG = 3
+if not Util.AUTO : Util.SHOW = True
+if Util.AUTO : Util.AUDIO = False
 
 password = "pass"
 if userName != "user" :
 	password = getpass.getpass()
 
-myAvatar = Bot() if auto else Avatar(userName, avaModel)
-net = Net(cliMgrIp, myComtree, numg, subLimit, userName, avaModel,
-	  myAvatar, debug)
+print "DEBUG=", Util.DEBUG
+myAvatar = Avatar(userName, avaModel)
+net = Net(cliMgrIp, myComtree, userName, avaModel, myAvatar)
 
-if auto : print "type Ctrl-C to terminate"
+if Util.AUTO : print "type Ctrl-C to terminate"
 
 # setup tasks
 if not net.init(userName, password) :
