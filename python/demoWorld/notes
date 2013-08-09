@@ -1,8 +1,6 @@
 New version of vworld2 that will enventually integrate all new
 features added by students over the summer. Not there yet.
 
-Get bots working
-
 Code for names and downloading pictures
 - add command-line argument, pass to Net
 - add missing components to UserWorld (take from wuTour)

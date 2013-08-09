@@ -7,7 +7,7 @@ class Mcast :
 	""" Multicast group management.
 
 	"""
-	def __init__(self, numg, subLimit, net, pWorld):
+	def __init__(self, net, myAvatar):
 		""" Initialize a new Mcast object.
 
 		numg*numg is the number of multicast groups used to
@@ -15,17 +15,15 @@ class Mcast :
 		subLimit limits number of multicast groups we subscribe to;
 		we subscribe only if x-distance + y-distance is <= subLimit
 		net is a reference to the Net object
-		pWorld is a reference to the PandaWorld object
+		myAvatar is a reference to the Avatar object
 		"""
 
-		#self.numg = numg
-		#self.subLimit = subLimit
 		self.net = net
-		self.pWorld = pWorld
+		self.myAvatar = myAvatar
 
 		# determine the number of cells in each direction and
 		# the resulting cell size
-		limit = pWorld.getLimit()
+		limit = myAvatar.getLimit()
 		self.nX = int(limit[0]/10.0);
 		self.cellSizeX = (limit[0]+0.0)/self.nX
 		self.nY = int(limit[1]/10.0);
@@ -171,7 +169,7 @@ class Mcast :
 		# Check sightlines between all pairs of "corners"
 		for p1 in points1 :
 			for p2 in points2 :
-				if self.pWorld.canSee(p1,p2) :
+				if self.myAvatar.canSee(p1,p2) :
 					return True
 		return False
 

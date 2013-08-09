@@ -27,9 +27,10 @@ from direct.interval.IntervalGlobal import Sequence
 from panda3d.core import Point3
 from pandac.PandaModules import CardMaker
 
+import Util
 from Util import *
 
-if AUDIO : import pyaudio; import wave
+if Util.AUDIO : import pyaudio; import wave
 
 def addTitle(text):
 	""" Show a title on the screen at bottom right.
@@ -51,37 +52,55 @@ class Avatar(DirectObject):
 		self.avaModel = avaModel
 
 		# Setup graphics
-		base.windowType = 'onscreen' 
-		wp = WindowProperties.getDefault() 
-		base.openDefaultWindow(props = wp)
-		base.win.setClearColor(Vec4(0,0,0,1))
+		if Util.SHOW :
+			base.windowType = 'onscreen' 
+			wp = WindowProperties.getDefault() 
+			base.openDefaultWindow(props = wp)
+			base.win.setClearColor(Vec4(0,0,0,1))
 		
 		# Set up the environment
 		self.environ = loader.loadModel("models/vworld24grid")
 		self.environ.reparentTo(render)
 		self.environ.setPos(0,0,0)
- 		base.setBackgroundColor(0.5,0.7,1,1)
 
+		self.setupLimits()
+		self.setupAvatar()
+		self.setupCollisions()
+		self.setupRemotes()
+		if Util.AUTO :
+			self.setupAuto()
+		else :
+			self.setupKeyMappings()
+		if Util.SHOW :
+			base.setBackgroundColor(0.5,0.7,1,1)
+			self.title = addTitle("demo world")
+			self.setupScreenText()
+			self.setupMap()
+			self.setupCamera()
+			self.setupLights()
+		if Util.AUDIO : self.setupAudio()
+
+		# add move method to task list
+		taskMgr.add(self.move,"moveTask")
+
+	def setupLimits(self) :
 		minBounds, maxBounds = self.environ.getTightBounds()
 		size = maxBounds - minBounds
 		self.modelSizeX = size.getX()
 		self.modelSizeY = size.getY()
 		print 'Size is ', self.modelSizeX, self.modelSizeY
 
-		self.title = addTitle("demo world")
-
-		self.setupScreenText()
-		self.setupMap()
-		self.setupKeyMappings()
-		self.setupAvatar()
-		self.setupCamera()
-		self.setupCollisions()
-		self.setupLights()
-		self.setupRemotes()
-		self.setupAudio()
-
-		# add move method to task list
-		taskMgr.add(self.move,"moveTask")
+	def setupAuto(self) :
+		""" Initialize variables that control automatic wandering.
+		"""
+		self.rotateDir = -1
+		self.rotateDuration = -1
+		self.moveDir = -1
+		self.moveDuration = -1
+		self.isAvoidingCollision = False
+		self.inBigRotate = False # if True, do not move forward;
+					 # only rotate
+		return
 
 	def setupScreenText(self) :
 		""" Setup screen text that will appear at upper right.
@@ -103,8 +122,13 @@ class Avatar(DirectObject):
 		"""
 		self.avatarNP = NodePath("ourAvatarNP")
 		self.avatarNP.reparentTo(render)
-		self.avatarNP.setPos(58,67,0)
-		self.avatarNP.setH(230)
+		if Util.AUTO :
+			self.avatarNP.setPos(58,67,0)
+			angle = 90*random.randint(0,3) + random.randint(-10,10)
+			self.avatarNP.setH(angle)
+		else :
+			self.avatarNP.setPos(58,75,0)
+			self.avatarNP.setH(0)
 
 		s = str(self.avaModel)
 		self.avatar = Actor("models/ava" + s,{"walk":"models/walk" + s})
@@ -314,7 +338,7 @@ class Avatar(DirectObject):
 		self.audioLevel = 0  	# audio volume
 		self.audioData = ''	# audio samples from microphone	 
 		self.isListening = False
-		if AUDIO :
+		if Util.AUDIO :
 			p = pyaudio.PyAudio()
 			print p.get_device_info_by_index(0)['defaultSampleRate']
 
@@ -372,6 +396,7 @@ class Avatar(DirectObject):
 
 		New remotes are included in the scene graph.
 		"""
+		if not Util.SHOW : return
 		if id in self.remoteMap:
 			self.updateRemote(x,y,direction,id,name); return
 		remote = self.getActor(avaNum)
@@ -415,6 +440,7 @@ class Avatar(DirectObject):
 		id is an identifier used to distinguish this remote from others
 		name is the remote's user name
 		"""
+		if not Util.SHOW : return
 		if id not in self.remoteMap : return
 		remote, avaNum, isMoving, dot = self.remoteMap[id]
 
@@ -462,8 +488,46 @@ class Avatar(DirectObject):
 					self.remotePics[id].destroy()
 					self.remotePics[id] = None
 
+
+	def removeRemote(self, id) :
+		""" Remove a remote when it goes out of range.
+		
+		id is the identifier for the remote
+		"""
+		if not Util.SHOW : return
+		if id not in self.remoteMap : return
+		self.remoteMap[id][3].destroy()
+		remote = self.remoteMap[id][0]
+		
+		if id in self.remoteNames.keys():
+			if self.remoteNames[id]:
+				self.remoteNames[id].destroy()	
+				
+		if id in self.remotePics.keys():
+			if self.remotePics[id]:
+				self.remotePics[id].destroy()
+				self.remotePics[id] = None
+				
+		remote.detachNode()
+		avaNum = self.remoteMap[id][1]
+		self.recycleActor(remote,avaNum)
+		del self.remoteMap[id]
+		if id in self.visList:
+			self.visList.remove(id)
+
+	def getPosHeading(self) :
+		""" Get the position and heading.
+	
+		Intended for use by a Net object that must track avatar's 
+		position return a tuple containing the x-coordinate,
+		y-coordinate, heading.
+		"""
+		return (self.avatarNP.getX(), self.avatarNP.getY(), \
+			self.avatarNP.getZ(), (self.avatarNP.getHpr()[0])%360)
+
 	# to display/hide pictures when the user clicks on the avatar/pic
 	def showPic(self):
+		if not Util.SHOW : return
 		x = y = 0
 		if base.mouseWatcherNode.hasMouse():
 			x=base.mouseWatcherNode.getMouseX()
@@ -497,6 +561,7 @@ class Avatar(DirectObject):
 							self.remotePics[id] = None
 			
 	def playAudio(self,inputData) :
+		if not Util.AUDIO : return
 		self.stream.write(inputData)
 		stream.stop_stream()
 		stream.close()
@@ -522,41 +587,6 @@ class Avatar(DirectObject):
 
 			p.terminate()
 
-	def removeRemote(self, id) :
-		""" Remove a remote when it goes out of range.
-		
-		id is the identifier for the remote
-		"""
-		if id not in self.remoteMap : return
-		self.remoteMap[id][3].destroy()
-		remote = self.remoteMap[id][0]
-		
-		if id in self.remoteNames.keys():
-			if self.remoteNames[id]:
-				self.remoteNames[id].destroy()	
-				
-		if id in self.remotePics.keys():
-			if self.remotePics[id]:
-				self.remotePics[id].destroy()
-				self.remotePics[id] = None
-				
-		remote.detachNode()
-		avaNum = self.remoteMap[id][1]
-		self.recycleActor(remote,avaNum)
-		del self.remoteMap[id]
-		if id in self.visList:
-			self.visList.remove(id)
-
-	def getPosHeading(self) :
-		""" Get the position and heading.
-	
-		Intended for use by a Net object that must track avatar's 
-		position return a tuple containing the x-coordinate,
-		y-coordinate, heading.
-		"""
-		return (self.avatarNP.getX(), self.avatarNP.getY(), \
-			self.avatarNP.getZ(), (self.avatarNP.getHpr()[0])%360)
-
 	def getLimit(self) :
 		""" Get the limit on the xy coordinates.
 		"""
@@ -565,15 +595,18 @@ class Avatar(DirectObject):
 	def getAudioLevel(self) :
 		""" Get audioLevel to see if Avatar is talking
 		"""
+		if not Util.AUDIO : return
 		return self.audioLevel
 
 	def record(self) :
+		if not Util.AUDIO : return
 		try:
 			self.streamin.read(CHUNK)
 		except IOError:
 			print 'warning:dropped frame'
 
 	def getaudioData(self) :
+		if not Util.AUDIO : return
 		return self.audioData    
 
 	def canSee(self, p1, p2):
@@ -610,25 +643,23 @@ class Avatar(DirectObject):
 		It responds to various keys to control the avatar and its
 		viewpoint.
 		"""
-
 		self.moveMyAvatar()
+
+		if not Util.SHOW : return task.cont
+
 		self.updateView()
 
-		# Update the text showing avatar's position on the screen
-		self.avPos.setText("Your location (x, y, z): (%d, %d, %d)"%\
-			(self.avatarNP.getX(), self.avatarNP.getY(),
-			 self.avatarNP.getZ()))
-
-		# update text showing visible avatars
- 		self.showNumVisible.setText("Visible avatars: " + \
-					    self.updateVisList())
+		self.updateScreenText()
 
 		self.updateMap()
 
 		return task.cont
 
 	def moveMyAvatar(self) :
-		# Update the position of avatar
+		""" Update the position of avatar.
+		"""
+		if Util.AUTO : self.autoMove(); return
+
 		newH = self.avatarNP.getH()
 		newY = 0
 		newX = 0
@@ -652,17 +683,72 @@ class Avatar(DirectObject):
 		self.avatarNP.setFluidX(self.avatarNP, newX)
 		self.avatarNP.setFluidY(self.avatarNP, newY)
 
+	def autoMove(self) :
+		""" Move the avatar randomly, without user input.
+		"""
+
+		if self.rotateDir == -1:
+			self.rotateDir = random.randint(1,25) #chances to rotate
+		if self.rotateDuration == -1:
+			self.rotateDuration = random.randint(200,400)
+
+		# guide the moving direction of the bot
+		if self.rotateDir <= 3 : # turn left
+			self.avatarNP.setH(self.avatarNP.getH() + \
+					 40 * globalClock.getDt())
+			self.rotateDuration -= 1
+			if self.rotateDuration <= 0:
+				self.rotateDuration = -1
+				self.rotateDir = -1
+		elif self.rotateDir <= 6 : # turn right
+			self.avatarNP.setH(self.avatarNP.getH() - \
+					 50 * globalClock.getDt())
+			self.rotateDuration -= 1
+			if self.rotateDuration <= 0:
+				self.rotateDuration = -1
+				self.rotateDir = -1
+		elif self.rotateDir == 7 : # turn big left
+			self.avatarNP.setH(self.avatarNP.getH() + \
+					 102 * globalClock.getDt())
+			self.rotateDuration -= 1
+			if self.rotateDuration <= 0:
+				self.rotateDuration = -1
+				self.rotateDir = -1
+		elif self.rotateDir == 8 : # turn big right
+			self.avatarNP.setH(self.avatarNP.getH() - \
+					 102 * globalClock.getDt())
+			self.rotateDuration -= 1
+			if self.rotateDuration <= 0:
+				self.rotateDuration = -1
+				self.rotateDir = -1
+		else :
+			self.rotateDuration -= 1
+			if self.rotateDuration <= 0:
+				self.rotateDuration = -1
+				self.rotateDir = -1
+			self.avatarNP.setFluidPos(self.avatarNP, 0,
+					-1 * globalClock.getDt(),
+					self.avatarNP.getZ() )
+		# moving forward
+		#self.avatarNP.setFluidPos(self.avatarNP, 0,
+	#				-1 * globalClock.getDt(),
+	#				self.avatarNP.getZ() )
+		return
+
 	def updateView(self) :
 		""" Update what appears on-screen in response to view controles.
 		"""
+		base.camera.setPos(self.avatarNP.getPos())
+		base.camera.setZ(self.avatarNP.getZ()+1.5)
+		base.camera.setH(self.avatarNP.getH()+180)
+
+		if Util.AUTO : return
+
 		if self.keyMap["view"] :
 			base.camera.setPos(self.avatarNP,
 					   0,-3,self.avatarNP.getZ()+1.5)
 			base.camera.setH(self.avatarNP.getH())
 			return
-
-		base.camera.setPos(self.avatarNP.getPos())
-		base.camera.setZ(self.avatarNP.getZ()+1.5)
 
 		# Update where camera is looking
 		camHeading = self.avatarNP.getH()+180
@@ -688,6 +774,18 @@ class Avatar(DirectObject):
 		elif self.keyMap["reset-view"] != 0 :
 			self.fieldAngle = 80
 		base.camLens.setFov(self.fieldAngle)		
+
+	def updateScreenText(self) :
+		""" Update informational text shown on the screen.
+		"""
+		# Update the text showing avatar's position
+		self.avPos.setText("Your location (x, y, z): (%d, %d, %d)"%\
+			(self.avatarNP.getX(), self.avatarNP.getY(),
+			 self.avatarNP.getZ()))
+
+		# update text showing visible avatars
+ 		self.showNumVisible.setText("Visible avatars: " + \
+					    self.updateVisList())
 
 	def updateVisList(self) :
 		# Check visibility and update visList

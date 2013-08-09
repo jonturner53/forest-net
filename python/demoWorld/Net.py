@@ -12,19 +12,21 @@ from time import sleep, time
 from random import randint, random
 from threading import *
 from collections import deque
+import errno
+import math
 from math import sin, cos
+
 import direct.directbase.DirectStart
 from panda3d.core import *
 from direct.task import Task
 
-import errno
-import math
-
+import Util
 from Util import *
-from Mcast import *
 from Packet import *
 from CtlPkt import *
+from Mcast import *
 from Avatar import *
+
 if AUDIO : import pyaudio; import wave; import audioop
 
 STATUS_REPORT = 1 	# code for status report packets
@@ -58,29 +60,20 @@ class Net :
 	""" Net support.
 
 	"""
-	def __init__(self, cliMgrIp, comtree, numg, subLimit, \
-			userName, avaModel, theAvatar, debug):
+	def __init__(self, cliMgrIp, comtree, userName, avaModel, myAvatar):
 		""" Initialize a new Net object.
 
 		comtree is the number of the comtree to use
-		numg*numg is the number of multicast groups
-		subLimit defines the maximum visibility distance for multicast
-		groups
 		userName is the name of this avatar's user
 		avaModel is the serial number of this avatar's model
-		theAvatar is a reference to the Avatar object
-		debug is an integer >=0 that determines amount of
-		debugging output
+		myAvatar is a reference to the Avatar object
 		"""
 
 		self.cliMgrIp = cliMgrIp
 		self.comtree = comtree
-		self.numg = numg
-		self.subLimit = subLimit
 		self.userName = userName
 		self.avaModel = avaModel
-		self.theAvatar = theAvatar
-		self.debug = debug
+		self.myAvatar = myAvatar
 
 		self.count = 0
 
@@ -89,17 +82,17 @@ class Net :
 		self.msg = "initial msg"
 
 		# setup multicast object to maintain subscriptions
-		self.mcg = Mcast(numg, subLimit, self, self.theAvatar)
+		self.mcg = Mcast(self, self.myAvatar)
 
 		# open and configure socket to be nonblocking
 		self.sock = socket(AF_INET, SOCK_DGRAM);
 		self.sock.setblocking(0)
 		self.myAdr = self.sock.getsockname()
-		self.limit = theAvatar.getLimit()
+		self.limit = myAvatar.getLimit()
 
 		# set initial position
 		self.x, self.y, self.z, self.direction = \
-			self.theAvatar.getPosHeading()
+			self.myAvatar.getPosHeading()
 
 		self.mySubs = set()	# multicast subscriptions
 		self.nearRemotes = {}	# map: fadr -> [x,y,dir,dx,dy,count]
@@ -190,6 +183,7 @@ class Net :
 		buf = ""
 		print "reading line"
 		line,buf = self.readLine(cmSock,buf)
+		print "got line=", line
 		if line != "success" : return False
 		line,buf = self.readLine(cmSock,buf)
 		if line != "over" : return False
@@ -230,7 +224,8 @@ class Net :
 
 		cmSock.close()
 
-		if self.debug >= 1 :
+		print "DEBUG=", Util.DEBUG
+		if Util.DEBUG >= 1 :
 			print "avatar address =", fadr2string(self.myFadr)
 			print "router info = (", ip2string(self.rtrIp), \
 					     str(self.rtrPort), \
@@ -254,7 +249,7 @@ class Net :
 		sent = psSock.sendall(request)
 		if sent == 0:
 			raise RuntimeError("socket connection broken")
-		if self.debug >= 1:
+		if Util.DEBUG >= 1:
 			print "photo server IP: ", self.photoServerIp
 			print "bytes sent: ", sent
 
@@ -263,7 +258,7 @@ class Net :
 		echo_recvd = 0
 		while echo_recvd == 0:
 			buffer = psSock.recv(echo_len)
-			if self.debug >= 1:
+			if Util.DEBUG >= 1:
 				print "buf= ", buffer
 			if buffer == '':
 				RuntimeError("broken connection")
@@ -286,7 +281,7 @@ class Net :
 				if pktlen < 1024:
 					gotPic = 1
 				more2read = 1
-				if self.debug >= 1:
+				if Util.DEBUG >= 1:
 					print "buffer is: ", buffer
 					print "repr(buffer) is: ", repr(buffer)
 				print pktlen
@@ -358,9 +353,9 @@ class Net :
 	def send(self, p) :
 		""" Send a packet to the router.
 		"""
-		if self.debug >= 3 or \
-		   (self.debug >= 2 and p.type != CLIENT_DATA) or \
-		   (self.debug >= 1 and p.type == CLIENT_SIG) :
+		if Util.DEBUG >= 3 or \
+		   (Util.DEBUG >= 2 and p.type != CLIENT_DATA) or \
+		   (Util.DEBUG >= 1 and p.type == CLIENT_SIG) :
 			print self.now, self.myAdr, "sending to", self.rtrAdr
 			print p.toString()
 			if p.type == CLIENT_SIG :
@@ -403,9 +398,9 @@ class Net :
 			sys.exit(1)
 		p = Packet()
 		p.unpack(buf)
-		if self.debug >= 3 or \
-		   (self.debug >= 2 and p.type != CLIENT_DATA) or \
-		   (self.debug >= 1 and p.type == CLIENT_SIG) :
+		if Util.DEBUG >= 3 or \
+		   (Util.DEBUG >= 2 and p.type != CLIENT_DATA) or \
+		   (Util.DEBUG >= 1 and p.type == CLIENT_SIG) :
 			print self.now, self.myAdr, \
 			      "received from", self.rtrAdr
 			print p.toString()
@@ -484,10 +479,10 @@ class Net :
 	
 	""" code for calling another avatar - not yet complete
 	def getCallRequest(self):
-		if self.theAvatar.getCallRequest != 0:
+		if self.myAvatar.getCallRequest != 0:
 			#we have a request
 			#send
-			self.theAvatar.getCallRequest()
+			self.myAvatar.getCallRequest()
 		#p.srcAdr = self.myFadr;
 		else:
 			print "no request to handle"		
@@ -647,15 +642,15 @@ class Net :
 		Also, update multicast subscriptions.
 		"""
 		self.x, self.y, self.z, self.direction = \
-					self.theAvatar.getPosHeading()
+					self.myAvatar.getPosHeading()
 		self.mcg.updateSubs(self.x,self.y)
 
-####		self.msg = self.theAvatar.getMsg()
+####		self.msg = self.myAvatar.getMsg()
 ####		if self.msg != '':
 ####			self.sendMsg(self.msg)
 ####			self.msg = ''
 
-		# self.callRequest = self.theAvatar.getCallRequest()
+		# self.callRequest = self.myAvatar.getCallRequest()
 		# if self.callRequest != 0:
 		# 	self.sendCallRequest(self.callRequest)
 		# 	self.callRequest = 0
@@ -724,12 +719,12 @@ class Net :
 			remote[2] = z1
 			remote[3] = dir1
 			remote[7] = 0
-			self.theAvatar.updateRemote(x1,y1,z1, \
+			self.myAvatar.updateRemote(x1,y1,z1, \
 						    dir1, avId, name)
 		elif len(self.nearRemotes) < MAXNEAR :
 			# fadr -> x,y,z,direction,dx,dy,dz,count
 			self.nearRemotes[avId] = [x1,y1,z1,dir1,0,0,0,0]
-			self.theAvatar.addRemote(x1, y1, z1, dir1,
+			self.myAvatar.addRemote(x1, y1, z1, dir1,
 						 avId, name, avaModel)
 	###		savedPath = os.getcwd()
 	###		os.chdir("photo_cache")
@@ -802,7 +797,7 @@ class Net :
 		if msglen != 0:
 			msg = struct.unpack(str(msglen) + 's',
 				p.payload[12+namelen: 12+namelen+msglen])[0]
-			self.theAvatar.displayMsg(msg, name)
+			self.myAvatar.displayMsg(msg, name)
 
 	def pruneNearby(self) :
 		""" Remove old entries from nearRemotes
@@ -835,4 +830,4 @@ class Net :
 				self.remoteAudioLevel = 0			
 			rem = self.nearRemotes[avId]
 			del self.nearRemotes[avId]
-			self.theAvatar.removeRemote(avId)
+			self.myAvatar.removeRemote(avId)
