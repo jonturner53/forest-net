@@ -27,7 +27,7 @@ from Mcast import *
 from Packet import *
 from Util import *
 from Avatar import *
-#from AIWorld import *
+from Bot import *
 
 import direct.directbase.DirectStart
 from panda3d.core import *
