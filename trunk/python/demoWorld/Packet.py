@@ -49,7 +49,7 @@ class Packet:
 		self.type &= 0xff; self.flags &= 0xff
 		firstWord = (1 << 28) | (self.length << 16) | \
 			    self.type << 8 | self.flags
-		buf = struct.pack('!IIIII' + str(plen) + 'sI', \
+		buf = struct.pack('!5I' + str(plen) + 'sI', \
 				  firstWord,
 				  self.comtree & 0xffffffff, \
 				  self.srcAdr & 0xffffffff, \
@@ -61,7 +61,7 @@ class Packet:
 	def unpack(self,buf) :
 		""" Unpack attributes from a provided buffer.
 		"""
-		plen = len(buf)-OVERHEAD
+		plen = len(buf) - OVERHEAD
 		tuple = struct.unpack('!IIIiI' + str(plen) + 'sI', buf)
 		if len(tuple) != 7 : return False
 		self.version = (tuple[0] >> 28) & 0xf

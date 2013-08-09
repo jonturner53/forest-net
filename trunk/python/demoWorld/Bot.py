@@ -1,4 +1,4 @@
-""" AIWorld - a virtual environment for each bot.
+""" Bot - robot version of Avatar object; just wanders around
 
 Author: Chao Wang and Jon Turner
 World Model: Chao Wang
@@ -33,7 +33,7 @@ from Util import *
 #		align=TextNode.ALeft, scale = .06, mayChange = True)
 
 
-class AIWorld(DirectObject):
+class Bot(DirectObject):
 	def __init__(self):
 
 # uncomment these lines to show up the display 
@@ -74,7 +74,8 @@ class AIWorld(DirectObject):
 		self.moveDir = -1
 		self.moveDuration = -1
 		self.isAvoidingCollision = False
-		self.inBigRotate = False # if True, do not move forward; only rotate
+		self.inBigRotate = False # if True, do not move forward;
+					 # only rotate
 
 		# Set the dot's position
 #		self.dot.setPos(self.avatar.getX()/(120.0+self.Dmap.getX()), \
@@ -99,7 +100,8 @@ class AIWorld(DirectObject):
 		taskMgr.add(self.move,"moveTask")
 
 #		# Create some lighting
-#		self.ambientLight = render.attachNewNode( AmbientLight( "ambientLight" ) )
+#		self.ambientLight = render.attachNewNode( \
+#					AmbientLight( "ambientLight" ) )
 #		self.ambientLight.node().setColor( Vec4( .8, .8, .8, 1 ) )
 #		render.setLight(self.ambientLight)
 
@@ -126,9 +128,9 @@ class AIWorld(DirectObject):
 		
 		self.csSphere = self.avatarSpNp.node().addSolid(
 			CollisionSphere(0.0/self.avatar.getScale().getX(),
-							-0.5/self.avatar.getScale().getY(),
-							0.5/self.avatar.getScale().getZ(),
-							0.8/self.avatar.getScale().getX()))
+					-0.5/self.avatar.getScale().getY(),
+					0.5/self.avatar.getScale().getZ(),
+					0.8/self.avatar.getScale().getX()))
 		# format above: (x,y,z,radius)
 
 		self.avatarSpNp.node().setFromCollideMask(BitMask32.bit(0))
@@ -139,13 +141,17 @@ class AIWorld(DirectObject):
 
 		self.avatarGroundHandler = CollisionHandlerPusher()
 		self.avatarGroundHandler.setHorizontal(True)
-		self.avatarGroundHandler.addCollider(self.avatarSpNp, self.avatar)
-		base.cTrav.addCollider(self.avatarSpNp,	self.avatarGroundHandler)
+		self.avatarGroundHandler.addCollider(self.avatarSpNp,
+					self.avatar)
+		base.cTrav.addCollider(self.avatarSpNp,
+					self.avatarGroundHandler)
 
 
 		# setup a collision solid for the canSee method
-		self.auxCSNp = self.environ.attachNewNode(CollisionNode('csForCanSee'))
-		self.auxCSSolid = self.auxCSNp.node().addSolid(CollisionSegment())
+		self.auxCSNp = self.environ.attachNewNode(CollisionNode( \
+					'csForCanSee'))
+		self.auxCSSolid = \
+			self.auxCSNp.node().addSolid(CollisionSegment())
 		self.auxCSNp.node().setFromCollideMask(BitMask32.bit(0))
 		self.auxCSNp.node().setIntoCollideMask(BitMask32.allOff())
 
@@ -157,74 +163,11 @@ class AIWorld(DirectObject):
 		# uncomment the following line to show where collision occurs
 		#self.csTrav.showCollisions(render)
 
-
-	def addRemote(self, x, y, direction, id) : 
-		""" Add a remote panda.
-
-		This method is used by the Net object when it starts
-		getting packets from a panda that it did not previously
-		know about.
-		x,y gives the remote's position
-		direction gives its heading
-		id is an identifier used to distinguish this remote from others
-
-		New remotes are included in the scene graph.
-		"""
-		if id in self.remoteMap :
-			self.updateRemote(x,y,direction,id); return
-		if len(self.freeRemotes) == 0 :
-			sys.stderr.write("PandaWorld.addRemote: no unused " + \
-					 "remotes\n")
-			sys.exit(1)
-		remote = self.freeRemotes.pop()
-		self.remoteMap[id] = [remote, True
-	#	self.remoteMap[id] = [remote, True ,
-	#			OnscreenImage(image = 'models/dot1.png', \
-	#					pos = (0,0,0), scale = .01)
-				]
-
-		# set position and direction of remote and make it visible
-		remote.reparentTo(render)
-		remote.setPos(x,y,0) 
-		remote.setHpr(direction,0,0) 
-		remote.loop("run")
-
-	def updateRemote(self, x, y, direction, id) :
-		""" Update location of a remote panda.
-
-		This method is used by the Net object to update the location.
-		x,y gives the remote's position
-		direction gives its heading
-		id is an identifier used to distinguish this remote from others
-		"""
-		if id not in self.remoteMap : return
-#		remote, isMoving, dot = self.remoteMap[id]
-		remote, isMoving = self.remoteMap[id]
-		if abs(x - remote.getX()) < .001 and \
-		   abs(y - remote.getY()) < .001 and \
-		   direction == remote.getHpr()[0] :
-			remote.stop(); remote.pose("run",5)
-			self.remoteMap[id][1] = False
-			return
-		elif not isMoving :
-			remote.loop("run")
-			self.remoteMap[id][1] = True
-		
-		# set position and direction of remote
-		remote.setPos(x,y,0)
-		remote.setHpr(direction,0,0) 
-
-	def removeRemote(self, id) :
-		""" Remove a remote when it goes out of range.
-		
-		id is the identifier for the remote
-		"""
-		if id not in self.remoteMap : return
-#		self.remoteMap[id][2].destroy()
-		remote = self.remoteMap[id][0]
-		remote.detachNode() # ??? check this
-		self.freeRemotes.append(remote)
-		del self.remoteMap[id]
+	# These three methods are just stubs in Bot objects, since
+	# we're not displaying remotes.
+	def addRemote(self, x, y, direction, id) :  return
+	def updateRemote(self, x, y, direction, id) : return
+	def removeRemote(self, id) : return
 
 	def getPosHeading(self) :
 		""" Get the position and heading.
@@ -234,7 +177,7 @@ class AIWorld(DirectObject):
 		y-coordinate, heading.
 		"""
 		return (self.avatar.getX(), self.avatar.getY(), \
-			(self.avatar.getHpr()[0])%360)
+			self.avatar.getY(), (self.avatar.getHpr()[0])%360)
 
 	def getLimit(self) :
 		""" Get the limit on the xy coordinates.
@@ -255,7 +198,7 @@ class AIWorld(DirectObject):
 		resources.
 		"""
 
-		# lift two points a bit above the grouond to prevent the
+		# lift two points a bit above the ground to prevent the
 		# collision ray from hiting the edge of shallow terrain;
 		# also, put them at different level so that the ray has
 		# nonzero length (a requirement for collisionSegment()).
@@ -277,35 +220,35 @@ class AIWorld(DirectObject):
 		"""
 
 		if self.rotateDir == -1:
-			self.rotateDir = random.randint(1,25) # chances to rotate
+			self.rotateDir = random.randint(1,25) #chances to rotate
 		if self.rotateDuration == -1:
 			self.rotateDuration = random.randint(200,400)
 
 		# guide the moving direction of the bot
 		if self.rotateDir <= 3 : # turn left
 			self.avatar.setH(self.avatar.getH() + \
-							 40 * globalClock.getDt())
+					 40 * globalClock.getDt())
 			self.rotateDuration -= 1
 			if self.rotateDuration <= 0:
 				self.rotateDuration = -1
 				self.rotateDir = -1
 		elif self.rotateDir <= 6 : # turn right
 			self.avatar.setH(self.avatar.getH() - \
-							 50 * globalClock.getDt())
+					 50 * globalClock.getDt())
 			self.rotateDuration -= 1
 			if self.rotateDuration <= 0:
 				self.rotateDuration = -1
 				self.rotateDir = -1
 		elif self.rotateDir == 7 : # turn big left
 			self.avatar.setH(self.avatar.getH() + \
-							 102 * globalClock.getDt())
+					 102 * globalClock.getDt())
 			self.rotateDuration -= 1
 			if self.rotateDuration <= 0:
 				self.rotateDuration = -1
 				self.rotateDir = -1
 		elif self.rotateDir == 8 : # turn big right
 			self.avatar.setH(self.avatar.getH() - \
-							 102 * globalClock.getDt())
+					 102 * globalClock.getDt())
 			self.rotateDuration -= 1
 			if self.rotateDuration <= 0:
 				self.rotateDuration = -1
@@ -315,31 +258,13 @@ class AIWorld(DirectObject):
 			if self.rotateDuration <= 0:
 				self.rotateDuration = -1
 				self.rotateDir = -1
-			self.avatar.setFluidPos(self.avatar,
-									0,
-									-60 * globalClock.getDt(),
-									self.avatar.getZ() )
+			self.avatar.setFluidPos(self.avatar, 0,
+					-60 * globalClock.getDt(),
+					self.avatar.getZ() )
 		# moving forward
-		self.avatar.setFluidPos(self.avatar,
-								0,
-								-420 * globalClock.getDt(),
-								self.avatar.getZ() )
-
-
-		# position the camera where the avatar is
-#		pos = self.avatar.getPos(); pos[2] += 1
-#		hpr = self.avatar.getHpr();
-#		hpr[0] += 180; hpr[1] = 0 #camAngle
-#		base.camera.setPos(pos); base.camera.setHpr(hpr)
-
-
-#		# map the avatar's position to the 2D map on the top-right 
-#		# corner of the screen
-#		self.dot.setPos((self.avatar.getX()/120.0)*0.7+0.45, \
-#				0,(self.avatar.getY()/120.0)*0.7+0.25)
-#		for id in self.remoteMap:
-#			self.remoteMap[id][2].setPos((self.remoteMap[id][0].getX()/120.0)*0.7+0.45, \
-#				0,(self.remoteMap[id][0].getY()/120.0)*0.7+0.25)
+		self.avatar.setFluidPos(self.avatar, 0,
+					-420 * globalClock.getDt(),
+					self.avatar.getZ() )
 
 		return task.cont
 

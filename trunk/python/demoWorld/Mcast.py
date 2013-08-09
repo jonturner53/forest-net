@@ -18,16 +18,22 @@ class Mcast :
 		pWorld is a reference to the PandaWorld object
 		"""
 
-		self.numg = numg
-		self.subLimit = subLimit
+		#self.numg = numg
+		#self.subLimit = subLimit
 		self.net = net
 		self.pWorld = pWorld
 
-		self.limit = pWorld.getLimit()
-		self.cellSize = (self.limit + 0.0)/self.numg
+		# determine the number of cells in each direction and
+		# the resulting cell size
+		limit = pWorld.getLimit()
+		self.nX = int(limit[0]/10.0);
+		self.cellSizeX = (limit[0]+0.0)/self.nX
+		self.nY = int(limit[1]/10.0);
+		self.cellSizeY = (limit[1]+0.0)/self.nY
+		self.subLimit = 10
 
 		# create array of visibility sets, one per cell
-		self.vsets = [ None ] * (self.numg*self.numg)
+		self.vsets = [ None ] * (self.nX*self.nY)
 
 		# list of vsets whose visibility range requires refinement
 		# vsets are added as new cells are visited
@@ -46,7 +52,7 @@ class Mcast :
 		return the number of the multicast group for an avatar at
 		that location
 		"""
-		return int(x/self.cellSize) + self.numg*int(y/self.cellSize) + 1
+		return int(x/self.cellSizeX) + self.nX*int(y/self.cellSizeY) + 1
 
 	def newVset(self, c) :
 		""" Create and initialize a vset for a cell.
@@ -66,7 +72,7 @@ class Mcast :
 		to avoid slowing the interactive graphics with a lot
 		of time-consuming visibiity calculations.
 		"""
-		col = c%self.numg; row = c/self.numg
+		col = c%self.nX; row = c/self.nX
 
 		lo = [row+1] * (2*self.subLimit+1) # low ends of column ranges
 		hi = [row] * (2*self.subLimit+1)   # high ends of column ranges
@@ -75,14 +81,14 @@ class Mcast :
 
 		# set initial visibility ranges using subLimit alone
 		lo[i0] = max(0,row-self.subLimit) 
-		hi[i0] = min(self.numg-1,row+self.subLimit) 
+		hi[i0] = min(self.nY-1,row+self.subLimit) 
 		for i in range(1,self.subLimit+1) :
 			if col-i >= 0 :
 				lo[i0-i] = max(0,row-(self.subLimit-i))
-				hi[i0-i] = min(self.numg-1,row+self.subLimit-i)
-			if col+i < self.numg :
+				hi[i0-i] = min(self.nY-1,row+self.subLimit-i)
+			if col+i < self.nX :
 				lo[i0+i] = max(0,row-(self.subLimit-i))
-				hi[i0+i] = min(self.numg-1,row+self.subLimit-i)
+				hi[i0+i] = min(self.nY-1,row+self.subLimit-i)
 
 		# add new vset to array of vsets, with i=side=0
 		# and append it to the refineList, so we can start
@@ -108,25 +114,25 @@ class Mcast :
 		    	# side=0 if we're refining lo[i]
 		    	# side=1 if we're refining hi[i]
 
-		col = c%self.numg; row = c/self.numg
+		col = c%self.nX; row = c/self.nX
 		i0 = self.subLimit	# offset in lo/hi matching c's column
 
 		ccol = col + (i-i0)	# current column to refine
 		if ccol < 0 :
 			i = i0 - col; ccol = 0
 			self.vsets[c][0] = i
-		elif ccol >= self.numg :
+		elif ccol >= self.nX :
 			self.vsets[c][0] = 0; self.vsets[c][1] = 0
 			self.refineList.pop();
 			return task.cont
 
 		if side == 0 :
-			crow = lo[i]; cc = ccol + crow*self.numg
+			crow = lo[i]; cc = ccol + crow*self.nX
 			if crow <= row and not self.isVis(c,cc) :
 				lo[i] += 1; return task.cont
 			self.vsets[c][1] = 1
 		else :
-			crow = hi[i]; cc = ccol + crow*self.numg
+			crow = hi[i]; cc = ccol + crow*self.nX
 			if crow > row and not self.isVis(c,cc) :
 				hi[i] -= 1; return task.cont
 			if i < 2*self.subLimit :
@@ -142,24 +148,25 @@ class Mcast :
 	   	c1 is the cell number of the first square
 	   	c2 is the cell number of the second square
 		"""
-		cellSize = self.cellSize
+		cellSizeX = self.cellSizeX
+		cellSizeY = self.cellSizeY
 
-		x1 = float(cellSize*(c1%self.numg))
-		y1 = float(cellSize*(c1/self.numg))
-		x2 = float(cellSize*(c2%self.numg))
-		y2 = float(cellSize*(c2/self.numg))
+		x1 = float(cellSizeX*(c1%self.nX))
+		y1 = float(cellSizeY*(c1/self.nX))
+		x2 = float(cellSizeX*(c2%self.nX))
+		y2 = float(cellSizeY*(c2/self.nX))
 
 		# define points near cell corners in panda coordinates
 		points1 = ( \
-			Point3(x1+.001*cellSize,y1+.001*cellSize,0), \
-			Point3(x1+.001*cellSize,y1+.999*cellSize,0), \
-			Point3(x1+.999*cellSize,y1+.999*cellSize,0), \
-			Point3(x1+.999*cellSize,y1+.001*cellSize,0))
+			Point3(x1+.001*cellSizeX,y1+.001*cellSizeY,0), \
+			Point3(x1+.001*cellSizeX,y1+.999*cellSizeY,0), \
+			Point3(x1+.999*cellSizeX,y1+.999*cellSizeY,0), \
+			Point3(x1+.999*cellSizeX,y1+.001*cellSizeY,0))
 		points2 = ( \
-			Point3(x2+.001*cellSize,y2+.001*cellSize,0), \
-			Point3(x2+.001*cellSize,y2+.999*cellSize,0), \
-			Point3(x2+.999*cellSize,y2+.999*cellSize,0), \
-			Point3(x2+.999*cellSize,y2+.001*cellSize,0))
+			Point3(x2+.001*cellSizeX,y2+.001*cellSizeY,0), \
+			Point3(x2+.001*cellSizeX,y2+.999*cellSizeY,0), \
+			Point3(x2+.999*cellSizeX,y2+.999*cellSizeY,0), \
+			Point3(x2+.999*cellSizeX,y2+.001*cellSizeY,0))
 
 		# Check sightlines between all pairs of "corners"
 		for p1 in points1 :
@@ -173,14 +180,16 @@ class Mcast :
 
 		x, y is the current coordinates of the avatar
 		"""
-		col = int(x/self.cellSize); row = int(y/self.cellSize)
+		col = int(x/self.cellSizeX); row = int(y/self.cellSizeX)
 		if col == self.col and row == self.row : return
 		self.col = col; self.row = row
 
 		# drop all current subscriptions - brute force, but effective
 		self.net.unsubscribe(self.mySubs); self.mySubs.clear()
 
-		c = col + row*self.numg;
+		c = col + row*self.nX;
+		if c < 0 or c > len(self.vsets) :
+			print "c=",c, "col=", col, "row=", row, "x=", x, "y=", y
 		vs = self.vsets[c]
 		if vs == None : vs = self.newVset(c)
 
@@ -188,11 +197,11 @@ class Mcast :
 
 		# identify all cells considered visible and subscribe to them
 		left = max(0,col-self.subLimit);
-		right = min(self.numg-1,col+self.subLimit)
+		right = min(self.nX-1,col+self.subLimit)
 		for i in range(left,right+1) :
 			bot = lo[self.subLimit+(i-col)]
 			top = hi[self.subLimit+(i-col)]
 			for j in range(bot,top+1)  :
-				self.mySubs.add(i+j*self.numg+1)
+				self.mySubs.add(i+j*self.nX+1)
 
 		self.net.subscribe(self.mySubs)

@@ -46,13 +46,13 @@ MEDIUM  = 50    	# medium avatar speed
 FAST    = 50    	# fast avatar speed
 
 # audio parameters
+CHUNK = 512
+BYTES = CHUNK*2
+CHANNELS = 1
+RATE = 10240
+AUDIO_BUFFER_SIZE = 2
 if AUDIO :
-	CHUNK = 512
-	BYTES = CHUNK*2
-	CHANNELS = 1
 	FORMAT = pyaudio.paInt16
-	RATE = 10240
-	AUDIO_BUFFER_SIZE = 2
 
 class Net :
 	""" Net support.
@@ -106,7 +106,7 @@ class Net :
 
 		self.seqNum = 1		# sequence # for control packets
 
-		if AUDIO : self.setupAudio()
+		self.setupAudio()
 
 		return
 
@@ -118,6 +118,8 @@ class Net :
 		self.remoteSpeaker = None	# address of remote speaker
 		self.audioBuffer = deque(maxlen=AUDIO_BUFFER_SIZE)
 		self.needtoWait = True
+
+		if not AUDIO : return
 		self.p1 = pyaudio.PyAudio()
                 self.stream = self.p1.open(format=FORMAT,
                         		   channels=CHANNELS,
@@ -136,7 +138,11 @@ class Net :
 		"""
 		if not self.login(uname, pword) : return False
 		self.rtrAdr = (ip2string(self.rtrIp),self.rtrPort)
-		self.t0 = time(); self.now = 0; self.nextTime = 0;
+
+		self.t0 = time.time()
+
+		self.now = 0; self.nextTime = 0
+
 		if not self.connect() : return False
 		sleep(.1)
 		if not self.joinComtree() :
@@ -304,7 +310,7 @@ class Net :
 		""" This is the main method for the Net object.
 		"""
 
-		self.now = time() - self.t0
+		self.now = time.time() - self.t0
 
 		# process once per UPDATE_PERIOD
 		if self.now < self.nextTime : return task.cont
@@ -356,6 +362,14 @@ class Net :
 		   (self.debug >= 2 and p.type != CLIENT_DATA) or \
 		   (self.debug >= 1 and p.type == CLIENT_SIG) :
 			print self.now, self.myAdr, "sending to", self.rtrAdr
+			print p.toString()
+			if p.type == CLIENT_SIG :
+				cp = CtlPkt(0,0,0)
+				cp.unpack(p.payload)
+				print cp.toString()
+			sys.stdout.flush()
+		if p.length == 26 :
+			print self.now, self.myAdr, "sending bad length", self.rtrAdr
 			print p.toString()
 			if p.type == CLIENT_SIG :
 				cp = CtlPkt(0,0,0)
@@ -432,6 +446,7 @@ class Net :
 		cp = CtlPkt(which,REQUEST,self.seqNum)
 		cp.comtree = self.comtree
 		p.payload = cp.pack()
+		p.length = OVERHEAD + len(p.payload)
 		self.seqNum += 1
 
 		reply = self.sendCtlPkt(p)
@@ -450,7 +465,7 @@ class Net :
 		If no reply within one second, try again.
 		If no reply after three attempts, return None.
 		"""
-		now = sendTime = time()
+		now = sendTime = time.time()
 		numAttempts = 1
 		self.send(p)
 
@@ -465,7 +480,7 @@ class Net :
 				self.send(p)
 			else :
 				sleep(.1)
-			now = time()
+			now = time.time()
 	
 	""" code for calling another avatar - not yet complete
 	def getCallRequest(self):
@@ -481,7 +496,7 @@ class Net :
 		if self.comtree == 0 : return
 		p = Packet()
 		msglen = len(self.msg)
-		p.leng = OVERHEAD + 4*6 + msglen;
+		p.length = OVERHEAD + 4*6 + msglen;
 		p.type = CLIENT_DATA; p.flags = 0
 		p.comtree = self.comtree
 	"""						
@@ -493,7 +508,7 @@ class Net :
 		p = Packet()
 		namelen = len(self.userName)
 		# msglen = len(self.msg)
-		p.leng = OVERHEAD + 4*8 + namelen;
+		p.length = OVERHEAD + 4*8 + namelen;
 		p.type = CLIENT_DATA; p.flags = 0
 		p.comtree = self.comtree
 		p.srcAdr = self.myFadr;
@@ -508,7 +523,14 @@ class Net :
 				int(self.x*GRID), int(self.y*GRID),
 				int(self.z*GRID), \
 				int(self.direction), self.avaModel, \
-				namelen, self.userName, self.rms, self.myFadr)
+				namelen,
+
+				self.userName,
+
+				0, #int(self.rms),
+
+
+				0) #self.myFadr)
 				#msglen, self.msg, self.rms, self.myFadr)
 		self.send(p)
 
@@ -517,7 +539,7 @@ class Net :
 
 		if self.comtree == 0: return
 		p = Packet()
-		p.leng = OVERHEAD + BYTES+20;
+		p.length = OVERHEAD + BYTES+20;
 		p.type = CLIENT_DATA; p.flags = 0
 		p.comtree = self.comtree
 		p.srcAdr = self.myFadr
@@ -535,7 +557,7 @@ class Net :
 	# 	p = Packet()
 	# 	msglen = len(msg)
 	# 	namelen = len(self.userName)
-	# 	p.leng = OVERHEAD + msglen + namelen + 8; p.type = CLIENT_DATA; p.flags = 0
+	# 	p.length = OVERHEAD + msglen + namelen + 8; p.type = CLIENT_DATA; p.flags = 0
 	# 	p.comtree = self.comtree
 	# 	p.srcAdr = self.myFadr
 	# 	p.dstAdr = -self.myFadr
@@ -550,7 +572,7 @@ class Net :
 ####		p = Packet()
 ####		msglen = len(msg)
 ####		namelen = len(self.userName)
-####		p.leng = OVERHEAD + msglen + namelen + 8; 
+####		p.length = OVERHEAD + msglen + namelen + 8; 
 ####		p.type = CLIENT_DATA; p.flags = 0
 ####		p.comtree = self.comtree
 ####		p.srcAdr = self.myFadr
@@ -613,7 +635,6 @@ class Net :
 			struct.pack_into('!i',buf,4*(nunsub+1),-g)
 
 		struct.pack_into('!II',buf,0,0,nunsub)
-		p.payload = str(buf)
 		p.length = OVERHEAD + 4*(2+nunsub); p.type = SUB_UNSUB
 		p.payload = str(buf[0:4*(2+nunsub)])
 		p.comtree = self.comtree;
@@ -648,6 +669,18 @@ class Net :
 		Could be extended to change the state of this avatar
 		(say, process a "kill packet")
 		"""
+		# for now just ignore non-data packets
+#		print self.now, self.myAdr, \
+#		      "processPkt", self.rtrAdr
+#		print p.toString()
+#		if p.type == CLIENT_SIG :
+#			cp = CtlPkt(0,0,0)
+#			cp.unpack(p.payload)
+#			print cp.toString()
+#		sys.stdout.flush()
+
+		if p.type != CLIENT_DATA : return
+
 		tuple = struct.unpack('!I',p.payload[0:4])
 		if tuple[0] == STATUS_REPORT : self.processReport(p)
 		elif tuple[0] == AUDIO_PKT : self.processAudio(p)
@@ -678,7 +711,7 @@ class Net :
 		tuple = struct.unpack('!Ii',p.payload[32+namelen:40+namelen])
 		rms = tuple[0]
 		remoteSpeaker = p.srcAdr
-		selr. updateRemoteSpeaker(rms,p.srcAdr)
+		self.updateRemoteSpeaker(x1,y1,rms,p.srcAdr)
 
 		if avId in self.nearRemotes :
 			# update map entry for this remote
