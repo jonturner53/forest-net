@@ -1,16 +1,15 @@
-""" Avatar - script that display's Avatar's view of world and controls movement
+""" Avatar - script that displays Avatar's view of world and controls movement
 
 This module is intended to be called by DemoWorld.py;
 To run it independently, uncomment the end of this code:
 and type "python Avatar.py"
  
-Last Updated: 3/14/2013
 Author: Chao Wang and Jon Turner
 World Model: Chao Wang
  
 Adapted from "Roaming Ralph", a tutorial included in Panda3D package.
 Author: Ryan Myers
-Models: Jeff Styers, Reagan Heller
+Models for Ralph: Jeff Styers, Reagan Heller
 """  
 
 import random, sys, os, math, re
@@ -183,25 +182,27 @@ class Avatar(DirectObject):
 		if self.avaModel <= 2 :
 			self.csSphere = self.avatarSpNp.node().addSolid(
 				CollisionSphere(0.0,
-					-0.5/self.avatar.getScale().getY(),
-					0.5/self.avatar.getScale().getZ(),5))
+					-0.5,
+					0.5,
+					0.8))
 		else :
 			self.csSphere = self.avatarSpNp.node().addSolid(
 				CollisionSphere(0.0,
-					-0.5/self.avatar.getScale().getY(),
-					0,5))
+					-0.5,
+					0.5,
+					0.8))
 		# format above: (x,y,z,radius)
 
 		self.avatarSpNp.node().setFromCollideMask(BitMask32.bit(0))
 		self.avatarSpNp.node().setIntoCollideMask(BitMask32.allOff())
 
 		# uncomment the following line to show the collisionSphere
-		# self.avatarSpNp.show()
+#		self.avatarSpNp.show()
 
 		self.avatarGroundHandler = CollisionHandlerPusher()
 		self.avatarGroundHandler.setHorizontal(True)
 		self.avatarGroundHandler.addCollider(self.avatarSpNp, \
-					self.avatar)
+					self.avatarNP)
 		base.cTrav.addCollider(self.avatarSpNp,\
 					self.avatarGroundHandler)
 
@@ -739,6 +740,8 @@ class Avatar(DirectObject):
 		""" Update what appears on-screen in response to view controles.
 		"""
 		base.camera.setPos(self.avatarNP.getPos())
+		# uncomment the following line for a third-persion view
+#		base.camera.setY(self.avatarNP.getY()+10)
 		base.camera.setZ(self.avatarNP.getZ()+1.5)
 		base.camera.setH(self.avatarNP.getH()+180)
 
