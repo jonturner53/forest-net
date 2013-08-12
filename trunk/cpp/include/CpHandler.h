@@ -51,6 +51,7 @@ public:
 	pktx dropLink(fAdr_t,int,fAdr_t,CtlPkt&);
 	pktx modLink(fAdr_t,int,RateSpec&,CtlPkt&);
 	pktx getLink(fAdr_t,int,CtlPkt&);
+	pktx getLinkSet(fAdr_t,int,int,CtlPkt&);
 
 	pktx addComtree(fAdr_t,comt_t,CtlPkt&);
 	pktx dropComtree(fAdr_t,comt_t,CtlPkt&);

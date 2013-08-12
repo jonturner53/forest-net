@@ -107,12 +107,15 @@ void CtlPkt::reset() {
 	nonce = 0;
 	rspec1.set(-1); rspec2.set(-1);
 	coreFlag = -1;
-	iface = 0; link = 0; nodeType = Forest::UNDEF_NODE;
+	iface = 0; link = 0;
+	nodeType = Forest::UNDEF_NODE;
 	comtree = 0; comtreeOwner = 0;
+	index1 = -1; index2 = -1;
 	count = -1;
 	queue = 0;
 	zipCode = 0;
 	errMsg.clear();
+	stringData.clear();
 	payload = 0; paylen = 0;
 }
 
@@ -314,6 +317,24 @@ int CtlPkt::pack() {
 			packPair(ADR1,adr1);
 			packRspec(RSPEC1,rspec1);
 			packRspec(RSPEC2,rspec2);
+			packPair(COUNT,count);
+		}
+		break;
+	case GET_LINK_SET:
+		if (mode == REQUEST) {
+			if (index1 == -1 || count == -1) return 0;
+			packPair(INDEX1,index1);
+			packPair(COUNT,count);
+		} else {
+			if (index1 == -1 || index2 == -1 || count == -1)
+				return 0;
+			packPair(INDEX1,index1);
+			packPair(INDEX2,index2);
+			packPair(COUNT,count);
+			int len = min(stringData.length(), 1300);
+			payload[pp++] = htonl(len);
+			stringData.copy((char *) &payload[pp], len);
+			payload += (len+3)/4;
 		}
 		break;
 	case MOD_LINK:
@@ -543,7 +564,7 @@ bool CtlPkt::unpack() {
 	if (mode == NEG_REPLY) {
 		if (paylen > 4*pp && ntohl(payload[pp]) == ERRMSG) {
 			pp++;
-			int len = ntohl(payload[pp++]);
+			int len; unpackWord(len);
 			errMsg.assign((char*) &payload[pp], len);
 		}
 		return true;
@@ -571,9 +592,14 @@ bool CtlPkt::unpack() {
 				break;
 		case COMTREE:	unpackWord(comtree); break;
 		case COMTREE_OWNER: unpackWord(comtreeOwner); break;
+		case INDEX1:	unpackWord(index1); break;
+		case INDEX2:	unpackWord(index2); break;
 		case COUNT:	unpackWord(count); break;
 		case QUEUE:	unpackWord(queue); break;
 		case ZIPCODE:	unpackWord(zipCode); break;
+		case STRING:	int len; unpackWord(len); 
+				stringData.assign((char *) &payload[pp], len);
+				break;
 		default:	return false;
 		}
 	}
@@ -661,6 +687,13 @@ bool CtlPkt::unpack() {
 		     (link == 0 || iface == 0 || nodeType == 0 ||
 		      ip1 == 0 || port1 == 0 || adr1 == 0 ||
 		      !rspec1.isSet() || !rspec2.isSet())))
+			return false;
+		break;
+	case GET_LINK_SET:
+		if (mode == REQUEST && (index1 == -1 || count == -1))
+			return false;
+		if (mode == POS_REPLY &&
+		    (index1 == -1 || index2 == -1 || count == -1))
 			return false;
 		break;
 	case MOD_LINK:
@@ -834,6 +867,12 @@ string& CtlPkt::avPair2string(CpAttr attr, string& s) {
 	case COMTREE_OWNER:
 		ss << "comtreeOwner=" << Forest::fAdr2string(comtreeOwner,s);
 		break;
+	case INDEX1:
+		if (index1 >= 0) ss << "index1=" << index1;
+		break;
+	case INDEX2:
+		if (index2 >= 0) ss << "index2=" << index2;
+		break;
 	case COUNT:
 		if (count >= 0) ss << "count=" << count;
 		break;
@@ -848,6 +887,9 @@ string& CtlPkt::avPair2string(CpAttr attr, string& s) {
 		break;
 	case ERRMSG:
 		if (errMsg.length() != 0) ss << "errMsg=" << errMsg;
+		break;
+	case STRING:
+		if (stringData.length() != 0) ss << "stringData=" << stringData;
 		break;
 	default: break;
 	}
@@ -873,6 +915,7 @@ string& CtlPkt::typeName(string& s) {
 	case ADD_LINK: s = "add link"; break;
 	case DROP_LINK: s = "drop link"; break;
 	case GET_LINK: s = "get link"; break;
+	case GET_LINK_SET: s = "get link set"; break;
 	case MOD_LINK: s = "mod link"; break;
 	case ADD_COMTREE: s = "add comtree"; break;
 	case DROP_COMTREE: s = "drop comtree"; break;
@@ -1052,6 +1095,17 @@ string& CtlPkt::toString(string& s) {
 			ss << " " << avPair2string(ADR1,s);
 			ss << " " << avPair2string(RSPEC1,s);
 			ss << " " << avPair2string(RSPEC2,s);
+		}
+		break;
+	case GET_LINK_SET:
+		if (mode == REQUEST) {
+			ss << " " << avPair2string(INDEX1,s);
+			ss << " " << avPair2string(COUNT,s);
+		} else {
+			ss << " " << avPair2string(INDEX1,s);
+			ss << " " << avPair2string(INDEX2,s);
+			ss << " " << avPair2string(COUNT,s);
+			ss << " " << stringData;
 		}
 		break;
 	case MOD_LINK:

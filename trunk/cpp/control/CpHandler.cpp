@@ -214,6 +214,21 @@ pktx CpHandler::getLink(fAdr_t dest, int link,CtlPkt& repCp) {
 	return sendRequest(reqCp,dest,repCp);
 }
 
+/** Send a get link set request packet.
+ *  @param dest is the destination address for the packet
+ *  @param firstLink is the table index for the first link to be returned;
+ *  if zero, start with the first link in the table
+ *  @param count is the number of links whose table entries are requested
+ *  @param repCp is a reference to a control packet in which the control
+ *  packet in the response is returned (if response is != 0)
+ *  @return the index of the response packet or 0 if there is no response
+ */
+pktx CpHandler::getLinkSet(fAdr_t dest, int link, int count, CtlPkt& repCp) {
+	CtlPkt reqCp(CtlPkt::GET_COMTREE,CtlPkt::REQUEST,0);
+	reqCp.index1 = link; reqCp.count = count;
+	return sendRequest(reqCp,dest,repCp);
+}
+
 /** Send an add comtree request packet.
  *  @param dest is the destination address for the packet
  *  @param comtree is the comtree number of the comtree to be added (may be 0)

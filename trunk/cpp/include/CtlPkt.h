@@ -58,6 +58,7 @@ public:
 
 		ADD_LINK = 40, DROP_LINK = 41,
 		GET_LINK = 42, MOD_LINK = 43,
+		GET_LINK_SET = 44,
 
 		ADD_COMTREE = 50, DROP_COMTREE = 51,
 		GET_COMTREE = 52, MOD_COMTREE = 53,
@@ -92,10 +93,13 @@ public:
 		NODE_TYPE = 23,
 		COMTREE = 50,
 		COMTREE_OWNER = 51,
+		INDEX1 = 60, INDEX2 = 61,
 		COUNT = 70,
 		QUEUE = 71,
 		ZIPCODE = 72,
-		ERRMSG = 100
+		ERRMSG = 100,
+		STRING = 101,
+		RAWBUF = 102
 	};
 	static const int MAX_STRING = 200;
 
@@ -142,14 +146,18 @@ public:
 	Forest::ntyp_t nodeType;	///< type of a node
 	comt_t	comtree;		///< comtree number
 	fAdr_t	comtreeOwner;		///< comtree owner
+	int	index1, index2;		///< table indexes
 	int	count;			///< count field
 	int	queue;			///< queue number
 	int	zipCode;		///< zip code
+	char*	rawBuf;			///< pointer to packed buffer
+	int	rawBufSize;		///< number of bytes in rawBuf
 
 	uint32_t* payload;		///< pointer to start of packet payload
 	int	paylen;			///< payload length in bytes
 
 	string	errMsg;			///< buffer for error messages
+	string	stringData;		///< buffer for string data
 
 private:
 };
