@@ -22,6 +22,7 @@
 #include "Substrate.h"
 #include "NetBuffer.h"
 #include "Logger.h"
+#include "AdminTable.h"
 #include <map>
 
 namespace forest {
@@ -65,6 +66,11 @@ struct clientInfo {
 };
 prefixInfo prefixes[1000];
 
+fstream adminFile;		///< stream for reading/updating admin data
+pthread_mutex_t adminFileLock; ///< so only one thread can update at a time
+
+static int const RECORD_SIZE = 256; ///< size of an admin file record
+
 bool	init(const char*);
 bool	readPrefixInfo(char*);
 
@@ -76,8 +82,7 @@ bool 	handleCancelSession(int,CtlPkt&,CpHandler&);
 bool 	handleBootLeaf(int,CtlPkt&,CpHandler&);
 bool 	handleBootRouter(int,CtlPkt&,CpHandler&);
 
-void	getNet(NetBuffer&, string&);
-void	getLinkTable(NetBuffer&, string&);
+void	getLinkTable(NetBuffer&, string&, CpHandler&);
 
 uint64_t generateNonce();
 fAdr_t	setupLeaf(int, pktx, CtlPkt&, int, int, uint64_t,CpHandler&,bool=false);

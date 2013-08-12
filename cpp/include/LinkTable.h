@@ -18,7 +18,6 @@
 
 namespace forest {
 
-
 /** Maintains information about a Forest router's virtual links.
  */
 class LinkTable {
@@ -42,11 +41,13 @@ public:
 	ipa_t	getPeerIpAdr(int) const;	
 	ipp_t 	getPeerPort(int) const;	
 	int	getIface(int) const;	
+	int	getComtCount(int) const;	
 	Forest::ntyp_t getPeerType(int) const;	
 	fAdr_t 	getPeerAdr(int) const;	
 	uint64_t getNonce(int) const;	
 	RateSpec& getRates(int) const;	
 	RateSpec& getAvailRates(int) const;	
+	int	getComtCount(int) const;	
 	set<int>& getComtSet(int) const;
 
 	// modifiers
@@ -65,8 +66,12 @@ public:
 
 	// io routines
 	bool read(istream&);
-	string&	entry2string(int, string&) const;
+	string&	link2string(int, string&) const;
 	string& toString(string&) const;
+
+	// packing entry in a packet
+	char*	pack(int, char*) const;
+	char*	unpack(int, char*);
 
 private:
 	int	maxLnk;			///< maximum link number
@@ -81,6 +86,7 @@ private:
 	uint64_t nonce;			///< used by peer when connecting
 	RateSpec rates;			///< rate spec for link rates
 	RateSpec availRates;		///< rate spec for available rates
+	int	comtCount;		///< number of comtrees on this link
 	set<int> *comtSet;		///< set of comtrees containing link
 	};
 	LinkInfo *lnkTbl;		///< lnkTbl[i] is link info for link i
@@ -195,6 +201,14 @@ inline RateSpec& LinkTable::getAvailRates(int lnk) const {
 	return lnkTbl[lnk].availRates;
 }
 
+/** Get the count of the number of comtrees used by a link.
+ *  @param lnk is a valid link number
+ *  @return the number of comtrees that use lnk
+ */
+inline int LinkTable::getComtCount(int lnk) const {
+	return lnkTbl[lnk].comtCount;
+}
+
 /** Get the set of comtrees registered for a link.
  *  This method is provided to allow the caller to efficiently
  *  examine the elements of a comtree set. It should not be
@@ -233,12 +247,16 @@ inline void LinkTable::setConnectStatus(int lnk, bool status) {
 inline bool LinkTable::registerComt(int lnk, int ctx) {
 	if (!valid(lnk)) return false;
 	lnkTbl[lnk].comtSet->insert(ctx);
+	lnkTbl[lnk].comtCount++;
 	return true;
 }
 
 inline bool LinkTable::deregisterComt(int lnk, int ctx) {
 	if (!valid(lnk)) return false;
+	if (lnkTbl[lnk].comtSet->find(ctx) == lnkTbl[lnk].comtSet->end())
+		return true;
 	lnkTbl[lnk].comtSet->erase(ctx);
+	lnkTbl[lnk].comtCount--;
 	return true;
 }
 

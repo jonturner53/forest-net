@@ -1032,6 +1032,7 @@ void RouterCore::handleCtlPkt(int px) {
         case CtlPkt::DROP_LINK:		dropLink(cp,reply); break;
         case CtlPkt::GET_LINK:		getLink(cp,reply); break;
         case CtlPkt::MOD_LINK:		modLink(cp,reply); break;
+        case CtlPkt::GET_LINK_SET:	getLinkSet(cp,reply); break;
 
 	// configuring comtrees
         case CtlPkt::ADD_COMTREE:	addComtree(cp,reply); break;
@@ -1276,11 +1277,48 @@ bool RouterCore::getLink(CtlPkt& cp, CtlPkt& reply) {
 		reply.adr1 = lt->getPeerAdr(link);
 		reply.rspec1 = lt->getRates(link);
 		reply.rspec2 = lt->getAvailRates(link);
+		reply.count = lt->getComtCount(lnk);
 		return true;
 	} 
 	reply.errMsg = "get link: invalid link number";
 	reply.mode = CtlPkt::NEG_REPLY;
 	return false;
+}
+
+/** Respond to a get link set control packet.
+ *  Control packet includes the first link in the set to be retrieved plus
+ *  a count of the number of links to be returned; reply includes the
+ *  first link in the set, the count of the number of links returned and
+ *  the next link in the table, following the last one in the returned set.
+ *  @param cp is a reference to a received get link set control packet
+ *  @param reply is a reference to the reply packet with fields to be
+ *  filled in
+ *  @return true on success, false on failure
+ */
+bool RouterCore::getLinkSet(CtlPkt& cp, CtlPkt& reply) {
+	int lnk = cp.index1;
+	if (lnk == 0) lnk = lt->firstLink(); // 0 means start with first link
+	else if (!lt->valid(lnk)) {
+		reply.errMsg = "get link set: invalid link number";
+		reply.mode = CtlPkt::NEG_REPLY;
+		return false;
+	}
+	reply.index1 = lnk;
+	int count = min(10,cp.count);
+	int i = 0;
+	while (i < count && lnk != 0) {
+		string s; lt->link2string(lnk,s); s.push_back('\n');
+		reply.stringData.append(s);
+		if (stringData.length() > 1300) {
+			reply.errMsg =  "get link set: error while formatting "
+					"reply";
+			reply.mode = CtlPkt::NEG_REPLY;
+			return false;
+		}
+		i++; lnk = lt->nextLink(lnk);
+	}
+	reply.index2 = lnk; reply.count = i;
+	return true;
 }
 
 bool RouterCore::modLink(CtlPkt& cp, CtlPkt& reply) {

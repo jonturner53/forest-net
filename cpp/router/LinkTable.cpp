@@ -232,7 +232,7 @@ bool LinkTable::read(istream& in) {
  *  @param s is a reference to a string in which the result is returned
  *  @return a reference to s
  */
-string& LinkTable::entry2string(int lnk, string& s) const {
+string& LinkTable::link2string(int lnk, string& s) const {
 	if (!valid(lnk)) { s = ""; return s; }
 	stringstream ss;
 	ss << setw(5) << right << lnk << setw(6) << getIface(lnk) << "  ";
@@ -241,7 +241,9 @@ string& LinkTable::entry2string(int lnk, string& s) const {
 	   << ":" << setw(5) << left << getPeerPort(lnk) << "  ";
 	ss << setw(10) << left << Forest::nodeType2string(getPeerType(lnk),s);
 	ss << " " << setw(10) << left <<Forest::fAdr2string(getPeerAdr(lnk),s);
-	ss << " " << getRates(lnk).toString(s) << endl;
+	ss << " " << getRates(lnk).toString(s);
+	ss << " " << getAvailRates(lnk).toString(s);
+	ss << " " << lnkTbl[lnk].comtCount;
 	s = ss.str();
 	return s;
 }
@@ -254,11 +256,74 @@ string& LinkTable::toString(string& s) const {
 	stringstream ss;
 	ss << links->getNumIn() << endl;
 	ss << "# link  iface    peerIp:port     peerType  peerAdr   ";
-        ss << "  bitRate pktRate\n";
+        ss << "  rates      avail rates      comtree count\n";
 	for (int i = firstLink(); i != 0; i = nextLink(i)) 
-		ss << entry2string(i,s);
+		ss << link2string(i,s) << endl;
 	s = ss.str();
 	return s;
+}
+
+#define pack8(x)  (*buf = *((char*)  x), buf += 1)
+#define pack16(x) (*buf = *((char*) htons(x)), buf += sizeof(uint16_t))
+#define pack32(x) (*buf = *((char*) htonl(x)), buf += sizeof(uint32_t))
+#define pack64(x) ( pack32(((x)>>32)&0xffffffff), pack32((x)&0xffffffff))
+#define packRspec(x) (	pack32(x.bitRateUp), pack32(x.bitRateDown), \
+                	pack32(x.pktRateUp), pack32(x.pktRateDown) )
+
+/** Pack a link table entry into a packet buffer.
+ *  Omit the comtSet, but include the number of elements it contains.
+ *  @return true on success, false on failure
+ */
+char* LinkTable::pack(int lnk, char *buf) const {
+	if (!valid(lnk)) return 0;
+	pack32(lnk);
+	pack32(lnkTbl[lnk].iface);
+
+	pack32(lnkTbl[lnk].peerIp);
+	pack16(lnkTbl[lnk].peerPort);
+	uint16_t x = lnkTbl[lnk].peerType; pack16(x);
+	pack16(lnkTbl[lnk].peerType);
+	pack32(lnkTbl[lnk].peerAdr);
+
+	pack8(lnkTbl[lnk].status);
+	pack64(lnkTbl[lnk].nonce);
+
+	packRspec(lnkTbl[lnk].rates);
+	packRspec(lnkTbl[lnk].availRates);
+
+	pack32(lnkTbl[lnk].comtCount);
+	return buf;
+}
+
+#define unpack8(x) (x = *buf, buf += 1)
+#define unpack16(x) (x = ntohs(*((uint16_t*) buf)), buf += sizeof(uint16_t))
+#define unpack32(x) (x = ntohl(*((uint32_t*) buf)), buf += sizeof(uint32_t))
+#define unpack64(x) (x  = ntohl(*((uint32_t*) buf)), buf += sizeof(uint32_t), \
+		     x |= ntohl(*((uint32_t*) buf)), buf += sizeof(uint32_t))
+#define unpackRspec(x) (pack32(x.bitRateUp), pack32(x.bitRateDown), \
+                	pack32(x.pktRateUp), pack32(x.pktRateDown) )
+
+/** Unpack a link table entry from a packet buffer.
+ *  @return true on success, false on failure
+ */
+char* LinkTable::unpack(int lnk, char *buf) {
+	if (!valid(lnk)) return 0;
+	unpack32(lnk);
+	unpack32(lnkTbl[lnk].iface);
+
+	unpack32(lnkTbl[lnk].peerIp);
+	unpack16(lnkTbl[lnk].peerPort);
+	uint16_t x; unpack16(x); lnkTbl[lnk].peerType = (Forest::ntyp_t) x;
+	unpack32(lnkTbl[lnk].peerAdr);
+
+	unpack8(lnkTbl[lnk].status);
+	unpack64(lnkTbl[lnk].nonce);
+
+	unpackRspec(lnkTbl[lnk].rates);
+	unpackRspec(lnkTbl[lnk].availRates);
+
+	unpack32(lnkTbl[lnk].comtCount);
+	return buf;
 }
 
 } // ends namespace

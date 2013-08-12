@@ -237,6 +237,122 @@ void getLinkTable(NetBuffer& buf, string& reply) {
 	// link number and remaining fields, with spaces separating items
 }
 
+
+
+/** Handle a connection from a remote console.
+ *  Interprets variety of requests from a remote console,
+ *  including requests to login, get information about routers,
+ *  monitor packet flows and so forth.
+ *  @param sock is a socket number for an open stream socket
+ *  @return true if the interaction proceeds normally, followed
+ *  by a normal close; return false if an error occurs
+ */
+bool handleConsole(int sock,CpHandler& cph) {
+	NetBuffer buf(sock,1024);
+	string cmd, reply, userName;
+	bool loggedIn;
+
+	// verify initial "greeting"
+	if (!buf.readLine(cmd) || cmd != "Forest-netConsole-v1") {
+		Np4d::sendString(sock,"misformatted initial dialog\n"
+				      "overAndOut\n");
+		return false;
+	}
+	// main processing loop for requests from client
+	loggedIn = false;
+	while (buf.readAlphas(cmd)) {
+cerr << "cmd=" << cmd << endl;
+		reply.assign("success\n");
+		if (cmd == "over") {
+			// shouldn't happen, but ignore it, if it does
+			buf.nextLine(); continue;
+		} else if (cmd == "overAndOut") {
+			buf.nextLine(); return true;
+		} else if (cmd == "login") {
+			loggedIn = login(buf,userName,reply);
+		} else if (!loggedIn) {
+			continue; // must login before anything else
+		} else if (cmd == "getNet") {
+			string s; net->toString(s);
+			reply.append(s);
+		} else if (cmd == "getLinkTable") {
+			getLinkTable(buf,reply);
+		} else {
+			reply = "unrecognized input\n";
+		}
+cerr << "sending reply: " << reply;
+		reply.append("over\n");
+		Np4d::sendString(sock,reply);
+	}
+	return true;
+cerr << "terminating" << endl;
+}
+
+/** Handle a login request.
+ *  Reads from the socket to identify client and obtain password
+ *  @param buf is a NetBuffer associated with the stream socket to a user
+ *  @param userName is a reference to a string in which the name of the
+ *  user is returned
+ *  @param reply is a reference to a string in which an error message may be
+ *  returned if the operation does not succeed.
+ *  @return true on success, else false
+ */
+bool login(NetBuffer& buf, string& userName, string& reply) {
+	return true; // finish later
+	/*
+	string pwd, s1, s2;
+	if (buf.verify(':') && buf.readName(userName) && buf.nextLine() &&
+	    buf.readAlphas(s1) && s1 == "password" &&
+	      buf.verify(':') && buf.readWord(pwd) && buf.nextLine() &&
+	    buf.readLine(s2) && s2 == "over") {
+		int clx =cliTbl->getClient(clientName);
+		// locks clx
+		if (clx == 0) {
+			reply = "login failed: try again";
+			return false;
+		} else if (cliTbl->checkPassword(clx,pwd)) {
+cerr << "login succeeded " << clientName << endl;
+			cliTbl->releaseClient(clx);
+			return true;
+		} else {
+			cliTbl->releaseClient(clx);
+			reply = "login failed: try again";
+			return false;
+		}
+	} else {
+		reply = "misformatted login request";
+		return false;
+	}
+	*/
+}
+
+/** Get link table from router and return to Console.
+ *  Table is returned as a text string which each entry on a separate line.
+ *  @param buf is a reference to a NetBuffer object for the socket
+ *  @param reply is a reference to a string to be returned to console
+ *  @param cph is a reference to this thread's control packet hander
+ */
+void getLinkTable(NetBuffer& buf, string& reply, CpHandler& cph) {
+	string rtrName; int rtr;
+	if (!buf.verify(':') || !buf.readName(rtrName) ||
+	    (rtr = net->getNodeNum(rtrName)) == 0) {
+		reply.assign("invalid request"); return
+	}
+	fAdr_t radr = net->getNodeAdr(rtr);
+	int lnk = 0;
+	while (true) {
+		repCp.reset()
+		pktx repx; CtlPkt repCp;
+		repx = cph.getLinkSet(radr, lnk, 10, repCp);
+		if (repx == 0 || repCp.mode != CtlPkt::POS_REPLY) {
+			reply.assign("could not read link table\n"); return;
+		}
+		reply.append(repCp.stringData());
+		if (repx.index2 == 0) return;
+		lnk = repx.index2;
+	}
+}
+
 /** Handle a connection/disconnection notification from a router.
  *  The request is acknowledged and then forwarded to the
  *  client manager.

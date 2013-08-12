@@ -13,7 +13,7 @@ JAVAC := javac
 IDIR := ${FROOT}/include
 
 HFILES = ${IDIR}/NetInfo.h ${IDIR}/ComtInfo.h ${IDIR}/CpHandler.h
-OFILES = NetInfo.o ComtInfo.o CpHandler.o Substrate.o ClientTable.o
+OFILES = NetInfo.o ComtInfo.o CpHandler.o Substrate.o ClientTable.o AdminTable.o
 XFILES = NetMgr ClientMgr ComtCtl BuildRtables PhotoServer #threadExample Console 
 
 ${OFILES} : ${HFILES}
