@@ -58,7 +58,7 @@ class Avatar(DirectObject):
 			base.win.setClearColor(Vec4(0,0,0,1))
 		
 		# Set up the environment
-		self.environ = loader.loadModel("models/vworld24grid")
+		self.environ = loader.loadModel("models/map")
 		self.environ.reparentTo(render)
 		self.environ.setPos(0,0,0)
 
@@ -122,11 +122,11 @@ class Avatar(DirectObject):
 		self.avatarNP = NodePath("ourAvatarNP")
 		self.avatarNP.reparentTo(render)
 		if Util.AUTO :
-			self.avatarNP.setPos(58,67,0)
+			self.avatarNP.setPos(63,77,0)
 			angle = 90*random.randint(0,3) + random.randint(-10,10)
 			self.avatarNP.setH(angle)
 		else :
-			self.avatarNP.setPos(58,75,0)
+			self.avatarNP.setPos(63,84,0)
 			self.avatarNP.setH(0)
 
 		s = str(self.avaModel)
@@ -147,22 +147,25 @@ class Avatar(DirectObject):
 		base.camera.setPos(self.avatarNP.getPos())
 		base.camera.setZ(self.avatarNP.getZ()+1.5)
 		base.camera.setHpr(self.avatarNP.getHpr()[0],0,0)		
-		self.fieldAngle = 80 # change this to zoom in/out
+		self.fieldAngle = 46.8 # similar to human eye; change this to zoom in/out
 		base.camLens.setFov(self.fieldAngle)		
 			
 	def setupMap(self) :
 		""" Add overview map and highlight position.
 		"""
-		self.Dmap = OnscreenImage(image = 'models/2Dmap.png', \
-					  pos = (.8,0,.6), scale = .4)
+		self.Dmap = OnscreenImage(image = 'models/mapTopView.png', \
+					  #pos = (.8,0,.6), scale = .4)
+					  pos = (0.8,0,0.6), scale = .4)
 		self.Dmap.setTransparency(TransparencyAttrib.MAlpha)
 		self.dot = OnscreenImage(image = 'models/dot.png', \
 					 pos = (1,0,1), scale = .01)
 
 		# Set the dot's position in the 2d map
-		self.dot.setPos( \
-		  base.camera.getX()/(self.modelSizeX+0.0+self.Dmap.getX()),0, \
-		  base.camera.getY()/(self.modelSizeY+0.0+self.Dmap.getZ()))
+		self.dot.setPos(0,0,0)
+#		  0.0+self.Dmap.getX(),0, \
+#		  0.0+self.Dmap.getY())
+	#	  self.avatarNP.getX()/(self.modelSizeX+0.0+self.Dmap.getX()),0, \
+	#	  self.avatarNP.getY()/(self.modelSizeY+0.0+self.Dmap.getY()))
 		self.dotOrigin = self.dot.getPos()
 
 	def setupCollisions(self) :
@@ -170,8 +173,13 @@ class Avatar(DirectObject):
 
 		These serve two purposes
  		1. prevent the avatar from passing through a wall
-		2. keep the avatar on the ground (we skip it for now)
+		2. keep the avatar on the ground (we skip it for now since we have flat plane)
 		"""
+		# Setup collisionBitMasks
+		WALL_MASK = BitMask32.bit(2)
+		self.buildingCollider = self.environ.find("**/SketchUp.002")
+		self.buildingCollider.node().setIntoCollideMask(WALL_MASK)
+#		self.buildingCollider.show()
 
 		base.cTrav = CollisionTraverser()
 		base.cTrav.setRespectPrevTransform(True)
@@ -179,21 +187,11 @@ class Avatar(DirectObject):
 		self.avatarSpNp = self.avatarNP.attachNewNode( \
 					CollisionNode('avatarSphere'))
 		
-		if self.avaModel <= 2 :
-			self.csSphere = self.avatarSpNp.node().addSolid(
-				CollisionSphere(0.0,
-					-0.5,
-					0.5,
-					0.8))
-		else :
-			self.csSphere = self.avatarSpNp.node().addSolid(
-				CollisionSphere(0.0,
-					-0.5,
-					0.5,
-					0.8))
+		self.csSphere = self.avatarSpNp.node().addSolid(
+			CollisionSphere(0.0,-0.5,0.9,0.9))
 		# format above: (x,y,z,radius)
 
-		self.avatarSpNp.node().setFromCollideMask(BitMask32.bit(0))
+		self.avatarSpNp.node().setFromCollideMask(WALL_MASK)
 		self.avatarSpNp.node().setIntoCollideMask(BitMask32.allOff())
 
 		# uncomment the following line to show the collisionSphere
@@ -674,7 +672,7 @@ class Avatar(DirectObject):
  		if self.keyMap["backward"] :
  			newY += 2 * globalClock.getDt()
  		if self.keyMap["dash"] :
- 			newY -= 5 * globalClock.getDt()
+ 			newY -= 20 * globalClock.getDt()
 		if self.keyMap["slide-left"] :
  			newX += 2 * globalClock.getDt()
 		if self.keyMap["slide-right"] :
@@ -741,7 +739,7 @@ class Avatar(DirectObject):
 		"""
 		base.camera.setPos(self.avatarNP.getPos())
 		# uncomment the following line for a third-persion view
-#		base.camera.setY(self.avatarNP.getY()+10)
+	#	base.camera.setY(self.avatarNP.getY()+10)
 		base.camera.setZ(self.avatarNP.getZ()+1.5)
 		base.camera.setH(self.avatarNP.getH()+180)
 
@@ -775,7 +773,7 @@ class Avatar(DirectObject):
 		elif self.keyMap["zoom-out"] != 0 :	
 			if self.fieldAngle < 120 : self.fieldAngle *= 1.01
 		elif self.keyMap["reset-view"] != 0 :
-			self.fieldAngle = 80
+			self.fieldAngle = 46.8
 		base.camLens.setFov(self.fieldAngle)		
 
 	def updateScreenText(self) :
@@ -807,8 +805,10 @@ class Avatar(DirectObject):
 		""" Show positions of this avatar and remotes as dots in map.
 		"""
 		self.dot.setPos( \
-		  (self.avatarNP.getX()/(self.modelSizeX))*0.7+0.45, 0, \
-		  (self.avatarNP.getY()/(self.modelSizeY))*0.7+0.25)
+		  (self.avatarNP.getX()/(self.modelSizeX))*0.79+0.4, 0, \
+		  (self.avatarNP.getY()/(self.modelSizeY))*0.79+0.21)
+	#	  (self.avatarNP.getX()/(self.modelSizeX))*0.7+0.45, 0, \
+	#	  (self.avatarNP.getY()/(self.modelSizeY))*0.7+0.25)
 		for id in self.remoteMap:
 			self.remoteMap[id][3].setPos( \
 				(self.remoteMap[id][0].getX() / \
