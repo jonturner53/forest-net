@@ -110,6 +110,30 @@ bool init(const char *topoFile) {
 		cerr << "could not find netMgr or cliMgr in topology file\n";
 		return false;
 	}
+
+	dummyRecord = 0; maxRecord = 0;
+	// read adminData file
+	adminFile.open("adminData");
+	if (!adminFile.good() || !admTbl->read(adminFile)) {
+		logger->log("NetMgr::init: could not read adminData "
+			    "file",2);
+		return false;
+	}
+	adminFile.clear();
+
+	// if size of file is not equal to count*RECORD_SIZE
+	// re-write the file using padded records
+	int n = admTbl->getMaxAdx();
+	adminFile.seekp(0,ios_base::end);
+	long len = adminFile.tellp();
+	if (len != (n+1)*RECORD_SIZE) {
+		for (int adx = 0; adx <= n; adx++) writeRecord(adx);
+	}
+	if (pthread_mutex_init(&adminFileLock,NULL) != 0) {
+		logger->log("NetMgr::init: could not initialize lock "
+			    "on client data file",2);
+		return false;
+	}
 	return true;
 }
 
@@ -191,54 +215,6 @@ void* handler(void *qp) {
 	}
 }
 
-/** Handle a connection from the remote console.
- *  This involves forwarding the packet to a remote router.
- *  @param px is the packet number of the request packet
- *  @param cp is the control packet structure for p (already unpacked)
- *  @param return true on successful completion, else false
- */
-bool handleConsole(int sock, CpHandler& cph) {
-        NetBuffer buf(sock,1024);
-
-	// login user at remote console using password in netMgrUsers file
-
-	// command processing loop
-	string cmd, reply;
-	while (buf.readAlphas(cmd)) {
-		reply = "success";
-		if (cmd == "getNet") {
-			getNet(buf,reply);
-		} else if (cmd == "getLinkTable") {
-			getLinkTable(buf,reply);
-		// more of these (getIfaceTable, getComtree,...)
-		} else if (cmd == "over" && buf.nextLine()) {
-			// ignore
-		} else if (cmd == "overAndOut" && buf.nextLine()) {
-			break;
-		} else {
-			reply = "unrecognized input";
-		}
-		if (sock == -1) break;
-		reply += "\nover\n";
-		Np4d::sendString(sock,reply);
-	}
-        return true;
-}
-
-void getNet(NetBuffer& buf, string& reply) {
-	// return net->toString(s) where net is the netInfo object
-}
-
-void getLinkTable(NetBuffer& buf, string& reply) {
-	// get list of links from router
-	// for each link in list, get the link table entry from router
-	// return each link to the Console, with one link per line,
-	// each line starting with the word link, followed by the
-	// link number and remaining fields, with spaces separating items
-}
-
-
-
 /** Handle a connection from a remote console.
  *  Interprets variety of requests from a remote console,
  *  including requests to login, get information about routers,
@@ -247,13 +223,13 @@ void getLinkTable(NetBuffer& buf, string& reply) {
  *  @return true if the interaction proceeds normally, followed
  *  by a normal close; return false if an error occurs
  */
-bool handleConsole(int sock,CpHandler& cph) {
+bool handleConsole(int sock, CpHandler& cph) {
 	NetBuffer buf(sock,1024);
-	string cmd, reply, userName;
+	string cmd, reply, adminName;
 	bool loggedIn;
 
 	// verify initial "greeting"
-	if (!buf.readLine(cmd) || cmd != "Forest-netConsole-v1") {
+	if (!buf.readLine(cmd) || cmd != "Forest-Console-v1") {
 		Np4d::sendString(sock,"misformatted initial dialog\n"
 				      "overAndOut\n");
 		return false;
@@ -269,14 +245,22 @@ cerr << "cmd=" << cmd << endl;
 		} else if (cmd == "overAndOut") {
 			buf.nextLine(); return true;
 		} else if (cmd == "login") {
-			loggedIn = login(buf,userName,reply);
+			loggedIn = login(buf,adminName,reply);
 		} else if (!loggedIn) {
 			continue; // must login before anything else
+		} else if (cmd == "newAccount") {
+			newAccount(buf,adminName,reply);
+		} else if (cmd == "getProfile") {
+			getProfile(buf,adminName,reply);
+		} else if (cmd == "updateProfile") {
+			updateProfile(buf,adminName,reply);
+		} else if (cmd == "changePassword") {
+			changePassword(buf,adminName,reply);
 		} else if (cmd == "getNet") {
 			string s; net->toString(s);
 			reply.append(s);
 		} else if (cmd == "getLinkTable") {
-			getLinkTable(buf,reply);
+			getLinkTable(buf,reply, cph);
 		} else {
 			reply = "unrecognized input\n";
 		}
@@ -288,34 +272,35 @@ cerr << "sending reply: " << reply;
 cerr << "terminating" << endl;
 }
 
+
+
+
 /** Handle a login request.
- *  Reads from the socket to identify client and obtain password
- *  @param buf is a NetBuffer associated with the stream socket to a user
- *  @param userName is a reference to a string in which the name of the
- *  user is returned
+ *  Reads from the socket to identify admin and obtain password
+ *  @param buf is a NetBuffer associated with the stream socket to an admin
+ *  @param adminName is a reference to a string in which the name of the
+ *  admin is returned
  *  @param reply is a reference to a string in which an error message may be
  *  returned if the operation does not succeed.
  *  @return true on success, else false
  */
-bool login(NetBuffer& buf, string& userName, string& reply) {
-	return true; // finish later
-	/*
+bool login(NetBuffer& buf, string& adminName, string& reply) {
 	string pwd, s1, s2;
-	if (buf.verify(':') && buf.readName(userName) && buf.nextLine() &&
+	if (buf.verify(':') && buf.readName(adminName) && buf.nextLine() &&
 	    buf.readAlphas(s1) && s1 == "password" &&
 	      buf.verify(':') && buf.readWord(pwd) && buf.nextLine() &&
 	    buf.readLine(s2) && s2 == "over") {
-		int clx =cliTbl->getClient(clientName);
-		// locks clx
-		if (clx == 0) {
+		int adx =admTbl->getAdmin(adminName);
+		// locks adx
+		if (adx == 0) {
 			reply = "login failed: try again";
 			return false;
-		} else if (cliTbl->checkPassword(clx,pwd)) {
-cerr << "login succeeded " << clientName << endl;
-			cliTbl->releaseClient(clx);
+		} else if (admTbl->checkPassword(adx,pwd)) {
+cerr << "login succeeded " << adminName << endl;
+			admTbl->releaseAdmin(adx);
 			return true;
 		} else {
-			cliTbl->releaseClient(clx);
+			admTbl->releaseAdmin(adx);
 			reply = "login failed: try again";
 			return false;
 		}
@@ -323,8 +308,130 @@ cerr << "login succeeded " << clientName << endl;
 		reply = "misformatted login request";
 		return false;
 	}
-	*/
 }
+
+/** Handle a new account request.
+ *  Reads from the socket to identify admin and obtain password
+ *  @param buf is a NetBuffer associated with the stream socket to an admin
+ *  @param adminName is a reference to a string in which the name of the
+ *  admin is returned
+ *  @param reply is a reference to a string in which an error message may be
+ *  returned if the operation does not succeed.
+ *  @return true on success, else false
+ */
+bool newAccount(NetBuffer& buf, string& adminName, string& reply) {
+	string newName, pwd, s1, s2;
+	if (buf.verify(':') && buf.readName(newName) && buf.nextLine() &&
+	    buf.readAlphas(s1) && s1 == "password" &&
+	      buf.verify(':') && buf.readWord(pwd) && buf.nextLine() &&
+	    buf.readLine(s2) && s2 == "over") {
+		int adx =admTbl->getAdmin(newName);
+		// locks adx
+		if (adx != 0) {
+			admTbl->releaseAdmin(adx);
+			reply = "name not available, select another";
+			return false;
+		}
+		adx = admTbl->addAdmin(newName,pwd);
+		if (adx != 0) {
+			writeRecord(adx);
+			admTbl->releaseAdmin(adx);
+			return true;
+		} else {
+			reply = "unable to add admin";
+			return false;
+		}
+	} else {
+		reply = "misformatted new admin request";
+		return false;
+	}
+}
+
+/** Handle a get profile request.
+ *  Reads from the socket to identify the target admin.
+ *  @param buf is a NetBuffer associated with the stream socket to an admin
+ *  @param adminName is the name of the currently logged-in admin
+ *  @param reply is a reference to a string in which an error message may be
+ *  returned if the operation does not succeed.
+ */
+void getProfile(NetBuffer& buf, string& adminName, string& reply) {
+	string s, targetName;
+	if (!buf.verify(':') || !buf.readName(targetName) ||
+	    !buf.nextLine() || !buf.readLine(s) || s != "over") {
+		reply = "misformatted get profile request"; return;
+	}
+	int tadx = admTbl->getAdmin(targetName);
+	reply  = "realName: \"" + admTbl->getRealName(tadx) + "\"\n";
+	reply += "email: " + admTbl->getEmail(tadx) + "\n";
+	admTbl->releaseAdmin(tadx);
+}
+
+/** Handle an update profile request.
+ *  Reads from the socket to identify the target admin. This operation
+ *  requires either that the target admin is the currently logged-in
+ *  admin, or that the logged-in admin has administrative privileges.
+ *  @param buf is a NetBuffer associated with the stream socket to an admin
+ *  @param adminName is the name of the currently logged-in admin
+ *  @param reply is a reference to a string in which an error message may be
+ *  returned if the operation does not succeed.
+ */
+void updateProfile(NetBuffer& buf, string& adminName, string& reply) {
+	string s, targetName;
+	if (!buf.verify(':') || !buf.readName(targetName) ||
+	    !buf.nextLine()) {
+		reply = "misformatted updateProfile request"; return;
+	}
+	// read profile information from admin
+	string item; RateSpec rates;
+	string realName, email; 
+	while (buf.readAlphas(item)) {
+		if (item == "realName" && buf.verify(':') &&
+		    buf.readString(realName) && buf.nextLine()) {
+			// that's all for now
+		} else if (item == "email" && buf.verify(':') &&
+		    buf.readWord(email) && buf.nextLine()) {
+			// that's all for now
+		} else if (item == "over" && buf.nextLine()) {
+			break;
+		} else {
+			reply = "misformatted update profile request (" +
+				item + ")";
+			return;
+		}
+	}
+	int tadx = admTbl->getAdmin(targetName);
+	if (realName.length() > 0) admTbl->setRealName(tadx,realName);
+	if (email.length() > 0) admTbl->setEmail(tadx,email);
+	writeAdminRecord(tadx);
+	admTbl->releaseAdmin(tadx);
+	return;
+}
+
+/** Handle a change password request.
+ *  Reads from the socket to identify the target admin. This operation
+ *  requires either that the target admin is the currently logged-in
+ *  admin, or that the logged-in admin has administrative privileges.
+ *  @param buf is a NetBuffer associated with the stream socket to an admin
+ *  @param adminName is the name of the currently logged-in admin
+ *  @param reply is a reference to a string in which an error message may be
+ *  returned if the operation does not succeed.
+ */
+void changePassword(NetBuffer& buf, string& adminName, string& reply) {
+	string targetName, pwd;
+	if (!buf.verify(':') || !buf.readName(targetName) || !buf.nextLine() ||
+	    !buf.readWord(pwd) && buf.nextLine()) {
+		reply = "misformatted change password request"; return;
+	}
+	int tadx = admTbl->getAdmin(targetName);
+	admTbl->setPassword(tadx,pwd);
+	writeRecord(tadx);
+	admTbl->releaseAdmin(tadx);
+	return;
+}
+
+
+
+
 
 /** Get link table from router and return to Console.
  *  Table is returned as a text string which each entry on a separate line.
@@ -983,6 +1090,59 @@ bool readPrefixInfo(char filename[]) {
 	numPrefixes = i;
 	cout << "read address info for " << numPrefixes << " prefixes" << endl;
 	return true;
+}
+
+/** Write a record to the file of network administrators.
+ *  The calling thread is assumed to hold a lock on the client.
+ *  @param adx is a non-negative integer
+ */
+void writeAdminRecord(int adx) {
+	if (adx < 0 || adx >= admTbl->getMaxAdmins()) return;
+
+	pthread_mutex_lock(&adminFileLock);
+	if (dummyRecord == 0) {
+		// create dummy record, for padding adminFile
+		dummyRecord = new char[RECORD_SIZE];
+		for (char *p = dummyRecord; p < dummyRecord+RECORD_SIZE; p++)
+			*p = ' ';
+		dummyRecord[0] = '-'; dummyRecord[RECORD_SIZE-1] = '\n';
+	}
+	if (maxRecord == 0) {
+		adminFile.seekp(0,ios_base::end);
+		maxRecord = adminFile.tellp()/RECORD_SIZE;
+	}
+
+	// position file pointer, adding dummy records if needed
+	if (adx > maxRecord) {
+		adminFile.seekp((maxRecord+1)*RECORD_SIZE);
+		while (adx > maxRecord) {
+			adminFile.write(dummyRecord,RECORD_SIZE);
+			maxRecord++;
+		}
+	}
+	adminFile.seekp(adx*RECORD_SIZE);
+
+	if (admTbl->validAdmin(adx)) {
+		string s;
+		admTbl->admin2string(adx,s);
+		s = "+ " + s;
+		if (s.length() > RECORD_SIZE) {
+			s.erase(RECORD_SIZE-1); s += "\n";
+		} else {
+			s.erase(s.length()-1);
+			int len = RECORD_SIZE - s.length();
+			char *p = dummyRecord + s.length();
+			s.append(p,len);
+		}
+		adminFile.write(s.c_str(),RECORD_SIZE);
+	} else {
+		//s.assign(dummyRecord,RECORD_SIZE);
+		adminFile.write(dummyRecord,RECORD_SIZE);
+	}
+	adminFile.flush();
+	maxRecord = max(adx,maxRecord);
+	pthread_mutex_unlock(&adminFileLock);
+	return;
 }
 
 /** Check for next packet from the remote console.
