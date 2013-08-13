@@ -149,6 +149,7 @@ private:
 	bool	dropLink(CtlPkt&, CtlPkt&);
 	void	dropLink(int,fAdr_t=0);
 	bool	getLink(CtlPkt&, CtlPkt&);
+	bool	getLinkSet(CtlPkt&, CtlPkt&);
 	bool	modLink(CtlPkt&, CtlPkt&);
 
 	bool	addComtree(CtlPkt&, CtlPkt&);

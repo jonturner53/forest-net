@@ -1277,7 +1277,7 @@ bool RouterCore::getLink(CtlPkt& cp, CtlPkt& reply) {
 		reply.adr1 = lt->getPeerAdr(link);
 		reply.rspec1 = lt->getRates(link);
 		reply.rspec2 = lt->getAvailRates(link);
-		reply.count = lt->getComtCount(lnk);
+		reply.count = lt->getComtCount(link);
 		return true;
 	} 
 	reply.errMsg = "get link: invalid link number";
@@ -1309,7 +1309,7 @@ bool RouterCore::getLinkSet(CtlPkt& cp, CtlPkt& reply) {
 	while (i < count && lnk != 0) {
 		string s; lt->link2string(lnk,s); s.push_back('\n');
 		reply.stringData.append(s);
-		if (stringData.length() > 1300) {
+		if (reply.stringData.length() > 1300) {
 			reply.errMsg =  "get link set: error while formatting "
 					"reply";
 			reply.mode = CtlPkt::NEG_REPLY;
