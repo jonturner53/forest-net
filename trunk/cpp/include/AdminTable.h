@@ -28,7 +28,7 @@ namespace forest {
  */
 class AdminTable {
 public:
-		AdminTable(int,int);
+		AdminTable(int);
 		~AdminTable();
 	bool	init();
 
@@ -53,7 +53,7 @@ public:
 	int	getMaxAdx() const;		
 
 	// add/remove/modify table entries
-	int	addAdmin(string&, string&, privileges, int=0);
+	int	addAdmin(string&, string&, int=0);
 	void	removeAdmin(int);
 
 	void	setAdminName(int, const string&);
@@ -76,16 +76,6 @@ private:
 	int	maxAdm;			///< max number of admins
 	int	maxAdx;			///< largest defined adx
 
-	struct Session {
-	fAdr_t	admAdr;			///< address of user in session
-	ipa_t	admIp;			///< admin's login IP
-	fAdr_t	rtrAdr;			///< address of router user connects to
-	int	adx;			///< admin index for user of session
-	sessionState state;
-	time_t	start;			///< start time of session
-					///< (in seconds  since the epoch)
-	RateSpec rates;			///< rates used for this session
-	};
 	struct Admin { 		///< admin table entry
 	string	aname;			///< admin's login name
 	string	pwd;			///< password

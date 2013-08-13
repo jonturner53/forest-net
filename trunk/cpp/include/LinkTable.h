@@ -41,7 +41,6 @@ public:
 	ipa_t	getPeerIpAdr(int) const;	
 	ipp_t 	getPeerPort(int) const;	
 	int	getIface(int) const;	
-	int	getComtCount(int) const;	
 	Forest::ntyp_t getPeerType(int) const;	
 	fAdr_t 	getPeerAdr(int) const;	
 	uint64_t getNonce(int) const;	

@@ -12,8 +12,7 @@ namespace forest {
 
 
 /** Constructor for AdminTable, allocates space and initializes table. */
-AdminTable::AdminTable(int maxAdmins, int maxSessions)
-		 : maxCli(maxAdmins), maxSess(maxSessions) {
+AdminTable::AdminTable(int maxAdmins) : maxAdm(maxAdmins) {
 	avec = new Admin[maxAdm+1];
 	admins = new UiSetPair(maxAdm);
 	nameMap = new map<string, int>();
@@ -125,29 +124,29 @@ int AdminTable::firstAdmin() {
  */
 int AdminTable::nextAdmin(int adx) {
 	lockMap();
-	int nuClx = admins->nextIn(adx);
-	if (nuClx == 0) {
+	int nuAdx = admins->nextIn(adx);
+	if (nuAdx == 0) {
 		avec[adx].busyBit = false;
 		pthread_cond_signal(&avec[adx].busyCond);
 		unlockMap();
 		return 0;
 	}
-	while (avec[nuClx].busyBit) {
-		pthread_cond_wait(&avec[nuClx].busyCond,&mapLock);
-		nuClx = admins->nextIn(adx);
-		if (nuClx == 0) {
+	while (avec[nuAdx].busyBit) {
+		pthread_cond_wait(&avec[nuAdx].busyCond,&mapLock);
+		nuAdx = admins->nextIn(adx);
+		if (nuAdx == 0) {
 			avec[adx].busyBit = false;
 			pthread_cond_signal(&avec[adx].busyCond);
-			pthread_cond_signal(&avec[nuClx].busyCond);
+			pthread_cond_signal(&avec[nuAdx].busyCond);
 			unlockMap();
 			return 0;
 		}
 	}
-	avec[nuClx].busyBit = true;
+	avec[nuAdx].busyBit = true;
 	avec[adx].busyBit = false;
 	pthread_cond_signal(&avec[adx].busyCond);
 	unlockMap();
-	return nuClx;
+	return nuAdx;
 }
 
 /** Add a new admin.
@@ -178,10 +177,10 @@ int AdminTable::addAdmin(string& aname, string& pwd, int adx) {
 	avec[adx].busyBit = true;
 	unlockMap();
 
-	setAdminName(adx,aname); setPassword(adx,pwd); setPrivileges(adx,priv);
+	setAdminName(adx,aname); setPassword(adx,pwd);
 	setRealName(adx,"noname"); setEmail(adx,"nomail");
 
-	maxClx = max(adx,maxClx);
+	maxAdx = max(adx,maxAdx);
 	return adx;
 }
 
@@ -220,7 +219,7 @@ bool AdminTable::readEntry(istream& in, int adx) {
 		}
 		Misc::cflush(in,'\n');
 	} else if (Misc::verify(in,'-')) {
-		maxClx = max(adx, maxAdx);
+		maxAdx = max(adx, maxAdx);
 		Misc::cflush(in,'\n'); return true;
 	} else {
 		Misc::cflush(in,'\n'); return false;

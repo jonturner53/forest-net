@@ -127,7 +127,7 @@ bool init(const char *topoFile) {
 	adminFile.seekp(0,ios_base::end);
 	long len = adminFile.tellp();
 	if (len != (n+1)*RECORD_SIZE) {
-		for (int adx = 0; adx <= n; adx++) writeRecord(adx);
+		for (int adx = 0; adx <= n; adx++) writeAdminRecord(adx);
 	}
 	if (pthread_mutex_init(&adminFileLock,NULL) != 0) {
 		logger->log("NetMgr::init: could not initialize lock "
@@ -334,7 +334,7 @@ bool newAccount(NetBuffer& buf, string& adminName, string& reply) {
 		}
 		adx = admTbl->addAdmin(newName,pwd);
 		if (adx != 0) {
-			writeRecord(adx);
+			writeAdminRecord(adx);
 			admTbl->releaseAdmin(adx);
 			return true;
 		} else {
@@ -419,12 +419,12 @@ void updateProfile(NetBuffer& buf, string& adminName, string& reply) {
 void changePassword(NetBuffer& buf, string& adminName, string& reply) {
 	string targetName, pwd;
 	if (!buf.verify(':') || !buf.readName(targetName) || !buf.nextLine() ||
-	    !buf.readWord(pwd) && buf.nextLine()) {
+	    !buf.readWord(pwd) || !buf.nextLine()) {
 		reply = "misformatted change password request"; return;
 	}
 	int tadx = admTbl->getAdmin(targetName);
 	admTbl->setPassword(tadx,pwd);
-	writeRecord(tadx);
+	writeAdminRecord(tadx);
 	admTbl->releaseAdmin(tadx);
 	return;
 }
@@ -443,20 +443,20 @@ void getLinkTable(NetBuffer& buf, string& reply, CpHandler& cph) {
 	string rtrName; int rtr;
 	if (!buf.verify(':') || !buf.readName(rtrName) ||
 	    (rtr = net->getNodeNum(rtrName)) == 0) {
-		reply.assign("invalid request"); return
+		reply.assign("invalid request"); return;
 	}
 	fAdr_t radr = net->getNodeAdr(rtr);
 	int lnk = 0;
+	pktx repx; CtlPkt repCp;
 	while (true) {
-		repCp.reset()
-		pktx repx; CtlPkt repCp;
+		repCp.reset();
 		repx = cph.getLinkSet(radr, lnk, 10, repCp);
 		if (repx == 0 || repCp.mode != CtlPkt::POS_REPLY) {
 			reply.assign("could not read link table\n"); return;
 		}
-		reply.append(repCp.stringData());
-		if (repx.index2 == 0) return;
-		lnk = repx.index2;
+		reply.append(repCp.stringData);
+		if (repCp.index2 == 0) return;
+		lnk = repCp.index2;
 	}
 }
 
