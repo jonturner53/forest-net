@@ -807,11 +807,9 @@ class Avatar(DirectObject):
 		self.dot.setPos( \
 		  (self.avatarNP.getX()/(self.modelSizeX))*0.79+0.4, 0, \
 		  (self.avatarNP.getY()/(self.modelSizeY))*0.79+0.21)
-	#	  (self.avatarNP.getX()/(self.modelSizeX))*0.7+0.45, 0, \
-	#	  (self.avatarNP.getY()/(self.modelSizeY))*0.7+0.25)
 		for id in self.remoteMap:
 			self.remoteMap[id][3].setPos( \
 				(self.remoteMap[id][0].getX() / \
-					self.modelSizeX)*0.7+0.45, \
+					self.modelSizeX)*0.79+0.4, \
 				0, (self.remoteMap[id][0].getY() / \
-					self.modelSizeY)*0.7+0.25)
+					self.modelSizeY)*0.79+0.21)
