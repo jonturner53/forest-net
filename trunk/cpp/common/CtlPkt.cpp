@@ -331,9 +331,12 @@ int CtlPkt::pack() {
 			packPair(INDEX1,index1);
 			packPair(INDEX2,index2);
 			packPair(COUNT,count);
+
+			payload[pp++] = htonl(STRING);
 			int len = min(stringData.length(), 1300);
 			payload[pp++] = htonl(len);
 			stringData.copy((char *) &payload[pp], len);
+
 			payload += (len+3)/4;
 		}
 		break;
