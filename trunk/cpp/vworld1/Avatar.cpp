@@ -77,6 +77,7 @@ Avatar::Avatar(ipa_t mipa, comt_t fc, comt_t lc)
 
 	numNear = numVisible = 0;
 	seqNum = 0;
+	subSeqNum = 0;
 	switchState = IDLE;
 }
 
@@ -142,7 +143,6 @@ bool Avatar::init(ipa_t cmIpAdr, string& uname, string& pword,
  */
 bool Avatar::login(ipa_t cmIpAdr, string uname, string pword) {
 	// open socket to client manager
-cerr << "logging in\n";
 	int loginSock = Np4d::streamSocket();
         if (loginSock < 0 ||
 	    !Np4d::bind4d(loginSock, myIp, 0) ||
@@ -154,7 +154,6 @@ cerr << "logging in\n";
 	// start login dialog
 	string s = "Forest-login-v1\nlogin: " + uname +
 		   "\npassword: " + pword + "\nover\n";
-cerr << "login string " << s << endl;
 	Np4d::sendString(loginSock,s);
 	NetBuffer buf(loginSock,1024);
 	string s0, s1, s2;
@@ -1125,18 +1124,24 @@ void Avatar::subscribe(list<int>& glist) {
 	for (gp = glist.begin(); gp != glist.end(); gp++) {
 		int g = *gp; nsub++;
 		if (nsub > 350) {
-			pp[0] = htonl(nsub-1); pp[nsub] = 0;
-			p.length = Forest::OVERHEAD + 4*(2+nsub);
+			pp[0] = htonl((uint32_t) (subSeqNum >> 32));
+        		pp[1] = htonl((uint32_t) (subSeqNum & 0xffffffff));
+			subSeqNum++;
+			pp[2] = htonl(nsub-1); pp[nsub+2] = 0;
+			p.length = Forest::OVERHEAD + 4*(4+nsub);
 			p.type = Forest::SUB_UNSUB; p.flags = 0;
 			p.comtree = comt;
 			p.srcAdr = myAdr; p.dstAdr = rtrAdr;
 			send(px);
 			nsub = 1;
 		}
-		pp[nsub] = htonl(-g);
+		pp[nsub+2] = htonl(-g);
 	}
-	pp[0] = htonl(nsub); pp[nsub+1] = 0;
-	p.length = Forest::OVERHEAD + 4*(2+nsub);
+	pp[0] = htonl((uint32_t) (subSeqNum >> 32));
+        pp[1] = htonl((uint32_t) (subSeqNum & 0xffffffff));
+	subSeqNum++;
+	pp[2] = htonl(nsub); pp[nsub+3] = 0;
+	p.length = Forest::OVERHEAD + 4*(4+nsub);
 	p.type = Forest::SUB_UNSUB; p.flags = 0;
 	p.comtree = comt;
 	p.srcAdr = myAdr; p.dstAdr = rtrAdr;
@@ -1158,18 +1163,23 @@ void Avatar::unsubscribe(list<int>& glist) {
 	for (gp = glist.begin(); gp != glist.end(); gp++) {
 		int g = *gp; nunsub++;
 		if (nunsub > 350) {
-			pp[0] = 0; pp[1] = htonl(nunsub-1);
-			p.length = Forest::OVERHEAD + 4*(2+nunsub);
+			pp[0] = htonl((uint32_t) (subSeqNum >> 32));
+        		pp[1] = htonl((uint32_t) (subSeqNum & 0xffffffff));
+			pp[2] = 0; pp[3] = htonl(nunsub-1);
+			p.length = Forest::OVERHEAD + 4*(4+nunsub);
 			p.type = Forest::SUB_UNSUB; p.flags = 0;
 			p.comtree = comt;
 			p.srcAdr = myAdr; p.dstAdr = rtrAdr;
 			send(px);
 			nunsub = 1;
 		}
-		pp[nunsub+1] = htonl(-g);
+		pp[nunsub+3] = htonl(-g);
 	}
-	pp[0] = 0; pp[1] = htonl(nunsub);
-	p.length = Forest::OVERHEAD + 4*(2+nunsub);
+	pp[0] = htonl((uint32_t) (subSeqNum >> 32));
+        pp[1] = htonl((uint32_t) (subSeqNum & 0xffffffff));
+	subSeqNum++;
+	pp[2] = 0; pp[3] = htonl(nunsub);
+	p.length = Forest::OVERHEAD + 4*(4+nunsub);
 	p.type = Forest::SUB_UNSUB; p.flags = 0; p.comtree = comt;
 	p.srcAdr = myAdr; p.dstAdr = rtrAdr;
 	send(px);
