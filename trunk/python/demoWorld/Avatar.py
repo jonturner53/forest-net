@@ -1,8 +1,6 @@
 """ Avatar - script that displays Avatar's view of world and controls movement
 
-This module is intended to be called by DemoWorld.py;
-To run it independently, uncomment the end of this code:
-and type "python Avatar.py"
+This module is intended to be called by DemoWorld.py.
  
 Author: Chao Wang and Jon Turner
 World Model: Chao Wang
@@ -161,11 +159,14 @@ class Avatar(DirectObject):
 					 pos = (1,0,1), scale = .01)
 
 		# Set the dot's position in the 2d map
-		self.dot.setPos(0,0,0)
+		#self.dot.setPos(0,0,0)
 #		  0.0+self.Dmap.getX(),0, \
 #		  0.0+self.Dmap.getY())
 	#	  self.avatarNP.getX()/(self.modelSizeX+0.0+self.Dmap.getX()),0, \
 	#	  self.avatarNP.getY()/(self.modelSizeY+0.0+self.Dmap.getY()))
+		self.dot.setPos( \
+		  (self.avatarNP.getX()/(self.modelSizeX))*0.79+0.4, 0, \
+		  (self.avatarNP.getY()/(self.modelSizeY))*0.79+0.21)
 		self.dotOrigin = self.dot.getPos()
 
 	def setupCollisions(self) :
@@ -179,7 +180,7 @@ class Avatar(DirectObject):
 		WALL_MASK = BitMask32.bit(2)
 		self.buildingCollider = self.environ.find("**/SketchUp.002")
 		self.buildingCollider.node().setIntoCollideMask(WALL_MASK)
-		self.buildingCollider.show()
+	#	self.buildingCollider.show()
 
 		base.cTrav = CollisionTraverser()
 		base.cTrav.setRespectPrevTransform(True)
@@ -195,7 +196,7 @@ class Avatar(DirectObject):
 		self.avatarSpNp.node().setIntoCollideMask(BitMask32.allOff())
 
 		# uncomment the following line to show the collisionSphere
-		self.avatarSpNp.show()
+	#	self.avatarSpNp.show()
 
 		self.avatarGroundHandler = CollisionHandlerPusher()
 		self.avatarGroundHandler.setHorizontal(True)
@@ -401,7 +402,10 @@ class Avatar(DirectObject):
 
 		self.remoteMap[id] = [remote, avaNum, False, \
 				      OnscreenImage(image = 'models/dot1.png', \
-				      pos = (0,0,0), scale = .01) ]
+				      pos = ( \
+		  (self.avatarNP.getX()/(self.modelSizeX))*0.79+0.4, 0, \
+		  (self.avatarNP.getY()/(self.modelSizeY))*0.79+0.21),
+				      scale = .01) ]
 
 		# set position and direction of remote and make it visible
 		remote.reparentTo(render)
@@ -738,7 +742,7 @@ class Avatar(DirectObject):
 		"""
 		base.camera.setPos(self.avatarNP.getPos())
 		# uncomment the following line for a third-persion view
-		base.camera.setY(self.avatarNP.getY()+10)
+	#	base.camera.setY(self.avatarNP.getY()+10)
 		base.camera.setZ(self.avatarNP.getZ()+1.5)
 		base.camera.setH(self.avatarNP.getH()+180)
 
