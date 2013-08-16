@@ -179,7 +179,7 @@ class Avatar(DirectObject):
 		WALL_MASK = BitMask32.bit(2)
 		self.buildingCollider = self.environ.find("**/SketchUp.002")
 		self.buildingCollider.node().setIntoCollideMask(WALL_MASK)
-#		self.buildingCollider.show()
+		self.buildingCollider.show()
 
 		base.cTrav = CollisionTraverser()
 		base.cTrav.setRespectPrevTransform(True)
@@ -209,7 +209,7 @@ class Avatar(DirectObject):
 						'csForCanSee'))
 		self.auxCSSolid = self.auxCSNp.node().addSolid( \
 						CollisionSegment())
-		self.auxCSNp.node().setFromCollideMask(BitMask32.bit(0))
+		self.auxCSNp.node().setFromCollideMask(WALL_MASK)
 		self.auxCSNp.node().setIntoCollideMask(BitMask32.allOff())
 
 		self.csHandler = CollisionHandlerQueue()
@@ -343,7 +343,6 @@ class Avatar(DirectObject):
 
 	def setupRemotes(self) :
 		# Setup data for controlling remote avatars - key is remote's id
-		self.maxRemotes = 100
 		self.remoteMap = {}	# map of potentially visible remotes
 		self.remoteNames = {}	# user names of thedr remotes
 		self.remotePics = {}	# picture files
@@ -626,8 +625,8 @@ class Avatar(DirectObject):
 		# collision ray from hitting the edge of shallow terrain;
 		# also, put them at different level so that the ray has
 		# nonzero length (a requirement for collisionSegment()).
-		p1[2] += 0.5
-		p2[2] += 0.4
+		p1[2] += 1
+		p2[2] += 0.9
 		self.auxCSNp.node().modifySolid(self.auxCSSolid).setPointA(p1)
 		self.auxCSNp.node().modifySolid(self.auxCSSolid).setPointB(p2)
 	
@@ -739,7 +738,7 @@ class Avatar(DirectObject):
 		"""
 		base.camera.setPos(self.avatarNP.getPos())
 		# uncomment the following line for a third-persion view
-	#	base.camera.setY(self.avatarNP.getY()+10)
+		base.camera.setY(self.avatarNP.getY()+10)
 		base.camera.setZ(self.avatarNP.getZ()+1.5)
 		base.camera.setH(self.avatarNP.getH()+180)
 
