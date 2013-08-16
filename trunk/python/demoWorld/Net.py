@@ -589,7 +589,7 @@ class Net :
 		for g in glist :
 			nsub += 1
 			if nsub > 300 :
-				self.subSeqNum++;
+				self.subSeqNum += 1
 				struct.pack_into('!I',buf,0,
 					 (self.subSeqNum >> 32) & 0xffffffff)
 				struct.pack_into('!I',buf,4*1,
@@ -607,7 +607,7 @@ class Net :
 				nsub = 1
 			struct.pack_into('!i',buf,4*(nsub+2),-g)
 
-		self.subSeqNum++;
+		self.subSeqNum += 1
 		struct.pack_into('!I',buf,0,(self.subSeqNum >> 32) & 0xffffffff)
 		struct.pack_into('!I',buf,4*1,self.subSeqNum & 0xffffffff)
 		struct.pack_into('!I',buf,4*2,nsub)
@@ -629,7 +629,7 @@ class Net :
 		for g in glist :
 			nunsub += 1
 			if nunsub > 300 :
-				self.subSeqNum++;
+				self.subSeqNum += 1;
 				struct.pack_into('!I',buf,0,
 					 (self.subSeqNum >> 32) & 0xffffffff)
 				struct.pack_into('!I',buf,4*1,
@@ -647,11 +647,11 @@ class Net :
 				nunsub = 1
 			struct.pack_into('!i',buf,4*(nunsub+1),-g)
 
-		self.subSeqNum++;
+		self.subSeqNum += 1
 		struct.pack_into('!I',buf,0,(self.subSeqNum >> 32) & 0xffffffff)
 		struct.pack_into('!I',buf,4*1,self.subSeqNum & 0xffffffff)
 		struct.pack_into('!I',buf,4*2,0)
-		struct.pack_into('!I',buf,4*3),nunsub)
+		struct.pack_into('!I',buf,4*3,nunsub)
 		p.payload = str(buf[0:4*(nunsub+4)])
 		p.length = OVERHEAD + 4*(nunsub+4);
 		p.type = SUB_UNSUB
