@@ -877,6 +877,7 @@ void RouterCore::handleRteReply(pktx px, int ctx) {
  *  @param px is a packet number
  *  @param ctx is the comtree index for p's comtree
  */
+/*
 void RouterCore::subUnsub(pktx px, int ctx) {
 	Packet& p = ps->getPacket(px);
 	uint32_t *pp = p.payload();
@@ -942,8 +943,8 @@ void RouterCore::subUnsub(pktx px, int ctx) {
 	ps->free(px); return;
 }
 
+*/
 
-/* Feng's version
 
 void RouterCore::subUnsub(pktx px, int ctx) {
 	Packet& p = ps->getPacket(px);
@@ -1049,7 +1050,6 @@ void RouterCore::subUnsub(pktx px, int ctx) {
         if (!qm->enq(copy,qid,now)) ps->free(copy);	
 	return;
 }
-*/
 
 /** Handle a CONNECT or DISCONNECT packet.
  *  @param px is the packet number of the packet to be handled.
@@ -1096,6 +1096,7 @@ void RouterCore::handleConnDisc(pktx px) {
 	// send ack back to sender
 	p.flags |= Forest::ACK_FLAG; p.dstAdr = p.srcAdr; p.srcAdr = myAdr;
 	p.pack();
+	pktLog->log(px,inLnk,true,now);
 	iop->send(px,inLnk);
 	return;
 }
@@ -1945,6 +1946,7 @@ void RouterCore::sendConnDisc(int lnk, Forest::ptyp_t type) {
 			"store\n";
 		return;
 	}
+	pktLog->log(copy,lnk,true,now);
 	iop->send(copy,lnk);
 }
 
@@ -2037,6 +2039,7 @@ void RouterCore::resendCpReq() {
 		}
 		if (p.type == Forest::CONNECT || p.type == Forest::DISCONNECT) {
 			iop->send(copy,p.inLink);
+			pktLog->log(copy,p.inLink,true,now);
 		} else if (booting) {
 			pktLog->log(copy,0,true,now);
 			iop->send(copy,0);

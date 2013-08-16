@@ -53,6 +53,12 @@ bool init(const char *topoFile) {
 	int maxComtree = 10000;
 	net = new NetInfo(maxNode, maxLink, maxRtr, maxCtl);
 	comtrees = new ComtInfo(maxComtree,*net);
+	admTbl = new AdminTable(100);
+
+	dummyRecord = new char[RECORD_SIZE];
+	for (char *p = dummyRecord; p < dummyRecord+RECORD_SIZE; p++) *p = ' ';
+	dummyRecord[0] = '-'; dummyRecord[RECORD_SIZE-1] = '\n';
+
 	ifstream fs; fs.open(topoFile);
 	if (fs.fail() || !net->read(fs) || !comtrees->read(fs)) {
 		cerr << "NetMgr::init: could not read topology file, or error "
@@ -111,7 +117,7 @@ bool init(const char *topoFile) {
 		return false;
 	}
 
-	dummyRecord = 0; maxRecord = 0;
+	maxRecord = 0;
 	// read adminData file
 	adminFile.open("adminData");
 	if (!adminFile.good() || !admTbl->read(adminFile)) {
@@ -120,6 +126,7 @@ bool init(const char *topoFile) {
 		return false;
 	}
 	adminFile.clear();
+
 
 	// if size of file is not equal to count*RECORD_SIZE
 	// re-write the file using padded records
@@ -134,6 +141,7 @@ bool init(const char *topoFile) {
 			    "on client data file",2);
 		return false;
 	}
+
 	return true;
 }
 
@@ -835,7 +843,6 @@ cerr << "got boot request from " << Forest::fAdr2string(rtrAdr,s) << endl;
 		return true;
 	}
 
-cerr << "A\n";
 	if (net->getStatus(rtr) == NetInfo::UP) {
 		// final reply lost or delayed, resend and quit
 		CtlPkt repCp(CtlPkt::BOOT_ROUTER,CtlPkt::POS_REPLY,cp.seqNum);
@@ -843,7 +850,6 @@ cerr << "A\n";
 		return true;
 	}
 
-cerr << "B\n";
 	net->setStatus(rtr,NetInfo::BOOTING);
 
 	// configure leaf address range
@@ -856,7 +862,6 @@ cerr << "B\n";
 		return false;
 	}
 
-cerr << "C\n";
 	// add/configure interfaces
 	// for each interface in table, do an add iface
 	int nmLnk = net->getLLnum(net->firstLinkAt(netMgr),nmRtr);
@@ -1100,13 +1105,6 @@ void writeAdminRecord(int adx) {
 	if (adx < 0 || adx >= admTbl->getMaxAdmins()) return;
 
 	pthread_mutex_lock(&adminFileLock);
-	if (dummyRecord == 0) {
-		// create dummy record, for padding adminFile
-		dummyRecord = new char[RECORD_SIZE];
-		for (char *p = dummyRecord; p < dummyRecord+RECORD_SIZE; p++)
-			*p = ' ';
-		dummyRecord[0] = '-'; dummyRecord[RECORD_SIZE-1] = '\n';
-	}
 	if (maxRecord == 0) {
 		adminFile.seekp(0,ios_base::end);
 		maxRecord = adminFile.tellp()/RECORD_SIZE;

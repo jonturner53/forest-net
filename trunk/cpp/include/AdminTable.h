@@ -20,7 +20,7 @@ namespace forest {
 
 /** Class that implements a table of information about Forest administrators.
  *
- *  Table entries are accessed using a "admin index", which
+ *  Table entries are accessed using an "admin index", which
  *  can be obtained using the getAdmin() method. This also
  *  locks the admin's table entry to permit exclusive access
  *  to the data for that admin.
@@ -76,7 +76,7 @@ private:
 	int	maxAdm;			///< max number of admins
 	int	maxAdx;			///< largest defined adx
 
-	struct Admin { 		///< admin table entry
+	struct Admin { 			///< admin table entry
 	string	aname;			///< admin's login name
 	string	pwd;			///< password
 	string	realName;		///< real world name
