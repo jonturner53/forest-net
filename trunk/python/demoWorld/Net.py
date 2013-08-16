@@ -98,6 +98,7 @@ class Net :
 		self.nearRemotes = {}	# map: fadr -> [x,y,dir,dx,dy,count]
 
 		self.seqNum = 1		# sequence # for control packets
+		self.subSeqNum = 1	# sequence # for subscriptions
 
 		self.setupAudio()
 
@@ -588,22 +589,32 @@ class Net :
 		for g in glist :
 			nsub += 1
 			if nsub > 300 :
-				struct.pack_into('!I',buf,0,nsub-1)
-				struct.pack_into('!I',buf,4*(nsub),0)
-				p.length = OVERHEAD + 4*(1+nsub)
+				self.subSeqNum++;
+				struct.pack_into('!I',buf,0,
+					 (self.subSeqNum >> 32) & 0xffffffff)
+				struct.pack_into('!I',buf,4*1,
+					 self.subSeqNum & 0xffffffff)
+				nsub -= 1;
+				struct.pack_into('!I',buf,4*2,nsub)
+				struct.pack_into('!I',buf,4*(nsub+3),0)
+				p.payload = str(buf[0:4*(nsub+4)])
+				p.length = OVERHEAD + 4*(nsub+4)
 				p.type = SUB_UNSUB
 				p.comtree = self.comtree
 				p.srcAdr = self.myFadr; p.dstAdr = self.rtrFadr
-				p.payload = str(buf[0:4*(2+nsub)])
 				self.send(p)
 				p = Packet()
 				nsub = 1
-			struct.pack_into('!i',buf,4*nsub,-g)
+			struct.pack_into('!i',buf,4*(nsub+2),-g)
 
-		struct.pack_into('!I',buf,0,nsub)
-		struct.pack_into('!I',buf,4*(nsub+1),0)
-		p.length = OVERHEAD + 4*(2+nsub); p.type = SUB_UNSUB
-		p.payload = str(buf[0:4*(2+nsub)])
+		self.subSeqNum++;
+		struct.pack_into('!I',buf,0,(self.subSeqNum >> 32) & 0xffffffff)
+		struct.pack_into('!I',buf,4*1,self.subSeqNum & 0xffffffff)
+		struct.pack_into('!I',buf,4*2,nsub)
+		struct.pack_into('!I',buf,4*(nsub+3),0)
+		p.payload = str(buf[0:4*(nsub+4)])
+		p.length = OVERHEAD + 4*(nsub+4);
+		p.type = SUB_UNSUB
 		p.comtree = self.comtree;
 		p.srcAdr = self.myFadr; p.dstAdr = self.rtrFadr
 		self.send(p)
@@ -618,20 +629,32 @@ class Net :
 		for g in glist :
 			nunsub += 1
 			if nunsub > 300 :
-				struct.pack_into('!II',buf,0,0,nunsub-1)
-				p.length = OVERHEAD + 4*(1+nunsub)
+				self.subSeqNum++;
+				struct.pack_into('!I',buf,0,
+					 (self.subSeqNum >> 32) & 0xffffffff)
+				struct.pack_into('!I',buf,4*1,
+					 self.subSeqNum & 0xffffffff)
+				nunsub -= 1
+				struct.pack_into('!I',buf,4*2,0)
+				struct.pack_into('!I',buf,4*3,nunsub)
+				p.payload = str(buf[0:4*(nunsub+4)])
+				p.length = OVERHEAD + 4*(nunsub+4)
 				p.type = SUB_UNSUB
 				p.comtree = self.comtree
 				p.srcAdr = self.myFadr; p.dstAdr = self.rtrFadr
-				p.payload = str(buf[0:4*(2+nunsub)])
 				self.send(p)
 				p = Packet()
 				nunsub = 1
 			struct.pack_into('!i',buf,4*(nunsub+1),-g)
 
-		struct.pack_into('!II',buf,0,0,nunsub)
-		p.length = OVERHEAD + 4*(2+nunsub); p.type = SUB_UNSUB
-		p.payload = str(buf[0:4*(2+nunsub)])
+		self.subSeqNum++;
+		struct.pack_into('!I',buf,0,(self.subSeqNum >> 32) & 0xffffffff)
+		struct.pack_into('!I',buf,4*1,self.subSeqNum & 0xffffffff)
+		struct.pack_into('!I',buf,4*2,0)
+		struct.pack_into('!I',buf,4*3),nunsub)
+		p.payload = str(buf[0:4*(nunsub+4)])
+		p.length = OVERHEAD + 4*(nunsub+4);
+		p.type = SUB_UNSUB
 		p.comtree = self.comtree;
 		p.srcAdr = self.myFadr; p.dstAdr = self.rtrFadr
 		self.send(p)

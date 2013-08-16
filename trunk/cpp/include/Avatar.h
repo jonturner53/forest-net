@@ -96,6 +96,7 @@ private:
 	int	switchCnt;		///< number of attempts so far
 	comt_t	nextComt;		///< comtree we're switching to
 	int	seqNum;			///< sequence number of control packet
+	long long subSeqNum;		///< sequence number for subscriptions
 
 	// data structures for multicast subscriptions and other avatars
 	set<int> *mySubs;		///< multicast group subscriptions

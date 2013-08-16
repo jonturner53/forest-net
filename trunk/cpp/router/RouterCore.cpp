@@ -942,6 +942,115 @@ void RouterCore::subUnsub(pktx px, int ctx) {
 	ps->free(px); return;
 }
 
+
+/* Feng's version
+
+void RouterCore::subUnsub(pktx px, int ctx) {
+	Packet& p = ps->getPacket(px);
+	uint32_t *pp = p.payload();
+
+
+	// add/remove branches from routes
+	// if non-core node, also propagate requests upward as
+	// appropriate
+	int comt = ctt->getComtree(ctx);
+	int inLink = p.inLink;
+	int cLnk = ctt->getComtLink(comt,inLink);
+	uint64_t seq = ntohl(pp[0]);
+        seq <<= 32; seq |= ntohl(pp[1]);
+	// process ack from parent router - just remove packet from pending map
+	if ((p.flags & Forest::ACK_FLAG) != 0) {
+		map<uint64_t,CpInfo>::iterator it = pending->find(seq);
+		if (it == pending->end()) {
+                	// this is a reply to a request we never sent, or
+                	// possibly, a reply to a request we gave up on
+                	ps->free(px);
+                	return;
+        	}
+		pending->erase(it); ps->free(px); return;
+	}
+	// ignore subscriptions from the parent or core neighbors
+	if (inLink == ctt->getPlink(ctx) || ctt->isCoreLink(cLnk)) {
+		ps->free(px); return;
+	}
+
+	// make copy to be used for ack
+	pktx copy = ps->fullCopy(px);
+	Packet& p1 = ps->getPacket(copy);
+
+	bool propagate = false;
+	int rtx; fAdr_t addr;
+	
+	// add subscriptions
+	int addcnt = ntohl(pp[2]);
+	if (addcnt < 0 || addcnt > 350 ||
+	    Forest::OVERHEAD + (addcnt + 4)*4 > p.length) {
+		ps->free(px); ps->free(copy); return;
+	}
+	for (int i = 3; i <= addcnt + 2; i++) {
+		addr = ntohl(pp[i]);
+		if (!Forest::mcastAdr(addr)) continue;  // ignore unicast or 0
+		rtx = rt->getRteIndex(comt,addr);
+		if (rtx == 0) { 
+			rtx = rt->addEntry(comt,addr,cLnk);
+			propagate = true;
+		} else if (!rt->isLink(rtx,cLnk)) {
+			rt->addLink(rtx,cLnk);
+			pp[i] = 0; // so, parent will ignore
+		}
+	}
+	// remove subscriptions
+	int dropcnt = ntohl(pp[addcnt+3]);
+	if (dropcnt < 0 || addcnt + dropcnt > 350 ||
+	    Forest::OVERHEAD + (addcnt + dropcnt + 4)*4 > p.length) {
+		ps->free(px); ps->free(copy); return;
+	}
+	for (int i = addcnt + 4; i <= addcnt + dropcnt + 3; i++) {
+		addr = ntohl(pp[i]);
+		if (!Forest::mcastAdr(addr)) continue; // ignore unicast or 0
+		rtx = rt->getRteIndex(comt,addr);
+		if (rtx == 0) continue;
+		rt->removeLink(rtx,cLnk);
+		if (rt->noLinks(rtx)) {
+			rt->removeEntry(rtx);
+			propagate = true;
+		} else {
+			pp[i] = 0;
+		}		
+	}
+	// propagate subscription packet to parent if not a core node
+	if (propagate && !ctt->inCore(ctx) && ctt->getPlink(ctx) != 0) {
+		pair<uint64_t,CpInfo> cpp;
+        	cpp.first = seqNum;
+		pp[0] = htonl((uint32_t) (seqNum >> 32));
+		pp[1] = htonl((uint32_t) (seqNum & 0xffffffff));
+		seqNum++;
+		//change srcAdr of outgoing subscription packet
+		p.srcAdr = myAdr;
+		p.dstAdr = lt->getPeerAdr(ctt->getPlink(ctx));
+		p.pack();
+        	cpp.second.px = px; cpp.second.nSent = 1;
+		cpp.second.timestamp = now;
+		pending->insert(cpp);	
+		//propagate
+		p.payErrUpdate();
+                int qid = ctt->getLinkQ(ctt->getPCLink(ctx));
+                if (!qm->enq(px,qid,now)) ps->free(px);
+	} else {
+		ps->free(px);
+	}
+	// send ack back to sender
+	// note that we send ack before getting ack from sender
+	// this is by design
+	p1.flags |= Forest::ACK_FLAG;
+	p1.dstAdr = p1.srcAdr; p1.srcAdr = myAdr;
+	p1.pack();
+	int qid = ctt->getLinkQ(cLnk);
+        if (!qm->enq(copy,qid,now)) ps->free(copy);	
+	return;
+}
+*/
+
 /** Handle a CONNECT or DISCONNECT packet.
  *  @param px is the packet number of the packet to be handled.
  */
