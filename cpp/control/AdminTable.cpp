@@ -214,7 +214,7 @@ bool AdminTable::readEntry(istream& in, int adx) {
 	        if (!Misc::readName(in, aname)      || !Misc::verify(in,',') ||
 		    !Misc::readWord(in, pwd)        || !Misc::verify(in,',') || 
 		    !Misc::readString(in, realName) || !Misc::verify(in,',') ||
-		    !Misc::readWord(in, email)      || !Misc::verify(in,',')) {
+		    !Misc::readWord(in, email)) {
 	                return false;
 		}
 		Misc::cflush(in,'\n');
