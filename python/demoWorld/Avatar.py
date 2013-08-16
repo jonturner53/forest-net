@@ -195,7 +195,7 @@ class Avatar(DirectObject):
 		self.avatarSpNp.node().setIntoCollideMask(BitMask32.allOff())
 
 		# uncomment the following line to show the collisionSphere
-#		self.avatarSpNp.show()
+		self.avatarSpNp.show()
 
 		self.avatarGroundHandler = CollisionHandlerPusher()
 		self.avatarGroundHandler.setHorizontal(True)
