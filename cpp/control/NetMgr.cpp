@@ -301,19 +301,18 @@ bool login(NetBuffer& buf, string& adminName, string& reply) {
 		int adx =admTbl->getAdmin(adminName);
 		// locks adx
 		if (adx == 0) {
-			reply = "login failed: try again";
+			reply = "login failed: try again\n";
 			return false;
 		} else if (admTbl->checkPassword(adx,pwd)) {
-cerr << "login succeeded " << adminName << endl;
 			admTbl->releaseAdmin(adx);
 			return true;
 		} else {
 			admTbl->releaseAdmin(adx);
-			reply = "login failed: try again";
+			reply = "login failed: try again\n";
 			return false;
 		}
 	} else {
-		reply = "misformatted login request";
+		reply = "misformatted login request\n";
 		return false;
 	}
 }
@@ -337,7 +336,7 @@ bool newAccount(NetBuffer& buf, string& adminName, string& reply) {
 		// locks adx
 		if (adx != 0) {
 			admTbl->releaseAdmin(adx);
-			reply = "name not available, select another";
+			reply = "name not available, select another\n";
 			return false;
 		}
 		adx = admTbl->addAdmin(newName,pwd);
@@ -346,11 +345,11 @@ bool newAccount(NetBuffer& buf, string& adminName, string& reply) {
 			admTbl->releaseAdmin(adx);
 			return true;
 		} else {
-			reply = "unable to add admin";
+			reply = "unable to add admin\n";
 			return false;
 		}
 	} else {
-		reply = "misformatted new admin request";
+		reply = "misformatted new admin request\n";
 		return false;
 	}
 }
@@ -387,7 +386,7 @@ void updateProfile(NetBuffer& buf, string& adminName, string& reply) {
 	string s, targetName;
 	if (!buf.verify(':') || !buf.readName(targetName) ||
 	    !buf.nextLine()) {
-		reply = "misformatted updateProfile request"; return;
+		reply = "misformatted updateProfile request\n"; return;
 	}
 	// read profile information from admin
 	string item; RateSpec rates;
@@ -403,7 +402,7 @@ void updateProfile(NetBuffer& buf, string& adminName, string& reply) {
 			break;
 		} else {
 			reply = "misformatted update profile request (" +
-				item + ")";
+				item + ")\n";
 			return;
 		}
 	}
@@ -428,7 +427,7 @@ void changePassword(NetBuffer& buf, string& adminName, string& reply) {
 	string targetName, pwd;
 	if (!buf.verify(':') || !buf.readName(targetName) || !buf.nextLine() ||
 	    !buf.readWord(pwd) || !buf.nextLine()) {
-		reply = "misformatted change password request"; return;
+		reply = "misformatted change password request\n"; return;
 	}
 	int tadx = admTbl->getAdmin(targetName);
 	admTbl->setPassword(tadx,pwd);
@@ -451,7 +450,7 @@ void getLinkTable(NetBuffer& buf, string& reply, CpHandler& cph) {
 	string rtrName; int rtr;
 	if (!buf.verify(':') || !buf.readName(rtrName) ||
 	    (rtr = net->getNodeNum(rtrName)) == 0) {
-		reply.assign("invalid request"); return;
+		reply.assign("invalid request\n"); return;
 	}
 	fAdr_t radr = net->getNodeAdr(rtr);
 	int lnk = 0;

@@ -227,6 +227,7 @@ bool AdminTable::readEntry(istream& in, int adx) {
 
 	if (addAdmin(aname, pwd, adx) == 0) return false;
 	setRealName(adx,realName); setEmail(adx,email);
+	releaseAdmin(adx);
         return true;
 }
 
