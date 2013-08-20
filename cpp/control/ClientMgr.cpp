@@ -655,7 +655,7 @@ void updateProfile(NetBuffer& buf, string& clientName, string& reply) {
  */
 void changePassword(NetBuffer& buf, string& clientName, string& reply) {
 	string targetName, pwd;
-	if (!buf.verify(':') || !buf.readName(targetName) || !buf.nextLine() ||
+	if (!buf.verify(':') || !buf.readName(targetName) ||
 	    !buf.readWord(pwd) && buf.nextLine()) {
 		reply = "misformatted change password request"; return;
 	}
