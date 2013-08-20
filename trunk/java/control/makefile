@@ -8,6 +8,7 @@ CLASSFILES = NetInfo.class ComtInfo.class ComtreeDisplay.class AcctMgr.class
 	cp *.class ${JAVAROOT}/forest/control
 
 all : ${CLASSFILES}
+	make -C console all
 
 clean :
 	rm -f *.class
