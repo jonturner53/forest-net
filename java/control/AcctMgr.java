@@ -659,8 +659,8 @@ public class AcctMgr extends MouseAdapter implements ActionListener, FocusListen
 	private String changePassword(String userName, String pwd) {
 		if (userName.length() == 0 || pwd.length() == 0)
 			return "empty user name or password";
-		if (!sendString("changePassword: " + userName +
-				"\npassword: " + pwd + "\nover\n"))
+		if (!sendString("changePassword: " + userName + " " + pwd +
+				"\nover\n"))
 			return "cannot send request to server";
 		String s = inBuf.readLine();
 		if (s == null || !s.equals("success")) {
