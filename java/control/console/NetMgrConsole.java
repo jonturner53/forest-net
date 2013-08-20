@@ -673,8 +673,6 @@ public class NetMgrConsole {
 	}
 
 	public static void main(String[] args) {
-		final String nmAddr = args[0];
-		final int nmPort = Integer.parseInt(args[1]);
 		SwingUtilities.invokeLater(new Runnable() {
 			public void run() { new NetMgrConsole(); }
 		});
