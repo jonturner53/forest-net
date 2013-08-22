@@ -334,10 +334,12 @@ int CtlPkt::pack() {
 
 			payload[pp++] = htonl(STRING);
 			int len = min(stringData.length(), 1300);
+cerr << "INDEX1 " << index1 << " INDEX2 " << index2 << " COUNT " << count << endl;
 			payload[pp++] = htonl(len);
+cerr <<"len " << len << " XstringData=X" << stringData << endl;
 			stringData.copy((char *) &payload[pp], len);
-
-			payload += (len+3)/4;
+cerr <<"check payload \n" << (char *) &payload[pp];
+			pp += (len+3)/4;
 		}
 		break;
 	case MOD_LINK:
@@ -600,8 +602,12 @@ bool CtlPkt::unpack() {
 		case COUNT:	unpackWord(count); break;
 		case QUEUE:	unpackWord(queue); break;
 		case ZIPCODE:	unpackWord(zipCode); break;
-		case STRING:	int len; unpackWord(len); 
+		case STRING:	int len; unpackWord(len);
+cerr << "INDEX1 " << index1 << " INDEX2 " << index2 << " COUNT " << count << endl;
+cerr << "checkpayload\n" << (char *) &payload[pp] << "\n";
 				stringData.assign((char *) &payload[pp], len);
+				pp += (len+3)/4;
+cerr << "unpacking " << stringData;
 				break;
 		default:	return false;
 		}
@@ -1108,7 +1114,8 @@ string& CtlPkt::toString(string& s) {
 			ss << " " << avPair2string(INDEX1,s);
 			ss << " " << avPair2string(INDEX2,s);
 			ss << " " << avPair2string(COUNT,s);
-			ss << " " << stringData;
+
+			ss << " " << avPair2string(STRING,s);
 		}
 		break;
 	case MOD_LINK:
