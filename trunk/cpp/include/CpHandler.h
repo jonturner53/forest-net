@@ -63,6 +63,10 @@ public:
 	pktx dropComtreeLink(fAdr_t,comt_t,int,fAdr_t,CtlPkt&);
 	pktx modComtreeLink(fAdr_t,comt_t,int,RateSpec&,CtlPkt&);
 	pktx getComtreeLink(fAdr_t,comt_t,int,CtlPkt&);
+	pktx getComtreeSet(fAdr_t,int,int,CtlPkt&);
+
+	pktx getIfaceSet(fAdr_t,int,int,CtlPkt&);
+	pktx getRouteSet(fAdr_t,int,int,CtlPkt&);
 
 	pktx newSession(fAdr_t,ipa_t,RateSpec&,CtlPkt&);
 	pktx cancelSession(fAdr_t,fAdr_t,fAdr_t,CtlPkt&);

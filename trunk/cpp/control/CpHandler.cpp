@@ -224,8 +224,53 @@ pktx CpHandler::getLink(fAdr_t dest, int link,CtlPkt& repCp) {
  *  @return the index of the response packet or 0 if there is no response
  */
 pktx CpHandler::getLinkSet(fAdr_t dest, int link, int count, CtlPkt& repCp) {
-	CtlPkt reqCp(CtlPkt::GET_COMTREE,CtlPkt::REQUEST,0);
+	CtlPkt reqCp(CtlPkt::GET_LINK_SET,CtlPkt::REQUEST,0);
 	reqCp.index1 = link; reqCp.count = count;
+	return sendRequest(reqCp,dest,repCp);
+}
+
+/** Send a get comtree set request packet.
+ *  @param dest is the destination address for the packet
+ *  @param firstLink is the table index for the first comtree to be returned;
+ *  if zero, start with the first comtree in the table
+ *  @param count is the number of comtrees whose table entries are requested
+ *  @param repCp is a reference to a control packet in which the control
+ *  packet in the response is returned (if response is != 0)
+ *  @return the index of the response packet or 0 if there is no response
+ */
+pktx CpHandler::getComtreeSet(fAdr_t dest, int link, int count, CtlPkt& repCp) {
+	CtlPkt reqCp(CtlPkt::GET_COMTREE_SET,CtlPkt::REQUEST,0);
+	reqCp.index1 = link; reqCp.count = count;
+	return sendRequest(reqCp,dest,repCp);
+}
+
+/** Send a get iface set request packet.
+ *  @param dest is the destination address for the packet
+ *  @param firstIface is the table index for the first iface to be returned;
+ *  if zero, start with the first iface in the table
+ *  @param count is the number of ifaces whose table entries are requested
+ *  @param repCp is a reference to a control packet in which the control
+ *  packet in the response is returned (if response is != 0)
+ *  @return the index of the response packet or 0 if there is no response
+ */
+pktx CpHandler::getIfaceSet(fAdr_t dest, int iface, int count, CtlPkt& repCp) {
+	CtlPkt reqCp(CtlPkt::GET_IFACE_SET,CtlPkt::REQUEST,0);
+	reqCp.index1 = iface; reqCp.count = count;
+	return sendRequest(reqCp,dest,repCp);
+}
+
+/** Send a get route set request packet.
+ *  @param dest is the destination address for the packet
+ *  @param firstRoute is the table index for the first route to be returned;
+ *  if zero, start with the first route in the table
+ *  @param count is the number of routes whose table entries are requested
+ *  @param repCp is a reference to a control packet in which the control
+ *  packet in the response is returned (if response is != 0)
+ *  @return the index of the response packet or 0 if there is no response
+ */
+pktx CpHandler::getRouteSet(fAdr_t dest, int route, int count, CtlPkt& repCp) {
+	CtlPkt reqCp(CtlPkt::GET_ROUTE_SET,CtlPkt::REQUEST,0);
+	reqCp.index1 = route; reqCp.count = count;
 	return sendRequest(reqCp,dest,repCp);
 }
 

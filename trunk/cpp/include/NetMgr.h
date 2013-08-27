@@ -93,6 +93,9 @@ void	changePassword(NetBuffer&, string&, string&);
 void	writeAdminRecord(int);
 
 void	getLinkTable(NetBuffer&, string&, CpHandler&);
+void 	getComtreeTable(NetBuffer&, string&, CpHandler&);
+void 	getIfaceTable(NetBuffer&, string&, CpHandler&);
+void 	getRouteTable(NetBuffer&, string&, CpHandler&);
 
 uint64_t generateNonce();
 fAdr_t	setupLeaf(int, pktx, CtlPkt&, int, int, uint64_t,CpHandler&,bool=false);

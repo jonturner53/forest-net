@@ -334,11 +334,66 @@ int CtlPkt::pack() {
 
 			payload[pp++] = htonl(STRING);
 			int len = min(stringData.length(), 1300);
-cerr << "INDEX1 " << index1 << " INDEX2 " << index2 << " COUNT " << count << endl;
 			payload[pp++] = htonl(len);
-cerr <<"len " << len << " XstringData=X" << stringData << endl;
 			stringData.copy((char *) &payload[pp], len);
-cerr <<"check payload \n" << (char *) &payload[pp];
+			pp += (len+3)/4;
+		}
+		break;
+	case GET_COMTREE_SET:
+		if (mode == REQUEST) {
+			if (index1 == -1 || count == -1) return 0;
+			packPair(INDEX1,index1);
+			packPair(COUNT,count);
+		} else {
+			if (index1 == -1 || index2 == -1 || count == -1)
+				return 0;
+			packPair(INDEX1,index1);
+			packPair(INDEX2,index2);
+			packPair(COUNT,count);
+
+			payload[pp++] = htonl(STRING);
+			int len = min(stringData.length(), 1300);
+			payload[pp++] = htonl(len);
+			stringData.copy((char *) &payload[pp], len);
+			pp += (len+3)/4;
+		}
+		break;
+	case GET_IFACE_SET:
+		if (mode == REQUEST) {
+			if (index1 == -1 || count == -1) return 0;
+			packPair(INDEX1,index1);
+			packPair(COUNT,count);
+		} else {
+			if (index1 == -1 || index2 == -1 || count == -1)
+				return 0;
+			packPair(INDEX1,index1);
+			packPair(INDEX2,index2);
+			packPair(COUNT,count);
+
+			payload[pp++] = htonl(STRING);
+			int len = min(stringData.length(), 1300);
+			payload[pp++] = htonl(len);
+			stringData.copy((char *) &payload[pp], len);
+			pp += (len+3)/4;
+		}
+		break;
+	case GET_ROUTE_SET:
+		if (mode == REQUEST) {
+			if (index1 == -1 || count == -1) return 0;
+			packPair(INDEX1,index1);
+			packPair(COUNT,count);
+		} else {
+			if (index1 == -1 || index2 == -1 || count == -1)
+				return 0;
+			packPair(INDEX1,index1);
+			packPair(INDEX2,index2);
+			packPair(COUNT,count);
+
+			payload[pp++] = htonl(STRING);
+			int len = min(stringData.length(), 1300);
+			payload[pp++] = htonl(len);
+cerr << "String " << stringData << endl;
+			stringData.copy((char *) &payload[pp], len);
 			pp += (len+3)/4;
 		}
 		break;
@@ -603,11 +658,8 @@ bool CtlPkt::unpack() {
 		case QUEUE:	unpackWord(queue); break;
 		case ZIPCODE:	unpackWord(zipCode); break;
 		case STRING:	int len; unpackWord(len);
-cerr << "INDEX1 " << index1 << " INDEX2 " << index2 << " COUNT " << count << endl;
-cerr << "checkpayload\n" << (char *) &payload[pp] << "\n";
 				stringData.assign((char *) &payload[pp], len);
 				pp += (len+3)/4;
-cerr << "unpacking " << stringData;
 				break;
 		default:	return false;
 		}
@@ -699,6 +751,27 @@ cerr << "unpacking " << stringData;
 			return false;
 		break;
 	case GET_LINK_SET:
+		if (mode == REQUEST && (index1 == -1 || count == -1))
+			return false;
+		if (mode == POS_REPLY &&
+		    (index1 == -1 || index2 == -1 || count == -1))
+			return false;
+		break;
+	case GET_COMTREE_SET:
+		if (mode == REQUEST && (index1 == -1 || count == -1))
+			return false;
+		if (mode == POS_REPLY &&
+		    (index1 == -1 || index2 == -1 || count == -1))
+			return false;
+		break;
+	case GET_IFACE_SET:
+		if (mode == REQUEST && (index1 == -1 || count == -1))
+			return false;
+		if (mode == POS_REPLY &&
+		    (index1 == -1 || index2 == -1 || count == -1))
+			return false;
+		break;
+	case GET_ROUTE_SET:
 		if (mode == REQUEST && (index1 == -1 || count == -1))
 			return false;
 		if (mode == POS_REPLY &&
@@ -925,6 +998,9 @@ string& CtlPkt::typeName(string& s) {
 	case DROP_LINK: s = "drop link"; break;
 	case GET_LINK: s = "get link"; break;
 	case GET_LINK_SET: s = "get link set"; break;
+	case GET_COMTREE_SET: s = "get comtree set"; break;
+	case GET_IFACE_SET: s = "get iface set"; break;
+	case GET_ROUTE_SET: s = "get route set"; break;
 	case MOD_LINK: s = "mod link"; break;
 	case ADD_COMTREE: s = "add comtree"; break;
 	case DROP_COMTREE: s = "drop comtree"; break;
@@ -1107,6 +1183,42 @@ string& CtlPkt::toString(string& s) {
 		}
 		break;
 	case GET_LINK_SET:
+		if (mode == REQUEST) {
+			ss << " " << avPair2string(INDEX1,s);
+			ss << " " << avPair2string(COUNT,s);
+		} else {
+			ss << " " << avPair2string(INDEX1,s);
+			ss << " " << avPair2string(INDEX2,s);
+			ss << " " << avPair2string(COUNT,s);
+
+			ss << " " << avPair2string(STRING,s);
+		}
+		break;
+	case GET_COMTREE_SET:
+		if (mode == REQUEST) {
+			ss << " " << avPair2string(INDEX1,s);
+			ss << " " << avPair2string(COUNT,s);
+		} else {
+			ss << " " << avPair2string(INDEX1,s);
+			ss << " " << avPair2string(INDEX2,s);
+			ss << " " << avPair2string(COUNT,s);
+
+			ss << " " << avPair2string(STRING,s);
+		}
+		break;
+	case GET_IFACE_SET:
+		if (mode == REQUEST) {
+			ss << " " << avPair2string(INDEX1,s);
+			ss << " " << avPair2string(COUNT,s);
+		} else {
+			ss << " " << avPair2string(INDEX1,s);
+			ss << " " << avPair2string(INDEX2,s);
+			ss << " " << avPair2string(COUNT,s);
+
+			ss << " " << avPair2string(STRING,s);
+		}
+		break;
+	case GET_ROUTE_SET:
 		if (mode == REQUEST) {
 			ss << " " << avPair2string(INDEX1,s);
 			ss << " " << avPair2string(COUNT,s);
