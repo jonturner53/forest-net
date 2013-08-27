@@ -30,6 +30,9 @@ ${FLIB} : ${OFILES}
 NetMgr : NetMgr.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -lpthread -o $@
 
+foo : foo.o ${LIBS}
+	${CXX} ${CXXFLAGS} $< ${LIBS} -lpthread -o $@
+
 threadExample : threadExample.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -v -o $@
 

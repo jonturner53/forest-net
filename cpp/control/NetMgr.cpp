@@ -269,6 +269,12 @@ cerr << "cmd=" << cmd << endl;
 			reply.append(s);
 		} else if (cmd == "getLinkTable") {
 			getLinkTable(buf,reply, cph);
+		} else if (cmd == "getComtreeTable") {
+			getComtreeTable(buf,reply, cph);
+		} else if (cmd == "getIfaceTable") {
+			getIfaceTable(buf,reply,cph);
+		} else if (cmd == "getRouteTable") {
+			getRouteTable(buf,reply,cph);
 		} else {
 			reply = "unrecognized input\n";
 		}
@@ -460,6 +466,87 @@ void getLinkTable(NetBuffer& buf, string& reply, CpHandler& cph) {
 		repx = cph.getLinkSet(radr, lnk, 10, repCp);
 		if (repx == 0 || repCp.mode != CtlPkt::POS_REPLY) {
 			reply.assign("could not read link table\n"); return;
+		}
+		reply.append(repCp.stringData);
+		if (repCp.index2 == 0) return;
+		lnk = repCp.index2;
+	}
+}
+
+/** Get comtree table from router and return to Console.
+ *  Table is returned as a text string which each entry on a separate line.
+ *  @param buf is a reference to a NetBuffer object for the socket
+ *  @param reply is a reference to a string to be returned to console
+ *  @param cph is a reference to this thread's control packet hander
+ */
+void getComtreeTable(NetBuffer& buf, string& reply, CpHandler& cph) {
+	string rtrName; int rtr;
+	if (!buf.verify(':') || !buf.readName(rtrName) ||
+	    (rtr = net->getNodeNum(rtrName)) == 0) {
+		reply.assign("invalid request\n"); return;
+	}
+	fAdr_t radr = net->getNodeAdr(rtr);
+	int lnk = 0;
+	pktx repx; CtlPkt repCp;
+	while (true) {
+		repCp.reset();
+		repx = cph.getComtreeSet(radr, lnk, 10, repCp);
+		if (repx == 0 || repCp.mode != CtlPkt::POS_REPLY) {
+			reply.assign("could not read comtree table\n"); return;
+		}
+		reply.append(repCp.stringData);
+		if (repCp.index2 == 0) return;
+		lnk = repCp.index2;
+	}
+}
+
+/** Get iface table from router and return to Console.
+ *  Table is returned as a text string which each entry on a separate line.
+ *  @param buf is a reference to a NetBuffer object for the socket
+ *  @param reply is a reference to a string to be returned to console
+ *  @param cph is a reference to this thread's control packet hander
+ */
+void getIfaceTable(NetBuffer& buf, string& reply, CpHandler& cph) {
+	string rtrName; int rtr;
+	if (!buf.verify(':') || !buf.readName(rtrName) ||
+	    (rtr = net->getNodeNum(rtrName)) == 0) {
+		reply.assign("invalid request\n"); return;
+	}
+	fAdr_t radr = net->getNodeAdr(rtr);
+	int lnk = 0;
+	pktx repx; CtlPkt repCp;
+	while (true) {
+		repCp.reset();
+		repx = cph.getIfaceSet(radr, lnk, 10, repCp);
+		if (repx == 0 || repCp.mode != CtlPkt::POS_REPLY) {
+			reply.assign("could not read iface table\n"); return;
+		}
+		reply.append(repCp.stringData);
+		if (repCp.index2 == 0) return;
+		lnk = repCp.index2;
+	}
+}
+
+/** Get route table from router and return to Console.
+ *  Table is returned as a text string which each entry on a separate line.
+ *  @param buf is a reference to a NetBuffer object for the socket
+ *  @param reply is a reference to a string to be returned to console
+ *  @param cph is a reference to this thread's control packet hander
+ */
+void getRouteTable(NetBuffer& buf, string& reply, CpHandler& cph) {
+	string rtrName; int rtr;
+	if (!buf.verify(':') || !buf.readName(rtrName) ||
+	    (rtr = net->getNodeNum(rtrName)) == 0) {
+		reply.assign("invalid request\n"); return;
+	}
+	fAdr_t radr = net->getNodeAdr(rtr);
+	int lnk = 0;
+	pktx repx; CtlPkt repCp;
+	while (true) {
+		repCp.reset();
+		repx = cph.getRouteSet(radr, lnk, 10, repCp);
+		if (repx == 0 || repCp.mode != CtlPkt::POS_REPLY) {
+			reply.assign("could not read route table\n"); return;
 		}
 		reply.append(repCp.stringData);
 		if (repCp.index2 == 0) return;

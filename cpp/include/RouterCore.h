@@ -150,6 +150,9 @@ private:
 	void	dropLink(int,fAdr_t=0);
 	bool	getLink(CtlPkt&, CtlPkt&);
 	bool	getLinkSet(CtlPkt&, CtlPkt&);
+	bool 	getComtreeSet(CtlPkt&, CtlPkt&);
+	bool 	getIfaceSet(CtlPkt&, CtlPkt&);
+	bool 	getRouteSet(CtlPkt&, CtlPkt&);
 	bool	modLink(CtlPkt&, CtlPkt&);
 
 	bool	addComtree(CtlPkt&, CtlPkt&);
