@@ -4,13 +4,18 @@ public class ComtreeTable{
     private String comtree;
     private String inCore;
     private String pLink;
-    private String link;
-    public ComtreeTable(String comtree, String inCore, String pLink, String link){
+    private String comtLinks;
+    private String coreLinks;
+    
+    public ComtreeTable(String comtree, String inCore, 
+    		String pLink, String link, String coreLinks){
         this.comtree = comtree; this.inCore = inCore;
-        this.pLink = pLink; this.link = link;
+        this.pLink = pLink; this.comtLinks = link;
+        this.coreLinks = coreLinks;
     }
     public String getComtree() {return comtree;}
     public String getInCore() {return inCore;}
     public String getpLink() {return pLink;}
-    public String getLink() {return link;}
+    public String getComtLinks() {return comtLinks;}
+    public String getCoreLink() {return coreLinks;}
 }

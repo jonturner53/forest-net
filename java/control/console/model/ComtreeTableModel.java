@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import javax.swing.table.AbstractTableModel;
 
 public class ComtreeTableModel extends AbstractTableModel {
-	private String[] columnNames = {"comtree", "inCore", "pLink", "link"};
+	private String[] columnNames = {"comtree", "inCore", "pLink", "comtLinks", "coreLinks"};
     private int[] widths = {1, 1, 3, 1};
     private ArrayList<ComtreeTable> data;
     public ComtreeTableModel(){ data = new ArrayList<ComtreeTable>(); }
@@ -18,7 +18,8 @@ public class ComtreeTableModel extends AbstractTableModel {
             case 0: return ct.getComtree(); 
             case 1: return ct.getInCore();
             case 2: return ct.getpLink();
-            case 3: return ct.getLink();
+            case 3: return ct.getComtLinks();
+            case 4: return ct.getCoreLink();
             default: return null;
         }
     }
