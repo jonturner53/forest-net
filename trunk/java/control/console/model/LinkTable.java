@@ -15,9 +15,12 @@ public class LinkTable{
     private String peerType;
     private String peerAdr;
     private String rates;
-    public LinkTable(String link, String iface, String peerIpAndPort, String peerType, String peerAdr, String rates) {
-        this.link = link; this.iface = iface; this.peerIpAndPort = peerIpAndPort;
-        this.peerType = peerType; this.peerAdr = peerAdr; this.rates = rates;
+    public LinkTable(String link, String iface, String peerIpAndPort, 
+    		String peerType, String peerAdr, String rates) {
+        this.link = link; this.iface = iface; 
+        this.peerIpAndPort = peerIpAndPort;
+        this.peerType = peerType; this.peerAdr = peerAdr; 
+        this.rates = rates;
     }
     public String getLink() { return link; }
     public String getIface() { return iface; }

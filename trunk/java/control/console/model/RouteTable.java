@@ -3,9 +3,12 @@ package forest.control.console.model;
 public class RouteTable{
     private String comtree;
     private String addr;
-    public RouteTable(String comtree, String addr){
+    private String link;
+    public RouteTable(String comtree, String addr, String link){
         this.comtree = comtree; this.addr = addr;
+        this.link = link;
     }
     public String getComtree() {return comtree;}
     public String getAddr() {return addr;}
+    public String getLink() {return link;}
 }
