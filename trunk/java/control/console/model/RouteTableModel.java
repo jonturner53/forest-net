@@ -5,7 +5,7 @@ import javax.swing.table.AbstractTableModel;
 
 public class RouteTableModel extends AbstractTableModel {
     private String[] columnNames = {"Comtree", "Addr", "Link"};
-    private int[] widths = {1, 1, 3, 1, 1, 3};
+    private int[] widths = {2, 6, 2};
     private ArrayList<RouteTable> data;
     public RouteTableModel(){ data = new ArrayList<RouteTable>(); }
     public int getColumnCount() { return columnNames.length; }

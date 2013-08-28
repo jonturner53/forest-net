@@ -5,7 +5,7 @@ import javax.swing.table.AbstractTableModel;
 
 public class ComtreeTableModel extends AbstractTableModel {
 	private String[] columnNames = {"comtree", "inCore", "pLink", "comtLinks", "coreLinks"};
-    private int[] widths = {1, 1, 3, 1};
+    private int[] widths = {2, 1, 1, 3, 3};
     private ArrayList<ComtreeTable> data;
     public ComtreeTableModel(){ data = new ArrayList<ComtreeTable>(); }
     public int getColumnCount() { return columnNames.length; }

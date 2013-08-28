@@ -64,7 +64,8 @@ public class NetMgrConsole {
 	private JButton routerInfoClearButton;
 	//Router Info Table
 	private JPanel routerInfoPanel;
-	private JTableHeader linkTableHeader;
+	private JTableHeader tableHeader;
+	private DefaultTableCellRenderer centerRenderer;
 	private JScrollPane infoTableScrollPane;
 	//Log menu
 	private JPanel logMenuPanel;
@@ -147,6 +148,7 @@ public class NetMgrConsole {
 				if (n == 0){ //connect
 					String nmAddr = connectDialog.getNmAddr();
 					connectionNetMgr.setNmAddr(nmAddr);
+					String ctAddr = connectDialog.getCtAddr();
 					if(connectionNetMgr.connectToNetMgr() && connectionComtCtl.connectToComCtl()){
 						//connect to NetMgr
 						connectionComtCtl.getNet();
@@ -155,7 +157,8 @@ public class NetMgrConsole {
 						for(Integer c : comtSet)
 							comtreeComboBoxModel.addElement(c);
 
-						statusLabel.setText("Connected to \"" + nmAddr + "\"");
+						statusLabel.setText("Connected to \"" + nmAddr + "\"" + " and \"" + 
+												ctAddr + "\"");
 						showPopupStatus("Connected");
 					} else{
 						showPopupStatus("Connection is failed.");
@@ -364,7 +367,7 @@ public class NetMgrConsole {
 			}
 		});
 		comtreeMenuPanel.add(comtreeDisClearBtn);
-		statusLabel = new JLabel(" Not connected to \"" + nmAddr + "\""); //status label
+		statusLabel = new JLabel(" Not connected"); //status label
 		statusLabel2 = new JLabel(" Not logged in");
 
 		statusPanel.add(statusLabel);
@@ -386,6 +389,9 @@ public class NetMgrConsole {
 		routerPanel.setPreferredSize(new Dimension(MAIN_WIDTH/2, MAIN_HEIGHT));
 		
 		infoTable = new JTable(comtreeTableModel); //initially comtreeTableModel
+		centerRenderer = new DefaultTableCellRenderer();
+		centerRenderer.setHorizontalAlignment(JLabel.CENTER);
+		setPreferredWidth(infoTable);
 		routerInfoMenuPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
 		routerInfoMenuPanel.setBorder(BorderFactory.createTitledBorder(""));
 		routerInfoMenuPanel.setPreferredSize(new Dimension(MAIN_WIDTH/2, MENU_HEIGHT));
@@ -461,14 +467,9 @@ public class NetMgrConsole {
 		routerInfoPanel = new JPanel();
 		routerInfoPanel.setBorder(BorderFactory.createTitledBorder(""));
 
-		linkTableHeader = infoTable.getTableHeader();
-		linkTableHeader.setDefaultRenderer(new HeaderRenderer(infoTable));
+		tableHeader = infoTable.getTableHeader();
+		tableHeader.setDefaultRenderer(new HeaderRenderer(infoTable));
 		infoTable.setAutoResizeMode(JTable.AUTO_RESIZE_OFF); //size
-		DefaultTableCellRenderer centerRenderer = new DefaultTableCellRenderer();
-		centerRenderer.setHorizontalAlignment(JLabel.CENTER);
-		for ( int i = 0; i < infoTable.getModel().getColumnCount(); ++i){
-			infoTable.getColumnModel().getColumn(i).setCellRenderer(centerRenderer);
-		}
 		infoTable.setFillsViewportHeight(true);
 
 		infoTableScrollPane = new JScrollPane(infoTable);
@@ -514,8 +515,19 @@ public class NetMgrConsole {
 	 */
 	private void setPreferredWidth(JTable infoTable){
 		for(int i = 0 ; i < infoTable.getModel().getColumnCount() ; ++i){
-			// int j = (infoTable.getModel().getWidth(i);
-			// infoTable.getColumnModel().getColumn(i).setPreferredWidth((int)(MAIN_WIDTH * j * 0.1));
+			AbstractTableModel tableModel = (AbstractTableModel) infoTable.getModel();
+			int j = 1;
+			if(tableModel instanceof ComtreeTableModel){
+				j = ((ComtreeTableModel)infoTable.getModel()).getWidth(i);
+			} else if(tableModel instanceof LinkTableModel){
+				j = ((LinkTableModel)infoTable.getModel()).getWidth(i);
+			} else if(tableModel instanceof IfaceTableModel){
+				j = ((IfaceTableModel)infoTable.getModel()).getWidth(i);
+			} else if(tableModel instanceof RouteTableModel){
+				j = ((RouteTableModel)infoTable.getModel()).getWidth(i);
+			}
+			infoTable.getColumnModel().getColumn(i).setPreferredWidth((int)(MAIN_WIDTH/2 * j * 0.1));
+			infoTable.getColumnModel().getColumn(i).setCellRenderer(centerRenderer);
 		}
 	}
 
