@@ -5,7 +5,7 @@ import javax.swing.table.AbstractTableModel;
 
 public class IfaceTableModel extends AbstractTableModel {
     private String[] columnNames = {"iface", "ip", "rates"};
-    private int[] widths = {1, 1, 3};
+    private int[] widths = {2, 2, 6};
     private ArrayList<IfaceTable> data;
     public IfaceTableModel(){ data = new ArrayList<IfaceTable>(); }
     public int getColumnCount() { return columnNames.length; }
