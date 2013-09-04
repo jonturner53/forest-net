@@ -610,6 +610,7 @@ void RouterCore::run(uint64_t finishTime) {
 			ctlQ.pop();
 			controlCount = 20; // do one control packet for
 					   // every 20 iterations when busy
+			didNothing = false;
 		}
 
 		// every 300 ms, update statistics and check for un-acked
