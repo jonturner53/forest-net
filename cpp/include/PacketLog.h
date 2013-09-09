@@ -13,36 +13,90 @@
 #include "Misc.h"
 #include "PacketStore.h"
 #include "Packet.h"
+#include "CtlPkt.h"
+#include "PacketFilter.h"
+#include "UiSetPair.h"
 
 namespace forest {
 
+typedef int fltx;	// filter index
 
 class PacketLog {
 public:
 		PacketLog(int,int,PacketStore*);
 		~PacketLog();
 
+	fltx	firstFilter() const;
+	fltx	nextFilter(fltx) const;
+
+	bool	validFilter(fltx) const;
+
+	bool	match(fltx, pktx, int, bool) const;
+	void	enable(fltx);
+	void	disable(fltx);
+	fltx	addFilter();
+	void	dropFilter(fltx);
+	PacketFilter& getFilter(fltx f);
+
+	int	size() const;
 	void 	log(int,int,bool,uint64_t);	
-	void	write(ostream&) const;
+	int	log2string(int, string&);
+
 private:
-	int	maxPkts;		///< max # of packets to record
-	int	maxData;		///< max # of data packets to record
-
-	int	numPkts;		///< # of packets logged so far
-	int	numData;		///< # of data packets logged so far
-
-	uint64_t dumpTime;		///< # time of last dump
+	int	maxEvents;		///< max # of events to record
+	int	maxFilters;		///< max # of filters
 
 	struct EventStruct {
-	pktx px;
-        int sendFlag;
-	int link;
-	uint64_t time;
+	pktx px;			///< index of some packet
+        int sendFlag;			///< true for outgoing packets
+	int link;			///< link used by packet
+	uint64_t time;			///< time packet was logged
         };
-	EventStruct *events;
+	EventStruct *evec;
+
+	int	eventCount;		///< count of # of events recorded
+	int	firstEvent;		///< oldest event in evec
+	int	lastEvent;		///< newest event in evec
+
+	PacketFilter *fvec;		///< table of filters
+	UiSetPair *filters;		///< in-use/free filter indexes
 
 	PacketStore *ps;
 };
+
+inline int PacketLog::size() const { return eventCount; }
+
+inline int PacketLog::firstFilter() const { return filters->firstIn(); }
+inline int PacketLog::nextFilter(int f) const { return filters->nextIn(f); }
+
+inline bool PacketLog::validFilter(int f) const { return filters->isIn(f); }
+
+inline void PacketLog::enable(fltx f) { fvec[f].on = true; }
+inline void PacketLog::disable(fltx f) { fvec[f].on = false; }
+
+inline bool PacketLog::match(fltx f, pktx px, int lnk, bool sendFlag) const {
+	Packet& p = ps->getPacket(px);
+	if (fvec[f].on && 
+	    (fvec[f].lnk == 0 || fvec[f].lnk == lnk) &&
+	    (fvec[f].comt == 0 || fvec[f].comt == p.comtree) &&
+	    (fvec[f].srcAdr == 0 || fvec[f].srcAdr == p.srcAdr) &&
+	    (fvec[f].dstAdr == 0 || fvec[f].dstAdr == p.dstAdr) &&
+	    (fvec[f].type == Forest::UNDEF_PKT || fvec[f].type == p.type) &&
+	    ((fvec[f].in && !sendFlag) || (fvec[f].out && sendFlag))) {
+		if (p.type != Forest::CLIENT_SIG && p.type != Forest::NET_SIG)
+			return true;
+		CtlPkt::CpType cpt = (CtlPkt::CpType) ntohl(p.payload()[0]);
+	    	return (fvec[f].cpType == CtlPkt::UNDEF_CPTYPE ||
+		        fvec[f].cpType == cpt);
+	}
+	return false;
+}
+
+/** Get a reference to a packet filter.
+ *  @param f is the index of some valid filter
+ *  @return a reference to the PacketFilter object for f
+ */
+inline PacketFilter& PacketLog::getFilter(fltx f) { return fvec[f]; }
 
 } // ends namespace
 
