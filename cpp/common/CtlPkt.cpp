@@ -129,6 +129,11 @@ void CtlPkt::reset() {
 				(payload[pp++] = htonl(y.pktRateUp)), \
 				(payload[pp++] = htonl(y.pktRateDown)) \
 			)
+#define packString() {	payload[pp++] = htonl(STRING); \
+			int len = min(stringData.length(), 1300); \
+		      	payload[pp++] = htonl(len); \
+		      	stringData.copy((char *) &payload[pp],len); \
+			pp += (len+3)/4; }
 
 /** Pack CtlPkt fields into payload of packet.
  *  @return the length of the packed payload in bytes.
@@ -331,12 +336,7 @@ int CtlPkt::pack() {
 			packPair(INDEX1,index1);
 			packPair(INDEX2,index2);
 			packPair(COUNT,count);
-
-			payload[pp++] = htonl(STRING);
-			int len = min(stringData.length(), 1300);
-			payload[pp++] = htonl(len);
-			stringData.copy((char *) &payload[pp], len);
-			pp += (len+3)/4;
+			packString();
 		}
 		break;
 	case GET_COMTREE_SET:
@@ -350,12 +350,7 @@ int CtlPkt::pack() {
 			packPair(INDEX1,index1);
 			packPair(INDEX2,index2);
 			packPair(COUNT,count);
-
-			payload[pp++] = htonl(STRING);
-			int len = min(stringData.length(), 1300);
-			payload[pp++] = htonl(len);
-			stringData.copy((char *) &payload[pp], len);
-			pp += (len+3)/4;
+			packString();
 		}
 		break;
 	case GET_IFACE_SET:
@@ -369,12 +364,7 @@ int CtlPkt::pack() {
 			packPair(INDEX1,index1);
 			packPair(INDEX2,index2);
 			packPair(COUNT,count);
-
-			payload[pp++] = htonl(STRING);
-			int len = min(stringData.length(), 1300);
-			payload[pp++] = htonl(len);
-			stringData.copy((char *) &payload[pp], len);
-			pp += (len+3)/4;
+			packString();
 		}
 		break;
 	case GET_ROUTE_SET:
@@ -388,13 +378,7 @@ int CtlPkt::pack() {
 			packPair(INDEX1,index1);
 			packPair(INDEX2,index2);
 			packPair(COUNT,count);
-
-			payload[pp++] = htonl(STRING);
-			int len = min(stringData.length(), 1300);
-			payload[pp++] = htonl(len);
-cerr << "String " << stringData << endl;
-			stringData.copy((char *) &payload[pp], len);
-			pp += (len+3)/4;
+			packString();
 		}
 		break;
 	case MOD_LINK:
@@ -540,6 +524,59 @@ cerr << "String " << stringData << endl;
 			packPair(LINK,link);
 		}
 		break;
+
+	case ADD_FILTER:
+		if (mode == POS_REPLY && index1 == -1)
+			return false;
+		packPair(INDEX1,index1);
+		break;
+	case DROP_FILTER:
+		if (mode == REQUEST && index1 == -1)
+			return false;
+		packPair(INDEX1,index1);
+		break;
+	case GET_FILTER:
+		if (mode == REQUEST) {
+			if (index1 == -1) return false;
+			packPair(INDEX1,index1);
+		} else if (mode == POS_REPLY) {
+			if (stringData.length() == 0) return false;
+			packString();
+		}
+		break;
+	case MOD_FILTER:
+		if (mode == REQUEST) {
+			if (index1 == -1 || stringData.length() == 0)
+				return false;
+			packPair(INDEX1,index1);
+			packString();
+		}
+		break;
+	case GET_FILTER_SET:
+		if (mode == REQUEST) {
+			if (index1 == -1 || count == -1) return false;
+			packPair(INDEX1,index1);
+			packPair(COUNT,count);
+		} else if (mode == POS_REPLY) {
+			if (index1 == -1 || index2 == -1 || count == -1 ||
+		     	    (count > 0 && stringData.length() == 0))
+				return false;
+			packPair(INDEX1,index1);
+			packPair(INDEX2,index2);
+			packPair(COUNT,count);
+			if (count > 0) packString();
+		}
+		break;
+	case GET_LOGGED_PACKETS:
+		if (mode == POS_REPLY) {
+			if (count == -1 ||
+		     	    (count > 0 && stringData.length() == 0))
+				return false;
+			packPair(COUNT,count);
+			if (count > 0) packString();
+		}
+		break;
+
 	case NEW_SESSION:
 		if (mode == REQUEST) {
 			if (ip1 == 0 || !rspec1.isSet()) return 0;
@@ -734,6 +771,14 @@ bool CtlPkt::unpack() {
 		     (iface == 0 || !rspec1.isSet())))
 			return false;
 		break;
+	case GET_IFACE_SET:
+		if (mode == REQUEST && (index1 == -1 || count == -1))
+			return false;
+		if (mode == POS_REPLY &&
+		    (index1 == -1 || index2 == -1 || count == -1))
+			return false;
+		break;
+
 	case ADD_LINK:
 		if (mode == REQUEST && (nodeType == 0 || iface == 0))
 			return false;
@@ -750,6 +795,10 @@ bool CtlPkt::unpack() {
 		      !rspec1.isSet() || !rspec2.isSet())))
 			return false;
 		break;
+	case MOD_LINK:
+		if (mode == REQUEST && link == 0)
+			return false;
+		break;
 	case GET_LINK_SET:
 		if (mode == REQUEST && (index1 == -1 || count == -1))
 			return false;
@@ -757,31 +806,7 @@ bool CtlPkt::unpack() {
 		    (index1 == -1 || index2 == -1 || count == -1))
 			return false;
 		break;
-	case GET_COMTREE_SET:
-		if (mode == REQUEST && (index1 == -1 || count == -1))
-			return false;
-		if (mode == POS_REPLY &&
-		    (index1 == -1 || index2 == -1 || count == -1))
-			return false;
-		break;
-	case GET_IFACE_SET:
-		if (mode == REQUEST && (index1 == -1 || count == -1))
-			return false;
-		if (mode == POS_REPLY &&
-		    (index1 == -1 || index2 == -1 || count == -1))
-			return false;
-		break;
-	case GET_ROUTE_SET:
-		if (mode == REQUEST && (index1 == -1 || count == -1))
-			return false;
-		if (mode == POS_REPLY &&
-		    (index1 == -1 || index2 == -1 || count == -1))
-			return false;
-		break;
-	case MOD_LINK:
-		if (mode == REQUEST && link == 0)
-			return false;
-		break;
+
 	case ADD_COMTREE:
 		if (mode == REQUEST && comtree == 0)
 			return false;
@@ -801,6 +826,14 @@ bool CtlPkt::unpack() {
 		if (mode == REQUEST && comtree == 0)
 			return false;
 		break;
+	case GET_COMTREE_SET:
+		if (mode == REQUEST && (index1 == -1 || count == -1))
+			return false;
+		if (mode == POS_REPLY &&
+		    (index1 == -1 || index2 == -1 || count == -1))
+			return false;
+		break;
+
 	case ADD_COMTREE_LINK:
 		if (mode == REQUEST && (comtree == 0 ||
 		    (link == 0	&& (ip1 == 0 || port1 == 0)
@@ -825,6 +858,7 @@ bool CtlPkt::unpack() {
 		      queue == 0 || adr1 == 0)))
 			return false;
 		break;
+
 	case ADD_ROUTE:
 		if (mode == REQUEST && (comtree == 0 || adr1 == 0 || link == 0))
 			return false;
@@ -854,6 +888,46 @@ bool CtlPkt::unpack() {
 		    (comtree == 0 || adr1 == 0 || link == 0))
 			return false;
 		break;
+	case GET_ROUTE_SET:
+		if (mode == REQUEST && (index1 == -1 || count == -1))
+			return false;
+		if (mode == POS_REPLY &&
+		    (index1 == -1 || index2 == -1 || count == -1))
+			return false;
+		break;
+
+	case ADD_FILTER:
+		if (mode == POS_REPLY && index1 == -1)
+			return false;
+		break;
+	case DROP_FILTER:
+		if (mode == REQUEST && index1 == -1)
+			return false;
+		break;
+	case GET_FILTER:
+		if ((mode == REQUEST && index1 == -1) ||
+		    (mode == POS_REPLY && stringData.length() == 0))
+			return false;
+		break;
+	case MOD_FILTER:
+		if (mode == REQUEST &&
+		    (index1 == -1 || stringData.length() == 0))
+			return false;
+		break;
+	case GET_FILTER_SET:
+		if (mode == REQUEST && (index1 == -1 || count == -1))
+			return false;
+		if (mode == POS_REPLY &&
+		    (index1 == -1 || index2 == -1 || count == -1 ||
+		     (count > 0 && stringData.length() == 0)))
+			return false;
+		break;
+	case GET_LOGGED_PACKETS:
+		if (mode == POS_REPLY && (count == -1 ||
+		    (count > 0 && stringData.length() == 0)))
+				return false;
+		break;
+
 	case NEW_SESSION:
 		if ((mode == REQUEST &&
 		     (ip1 == 0 || !rspec1.isSet())) ||
@@ -979,7 +1053,8 @@ string& CtlPkt::avPair2string(CpAttr attr, string& s) {
 	return s;
 }
 
-string& CtlPkt::typeName(string& s) {
+
+string& CtlPkt::cpType2string(CpType type, string& s) {
 	switch (type) {
 	case CLIENT_ADD_COMTREE: s = "client add comtree"; break;
 	case CLIENT_DROP_COMTREE: s = "client drop comtree"; break;
@@ -1016,6 +1091,14 @@ string& CtlPkt::typeName(string& s) {
 	case MOD_ROUTE: s = "mod route"; break;
 	case ADD_ROUTE_LINK: s = "add route link"; break;
 	case DROP_ROUTE_LINK: s = "drop route link"; break;
+
+	case ADD_FILTER: s = "add filter"; break;
+	case DROP_FILTER: s = "drop filter"; break;
+	case GET_FILTER: s = "get filter"; break;
+	case MOD_FILTER: s = "mod filter"; break;
+	case GET_FILTER_SET: s = "get filter set"; break;
+	case GET_LOGGED_PACKETS: s = "get logged packets"; break;
+
 	case NEW_SESSION: s = "new session"; break;
 	case CANCEL_SESSION: s = "cancel session"; break;
 	case CLIENT_CONNECT: s = "client connect"; break;
@@ -1026,12 +1109,76 @@ string& CtlPkt::typeName(string& s) {
 	case BOOT_LEAF: s = "boot leaf"; break;
 	case BOOT_COMPLETE: s = "boot complete"; break;
 	case BOOT_ABORT: s = "boot abort"; break;
-	default: break;
+	default: s = "undefined"; break;
 	}
 	return s;
 }
 
-string& CtlPkt::modeName(string& s) {
+bool CtlPkt::string2cpType(string& s, CpType& type) {
+	if (s == "undef") type = UNDEF_CPTYPE;
+	else if (s == "client add comtree") type = CLIENT_ADD_COMTREE;
+	else if (s == "client drop comtree") type = CLIENT_DROP_COMTREE;
+	else if (s == "client get comtree") type = CLIENT_GET_COMTREE;
+	else if (s == "client mod comtree") type = CLIENT_MOD_COMTREE;
+	else if (s == "client join comtree") type = CLIENT_JOIN_COMTREE;
+	else if (s == "client leave comtree") type = CLIENT_LEAVE_COMTREE;
+	else if (s == "client resize comtree") type = CLIENT_RESIZE_COMTREE;
+	else if (s == "client get leaf rate") type = CLIENT_GET_LEAF_RATE;
+	else if (s == "client mod leaf rate") type = CLIENT_MOD_LEAF_RATE;
+
+	else if (s == "add iface") type = ADD_IFACE;
+	else if (s == "drop iface") type = DROP_IFACE;
+	else if (s == "get iface") type = GET_IFACE;
+	else if (s == "mod iface") type = MOD_IFACE;
+
+	else if (s == "add link") type = ADD_LINK;
+	else if (s == "drop link") type = DROP_LINK;
+	else if (s == "get link") type = GET_LINK;
+	else if (s == "mod link") type = MOD_LINK;
+	else if (s == "get link set") type = GET_LINK_SET;
+
+	else if (s == "add comtree") type = ADD_COMTREE;
+	else if (s == "drop comtree") type = DROP_COMTREE;
+	else if (s == "get comtree") type = GET_COMTREE;
+	else if (s == "mod comtree") type = MOD_COMTREE;
+
+	else if (s == "add comtree link") type = ADD_COMTREE_LINK;
+	else if (s == "drop comtree link") type = DROP_COMTREE_LINK;
+	else if (s == "get comtree link") type = GET_COMTREE_LINK;
+	else if (s == "mod comtree link") type = MOD_COMTREE_LINK;
+
+	else if (s == "add route") type = ADD_ROUTE;
+	else if (s == "drop route") type = DROP_ROUTE;
+	else if (s == "get route") type = GET_ROUTE;
+	else if (s == "mod route") type = MOD_ROUTE;
+	else if (s == "add route link") type = ADD_ROUTE;
+	else if (s == "drop route link") type = DROP_ROUTE;
+
+	else if (s == "add filter") type = ADD_FILTER;
+	else if (s == "drop filter") type = DROP_FILTER;
+	else if (s == "mod filter") type = MOD_FILTER;
+	else if (s == "get filter") type = GET_FILTER;
+	else if (s == "get filter set") type = GET_FILTER_SET;
+	else if (s == "get logged packets") type = GET_LOGGED_PACKETS;
+
+	else if (s == "new session") type = NEW_SESSION;
+	else if (s == "cancel session") type = CANCEL_SESSION;
+	else if (s == "client connect") type = CLIENT_CONNECT;
+	else if (s == "client disconnect") type = CLIENT_DISCONNECT;
+
+	else if (s == "set leaf range") type = SET_LEAF_RANGE;
+	else if (s == "config leaf") type = CONFIG_LEAF;
+
+	else if (s == "boot router") type = BOOT_ROUTER;
+	else if (s == "boot complete") type = BOOT_COMPLETE;
+	else if (s == "boot abort") type = BOOT_ABORT;
+	else if (s == "boot leaf") type = BOOT_LEAF;
+
+	else return false;
+	return true;
+}
+
+string& CtlPkt::cpMode2string(CpMode mode, string& s) {
 	switch (mode) {
 	case REQUEST: s = "request"; break;
 	case POS_REPLY: s = "pos reply"; break;
@@ -1041,12 +1188,21 @@ string& CtlPkt::modeName(string& s) {
 	return s;
 }
 
+bool CtlPkt::string2cpMode(string& s, CpMode& mode) {
+	if (s == "undef") mode = UNDEF_MODE;
+	else if (s == "request") mode = REQUEST;
+	else if (s == "pos reply") mode = POS_REPLY;
+	else if (s == "neg reply") mode = NEG_REPLY;
+	else return false;
+	return true;
+}
+
 string& CtlPkt::toString(string& s) {
 	stringstream ss;
 
 	//if (payload != 0) unpack();
-	ss << typeName(s);
-	ss << " (" << modeName(s) << "," << seqNum << "): ";
+	ss << cpType2string(type,s);
+	ss << " (" << cpMode2string(mode,s) << "," << seqNum << "): ";
 	if (mode == NEG_REPLY) {
 		ss << errMsg << endl;
 		s = ss.str();
@@ -1190,7 +1346,6 @@ string& CtlPkt::toString(string& s) {
 			ss << " " << avPair2string(INDEX1,s);
 			ss << " " << avPair2string(INDEX2,s);
 			ss << " " << avPair2string(COUNT,s);
-
 			ss << " " << avPair2string(STRING,s);
 		}
 		break;
@@ -1349,6 +1504,49 @@ string& CtlPkt::toString(string& s) {
 			ss << " " << avPair2string(LINK,s);
 		}
 		break;
+
+	case ADD_FILTER:
+		if (mode == POS_REPLY) {
+			ss << " " << avPair2string(INDEX1,s);
+			ss << " " << avPair2string(STRING,s);
+		}
+		break;
+	case DROP_FILTER:
+		if (mode == REQUEST) {
+			ss << " " << avPair2string(INDEX1,s);
+		}
+		break;
+	case MOD_FILTER:
+		if (mode == REQUEST) {
+			ss << " " << avPair2string(INDEX1,s);
+			ss << " " << avPair2string(STRING,s);
+		}
+		break;
+	case GET_FILTER:
+		if (mode == REQUEST) {
+			ss << " " << avPair2string(INDEX1,s);
+		} else {
+			ss << " " << avPair2string(STRING,s);
+		}
+		break;
+	case GET_FILTER_SET:
+		if (mode == REQUEST) {
+			ss << " " << avPair2string(INDEX1,s);
+			ss << " " << avPair2string(COUNT,s);
+		} else {
+			ss << " " << avPair2string(INDEX1,s);
+			ss << " " << avPair2string(INDEX2,s);
+			ss << " " << avPair2string(COUNT,s);
+			ss << " " << avPair2string(STRING,s);
+		}
+		break;
+	case GET_LOGGED_PACKETS:
+		if (mode == POS_REPLY) {
+			ss << " " << avPair2string(COUNT,s);
+			ss << " " << avPair2string(STRING,s);
+		}
+		break;
+
 	case NEW_SESSION:
 		if (mode == REQUEST) {
 			ss << " " << avPair2string(IP1,s);

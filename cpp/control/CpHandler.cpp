@@ -209,7 +209,7 @@ pktx CpHandler::modLink(fAdr_t dest, int link, RateSpec& rates,CtlPkt& repCp) {
  *  @return the index of the response packet or 0 if there is no response
  */
 pktx CpHandler::getLink(fAdr_t dest, int link,CtlPkt& repCp) {
-	CtlPkt reqCp(CtlPkt::GET_COMTREE,CtlPkt::REQUEST,0);
+	CtlPkt reqCp(CtlPkt::GET_LINK,CtlPkt::REQUEST,0);
 	reqCp.link = link;
 	return sendRequest(reqCp,dest,repCp);
 }
@@ -448,6 +448,86 @@ pktx CpHandler::modComtreeLink( fAdr_t dest, comt_t comtree, int link,
 pktx CpHandler::getComtreeLink( fAdr_t dest, comt_t comtree, int link,CtlPkt& repCp) {
 	CtlPkt reqCp(CtlPkt::GET_COMTREE_LINK,CtlPkt::REQUEST,0);
 	reqCp.comtree = comtree; reqCp.link = link;
+	return sendRequest(reqCp,dest,repCp);
+}
+
+/** Send an add filter request packet.
+ *  @param dest is the destination address for the packet
+ *  @param repCp is a reference to a control packet in which the control
+ *  packet in the response is returned (if response is != 0)
+ *  @return the index of the response packet or 0 if there is no response;
+ *  the reply packet should include the link number assigned by the
+ *  router and the Forest address assigned to the peer by the router.
+ */
+pktx CpHandler::addFilter(fAdr_t dest, CtlPkt& repCp) {
+	CtlPkt reqCp(CtlPkt::ADD_FILTER,CtlPkt::REQUEST,0);
+	return sendRequest(reqCp,dest,repCp);
+}
+
+/** Send a drop filter request packet.
+ *  @param dest is the destination address for the packet
+ *  @param filter is the number of the filter to be dropped
+ *  @param repCp is a reference to a control packet in which the control
+ *  packet in the response is returned (if response is != 0)
+ *  @return the index of the response packet or 0 if there is no response
+ */
+pktx CpHandler::dropFilter(fAdr_t dest, int filter, CtlPkt& repCp) {
+	CtlPkt reqCp(CtlPkt::DROP_FILTER,CtlPkt::REQUEST,0);
+	reqCp.index1 = filter;
+	return sendRequest(reqCp,dest,repCp);
+}
+
+/** Send a modify filter request packet.
+ *  @param dest is the destination address for the packet
+ *  @param filter is the number of the filter to be modified
+ *  @param filterString is a string representation fo the filter
+ *  @param repCp is a reference to a control packet in which the control
+ *  packet in the response is returned (if response is != 0)
+ *  @return the index of the response packet or 0 if there is no response
+ */
+pktx CpHandler::modFilter(fAdr_t dest, int filter, string& filterString,
+			  CtlPkt& repCp) {
+	CtlPkt reqCp(CtlPkt::MOD_LINK,CtlPkt::REQUEST,0);
+	reqCp.index1 = filter; reqCp.stringData.assign(filterString);
+	return sendRequest(reqCp,dest,repCp);
+}
+
+/** Send a get filter request packet.
+ *  @param dest is the destination address for the packet
+ *  @param filter is the number of the filter 
+ *  @param repCp is a reference to a control packet in which the control
+ *  packet in the response is returned (if response is != 0)
+ *  @return the index of the response packet or 0 if there is no response
+ */
+pktx CpHandler::getFilter(fAdr_t dest, int filter, CtlPkt& repCp) {
+	CtlPkt reqCp(CtlPkt::GET_FILTER,CtlPkt::REQUEST,0);
+	reqCp.index1 = filter;
+	return sendRequest(reqCp,dest,repCp);
+}
+
+/** Send a get filter set request packet.
+ *  @param dest is the destination address for the packet
+ *  @param firstFilter is the table index for the first filter to be returned;
+ *  if zero, start with the first link in the table
+ *  @param count is the number of links whose table entries are requested
+ *  @param repCp is a reference to a control packet in which the control
+ *  packet in the response is returned (if response is != 0)
+ *  @return the index of the response packet or 0 if there is no response
+ */
+pktx CpHandler::getFilterSet(fAdr_t dest, int link, int count, CtlPkt& repCp) {
+	CtlPkt reqCp(CtlPkt::GET_FILTER_SET,CtlPkt::REQUEST,0);
+	reqCp.index1 = link; reqCp.count = count;
+	return sendRequest(reqCp,dest,repCp);
+}
+
+/** Send a get logged packets request packet.
+ *  @param dest is the destination address for the packet
+ *  @param repCp is a reference to a control packet in which the control
+ *  packet in the response is returned (if response is != 0)
+ *  @return the index of the response packet or 0 if there is no response
+ */
+pktx CpHandler::getLoggedPackets(fAdr_t dest, CtlPkt& repCp) {
+	CtlPkt reqCp(CtlPkt::GET_LOGGED_PACKETS,CtlPkt::REQUEST,0);
 	return sendRequest(reqCp,dest,repCp);
 }
 

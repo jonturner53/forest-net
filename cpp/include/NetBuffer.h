@@ -10,10 +10,11 @@
 #define NETBUFFER_H
 
 #include "Forest.h"
+#include "Packet.h"
+#include "CtlPkt.h"
 #include "RateSpec.h"
 
 namespace forest {
-
 
 /** This class implements a simple user-space buffer for use when
  *  reading from a stream socket. It provides methods for reading
@@ -46,9 +47,12 @@ public:
 	bool	readString(string&);
 	bool	readAlphas(string&);
 	bool	readLine(string&);
+	bool	readBit(bool&);
 	bool	readInt(int&);
 	bool	readInt(uint64_t&);
 	bool	readForestAddress(string&);
+	bool	readPktType(Forest::ptyp_t&);
+	bool	readCpType(CtlPkt::CpType&);
 	bool	readIpAddress(string&);
 	int	readBlock(char*, int);
 	bool	readRspec(RateSpec&);

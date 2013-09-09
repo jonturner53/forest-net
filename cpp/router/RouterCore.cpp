@@ -135,7 +135,7 @@ RouterCore::RouterCore(bool booting1, const RouterInfo& config)
 	sm = new StatsModule(1000, nLnks, nQus, ctt);
 	iop = new IoProcessor(nIfaces, config.portNum, ift, lt, ps, sm);
 	qm = new QuManager(nLnks, nPkts, nQus, min(50,5*nPkts/nLnks), ps, sm);
-	pktLog = new PacketLog(20000,500,ps);
+	pktLog = new PacketLog(5000,20,ps);
 
 	if (!booting)
 		leafAdr = new UiSetPair((config.lastLeafAdr - firstLeafAdr)+1);
@@ -555,7 +555,6 @@ void RouterCore::run(uint64_t finishTime) {
 		if (!sendCpReq(cp,nmAdr))
 			fatal("RouterCore::run: could not send boot request\n");
 	}
-	// create packet log to record a sample of packets handled
 
 	uint64_t statsTime = 0;		// time statistics were last processed
 	bool didNothing;
@@ -630,7 +629,7 @@ void RouterCore::run(uint64_t finishTime) {
 	}
 
 	// write out recorded events
-	pktLog->write(cout);
+	// pktLog->write(cout);
 	cout << endl;
 	cout << sm->iPktCnt(0) << " packets received, "
 	     <<	sm->oPktCnt(0) << " packets sent\n";
@@ -1137,6 +1136,7 @@ void RouterCore::handleCtlPkt(int px) {
         case CtlPkt::DROP_IFACE:	dropIface(cp,reply); break;
         case CtlPkt::GET_IFACE:		getIface(cp,reply); break;
         case CtlPkt::MOD_IFACE:		modIface(cp,reply); break;
+	case CtlPkt::GET_IFACE_SET:		getIfaceSet(cp,reply); break;
 
 	// configuring links
         case CtlPkt::ADD_LINK:		addLink(cp,reply); break;
@@ -1144,15 +1144,15 @@ void RouterCore::handleCtlPkt(int px) {
         case CtlPkt::GET_LINK:		getLink(cp,reply); break;
         case CtlPkt::MOD_LINK:		modLink(cp,reply); break;
         case CtlPkt::GET_LINK_SET:	getLinkSet(cp,reply); break;
-    case CtlPkt::GET_COMTREE_SET: 	getComtreeSet(cp,reply); break;
-    case CtlPkt::GET_IFACE_SET:		getIfaceSet(cp,reply); break;
-    case CtlPkt::GET_ROUTE_SET:		getRouteSet(cp,reply); break;
 
 	// configuring comtrees
         case CtlPkt::ADD_COMTREE:	addComtree(cp,reply); break;
         case CtlPkt::DROP_COMTREE:	dropComtree(cp,reply); break;
         case CtlPkt::GET_COMTREE:	getComtree(cp,reply); break;
         case CtlPkt::MOD_COMTREE:	modComtree(cp,reply); break;
+	case CtlPkt::GET_COMTREE_SET: 	getComtreeSet(cp,reply); break;
+
+	// and comtree links
 	case CtlPkt::ADD_COMTREE_LINK:	addComtreeLink(cp,reply); break;
 	case CtlPkt::DROP_COMTREE_LINK: dropComtreeLink(cp,reply); break;
 	case CtlPkt::GET_COMTREE_LINK:	getComtreeLink(cp,reply); break;
@@ -1163,6 +1163,15 @@ void RouterCore::handleCtlPkt(int px) {
         case CtlPkt::DROP_ROUTE:	dropRoute(cp,reply); break;
         case CtlPkt::GET_ROUTE:		getRoute(cp,reply); break;
         case CtlPkt::MOD_ROUTE:		modRoute(cp,reply); break;
+	case CtlPkt::GET_ROUTE_SET:	getRouteSet(cp,reply); break;
+
+	// configuring filters and retrieving pacets
+        case CtlPkt::ADD_FILTER:	addFilter(cp,reply); break;
+        case CtlPkt::DROP_FILTER:	dropFilter(cp,reply); break;
+        case CtlPkt::GET_FILTER:	getFilter(cp,reply); break;
+        case CtlPkt::MOD_FILTER:	modFilter(cp,reply); break;
+        case CtlPkt::GET_FILTER_SET:	getFilterSet(cp,reply); break;
+        case CtlPkt::GET_LOGGED_PACKETS: getLoggedPackets(cp,reply); break;
 
 	// setting parameters
 	case CtlPkt::SET_LEAF_RANGE:	setLeafRange(cp,reply); break;
@@ -2203,7 +2212,7 @@ void RouterCore::handleCpReply(pktx reply, CtlPkt& cpr) {
 			cerr << "RouterCore::handleCpReply: setup failed after "
 				"completion of boot phase\n";
 			perror("");
-			pktLog->write(cout);
+			// pktLog->write(cout);
 			exit(1);
 		}
 		iop->closeBootSock();

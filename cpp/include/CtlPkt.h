@@ -15,7 +15,6 @@
 
 namespace forest {
 
-
 /** This class provides a mechanism for handling forest signalling packets.
  *  Signalling packets have a packet type of CLIENT_SIG or NET_SIG in the
  *  first word of the forest head. The payload identifies the specific
@@ -55,6 +54,7 @@ public:
 
 		ADD_IFACE = 30, DROP_IFACE = 31,
 		GET_IFACE = 32, MOD_IFACE = 33,
+		GET_IFACE_SET = 34,
 
 		ADD_LINK = 40, DROP_LINK = 41,
 		GET_LINK = 42, MOD_LINK = 43,
@@ -67,11 +67,14 @@ public:
 		MOD_COMTREE_LINK = 56, GET_COMTREE_LINK = 57,
 		GET_COMTREE_SET = 58,
 
-		GET_IFACE_SET = 60, GET_ROUTE_SET = 61,
-
 		ADD_ROUTE = 70, DROP_ROUTE = 71,
 		GET_ROUTE = 72, MOD_ROUTE = 73,
 		ADD_ROUTE_LINK = 74, DROP_ROUTE_LINK = 75,
+		GET_ROUTE_SET = 76,
+
+		ADD_FILTER = 80, DROP_FILTER = 81,
+		GET_FILTER = 82, MOD_FILTER = 83,
+		GET_FILTER_SET = 84, GET_LOGGED_PACKETS = 85,
 
 		NEW_SESSION = 100, CANCEL_SESSION = 103,
 		CLIENT_CONNECT = 101, CLIENT_DISCONNECT = 102,
@@ -129,8 +132,11 @@ public:
 	int	pack();	
 	bool	unpack();	
 
-	string& typeName(string&);
-	string& modeName(string&);
+	static string& cpType2string(CpType,string&);
+	static string& cpMode2string(CpMode,string&);
+	static bool string2cpType(string&, CpType&);
+	static bool string2cpMode(string&, CpMode&);
+
 	string&	avPair2string(CpAttr, string&); 
 	string&	toString(string&); 
 

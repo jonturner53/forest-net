@@ -194,7 +194,7 @@ bool NetBuffer::readAlphas(string& s) {
 	}
 }
 
-/** Read a name from the socket.
+/** Read a name from the buffer.
  *  Here a name starts with a letter and may also contain digits and
  *  underscores.
  *  @param s is a reference to a string in which result is returned
@@ -237,7 +237,19 @@ bool NetBuffer::readString(string& s) {
 	}
 }
 
-/** Read an integer from the socket.
+/** Read a bit from the buffer.
+ *  Looks for a 0 or 1 as next non-whitespace character.
+ *  @param b is a reference to a bool in which result is returned
+ *  @return true on success, false on failure
+ */
+bool NetBuffer::readBit(bool& b) {
+	if (!skipSpace()) return false;
+	if (*rp == 0) { advance(rp); b = false; return true; }
+	if (*rp == 1) { advance(rp); b = true; return true; }
+	return false;
+}
+
+/** Read an integer from the buffer.
  *  Initial white space is skipped and input terminates on first non-digit
  *  following a digit string.
  *  @param i is a reference to an integer in which result is returned
@@ -301,6 +313,18 @@ bool NetBuffer::readForestAddress(string& s) {
 	}
 }
 
+bool NetBuffer::readPktType(Forest::ptyp_t& type) {
+	string s;
+	if (!readWord(s)) return false;
+	return Packet::string2pktTyp(s,type);
+}
+
+bool NetBuffer::readCpType(CtlPkt::CpType& cpTyp) {
+	string s;
+	if (!readWord(s)) return false;
+	return CtlPkt::string2cpType(s,cpTyp);
+}
+
 /** Read an Ip address in dotted decimal form and return it as a string.
  *  Initial white space is skipped and input terminates on first non-digit
  *  following the last part of the address.
@@ -324,6 +348,7 @@ bool NetBuffer::readIpAddress(string& s) {
 		len++; advance(p);
 	}
 }
+
 
 /** Read a block of bytes from the buffer.
  *  @param xbuf is a pointer to a character buffer
