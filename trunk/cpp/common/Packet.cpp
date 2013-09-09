@@ -116,6 +116,35 @@ bool Packet::read(istream& in) {
 	return true;
 }
 
+string& Packet::pktTyp2string(Forest::ptyp_t type, string& s) {
+        if (type == Forest::CLIENT_DATA)     s = "data      ";
+        else if (type == Forest::SUB_UNSUB)  s = "sub_unsub ";
+        else if (type == Forest::CLIENT_SIG) s = "client_sig";
+        else if (type == Forest::CONNECT)    s = "connect   ";
+        else if (type == Forest::DISCONNECT) s = "disconnect";
+        else if (type == Forest::NET_SIG)    s = "net_sig   ";
+        else if (type == Forest::RTE_REPLY)  s = "rteReply  ";
+        else if (type == Forest::RTR_CTL)    s = "rtr_ctl   ";
+        else if (type == Forest::VOQSTATUS)  s = "voq_status";
+        else                         	     s = "undef ";
+	return s;
+}
+
+bool Packet::string2pktTyp(string& s, Forest::ptyp_t& type) {
+	if (s == "data")		type = Forest::CLIENT_DATA;
+	else if (s == "sub_unsub")	type = Forest::SUB_UNSUB;
+	else if (s == "client_sig")	type = Forest::CLIENT_SIG;
+	else if (s == "connect")	type = Forest::CONNECT;
+	else if (s == "disconnect")	type = Forest::DISCONNECT;
+	else if (s == "net_sig")	type = Forest::NET_SIG;
+	else if (s == "rteReply")	type = Forest::RTE_REPLY;
+	else if (s == "rtr_ctl")	type = Forest::RTR_CTL;
+	else if (s == "voq_status")	type = Forest::VOQSTATUS;
+	else if (s == "undef")		type = Forest::UNDEF_PKT;
+	else return false;
+	return true;
+}
+
 /** Create a string representing packet contents.
  *  @param b is a reference to a buffer containing the packet
  *  @param s is a reference to a string in which result is returned

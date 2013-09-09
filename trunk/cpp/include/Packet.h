@@ -38,6 +38,8 @@ public:
 	/** input/output */
 	bool	read(istream&);
 	string&	toString(string&) const;
+	static string& pktTyp2string(Forest::ptyp_t, string&);
+	static bool string2pktTyp(string&, Forest::ptyp_t&);
 
 	// packet fields - note: all public
 	int	version;		///< version number field

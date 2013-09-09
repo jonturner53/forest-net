@@ -45,6 +45,7 @@ public:
 	pktx dropIface(fAdr_t,int,CtlPkt&);
 	pktx modIface(fAdr_t,int,ipa_t,RateSpec&,CtlPkt&);
 	pktx getIface(fAdr_t,int,CtlPkt&);
+        pktx getIfaceSet(fAdr_t,int,int,CtlPkt&);
 
 	pktx addLink(fAdr_t,Forest::ntyp_t,int,int,ipa_t,ipp_t,					     fAdr_t,uint64_t,CtlPkt&);
 	pktx addLink(fAdr_t,Forest::ntyp_t,int,uint64_t,CtlPkt&);
@@ -57,16 +58,22 @@ public:
 	pktx dropComtree(fAdr_t,comt_t,CtlPkt&);
 	pktx modComtree(fAdr_t,comt_t,int,int,CtlPkt&);
 	pktx getComtree(fAdr_t,comt_t,CtlPkt&);
+	pktx getComtreeSet(fAdr_t,int,int,CtlPkt&);
 
 	pktx addComtreeLink(fAdr_t,comt_t,int,int,CtlPkt&);
 	pktx addComtreeLink(fAdr_t,comt_t,fAdr_t,CtlPkt&);
 	pktx dropComtreeLink(fAdr_t,comt_t,int,fAdr_t,CtlPkt&);
 	pktx modComtreeLink(fAdr_t,comt_t,int,RateSpec&,CtlPkt&);
 	pktx getComtreeLink(fAdr_t,comt_t,int,CtlPkt&);
-	pktx getComtreeSet(fAdr_t,int,int,CtlPkt&);
 
-	pktx getIfaceSet(fAdr_t,int,int,CtlPkt&);
-	pktx getRouteSet(fAdr_t,int,int,CtlPkt&);
+        pktx getRouteSet(fAdr_t,int,int,CtlPkt&);
+
+	pktx addFilter(fAdr_t,CtlPkt&);
+	pktx dropFilter(fAdr_t,int,CtlPkt&);
+	pktx modFilter(fAdr_t,int,string&,CtlPkt&);
+	pktx getFilter(fAdr_t,int,CtlPkt&);
+	pktx getFilterSet(fAdr_t,int,int,CtlPkt&);
+	pktx getLoggedPackets(fAdr_t,CtlPkt&);
 
 	pktx newSession(fAdr_t,ipa_t,RateSpec&,CtlPkt&);
 	pktx cancelSession(fAdr_t,fAdr_t,fAdr_t,CtlPkt&);
