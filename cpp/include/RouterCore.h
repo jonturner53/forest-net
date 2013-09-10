@@ -144,21 +144,22 @@ private:
 	bool	dropIface(CtlPkt&, CtlPkt&);
 	bool	getIface(CtlPkt&, CtlPkt&);
 	bool	modIface(CtlPkt&, CtlPkt&);
+	bool 	getIfaceSet(CtlPkt&, CtlPkt&);
 
 	bool	addLink(CtlPkt&, CtlPkt&);
 	bool	dropLink(CtlPkt&, CtlPkt&);
 	void	dropLink(int,fAdr_t=0);
+	bool	modLink(CtlPkt&, CtlPkt&);
 	bool	getLink(CtlPkt&, CtlPkt&);
 	bool	getLinkSet(CtlPkt&, CtlPkt&);
-	bool 	getComtreeSet(CtlPkt&, CtlPkt&);
-	bool 	getIfaceSet(CtlPkt&, CtlPkt&);
-	bool 	getRouteSet(CtlPkt&, CtlPkt&);
-	bool	modLink(CtlPkt&, CtlPkt&);
+
 
 	bool	addComtree(CtlPkt&, CtlPkt&);
 	bool	dropComtree(CtlPkt&, CtlPkt&);
 	bool	getComtree(CtlPkt&, CtlPkt&);
 	bool	modComtree(CtlPkt&, CtlPkt&);
+	bool 	getComtreeSet(CtlPkt&, CtlPkt&);
+
 	bool	addComtreeLink(CtlPkt&, CtlPkt&);
 	bool	dropComtreeLink(CtlPkt&, CtlPkt&);
 	void	dropComtreeLink(int, int, int);
@@ -169,6 +170,14 @@ private:
 	bool	dropRoute(CtlPkt&, CtlPkt&);
 	bool	getRoute(CtlPkt&, CtlPkt&);
 	bool	modRoute(CtlPkt&, CtlPkt&);
+	bool 	getRouteSet(CtlPkt&, CtlPkt&);
+
+	bool	addFilter(CtlPkt&, CtlPkt&);
+	bool	dropFilter(CtlPkt&, CtlPkt&);
+	bool	getFilter(CtlPkt&, CtlPkt&);
+	bool	modFilter(CtlPkt&, CtlPkt&);
+	bool 	getFilterSet(CtlPkt&, CtlPkt&);
+	bool 	getLoggedPackets(CtlPkt&, CtlPkt&);
 
 	bool	setLeafRange(CtlPkt&, CtlPkt&);
 

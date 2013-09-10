@@ -1267,6 +1267,43 @@ bool RouterCore::modIface(CtlPkt& cp, CtlPkt& reply) {
 	return false;
 }
 
+/** Respond to a get iface set control packet.
+ *  Control packet includes the first iface in the set to be retrieved plus
+ *  a count of the number of iface to be returned; reply includes the
+ *  first iface in the set, the count of the number of ifaces returned and
+ *  the next iface in the table, following the last one in the returned set.
+ *  @param cp is a reference to a received get iface set control packet
+ *  @param reply is a reference to the reply packet with fields to be
+ *  filled in
+ *  @return true on success, false on failure
+ */
+bool RouterCore::getIfaceSet(CtlPkt& cp, CtlPkt& reply) {
+	int ifIndex = cp.index1;
+	if (ifIndex == 0) {
+		ifIndex = ift->firstIface(); // 0 means start with first iface
+	} else if (!ift->valid(ifIndex)) {
+		reply.errMsg = "get iface set: invalid iface number";
+		reply.mode = CtlPkt::NEG_REPLY;
+		return false;
+	}
+	reply.index1 = ifIndex;
+	int count = min(10,cp.count);
+	int i = 0;
+	while (i < count && ifIndex != 0) {
+		string s; ift->entry2string(ifIndex,s); //s.push_back('\n');
+		reply.stringData.append(s);
+		if (reply.stringData.length() > 1300) {
+			reply.errMsg =  "get iface set: error while formatting "
+					"reply";
+			reply.mode = CtlPkt::NEG_REPLY;
+			return false;
+		}
+		i++; ifIndex = ift->nextIface(ifIndex);
+	}
+	reply.index2 = ifIndex; reply.count = i;
+	return true;
+}
+
 bool RouterCore::addLink(CtlPkt& cp, CtlPkt& reply) {
 	Forest::ntyp_t peerType = cp.nodeType;
 	if (peerType == Forest::ROUTER && cp.adr1 == 0) {
@@ -1420,8 +1457,9 @@ bool RouterCore::getLink(CtlPkt& cp, CtlPkt& reply) {
  */
 bool RouterCore::getLinkSet(CtlPkt& cp, CtlPkt& reply) {
 	int lnk = cp.index1;
-	if (lnk == 0) lnk = lt->firstLink(); // 0 means start with first link
-	else if (!lt->valid(lnk)) {
+	if (lnk == 0) {
+		lnk = lt->firstLink(); // 0 means start with first link
+	} else if (!lt->valid(lnk)) {
 		reply.errMsg = "get link set: invalid link number";
 		reply.mode = CtlPkt::NEG_REPLY;
 		return false;
@@ -1442,113 +1480,6 @@ bool RouterCore::getLinkSet(CtlPkt& cp, CtlPkt& reply) {
 	}
 	reply.index2 = lnk; reply.count = i;
 	return true;
-}
-
-/** Respond to a get comtree set control packet.
- *  Control packet includes the first comtree in the set to be retrieved plus
- *  a count of the number of comtree to be returned; reply includes the
- *  first comtree in the set, the count of the number of comtrees returned and
- *  the next comtree in the table, following the last one in the returned set.
- *  @param cp is a reference to a received get comtree set control packet
- *  @param reply is a reference to the reply packet with fields to be
- *  filled in
- *  @return true on success, false on failure
- */
-bool RouterCore::getComtreeSet(CtlPkt& cp, CtlPkt& reply) {
-	int comtIndex = cp.index1;
-	if (comtIndex == 0) comtIndex = ctt->firstComtIndex(); // 0 means start with first link
-	else if (!ctt->validComtIndex(comtIndex)) {
-		reply.errMsg = "get comtree set: invalid comtree number";
-		reply.mode = CtlPkt::NEG_REPLY;
-		return false;
-	}
-	reply.index1 = comtIndex;
-	int count = min(10,cp.count);
-	int i = 0;
-	while (i < count && comtIndex != 0) {
-		string s; ctt->entry2string(comtIndex,s); //s.push_back('\n');
-		reply.stringData.append(s);
-		if (reply.stringData.length() > 1300) {
-			reply.errMsg =  "get comtee set: error while formatting "
-					"reply";
-			reply.mode = CtlPkt::NEG_REPLY;
-			return false;
-		}
-		i++; comtIndex = ctt->nextComtIndex(comtIndex);
-	}
-	reply.index2 = comtIndex; reply.count = i;
-	return true;
-}
-
-/** Respond to a get iface set control packet.
- *  Control packet includes the first iface in the set to be retrieved plus
- *  a count of the number of iface to be returned; reply includes the
- *  first iface in the set, the count of the number of ifaces returned and
- *  the next iface in the table, following the last one in the returned set.
- *  @param cp is a reference to a received get iface set control packet
- *  @param reply is a reference to the reply packet with fields to be
- *  filled in
- *  @return true on success, false on failure
- */
-bool RouterCore::getIfaceSet(CtlPkt& cp, CtlPkt& reply) {
-	int ifIndex = cp.index1;
-	if (ifIndex == 0) ifIndex = ift->firstIface(); // 0 means start with first link
-	else if (!ift->valid(ifIndex)) {
-		reply.errMsg = "get iface set: invalid iface number";
-		reply.mode = CtlPkt::NEG_REPLY;
-		return false;
-	}
-	reply.index1 = ifIndex;
-	int count = min(10,cp.count);
-	int i = 0;
-	while (i < count && ifIndex != 0) {
-		string s; ift->entry2string(ifIndex,s); //s.push_back('\n');
-		reply.stringData.append(s);
-		if (reply.stringData.length() > 1300) {
-			reply.errMsg =  "get iface set: error while formatting "
-					"reply";
-			reply.mode = CtlPkt::NEG_REPLY;
-			return false;
-		}
-		i++; ifIndex = ift->nextIface(ifIndex);
-	}
-	reply.index2 = ifIndex; reply.count = i;
-	return true;
-}
-
-/** Respond to a get route set control packet.
- *  Control packet includes the first route in the set to be retrieved plus
- *  a count of the number of route to be returned; reply includes the
- *  first route in the set, the count of the number of routes returned and
- *  the next route in the table, following the last one in the returned set.
- *  @param cp is a reference to a received get route set control packet
- *  @param reply is a reference to the reply packet with fields to be
- *  filled in
- *  @return true on success, false on failure
- */
-bool RouterCore::getRouteSet(CtlPkt& cp, CtlPkt& reply) {
-	int rIndex = cp.index1;
-	if (rIndex == 0) rIndex = rt->firstRteIndex(); // 0 means start with first link
-	else if (!rt->validRteIndex(rIndex)) {
-		reply.errMsg = "get route set: invalid route number";
-		reply.mode = CtlPkt::NEG_REPLY;
-		return false;
-	}
-	reply.index1 = rIndex;
-	int count = min(10,cp.count);
-	int i = 0;
-	while (i < count && rIndex != 0) {
-		string s; rt->entry2string(rIndex,s); //s.push_back('\n');
-		reply.stringData.append(s);
-		if (reply.stringData.length() > 1300) {
-			reply.errMsg =  "get route set: error while formatting "
-					"reply";
-			reply.mode = CtlPkt::NEG_REPLY;
-			return false;
-		}
-		i++; rIndex = rt->nextRteIndex(rIndex);
-	}
-	reply.index2 = rIndex; reply.count = i;	
 }
 
 bool RouterCore::modLink(CtlPkt& cp, CtlPkt& reply) {
@@ -1629,6 +1560,43 @@ bool RouterCore::getComtree(CtlPkt& cp, CtlPkt& reply) {
 	reply.coreFlag = ctt->inCore(ctx);
 	reply.link = ctt->getPlink(ctx);
 	reply.count = ctt->getLinkCount(ctx);
+	return true;
+}
+
+/** Respond to a get comtree set control packet.
+ *  Control packet includes the first comtree in the set to be retrieved plus
+ *  a count of the number of comtree to be returned; reply includes the
+ *  first comtree in the set, the count of the number of comtrees returned and
+ *  the next comtree in the table, following the last one in the returned set.
+ *  @param cp is a reference to a received get comtree set control packet
+ *  @param reply is a reference to the reply packet with fields to be
+ *  filled in
+ *  @return true on success, false on failure
+ */
+bool RouterCore::getComtreeSet(CtlPkt& cp, CtlPkt& reply) {
+	int comtIndex = cp.index1;
+	if (comtIndex == 0) {
+		comtIndex = ctt->firstComtIndex(); // 0 means first comtree
+	} else if (!ctt->validComtIndex(comtIndex)) {
+		reply.errMsg = "get comtree set: invalid comtree number";
+		reply.mode = CtlPkt::NEG_REPLY;
+		return false;
+	}
+	reply.index1 = comtIndex;
+	int count = min(10,cp.count);
+	int i = 0;
+	while (i < count && comtIndex != 0) {
+		string s; ctt->entry2string(comtIndex,s); //s.push_back('\n');
+		reply.stringData.append(s);
+		if (reply.stringData.length() > 1300) {
+			reply.errMsg =  "get comtee set: error while "
+					"formatting reply";
+			reply.mode = CtlPkt::NEG_REPLY;
+			return false;
+		}
+		i++; comtIndex = ctt->nextComtIndex(comtIndex);
+	}
+	reply.index2 = comtIndex; reply.count = i;
 	return true;
 }
 
@@ -2009,6 +1977,144 @@ bool RouterCore::modRoute(CtlPkt& cp, CtlPkt& reply) {
 	reply.errMsg = "modify route: invalid route";
 	reply.mode = CtlPkt::NEG_REPLY;
 	return false;
+}
+
+/** Respond to a get route set control packet.
+ *  Control packet includes the first route in the set to be retrieved plus
+ *  a count of the number of route to be returned; reply includes the
+ *  first route in the set, the count of the number of routes returned and
+ *  the next route in the table, following the last one in the returned set.
+ *  @param cp is a reference to a received get route set control packet
+ *  @param reply is a reference to the reply packet with fields to be
+ *  filled in
+ *  @return true on success, false on failure
+ */
+bool RouterCore::getRouteSet(CtlPkt& cp, CtlPkt& reply) {
+	int rIndex = cp.index1;
+	if (rIndex == 0) {
+		rIndex = rt->firstRteIndex(); // 0 means start with first route
+	} else if (!rt->validRteIndex(rIndex)) {
+		reply.errMsg = "get route set: invalid route number";
+		reply.mode = CtlPkt::NEG_REPLY;
+		return false;
+	}
+	reply.index1 = rIndex;
+	int count = min(10,cp.count);
+	int i = 0;
+	while (i < count && rIndex != 0) {
+		string s; rt->entry2string(rIndex,s); //s.push_back('\n');
+		reply.stringData.append(s);
+		if (reply.stringData.length() > 1300) {
+			reply.errMsg =  "get route set: error while formatting "
+					"reply";
+			reply.mode = CtlPkt::NEG_REPLY;
+			return false;
+		}
+		i++; rIndex = rt->nextRteIndex(rIndex);
+	}
+	reply.index2 = rIndex; reply.count = i;	
+	return true;
+}
+
+/** Handle an add filter control packet.
+ *  Adds the specified interface and prepares a reply packet.
+ *  @param cp is the control packet structure (already unpacked)
+ *  @param reply is a control packet structure for the reply, which
+ *  the cpType has been set to match cp, the rrType is POS_REPLY
+ *  and the seqNum has been set to match cp.
+ *  @param return true on success, false on failure; on a successful
+ *  return, all appropriate attributes in reply are set; on a failure
+ *  return, the errMsg field of reply is set.
+ */
+bool RouterCore::addFilter(CtlPkt& cp, CtlPkt& reply) {
+	fltx fx = pktLog->addFilter();
+	if (fx == 0) {
+		reply.errMsg = "add filter: cannot add filter";
+		reply.mode = CtlPkt::NEG_REPLY;
+		return false;
+	}
+	reply.index1 = fx;
+	return true;
+}
+
+bool RouterCore::dropFilter(CtlPkt& cp, CtlPkt& reply) {
+	pktLog->dropFilter(cp.index1);
+	return true;
+}
+
+bool RouterCore::getFilter(CtlPkt& cp, CtlPkt& reply) {
+	fltx fx = cp.index1;
+	if (!pktLog->validFilter(fx)) {
+		reply.errMsg = "get filter: invalid filter index";
+		reply.mode = CtlPkt::NEG_REPLY;
+		return false;
+	}
+	PacketFilter& f = pktLog->getFilter(fx);
+	f.toString(reply.stringData);
+	return true;
+}
+
+bool RouterCore::modFilter(CtlPkt& cp, CtlPkt& reply) {
+	fltx fx = cp.index1;
+	if (!pktLog->validFilter(fx)) {
+		reply.errMsg = "mod filter: invalid filter index";
+		reply.mode = CtlPkt::NEG_REPLY;
+		return false;
+	}
+	PacketFilter& f = pktLog->getFilter(fx);
+	f.fromString(cp.stringData);
+	return true;
+}
+
+/** Respond to a get filter set control packet.
+ *  Control packet includes the first filter in the set to be retrieved plus
+ *  a count of the number of filters to be returned; reply includes the
+ *  first filters in the set, the count of the number of filters returned and
+ *  the next filters in the table, following the last one in the returned set.
+ *  @param cp is a reference to a received get filter set control packet
+ *  @param reply is a reference to the reply packet with fields to be
+ *  filled in
+ *  @return true on success, false on failure
+ */
+bool RouterCore::getFilterSet(CtlPkt& cp, CtlPkt& reply) {
+	fltx fx = cp.index1;
+	if (fx == 0) {
+		fx = pktLog->firstFilter(); // 0 means start with first filter
+	} else if (!pktLog->validFilter(fx)) {
+		reply.errMsg = "get filter set: invalid filter index";
+		reply.mode = CtlPkt::NEG_REPLY;
+		return false;
+	}
+	reply.index1 = fx;
+	int count = min(10,cp.count);
+	int i = 0;
+	while (i < count && fx != 0) {
+		string s;
+		PacketFilter& f = pktLog->getFilter(fx);
+		reply.stringData.append(f.toString(s));
+		reply.stringData.push_back('\n');
+
+		if (reply.stringData.length() > 1300) {
+			reply.errMsg =  "get filter set: error while "
+					"formatting reply";
+			reply.mode = CtlPkt::NEG_REPLY;
+			return false;
+		}
+		i++; fx = pktLog->nextFilter(fx);
+	}
+	reply.index2 = fx; reply.count = i;
+	return true;
+}
+
+/** Respond to a get logged packets control packet.
+ *  @param cp is a reference to a received get logged packets control packet
+ *  @param reply is a reference to the reply packet with fields to be
+ *  filled in
+ *  @return true on success, false on failure
+ */
+bool RouterCore::getLoggedPackets(CtlPkt& cp, CtlPkt& reply) {
+	reply.count = pktLog->log2string(1300, reply.stringData);
+	return true;
 }
 
 /** Set leaf address range.
