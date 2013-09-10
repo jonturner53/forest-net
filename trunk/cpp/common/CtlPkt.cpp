@@ -535,6 +535,7 @@ int CtlPkt::pack() {
 			return false;
 		packPair(INDEX1,index1);
 		break;
+
 	case GET_FILTER:
 		if (mode == REQUEST) {
 			if (index1 == -1) return false;
