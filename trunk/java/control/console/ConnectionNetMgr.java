@@ -1,5 +1,6 @@
 package forest.control.console;
 
+import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
@@ -377,5 +378,15 @@ public class ConnectionNetMgr {
 //		if (!sendString(msg))
 //			return "cannot send filters to server";
 		return null;
+	}
+	
+	public void closeSocket(){
+		if(serverChan != null && serverChan.isConnected()){
+			try {
+				serverChan.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
 	}
 }

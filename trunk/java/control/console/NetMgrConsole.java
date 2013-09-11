@@ -188,7 +188,9 @@ public class NetMgrConsole {
 		connectionComtCtl = new ConnectionComtCtl();
 
 		displayNetMgr();
-
+		
+		mainFrame.addWindowListener(new CloseEvent(connectionNetMgr, 
+													connectionComtCtl));
 		mainFrame.pack();
 		mainFrame.setVisible(true);
 	}
@@ -373,6 +375,12 @@ public class NetMgrConsole {
 		closeMenuItem = new JMenuItem("Close");
 		closeMenuItem.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent evt) {
+				if(connectionNetMgr != null 
+						&& connectionComtCtl != null){
+					connectionNetMgr.closeSocket();
+					connectionComtCtl.closeSocket();
+					System.out.println("Connections are closing...");
+				}
 				System.exit(0);
 			}
 		});
@@ -743,6 +751,22 @@ public class NetMgrConsole {
 		SwingUtilities.invokeLater(new Runnable() {
 			public void run() { new NetMgrConsole(); }
 		});
+	}
+}
+
+class CloseEvent extends WindowAdapter{
+	private ConnectionNetMgr netMgr;
+	private ConnectionComtCtl comtCtl;
+	public CloseEvent(ConnectionNetMgr netMgr, ConnectionComtCtl comtCtl){
+		this.netMgr = netMgr;
+		this.comtCtl = comtCtl;
+	}
+	public void windowClosing(WindowEvent e){
+		if(netMgr != null && comtCtl != null){
+			netMgr.closeSocket();
+			comtCtl.closeSocket();
+			System.out.println("Connections are closing...");
+		}
 	}
 }
 
