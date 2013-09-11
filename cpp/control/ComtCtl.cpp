@@ -449,10 +449,10 @@ bool handleAddComtReq(pktx px, CtlPkt& cp, CpHandler& cph) {
 	if (reply == 0 || repCp.mode != CtlPkt::POS_REPLY) {
 		releaseComtreeNum(comt);
 		comtrees->removeComtree(ctx); // releases lock on ctx
-		if (reply == 0)
 		cph.errReply(px,cp,(reply == 0 ?
 				"root router never replied" :
 				"root router could not add comtree"));
+		if (reply != 0) ps->free(reply);
 		return false;
 	}
 	
@@ -464,6 +464,7 @@ bool handleAddComtReq(pktx px, CtlPkt& cp, CpHandler& cph) {
 		cph.errReply(px,cp,(reply == 0 ?
 				"root router never replied" :
 				"root router could not modify comtree"));
+		if (reply != 0) ps->free(reply);
 		return false;
 	}
 	
@@ -883,7 +884,9 @@ bool setupComtNode(int ctx, int rtr, CpHandler& cph) {
 	CtlPkt repCp;
 	int reply = cph.addComtree(net->getNodeAdr(rtr),
 				   comtrees->getComtree(ctx),repCp);
-	return reply != 0 && repCp.mode == CtlPkt::POS_REPLY;
+	if (reply == 0) return false;
+	ps->free(reply);
+	return repCp.mode == CtlPkt::POS_REPLY;
 } 
 
 /** Remove a comtree at a router
@@ -895,7 +898,9 @@ bool teardownComtNode(int ctx, int rtr, CpHandler& cph) {
 	CtlPkt repCp;
 	int reply = cph.dropComtree(net->getNodeAdr(rtr),
 				    comtrees->getComtree(ctx),repCp);
-	return reply != 0 && repCp.mode == CtlPkt::POS_REPLY;
+	if (reply == 0) return false;
+	ps->free(reply);
+	return repCp.mode == CtlPkt::POS_REPLY;
 } 
 
 /** Configure a comtree link at a router.
@@ -911,7 +916,9 @@ bool setupComtLink(int ctx, int lnk, int rtr, CpHandler& cph) {
 				   	comtrees->getComtree(ctx),
 				   	net->getLLnum(lnk,rtr),
 				   	comtrees->isCoreNode(ctx,parent),repCp);
-	return reply != 0 && repCp.mode == CtlPkt::POS_REPLY;
+	if (reply == 0) return false;
+	ps->free(reply);
+	return repCp.mode == CtlPkt::POS_REPLY;
 } 
 
 /** Configure a comtree link to a client at a router.
@@ -926,7 +933,9 @@ int setupClientLink(int ctx, fAdr_t cliAdr, int rtr, CpHandler& cph) {
 	pktx reply = cph.addComtreeLink(net->getNodeAdr(rtr),
 					comtrees->getComtree(ctx),
 				   	cliAdr, repCp);
-	return repCp.link;
+	if (reply == 0) return 0;
+	ps->free(reply);
+	return (repCp.mode == CtlPkt::POS_REPLY ? repCp.link : 0);
 } 
 
 /** Teardown a comtree link to a client at a router.
@@ -940,7 +949,9 @@ bool teardownClientLink(int ctx, fAdr_t cliAdr, int rtr, CpHandler& cph) {
 	int reply = cph.dropComtreeLink(net->getNodeAdr(rtr),
 					comtrees->getComtree(ctx),
 				   	0, cliAdr, repCp);
-	return reply != 0 && repCp.mode == CtlPkt::POS_REPLY;
+	if (reply == 0) return false;
+	ps->free(reply);
+	return repCp.mode == CtlPkt::POS_REPLY;
 } 
 
 /** Configure comtree attributes at a router.
@@ -954,7 +965,9 @@ bool setupComtAttrs(int ctx, int rtr, CpHandler& cph) {
 	CtlPkt repCp;
 	int reply = cph.modComtree(rtrAdr, comtrees->getComtree(ctx), llnk,
 				   comtrees->isCoreNode(ctx,rtrAdr),repCp);
-	return reply != 0 && repCp.mode == CtlPkt::POS_REPLY;
+	if (reply == 0) return false;
+	ps->free(reply);
+	return repCp.mode == CtlPkt::POS_REPLY;
 }
 
 /** Set the comtree link rates at a router
@@ -979,6 +992,7 @@ bool setComtLinkRates(int ctx, int lnk, int rtr, CpHandler& cph) {
 				   	comtrees->getComtree(ctx),
 					net->getLLnum(lnk,rtr),rs,repCp);
 	if (reply == 0) return false;
+	ps->free(reply);
 	if (repCp.mode == CtlPkt::POS_REPLY) return true;
 
 	// router rejected, probably because available rate at router
@@ -987,7 +1001,9 @@ bool setComtLinkRates(int ctx, int lnk, int rtr, CpHandler& cph) {
 	// controllers; request available rate at router and use it
 	// to update local information
 	reply = cph.getLink(rtrAdr,net->getLLnum(lnk,rtr),repCp);
-	if (reply == 0 || repCp.mode != CtlPkt::POS_REPLY) return false;
+	if (reply == 0) return false;
+	ps->free(reply);
+	if (repCp.mode != CtlPkt::POS_REPLY) return false;
 	if (repCp.rspec2.isSet()) {
 		if (rtr == net->getLeft(lnk)) repCp.rspec2.flip();
 		net->getAvailRates(lnk) = repCp.rspec2;
@@ -1008,7 +1024,9 @@ bool setComtLeafRates(int ctx, fAdr_t leafAdr, CpHandler& cph) {
 				   	comtrees->getPlink(ctx,leafAdr),
 					comtrees->getLinkRates(ctx,leafAdr),
 				        repCp);
-	return reply != 0 && repCp.mode == CtlPkt::POS_REPLY;
+	if (reply == 0) return false;
+	ps->free(reply);
+	return repCp.mode == CtlPkt::POS_REPLY;
 }
 
 /** Modify rates in a comtree.

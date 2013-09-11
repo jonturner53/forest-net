@@ -485,12 +485,13 @@ void newSession(int sock, CpHandler& cph, NetBuffer& buf,
 		reply = "cannot setup session: NetMgr never responded";
 		return;
 	}
+	ps->free(rpx);
 	if (repCp.mode != CtlPkt::POS_REPLY) {
 		cliTbl->getAvailRates(clx).add(rs);
 		cliTbl->releaseClient(clx);
 		reply = "cannot setup new session: NetMgr failed (" +
 			 repCp.errMsg + ")";
-		ps->free(rpx); return;
+		return;
 	}
 	int sess = cliTbl->addSession(repCp.adr1, repCp.adr2, clx);
 	if (sess == 0) {
@@ -792,10 +793,11 @@ void cancelSession(NetBuffer& buf, string& clientName, CpHandler& cph,
 		reply = "cannot cancel session: NetMgr never responded";
 		return;
 	}
+	ps->free(rpx);
 	if (repCp.mode != CtlPkt::POS_REPLY) {
 		reply = "cannot complete cancelSession: NetMgr failed (" +
 			 repCp.errMsg + ")";
-		ps->free(rpx); return;
+		return;
 	}
 	tclx = cliTbl->getClient(targetName); // re-acquire lock on entry
 	if (tclx == 0) {
@@ -842,10 +844,11 @@ void cancelAllSessions(NetBuffer& buf, string& clientName, CpHandler& cph,
 			reply = "cannot cancel session: NetMgr never responded";
 			return;
 		}
+		ps->free(rpx);
 		if (repCp.mode != CtlPkt::POS_REPLY) {
 			reply = "cannot complete cancelSession: NetMgr failed "
 				"(" + repCp.errMsg + ")";
-			ps->free(rpx); return;
+			return;
 		}
 		tclx = cliTbl->getClient(targetName); // re-acquire lock 
 
