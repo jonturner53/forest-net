@@ -183,4 +183,17 @@ public class ConnectionComtCtl {
 	public void setAutoRefresh(boolean b){
 		this.autoRefresh = b;
 	}
+	
+	/**
+	 * Close socket connection to Comtree Controller
+	 */
+	public void closeSocket(){
+		if(serverChan != null && serverChan.isConnected()){
+			try {
+				serverChan.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
+	}
 }
