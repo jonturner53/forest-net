@@ -1,6 +1,5 @@
 package forest.control.console;
 
-import java.awt.Color;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PushbackReader;
@@ -16,15 +15,9 @@ import java.nio.charset.CodingErrorAction;
 import java.util.TreeSet;
 
 import algoLib.misc.Util;
-import forest.common.Forest;
-import forest.common.Pair;
-import forest.common.RateSpec;
 //import forest.common.NetBuffer;
 import forest.control.ComtInfo;
 import forest.control.NetInfo;
-import forest.control.console.model.Circle;
-import forest.control.console.model.Line;
-import forest.control.console.model.Rect;
 
 public class ConnectionComtCtl {
 	
@@ -35,7 +28,7 @@ public class ConnectionComtCtl {
 	
 	private int cmPort = 30121;
 	private String cmAddr = "forest4.arl.wustl.edu";
-
+	
 	private Charset ascii;
 	private CharsetEncoder enc;
 	private CharBuffer cb;
@@ -43,6 +36,8 @@ public class ConnectionComtCtl {
 	private SocketChannel serverChan;
 	private PushbackReader inRdr;
 	//private NetBuffer inBuf;
+	
+	private boolean autoRefresh = true;
 	
 	private NetInfo netInfo;
 	private ComtInfo comtrees;
@@ -159,7 +154,7 @@ public class ConnectionComtCtl {
             return "received comtree info does not match request\n";
         }
         System.out.println(comtrees);
-        return null;
+        return comtrees.toString();
     }
 
 	public ComtInfo getComtrees() {
@@ -182,5 +177,10 @@ public class ConnectionComtCtl {
 		return netInfo;
 	}
 	
-	
+	public boolean isAutoRefresh(){
+		return autoRefresh;
+	}
+	public void setAutoRefresh(boolean b){
+		this.autoRefresh = b;
+	}
 }

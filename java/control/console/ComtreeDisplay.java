@@ -2,11 +2,12 @@ package forest.control.console;
 
 import java.awt.BasicStroke;
 import java.awt.Color;
-import java.awt.Dimension;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Point;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseWheelEvent;
@@ -18,11 +19,10 @@ import java.awt.geom.Point2D;
 import java.awt.geom.Rectangle2D;
 import java.util.ArrayList;
 
-import javax.swing.JLabel;
 import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
-import javax.swing.JWindow;
+import javax.swing.Timer;
 
 import forest.common.Forest;
 import forest.common.Pair;
@@ -33,25 +33,31 @@ import forest.control.console.model.Circle;
 import forest.control.console.model.Line;
 import forest.control.console.model.Rect;
 
-public class ComtreeDisplay extends JPanel {
+public class ComtreeDisplay extends JPanel{
 	public static final int MAXINUM_ZOOM_LEVEL = 3;
 	public static final int MININUM_ZOOM_LEVEL = -5;
 	public static final double  ZOOM_MULTIPLICATION_FACTOR = 1.2;
 
-	ArrayList<Line> lines = new ArrayList<Line>();
-	ArrayList<Circle> circles = new ArrayList<Circle>();
-	ArrayList<Rect> rects = new ArrayList<Rect>();
+	private ArrayList<Line> lines = new ArrayList<Line>();
+	private ArrayList<Circle> circles = new ArrayList<Circle>();
+	private ArrayList<Rect> rects = new ArrayList<Rect>();
 	
-	JPopupMenu popupMenu;
+	private JPopupMenu popupMenu;
 
-	AffineTransform tx = new AffineTransform();
-	int zoomLevel = 0;
-	boolean zoomEnabled = false;
-	Point startDragPointScreen, endDragPointScreen;
-	Point2D.Float startDragPoint = new Point2D.Float();
-	Point2D.Float endDragPoint = new Point2D.Float();
+	private AffineTransform tx = new AffineTransform();
+	private int zoomLevel = 0;
+	private boolean zoomEnabled = false;
+	private Point startDragPointScreen, endDragPointScreen;
+	private Point2D.Float startDragPoint = new Point2D.Float();
+	private Point2D.Float endDragPoint = new Point2D.Float();
+	
+	private ConnectionComtCtl connectionComtCtl;
+	
+	private Timer timer;
 
-	public ComtreeDisplay(){
+	public ComtreeDisplay(ConnectionComtCtl connectionComtCtl){
+		this.connectionComtCtl = connectionComtCtl;
+		
 		setOpaque(true);
 		setDoubleBuffered(true);
 
@@ -237,29 +243,36 @@ public class ComtreeDisplay extends JPanel {
             int right = netInfo.getRight(lnk);
             netInfo.getNodeLocation(left,loc);
             double lx = xorigin + (loc.second - xcenter)*scale;
-            double ly = MAIN_HEIGHT - (yorigin + (loc.first - ycenter)*scale); //Swing coordinates start from the left top.
+            //Swing coordinates start from the left top.
+            double ly = MAIN_HEIGHT - (yorigin + (loc.first - ycenter)*scale); 
             netInfo.getNodeLocation(right,loc);
             double rx = xorigin + (loc.second - xcenter)*scale;
-            double ry = MAIN_HEIGHT - (yorigin + (loc.first - ycenter)*scale); //Swing coordinates start from the left top.
+            //Swing coordinates start from the left top.
+            double ry = MAIN_HEIGHT - (yorigin + (loc.first - ycenter)*scale);
 
             //get LinkRate
             RateSpec rs = new RateSpec(0); 
+            RateSpec availableRs = new RateSpec();
+//            RateSpec ctRs = new RateSpec();
             netInfo.getLinkRates(lnk,rs);
-
+            netInfo.getAvailRates(lnk, availableRs);
+                     
             // System.out.println(lx + " " + ly + " " + rx + " " + ry);
             boolean strong = false;
             if (comtrees.isComtLink(ctx,lnk)){
                 strong = true;
             }
-
-            addLine(new Line((int)lx, (int)ly, (int)rx, (int)ry, strong, rs));
+            
+            addLine(new Line((int)lx, (int)ly, (int)rx, (int)ry, 
+            					strong, rs, availableRs));
         }
 
         // draw all the nodes in the net
         for (int node = netInfo.firstNode(); node != 0; node = netInfo.nextNode(node)) {
         	netInfo.getNodeLocation(node,loc);
             double x = xorigin + (loc.second - xcenter)*scale;
-            double y = MAIN_HEIGHT - (yorigin + (loc.first - ycenter)*scale); //Swing coordinates start from the left top.
+            //Swing coordinates start from the left top.
+            double y = MAIN_HEIGHT - (yorigin + (loc.first - ycenter)*scale); 
 
             int lnkCnt = 0;
             Color nodeColor = Color.LIGHT_GRAY;
@@ -273,10 +286,11 @@ public class ComtreeDisplay extends JPanel {
             }
             if (netInfo.isRouter(node)) {
             	addCircle(new Circle((int)x - 25 , (int)y - 25, 50, 50, 
-                    nodeColor, netInfo.getNodeName(node), lnkCnt));
+            						nodeColor, netInfo.getNodeName(node), lnkCnt));
             } else {
             	addRect(new Rect((int)x - 25 , (int)y - 25, 50, 50, 
-                    nodeColor, netInfo.getNodeName(node), Forest.fAdr2string(netInfo.getNodeAdr(node))));
+            						nodeColor, netInfo.getNodeName(node), 
+            						Forest.fAdr2string(netInfo.getNodeAdr(node))));
             }
         }
         //refreshing GUI
@@ -301,6 +315,31 @@ public class ComtreeDisplay extends JPanel {
 	}
 	public void addRect(Rect rect){
 		rects.add(rect);
+	}
+
+	public void autoUpdateDisplay(final int ccomt){
+		timer = new Timer(2000, new ActionListener() {
+			public void actionPerformed(ActionEvent evt) {
+				NetInfo netInfo = connectionComtCtl.getNetInfo();
+				ComtInfo comtrees = connectionComtCtl.getComtrees();
+				String s = connectionComtCtl.getComtree(ccomt);
+				updateDisplay(ccomt, netInfo, comtrees);
+				
+				if(!connectionComtCtl.isAutoRefresh()) {
+					timer.stop();
+				}
+			}    
+		});
+		timer.start();
+	}
+	
+	public void clearUI(){
+		if(timer != null)
+			timer.stop();
+		clearLines();
+		clearCircles();
+		clearRects();
+		updateUI();
 	}
 }
 

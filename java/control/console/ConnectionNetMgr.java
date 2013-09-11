@@ -21,6 +21,7 @@ import forest.control.console.model.IfaceTable;
 import forest.control.console.model.IfaceTableModel;
 import forest.control.console.model.LinkTable;
 import forest.control.console.model.LinkTableModel;
+import forest.control.console.model.LogFilters;
 import forest.control.console.model.RouteTable;
 import forest.control.console.model.RouteTableModel;
 
@@ -68,7 +69,7 @@ public class ConnectionNetMgr {
 		// add initial greeting message from NetMgr so that we can
 		// detect when we're really talking to server and not just tunnel
 		if (!sendString("Forest-Console-v1\n")) return false;
-		inBuf = new NetBuffer(serverChan,1000);
+		inBuf = new NetBuffer(serverChan,1000);	
 		return true;
 	}
 	
@@ -349,5 +350,32 @@ public class ConnectionNetMgr {
 
 	public AdminProfile getAdminProfile() {
 		return adminProfile;
+	}
+
+	public String setLogOn(boolean isLogOn) {
+		String flag = "";
+		if(isLogOn){
+			flag = "on";
+		}else{
+			flag = "off";
+		}
+		String msg = "setLog: " + flag + "\nover\n";
+//		if (!sendString(msg))
+//			return "cannot send set logging to server";
+		return null;
+	}
+
+	public String sendLogFilters(LogFilters filter) {
+		String inAndOut = filter.getInAndOut();
+		String link = filter.getLink();
+		String comtree = filter.getComtree();
+		String type = filter.getLink();
+		String cpType = filter.getCpType();
+		String msg = "filters: " + inAndOut + " " + link
+						+ " " + comtree + " " + type
+						+ " " + cpType + "\nover\n"; 
+//		if (!sendString(msg))
+//			return "cannot send filters to server";
+		return null;
 	}
 }
