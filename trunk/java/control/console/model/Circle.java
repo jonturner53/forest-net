@@ -7,7 +7,8 @@ public class Circle{
     private String name;
     private int linkCnt;
     private Color color;
-    public Circle(int x, int y, int width, int height, Color color, String name, int linkCnt){
+    public Circle(int x, int y, int width, int height, Color color, 
+    		String name, int linkCnt){
         this.x = x; this.y = y; 
         this.width = width; this.height = height;
         this.color = color;
