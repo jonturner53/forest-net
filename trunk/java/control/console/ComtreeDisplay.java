@@ -77,7 +77,7 @@ public class ComtreeDisplay extends JPanel{
 								l.getRy(), p2.getX(), p2.getY());
 						if(dist >= -1.5 && dist <= 1.5){
 //							if(e.isPopupTrigger())
-							doPop(e, l.getRateSpec().toString());
+							doPop(e, l.getRateSpec().toString(), l.getComtreeRs().toString());
 						}
 					}
 				} catch (NoninvertibleTransformException ex){
@@ -91,8 +91,8 @@ public class ComtreeDisplay extends JPanel{
 				endDragPointScreen = null;
 			}
 		    
-			private void doPop(MouseEvent e, String s){
-		        PopUp menu = new PopUp(s);
+			private void doPop(MouseEvent e, String s, String s2){
+		        PopUp menu = new PopUp(s, s2);
 		        menu.show(e.getComponent(), e.getX(), e.getY());
 		    }
 		});
@@ -202,7 +202,12 @@ public class ComtreeDisplay extends JPanel{
 			g2D.drawString(r.getNodeAddr(), x, y);
 		}
 	}
-	
+	/**
+	 * retrieve netinfo and comtree, and populate table models to update display
+	 * @param ccomt
+	 * @param netInfo
+	 * @param comtrees
+	 */
 	public void updateDisplay(int ccomt, NetInfo netInfo, ComtInfo comtrees){
         // find min and max latitude and longitude
         // expressed in degrees
@@ -223,18 +228,15 @@ public class ComtreeDisplay extends JPanel{
             maxLong = Math.max(maxLong, loc.second);
         }
 
-        // System.out.println(maxLong + " " + minLong);
-        // System.out.println(maxLat + " " + minLat);
-
         double xcenter = (maxLong + minLong)/2;
         double ycenter = (maxLat  + minLat)/2;
         double xscale  = (MAIN_WIDTH - 150)* WIDTH_RATIO / (maxLong - minLong);
         double yscale  = MAIN_HEIGHT  / (maxLat  - minLat);
         double scale   = Math.min(xscale,yscale);
 
-        // System.out.println(xcenter + " " + ycenter + " " + xscale + " " + yscale + " " + scale);
 
         int ctx = comtrees.getComtIndex(ccomt);
+
         double nodeRadius = .05;
 
         //draw all the links
@@ -253,18 +255,32 @@ public class ComtreeDisplay extends JPanel{
             //get LinkRate
             RateSpec rs = new RateSpec(0); 
             RateSpec availableRs = new RateSpec();
-//            RateSpec ctRs = new RateSpec();
+            RateSpec comtreeRs = new RateSpec();
             netInfo.getLinkRates(lnk,rs);
             netInfo.getAvailRates(lnk, availableRs);
-                     
-            // System.out.println(lx + " " + ly + " " + rx + " " + ry);
+            
+       
             boolean strong = false;
             if (comtrees.isComtLink(ctx,lnk)){
                 strong = true;
+                //comtree rate
+                int child = -1;
+                int leftNode = netInfo.getLeft(lnk);
+                int lNodeAddr = netInfo.getNodeAdr(leftNode);
+                int pLink = comtrees.getPlink(ctx, lNodeAddr);
+                if( pLink == lnk){
+                	child = netInfo.getLeft(lnk);
+                }
+                else{
+                	child = netInfo.getRight(lnk);
+                }
+               
+                int nodeAddr = netInfo.getNodeAdr(child);
+                comtrees.getLinkRates(ctx, nodeAddr, comtreeRs);
             }
             
             addLine(new Line((int)lx, (int)ly, (int)rx, (int)ry, 
-            					strong, rs, availableRs));
+            					strong, rs, availableRs, comtreeRs));
         }
 
         // draw all the nodes in the net
@@ -317,6 +333,10 @@ public class ComtreeDisplay extends JPanel{
 		rects.add(rect);
 	}
 
+	/**
+	 * A thread to refresh display
+	 * @param ccomt
+	 */
 	public void autoUpdateDisplay(final int ccomt){
 		timer = new Timer(2000, new ActionListener() {
 			public void actionPerformed(ActionEvent evt) {
@@ -333,6 +353,9 @@ public class ComtreeDisplay extends JPanel{
 		timer.start();
 	}
 	
+	/**
+	 * Clean Comtree Display 
+	 */
 	public void clearUI(){
 		if(timer != null)
 			timer.stop();
@@ -343,10 +366,18 @@ public class ComtreeDisplay extends JPanel{
 	}
 }
 
+/**
+ * Popup class to display rates on comtree
+ * @author Doowon Kim
+ *
+ */
 class PopUp extends JPopupMenu{
 	JMenuItem item;
-	public PopUp(String s){
-		item = new JMenuItem(s);
+	JMenuItem item2;
+	public PopUp(String s, String s2){
+		item = new JMenuItem("Link Rate: " + s);
+		item2 = new JMenuItem("Comtree Rate: " + s2);
 		add(item);
+		add(item2);
 	}
 }
