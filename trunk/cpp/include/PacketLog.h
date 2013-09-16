@@ -40,11 +40,15 @@ public:
 
 	int	size() const;
 	void 	log(int,int,bool,uint64_t);	
-	int	log2string(int, string&);
+	int	extract(int, string&);
+	void	write(ostream&);
 
 private:
 	int	maxEvents;		///< max # of events to record
 	int	maxFilters;		///< max # of filters
+
+	bool	logLocal;		///< if true, dump events to cout
+	uint64_t dumpTime;		///< next time to dump events to cout
 
 	struct EventStruct {
 	pktx px;			///< index of some packet
