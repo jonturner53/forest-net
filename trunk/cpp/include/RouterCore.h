@@ -77,12 +77,13 @@ private:
 	UiSetPair *leafAdr;		///< offsets for in-use and free leaf
 					///< addresses
 
-	struct CpInfo {			///< info on outgoing control packets
+	struct ControlInfo {		///< info on outgoing control packets
 	pktx	px;			///< packet number of retained copy
 	int	nSent;			///< number of times we've sent packet
+	int	lnk;			///< out link (if 0, use forward())
 	uint64_t timestamp;		///< time when we last sent a request
 	};
-	map<uint64_t,CpInfo> *pending;	///< map of pending requests, indexed
+	map<uint64_t,ControlInfo> *pending; ///< map of pending requests
 
 	int	nIfaces;		///< max number of interfaces
 	int	nLnks;			///< max number of links
@@ -149,10 +150,9 @@ private:
 	bool	addLink(CtlPkt&, CtlPkt&);
 	bool	dropLink(CtlPkt&, CtlPkt&);
 	void	dropLink(int,fAdr_t=0);
-	bool	modLink(CtlPkt&, CtlPkt&);
 	bool	getLink(CtlPkt&, CtlPkt&);
+	bool	modLink(CtlPkt&, CtlPkt&);
 	bool	getLinkSet(CtlPkt&, CtlPkt&);
-
 
 	bool	addComtree(CtlPkt&, CtlPkt&);
 	bool	dropComtree(CtlPkt&, CtlPkt&);
@@ -176,15 +176,16 @@ private:
 	bool	dropFilter(CtlPkt&, CtlPkt&);
 	bool	getFilter(CtlPkt&, CtlPkt&);
 	bool	modFilter(CtlPkt&, CtlPkt&);
-	bool 	getFilterSet(CtlPkt&, CtlPkt&);
-	bool 	getLoggedPackets(CtlPkt&, CtlPkt&);
+	bool	getFilterSet(CtlPkt&, CtlPkt&);
+	bool	getLoggedPackets(CtlPkt&, CtlPkt&);
 
 	bool	setLeafRange(CtlPkt&, CtlPkt&);
 
 	void	sendConnDisc(int,Forest::ptyp_t);
 	bool	sendCpReq(CtlPkt&, fAdr_t);
-	void	resendCpReq();
-	void	handleCpReply(pktx, CtlPkt&);
+	bool	sendControl(pktx,uint64_t,int);
+	void	resendControl();
+	void	handleControlReply(pktx);
 
 	void	returnToSender(pktx,CtlPkt&);
 };

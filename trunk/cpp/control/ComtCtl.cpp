@@ -149,9 +149,10 @@ bool bootMe(ipa_t nmIp, ipa_t myIp, fAdr_t& nmAdr, fAdr_t& myAdr,
 			}
 			resendTime += 1000000; // retry after 1 second
 		}
+		usleep(10000);
 		int nbytes = Np4d::recvfrom4d(bootSock,reply.buffer,1500,
 					      srcIp, srcPort);
-		if (nbytes < 0) { usleep(100000); continue; }
+		if (nbytes < 0) continue;
 		reply.unpack();
 
 		// do some checking

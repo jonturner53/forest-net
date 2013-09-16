@@ -162,7 +162,10 @@ cerr << x << endl;
 	int lnk;	  	// # of link on which packet received
 
 	pktx px = ps->alloc();
-        if (px == 0) return 0;
+        if (px == 0) {
+		cerr << "IoProcessor:receive: out of packets\n";
+		return 0;
+	}
         Packet& p = ps->getPacket(px);
         buffer_t& b = *p.buffer;
 
