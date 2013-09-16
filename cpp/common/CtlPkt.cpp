@@ -1406,7 +1406,7 @@ string& CtlPkt::toString(string& s) {
 		if (mode == REQUEST) {
 			ss << " " << avPair2string(COMTREE,s);
 		} else
-			if (rspec1.isSet()) packRspec(RSPEC1,rspec1);
+			if (rspec1.isSet()) avPair2string(RSPEC1,s);
 		break;
 	case GET_COMTREE:
 		if (mode == REQUEST) {

@@ -56,19 +56,13 @@ bool Substrate::init() {
 	}
 
 	// setup sockets
-string s;
-cerr << "binding datagram socket to " << Np4d::ip2string(myIp,s) << ":"
-     << dgPort << endl;
 	dgSock = Np4d::datagramSocket();
 	if (dgSock < 0 || !Np4d::bind4d(dgSock,myIp,dgPort) ||
 	    !Np4d::nonblock(dgSock)) {
 		return false;
 	}
-cerr << "done\n";
 	listenSock = Np4d::streamSocket();
 	if (listenSock < 0) return false;
-cerr << "binding stream socket to " << INADDR_ANY << ":"
-     << listenPort << endl;
 	return	Np4d::bind4d(listenSock,INADDR_ANY,listenPort) &&
 		Np4d::listen4d(listenSock) && Np4d::nonblock(listenSock);
 }
@@ -235,11 +229,11 @@ pktx Substrate::recvFromForest() {
 		ps->free(px); return 0;
 	}
 	p.tunIp = srcIp; p.tunPort = srcPort;
-///*
+/*
 string s;
 cerr << "got packet from " << Np4d::ip2string(srcIp,s) << " " << srcPort << endl;
 cerr << p.toString(s) << endl;
-//*/
+*/
 
 	return px;
 }
@@ -257,11 +251,11 @@ void Substrate::sendToForest(pktx px) {
 	} else {
 		ip = rtrIp; port = rtrPort;
 	}
-///*
+/*
 string s;
 cerr << "substrate sending to " << Np4d::ip2string(ip,s) << " " << port << endl;
 cerr << p.toString(s) << endl;
-//*/
+*/
 	if (port == 0) fatal("Substrate::sendToForest: zero port number");
 	int rv = Np4d::sendto4d(dgSock,(void *) p.buffer, p.length,ip,port);
 	if (rv == -1) fatal("Substrate::sendToForest: failure in sendto");
@@ -291,13 +285,16 @@ bool Substrate::connect() {
 			resendTime += 1000000;
 			resendCount++;
 		}
+		usleep(10000);
 		int rx = recvFromForest();
-		if (rx == 0) { usleep(100000); continue; }
-		Packet& reply = ps->getPacket(rx);
-		bool status =  (reply.type == Forest::CONNECT &&
-		    		reply.flags == Forest::ACK_FLAG);
-		ps->free(px); ps->free(rx);
-		return status;
+		if (rx != 0) {
+			Packet& reply = ps->getPacket(rx);
+			if (reply.type == Forest::CONNECT &&
+			    reply.flags == Forest::ACK_FLAG) {
+				ps->free(px); ps->free(rx);
+				return true;
+			}
+		}
 	}
 }
 
@@ -324,13 +321,16 @@ bool Substrate::disconnect() {
 			resendTime += 1000000;
 			resendCount++;
 		}
+		usleep(10000);
 		int rx = recvFromForest();
-		if (rx == 0) { usleep(100000); continue; }
-		Packet& reply = ps->getPacket(rx);
-		bool status =  (reply.type == Forest::DISCONNECT &&
-		    		reply.flags == Forest::ACK_FLAG);
-		ps->free(px); ps->free(rx);
-		return status;
+		if (rx != 0) {
+			Packet& reply = ps->getPacket(rx);
+			if (reply.type == Forest::DISCONNECT &&
+			    reply.flags == Forest::ACK_FLAG) {
+				ps->free(px); ps->free(rx);
+				return true;
+			}
+		}
 	}
 }
 

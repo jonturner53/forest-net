@@ -468,7 +468,7 @@ void Avatar::run(uint32_t finishTime) {
 					startComtSwitch(newComt,now);
 					waiting4switch = true;
 				}
-				comtSwitchTime = now + randint(10,30)*1000000;
+				comtSwitchTime = now + randint(1,3)*100000;
 			}
 		}
 
@@ -771,13 +771,16 @@ bool Avatar::connect() {
 			resendTime += 1000000;
 			resendCount++;
 		}
+		usleep(10000);
 		int rx = receive();
-		if (rx == 0) { usleep(100000); continue; }
-		Packet& reply = ps->getPacket(rx);
-		bool status =  (reply.type == Forest::CONNECT &&
-		    		reply.flags == Forest::ACK_FLAG);
-		ps->free(px); ps->free(rx);
-		return status;
+		if (rx != 0) {
+			Packet& reply = ps->getPacket(rx);
+			if (reply.type == Forest::CONNECT &&
+			    reply.flags == Forest::ACK_FLAG) {
+				ps->free(px); ps->free(rx);
+				return true;
+			}
+		}
 	}
 }
 
@@ -803,13 +806,16 @@ bool Avatar::disconnect() {
 			resendTime += 1000000;
 			resendCount++;
 		}
+		usleep(10000);
 		int rx = receive();
-		if (rx == 0) { usleep(100000); continue; }
-		Packet& reply = ps->getPacket(rx);
-		bool status =  (reply.type == Forest::DISCONNECT &&
-		    		reply.flags == Forest::ACK_FLAG);
-		ps->free(px); ps->free(rx);
-		return status;
+		if (rx != 0) {
+			Packet& reply = ps->getPacket(rx);
+			if (reply.type == Forest::DISCONNECT &&
+			    reply.flags == Forest::ACK_FLAG) {
+				ps->free(px); ps->free(rx);
+				return true;
+			}
+		}
 	}
 }
 
