@@ -33,14 +33,19 @@ PacketLog::~PacketLog() { delete [] evec; delete [] fvec; delete filters; }
  *  can't be saved, we record a "gap" in the log. If several packets
  *  in a row cannot be logged, the number of missing packets is
  *  recorded as part of the gap record.
+ *  If no filters are defined, we log every packet. This is mainly
+ *  to support local logging, in the absence of a remote client.
+ *  Local logging is enabled if logLocal is true or there is a
+ *  local file called packetLogSwitch containing the string "on".
  */
 void PacketLog::log(pktx px, int lnk, bool sendFlag, uint64_t now) {
-	if (firstFilter() == 0) return;
-	for (fltx f = firstFilter(); f != 0; f = nextFilter(f)) {
-		if (match(f,px,lnk,sendFlag)) break;
-		if (nextFilter(f) == 0) return; // no filters match
+	if (firstFilter() != 0) {
+		for (fltx f = firstFilter(); f != 0; f = nextFilter(f)) {
+			if (match(f,px,lnk,sendFlag)) break;
+			if (nextFilter(f) == 0) return; // no filters match
+		}
 	}
-	// reach here if packet matched some filter
+	// reach here if no filters or packet matched some filter
 	// make a record in event vector
 	int px1 = ps->fullCopy(px);
 	if (px1 == 0 || eventCount == maxEvents) { // record gap
@@ -57,26 +62,69 @@ void PacketLog::log(pktx px, int lnk, bool sendFlag, uint64_t now) {
 		evec[lastEvent].link = 1;
 		evec[lastEvent].time = now;
 		if (eventCount == 0) eventCount++;
-		return;
+	} else {
+		// common case - just add new record for packet
+		if (eventCount > 0)
+			if (++lastEvent >= maxEvents) lastEvent = 0;
+		eventCount++;
+		evec[lastEvent].px = px1;
+		evec[lastEvent].sendFlag = sendFlag;
+		evec[lastEvent].link = lnk;
+		evec[lastEvent].time = now;
 	}
-	// common case - just add new record for packet
-	if (eventCount > 0)
-		if (++lastEvent >= maxEvents) lastEvent = 0;
-	eventCount++;
-	evec[lastEvent].px = px1;
-	evec[lastEvent].sendFlag = sendFlag;
-	evec[lastEvent].link = lnk;
-	evec[lastEvent].time = now;
-	return;
+	// optionally write log entries to cout
+	if (now < dumpTime + 1000000000) return;
+	dumpTime = now;
+	if (logLocal) {
+		write(cout);
+	} else if (firstFilter() == 0) {
+		// check for packetLogSwitch file
+		string fname = "packetLogSwitch";
+		ifstream fs; fs.open(fname.c_str());
+		string plSwitch;
+		if (fs.fail()) return;
+	        if (Misc::readWord(fs,plSwitch) && plSwitch == "on")
+			write(cout);
+		fs.close();
+	}
 }
 
-/** Extract event records from the log.
+/** Write all logged packets.
+ *  @param out is an open output stream
+ */
+void PacketLog::write(ostream& out) {
+	stringstream ss;
+	int count = 0; 
+	while (eventCount > 0) {
+		int px = evec[firstEvent].px;
+		string s;
+		out << Misc::nstime2string(evec[firstEvent].time,s);
+		if (px == 0) {
+			out << " missing " << evec[firstEvent].link << endl;
+		} else {
+			if (evec[firstEvent].sendFlag)	out << "send ";
+			else				out << "recv ";
+			out << "link " << setw(2) << evec[firstEvent].link;
+			out << " " << ps->getPacket(px).toString(s);
+		}
+		ps->free(px);
+		count++; eventCount--;
+		if (++firstEvent >= maxEvents) firstEvent = 0;
+	}
+	out.flush();
+}
+
+/** Extract event records from the log for delivery to remote client.
+ *  Remote logging requires at least one filter to be defined.
+ *  It also disables local logging, as we cannot do both at the same time.
  *  @param maxLen is the maximum number of characters to return
  *  @param s is a reference to a string in which result is returned
  *  @return the number of log events in the returned string.
  *  Events that are copied to buf are removed from the log.
  */
-int PacketLog::log2string(int maxLen, string& s) {
+int PacketLog::extract(int maxLen, string& s) {
+	if (firstFilter() == 0) { return 0; }
+	logLocal = false;
 	stringstream ss;
 	int count = 0; s = "";
 	while (eventCount > 0) {
