@@ -119,16 +119,16 @@ void CtlPkt::reset() {
 	payload = 0; paylen = 0;
 }
 
-#define packPair(x,y) ((payload[pp++] = htonl(x)), (payload[pp++] = htonl(y)))
-#define packNonce(x,y) ((payload[pp++] = htonl(x)), \
-		(payload[pp++] = htonl((int) (((y)>>32)&0xffffffff))), \
-		(payload[pp++] = htonl((int) ((y)&0xffffffff))))
-#define packRspec(x,y) ((payload[pp++] = htonl(x)), \
-				(payload[pp++] = htonl(y.bitRateUp)), \
-				(payload[pp++] = htonl(y.bitRateDown)), \
-				(payload[pp++] = htonl(y.pktRateUp)), \
-				(payload[pp++] = htonl(y.pktRateDown)) \
-			)
+#define packPair(x,y) {payload[pp++] = htonl(x); payload[pp++] = htonl(y); }
+#define packNonce(x,y) {payload[pp++] = htonl(x); \
+		payload[pp++] = htonl((int) (((y)>>32)&0xffffffff)); \
+		payload[pp++] = htonl((int) ((y)&0xffffffff)); }
+#define packRspec(x,y) {payload[pp++] = htonl(x); \
+				payload[pp++] = htonl(y.bitRateUp); \
+				payload[pp++] = htonl(y.bitRateDown); \
+				payload[pp++] = htonl(y.pktRateUp); \
+				payload[pp++] = htonl(y.pktRateDown); \
+			}
 #define packString() {	payload[pp++] = htonl(STRING); \
 			int len = min(stringData.length(), 1300); \
 		      	payload[pp++] = htonl(len); \
@@ -173,7 +173,8 @@ int CtlPkt::pack() {
 		if (mode == REQUEST) {
 			if (comtree == 0) return 0;
 			packPair(COMTREE,comtree);
-		}
+		} else
+			if (rspec1.isSet()) packRspec(RSPEC1,rspec1);
 		break;
 	case CLIENT_GET_COMTREE:
 		if (mode == REQUEST) {
@@ -434,6 +435,7 @@ int CtlPkt::pack() {
 		} else {
 			if (link == 0) return 0;
 			packPair(LINK,link);
+			if (rspec1.isSet()) packRspec(RSPEC1,rspec1);
 		}
 		break;
 	case DROP_COMTREE_LINK:
@@ -444,7 +446,8 @@ int CtlPkt::pack() {
 			if (ip1 != 0) packPair(IP1,ip1);
 			if (port1 != 0) packPair(PORT1,port1);
 			if (adr1 != 0) packPair(ADR1,adr1);
-		}
+		} else
+			if (rspec1.isSet()) packRspec(RSPEC1,rspec1);
 		break;
 	case MOD_COMTREE_LINK:
 		if (mode == REQUEST) {
@@ -452,7 +455,8 @@ int CtlPkt::pack() {
 			packPair(COMTREE,comtree);
 			packPair(LINK,link);
 			if (rspec1.isSet()) packRspec(RSPEC1,rspec1);
-		}
+		} else
+			if (rspec1.isSet()) packRspec(RSPEC1,rspec1);
 		break;
 	case GET_COMTREE_LINK:
 		if (mode == REQUEST) {
@@ -640,11 +644,12 @@ int CtlPkt::pack() {
 	return paylen;
 }
 
-#define unpackWord(x) (x = ntohl(payload[pp++]))
-#define unpackRspec(x) ((x).set(ntohl(payload[pp++]), \
-			      ntohl(payload[pp++]), \
-			      ntohl(payload[pp++]), \
-			      ntohl(payload[pp++]) ))
+#define unpackWord(x) { x = ntohl(payload[pp++]); }
+#define unpackRspec(x) { int bru = ntohl(payload[pp++]); \
+			 int brd = ntohl(payload[pp++]); \
+			 int pru = ntohl(payload[pp++]); \
+			 int prd = ntohl(payload[pp++]); \
+			 (x).set(bru,brd,pru,prd); }
 
 /** Unpack CtlPkt fields from the packet payload.
  *  @return true on success, 0 on failure
@@ -1400,7 +1405,8 @@ string& CtlPkt::toString(string& s) {
 	case DROP_COMTREE:
 		if (mode == REQUEST) {
 			ss << " " << avPair2string(COMTREE,s);
-		}
+		} else
+			if (rspec1.isSet()) packRspec(RSPEC1,rspec1);
 		break;
 	case GET_COMTREE:
 		if (mode == REQUEST) {
@@ -1429,6 +1435,7 @@ string& CtlPkt::toString(string& s) {
 			ss << " " << avPair2string(ADR1,s);
 		} else {
 			ss << " " << avPair2string(LINK,s);
+			ss << " " << avPair2string(RSPEC1,s);
 		}
 		break;
 	case DROP_COMTREE_LINK:
@@ -1438,14 +1445,16 @@ string& CtlPkt::toString(string& s) {
 			ss << " " << avPair2string(IP1,s);
 			ss << " " << avPair2string(PORT1,s);
 			ss << " " << avPair2string(ADR1,s);
-		}
+		} else
+			ss << " " << avPair2string(RSPEC1,s);
 		break;
 	case MOD_COMTREE_LINK:
 		if (mode == REQUEST) {
 			ss << " " << avPair2string(COMTREE,s);
 			ss << " " << avPair2string(LINK,s);
 			ss << " " << avPair2string(RSPEC1,s);
-		}
+		} else
+			ss << " " << avPair2string(RSPEC1,s);
 		break;
 	case GET_COMTREE_LINK:
 		if (mode == REQUEST) {
