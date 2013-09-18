@@ -102,8 +102,8 @@ void PacketLog::write(ostream& out) {
 		if (px == 0) {
 			out << " missing " << evec[firstEvent].link << endl;
 		} else {
-			if (evec[firstEvent].sendFlag)	out << "send ";
-			else				out << "recv ";
+			if (evec[firstEvent].sendFlag)	out << " send ";
+			else				out << " recv ";
 			out << "link " << setw(2) << evec[firstEvent].link;
 			out << " " << ps->getPacket(px).toString(s);
 		}
@@ -134,8 +134,8 @@ int PacketLog::extract(int maxLen, string& s) {
 		if (px == 0) {
 			ss << " missing " << evec[firstEvent].link << endl;
 		} else {
-			if (evec[firstEvent].sendFlag)	ss << "send ";
-			else				ss << "recv ";
+			if (evec[firstEvent].sendFlag)	ss << " send ";
+			else				ss << " recv ";
 			ss << "link " << setw(2) << evec[firstEvent].link;
 			ss << " " << ps->getPacket(px).toString(s);
 		}

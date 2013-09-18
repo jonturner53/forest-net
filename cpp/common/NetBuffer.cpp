@@ -244,8 +244,8 @@ bool NetBuffer::readString(string& s) {
  */
 bool NetBuffer::readBit(bool& b) {
 	if (!skipSpace()) return false;
-	if (*rp == 0) { advance(rp); b = false; return true; }
-	if (*rp == 1) { advance(rp); b = true; return true; }
+	if (*rp == '0') { advance(rp); b = false; return true; }
+	if (*rp == '1') { advance(rp); b = true; return true; }
 	return false;
 }
 
