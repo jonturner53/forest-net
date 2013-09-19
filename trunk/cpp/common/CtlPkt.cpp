@@ -1122,63 +1122,63 @@ string& CtlPkt::cpType2string(CpType type, string& s) {
 
 bool CtlPkt::string2cpType(string& s, CpType& type) {
 	if (s == "undef") type = UNDEF_CPTYPE;
-	else if (s == "client add comtree") type = CLIENT_ADD_COMTREE;
-	else if (s == "client drop comtree") type = CLIENT_DROP_COMTREE;
-	else if (s == "client get comtree") type = CLIENT_GET_COMTREE;
-	else if (s == "client mod comtree") type = CLIENT_MOD_COMTREE;
-	else if (s == "client join comtree") type = CLIENT_JOIN_COMTREE;
-	else if (s == "client leave comtree") type = CLIENT_LEAVE_COMTREE;
-	else if (s == "client resize comtree") type = CLIENT_RESIZE_COMTREE;
-	else if (s == "client get leaf rate") type = CLIENT_GET_LEAF_RATE;
-	else if (s == "client mod leaf rate") type = CLIENT_MOD_LEAF_RATE;
+	else if (s == "client_add_comtree") type = CLIENT_ADD_COMTREE;
+	else if (s == "client_drop_comtree") type = CLIENT_DROP_COMTREE;
+	else if (s == "client_get_comtree") type = CLIENT_GET_COMTREE;
+	else if (s == "client_mod_comtree") type = CLIENT_MOD_COMTREE;
+	else if (s == "client_join_comtree") type = CLIENT_JOIN_COMTREE;
+	else if (s == "client_leave_comtree") type = CLIENT_LEAVE_COMTREE;
+	else if (s == "client_resize_comtree") type = CLIENT_RESIZE_COMTREE;
+	else if (s == "client_get_leaf_rate") type = CLIENT_GET_LEAF_RATE;
+	else if (s == "client_mod_leaf_rate") type = CLIENT_MOD_LEAF_RATE;
 
-	else if (s == "add iface") type = ADD_IFACE;
-	else if (s == "drop iface") type = DROP_IFACE;
-	else if (s == "get iface") type = GET_IFACE;
-	else if (s == "mod iface") type = MOD_IFACE;
+	else if (s == "add_iface") type = ADD_IFACE;
+	else if (s == "drop_iface") type = DROP_IFACE;
+	else if (s == "get_iface") type = GET_IFACE;
+	else if (s == "mod_iface") type = MOD_IFACE;
 
-	else if (s == "add link") type = ADD_LINK;
-	else if (s == "drop link") type = DROP_LINK;
-	else if (s == "get link") type = GET_LINK;
-	else if (s == "mod link") type = MOD_LINK;
-	else if (s == "get link set") type = GET_LINK_SET;
+	else if (s == "add_link") type = ADD_LINK;
+	else if (s == "drop_link") type = DROP_LINK;
+	else if (s == "get_link") type = GET_LINK;
+	else if (s == "mod_link") type = MOD_LINK;
+	else if (s == "get_link_set") type = GET_LINK_SET;
 
-	else if (s == "add comtree") type = ADD_COMTREE;
-	else if (s == "drop comtree") type = DROP_COMTREE;
-	else if (s == "get comtree") type = GET_COMTREE;
-	else if (s == "mod comtree") type = MOD_COMTREE;
+	else if (s == "add_comtree") type = ADD_COMTREE;
+	else if (s == "drop_comtree") type = DROP_COMTREE;
+	else if (s == "get_comtree") type = GET_COMTREE;
+	else if (s == "mod_comtree") type = MOD_COMTREE;
 
-	else if (s == "add comtree link") type = ADD_COMTREE_LINK;
-	else if (s == "drop comtree link") type = DROP_COMTREE_LINK;
-	else if (s == "get comtree link") type = GET_COMTREE_LINK;
-	else if (s == "mod comtree link") type = MOD_COMTREE_LINK;
+	else if (s == "add_comtree_link") type = ADD_COMTREE_LINK;
+	else if (s == "drop_comtree_link") type = DROP_COMTREE_LINK;
+	else if (s == "get_comtree_link") type = GET_COMTREE_LINK;
+	else if (s == "mod_comtree_link") type = MOD_COMTREE_LINK;
 
-	else if (s == "add route") type = ADD_ROUTE;
-	else if (s == "drop route") type = DROP_ROUTE;
-	else if (s == "get route") type = GET_ROUTE;
-	else if (s == "mod route") type = MOD_ROUTE;
-	else if (s == "add route link") type = ADD_ROUTE;
-	else if (s == "drop route link") type = DROP_ROUTE;
+	else if (s == "add_route") type = ADD_ROUTE;
+	else if (s == "drop_route") type = DROP_ROUTE;
+	else if (s == "get_route") type = GET_ROUTE;
+	else if (s == "mod_route") type = MOD_ROUTE;
+	else if (s == "add_route_link") type = ADD_ROUTE;
+	else if (s == "drop_route_link") type = DROP_ROUTE;
 
-	else if (s == "add filter") type = ADD_FILTER;
-	else if (s == "drop filter") type = DROP_FILTER;
-	else if (s == "mod filter") type = MOD_FILTER;
-	else if (s == "get filter") type = GET_FILTER;
-	else if (s == "get filter set") type = GET_FILTER_SET;
-	else if (s == "get logged packets") type = GET_LOGGED_PACKETS;
+	else if (s == "add_filter") type = ADD_FILTER;
+	else if (s == "drop_filter") type = DROP_FILTER;
+	else if (s == "mod_filter") type = MOD_FILTER;
+	else if (s == "get_filter") type = GET_FILTER;
+	else if (s == "get_filter_set") type = GET_FILTER_SET;
+	else if (s == "get_logged_packets") type = GET_LOGGED_PACKETS;
 
-	else if (s == "new session") type = NEW_SESSION;
-	else if (s == "cancel session") type = CANCEL_SESSION;
-	else if (s == "client connect") type = CLIENT_CONNECT;
-	else if (s == "client disconnect") type = CLIENT_DISCONNECT;
+	else if (s == "new_session") type = NEW_SESSION;
+	else if (s == "cancel_session") type = CANCEL_SESSION;
+	else if (s == "client_connect") type = CLIENT_CONNECT;
+	else if (s == "client_disconnect") type = CLIENT_DISCONNECT;
 
-	else if (s == "set leaf range") type = SET_LEAF_RANGE;
-	else if (s == "config leaf") type = CONFIG_LEAF;
+	else if (s == "set_leaf_range") type = SET_LEAF_RANGE;
+	else if (s == "config_leaf") type = CONFIG_LEAF;
 
-	else if (s == "boot router") type = BOOT_ROUTER;
-	else if (s == "boot complete") type = BOOT_COMPLETE;
-	else if (s == "boot abort") type = BOOT_ABORT;
-	else if (s == "boot leaf") type = BOOT_LEAF;
+	else if (s == "boot_router") type = BOOT_ROUTER;
+	else if (s == "boot_complete") type = BOOT_COMPLETE;
+	else if (s == "boot_abort") type = BOOT_ABORT;
+	else if (s == "boot_leaf") type = BOOT_LEAF;
 
 	else return false;
 	return true;
