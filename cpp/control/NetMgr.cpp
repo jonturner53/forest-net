@@ -275,6 +275,18 @@ cerr << "cmd=" << cmd << endl;
 			getIfaceTable(buf,reply,cph);
 		} else if (cmd == "getRouteTable") {
 			getRouteTable(buf,reply,cph);
+		} else if (cmd == "addFilter"){
+			addFilter(buf,reply,cph);
+		} else if (cmd == "modFilter"){
+			modFilter(buf,reply,cph);
+		} else if (cmd == "dropFilter"){
+			dropFilter(buf,reply,cph);
+		} else if (cmd == "getFilter"){
+			getFilter(buf,reply,cph);
+		} else if (cmd == "getFilterSet"){
+			getFilterSet(buf,reply,cph);
+		} else if (cmd == "getLoggedPackets"){
+			getLoggedPackets(buf,reply,cph);
 		} else {
 			reply = "unrecognized input\n";
 		}
@@ -442,9 +454,154 @@ void changePassword(NetBuffer& buf, string& adminName, string& reply) {
 	return;
 }
 
+/** Allocate log filter in router and return filter index to Console.
+ *  Reads router name from the socket.
+ *  @param buf is a reference to a NetBuffer object for the socket
+ *  @param reply is a reference to a string to be returned to console
+ *  @param cph is a reference to this thread's control packet hander
+ */
+void addFilter(NetBuffer& buf, string& reply, CpHandler& cph) {
+	string rtrName; int rtr;
+	if (!buf.verify(':') || !buf.readName(rtrName) ||
+	    (rtr = net->getNodeNum(rtrName)) == 0) {
+		reply.assign("invalid request\n"); return;
+	}
+	fAdr_t radr = net->getNodeAdr(rtr);
+	pktx repx; CtlPkt repCp;
+	repCp.reset();
+	repx = cph.addFilter(radr, repCp);
+	if (repx == 0 || repCp.mode != CtlPkt::POS_REPLY) {
+		reply.assign("could not add log filter\n"); return;
+	}
+	string index = to_string(repCp.index1);
+	reply.append(index);
+	reply.append("\n");
+}
 
+/** Modify log filter in router.
+ *  Reads router name and filter index from the socket.
+ *  @param buf is a reference to a NetBuffer object for the socket
+ *  @param reply is a reference to a string to be returned to console
+ *  @param cph is a reference to this thread's control packet hander
+ */
+void modFilter(NetBuffer& buf, string& reply, CpHandler& cph){
+	string rtrName; int rtr, fx = -1;
+	string filterString;
+	if (!buf.verify(':') || !buf.readName(rtrName) ||
+			((rtr = net->getNodeNum(rtrName)) == 0) || 
+			!buf.readInt(fx) || (fx < 0) ||
+			!buf.nextLine() || !buf.readLine(filterString)){
+		reply.assign("invalid request\n"); return;
+	}
+	fAdr_t radr = net->getNodeAdr(rtr);
+	pktx repx; CtlPkt repCp;
+	repCp.reset();
+	repx = cph.modFilter(radr, fx, filterString, repCp);
+	if (repx == 0 || repCp.mode != CtlPkt::POS_REPLY) {
+		reply.assign("could not modify log filter\n"); return;
+	}
+}
 
+/** Drop log filter from router.
+ *  Reads router name and filter index from the socket.
+ *  @param buf is a reference to a NetBuffer object for the socket
+ *  @param reply is a reference to a string to be returned to console
+ *  @param cph is a reference to this thread's control packet hander
+ */
+void dropFilter(NetBuffer& buf, string& reply, CpHandler& cph){
+	string rtrName; int rtr, fx = -1;
+	if (!buf.verify(':') || !buf.readName(rtrName) ||
+			((rtr = net->getNodeNum(rtrName)) == 0) ||
+			!buf.readInt(fx) || (fx < 0)){
+		reply.assign("invalid request\n"); return;
+	}
+	fAdr_t radr = net->getNodeAdr(rtr);
+	pktx repx; CtlPkt repCp;
+	repCp.reset();
+	repx = cph.dropFilter(radr, fx, repCp);
+	if (repx == 0 || repCp.mode != CtlPkt::POS_REPLY) {
+		reply.assign("could not drop log filter\n"); return;
+	}
+}
 
+/** Get log filter from router and return to Console.
+ *  Reads router name and filter index from the socket.
+ *  Log filter is returned as a string line.
+ *  @param buf is a reference to a NetBuffer object for the socket
+ *  @param reply is a reference to a string to be returned to console
+ *  @param cph is a reference to this thread's control packet hander
+ */
+void getFilter(NetBuffer& buf, string& reply, CpHandler& cph){
+	string rtrName; int rtr, fx = -1;
+	if (!buf.verify(':') || !buf.readName(rtrName) ||
+			((rtr = net->getNodeNum(rtrName)) == 0) ||
+			!buf.readInt(fx) || (fx < 0)){
+		reply.assign("invalid request\n"); return;
+	}
+	fAdr_t radr = net->getNodeAdr(rtr);
+	pktx repx; CtlPkt repCp;
+	repCp.reset();
+	repx = cph.getFilter(radr, fx, repCp);
+	if (repx == 0 || repCp.mode != CtlPkt::POS_REPLY) {
+		reply.assign("could not get log filter\n"); return;
+	}
+	reply.append(repCp.stringData);
+	reply.append("\n");
+}
+
+/** Get log filter set from router and return to Console.
+ *  Reads router name from the socket.
+ *	Log filter sets are returned as a text string which each entry on 
+ *  a seprate line.
+ *  @param buf is a reference to a NetBuffer object for the socket
+ *  @param reply is a reference to a string to be returned to console
+ *  @param cph is a reference to this thread's control packet hander
+ */
+void getFilterSet(NetBuffer& buf, string& reply, CpHandler& cph){
+	string rtrName; int rtr;
+	if (!buf.verify(':') || !buf.readName(rtrName) ||
+			((rtr = net->getNodeNum(rtrName)) == 0)){
+		reply.assign("invalid request\n"); return;
+	}
+	fAdr_t radr = net->getNodeAdr(rtr);
+	pktx repx; CtlPkt repCp;
+	int fx = 0;
+	while(true){
+		repCp.reset();
+		repx = cph.getFilterSet(radr, fx, 10, repCp);
+		if (repx == 0 || repCp.mode != CtlPkt::POS_REPLY) {
+			reply.assign("could not get filter set \n"); return;
+		}
+		reply.append(repCp.stringData);
+		if(repCp.index2 == 0) return;
+		fx = repCp.index2;
+	}
+}
+
+/** Get logged packets from router and return to Console.
+ *  Reads router name from the socket.
+ *	Logged packets are returned as a text string which each entry on a
+ *  separate line.
+ *  @param buf is a reference to a NetBuffer object for the socket
+ *  @param reply is a reference to a string to be returned to console
+ *  @param cph is a reference to this thread's control packet hander
+ */
+void getLoggedPackets(NetBuffer& buf, string& reply, CpHandler& cph){
+	string rtrName; int rtr;
+	if (!buf.verify(':') || !buf.readName(rtrName) ||
+			((rtr = net->getNodeNum(rtrName)) == 0)){
+		reply.assign("invalid request\n"); return;
+	}
+	fAdr_t radr = net->getNodeAdr(rtr);
+	pktx repx; CtlPkt repCp;
+	repCp.reset();
+	repx = cph.getLoggedPackets(radr, repCp);
+	if (repx == 0 || repCp.mode != CtlPkt::POS_REPLY) {
+		reply.assign("could not get logged packets \n"); return;
+	}
+	reply.append(repCp.stringData);
+	reply.append("\n");
+}
 
 /** Get link table from router and return to Console.
  *  Table is returned as a text string which each entry on a separate line.

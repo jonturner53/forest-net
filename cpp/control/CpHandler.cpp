@@ -487,7 +487,7 @@ pktx CpHandler::dropFilter(fAdr_t dest, int filter, CtlPkt& repCp) {
  */
 pktx CpHandler::modFilter(fAdr_t dest, int filter, string& filterString,
 			  CtlPkt& repCp) {
-	CtlPkt reqCp(CtlPkt::MOD_LINK,CtlPkt::REQUEST,0);
+	CtlPkt reqCp(CtlPkt::MOD_FILTER,CtlPkt::REQUEST,0);
 	reqCp.index1 = filter; reqCp.stringData.assign(filterString);
 	return sendRequest(reqCp,dest,repCp);
 }
