@@ -20,8 +20,8 @@ PacketFilter::PacketFilter() { on = false; }
  */
 string& PacketFilter::toString(string& s) const {
 	stringstream ss;
-	ss << (on ? 1 : 0 ) << " " << lnk << " "
-	   << (in ? 1 : 0) << (out ? 1 : 0) << " ";
+	ss << (on ? '1' : '0' ) << " " << lnk << " "
+	   << (in ? '1' : '0') << (out ? '1' : '0') << " ";
 	ss << comt << " ";
 	ss << Forest::fAdr2string(srcAdr,s) << " ";
 	ss << Forest::fAdr2string(dstAdr,s) << " ";
