@@ -97,6 +97,13 @@ void 	getComtreeTable(NetBuffer&, string&, CpHandler&);
 void 	getIfaceTable(NetBuffer&, string&, CpHandler&);
 void 	getRouteTable(NetBuffer&, string&, CpHandler&);
 
+void	addFilter(NetBuffer&, string&, CpHandler&);
+void	modFilter(NetBuffer&, string&, CpHandler&);
+void	dropFilter(NetBuffer&, string&, CpHandler&);
+void	getFilter(NetBuffer&, string&, CpHandler&);
+void	getFilterSet(NetBuffer&, string&, CpHandler&);
+void 	getLoggedPackets(NetBuffer& buf, string& reply, CpHandler& cph);
+
 uint64_t generateNonce();
 fAdr_t	setupLeaf(int, pktx, CtlPkt&, int, int, uint64_t,CpHandler&,bool=false);
 bool	setupEndpoint(int, int, pktx, CtlPkt&, CpHandler&, bool=false);
