@@ -35,6 +35,7 @@ from direct.interval.IntervalGlobal import Sequence
 from panda3d.core import Point3
 
 import Util
+import getpass
 from Util import *
 from Net import *
 from Avatar import *

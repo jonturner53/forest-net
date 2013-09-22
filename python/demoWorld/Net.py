@@ -180,24 +180,26 @@ class Net :
 		cmSock.sendall("Forest-login-v1\nlogin: " + uname + \
                 	       "\npassword: " + pword + "\nover\n")
 
-
 		buf = ""
 		print "reading line"
 		line,buf = self.readLine(cmSock,buf)
 		print "got line=", line
 		if line != "success" : return False
 		line,buf = self.readLine(cmSock,buf)
+		print line
 		if line != "over" : return False
 
 		cmSock.sendall("newSession\nover\n")
 
 		line,buf = self.readLine(cmSock,buf)
+		print line
 		chunks = line.partition(":")
 		if chunks[0].strip() != "yourAddress" or chunks[1] != ":" :
 			return False
 		self.myFadr = string2fadr(chunks[2].strip())
 
 		line,buf = self.readLine(cmSock,buf)
+		print line
 		chunks = line.partition(":")
 		if chunks[0].strip() != "yourRouter" or chunks[1] != ":" :
 			return False
@@ -209,18 +211,21 @@ class Net :
 		self.rtrFadr = string2fadr(chunks[2].strip())
 
 		line,buf = self.readLine(cmSock,buf)
+		print line
 		chunks = line.partition(":")
 		if chunks[0].strip() != "comtCtlAddress" or chunks[1] != ":" :
 			return False
 		self.comtCtlFadr = string2fadr(chunks[2].strip())
 
 		line,buf = self.readLine(cmSock,buf)
+		print line
 		chunks = line.partition(":")
 		if chunks[0].strip() != "connectNonce" or chunks[1] != ":" :
 			return False
 		self.nonce = int(chunks[2].strip())
 
 		line,buf = self.readLine(cmSock,buf) 
+		print line
 		if line != "overAndOut" : return False
 
 		cmSock.close()
