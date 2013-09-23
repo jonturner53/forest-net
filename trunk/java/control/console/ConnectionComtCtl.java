@@ -27,7 +27,7 @@ public class ConnectionComtCtl {
     private final int MAXCOMTREE = 20000;
 	
 	private int cmPort = 30121;
-	private String cmAddr = "forest4.arl.wustl.edu";
+	private String cmAddr = "";
 	
 	private Charset ascii;
 	private CharsetEncoder enc;

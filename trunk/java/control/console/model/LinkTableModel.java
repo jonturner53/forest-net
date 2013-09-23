@@ -5,15 +5,17 @@ import java.util.ArrayList;
 import javax.swing.table.AbstractTableModel;
 
 public class LinkTableModel extends AbstractTableModel {
-    private String[] columnNames = {"link", "iface", "peerIp:port", "peerType", "peerAdr", "rates"};
+
+	private static final long serialVersionUID = 5896172706741952062L;
+	private String[] columnNames = {"link", "iface", "peerIp:port", "peerType", "peerAdr", "rates"};
     private int[] widths = {1, 1, 3, 1, 1, 3};
-    private ArrayList<LinkTable> data;
-    public LinkTableModel(){ data = new ArrayList<LinkTable>(); }
+    private ArrayList<Link> data;
+    public LinkTableModel(){ data = new ArrayList<Link>(); }
     public int getColumnCount() { return columnNames.length; }
     public int getRowCount() { return data.size(); }
     public String getColumnName(int col) { return columnNames[col];}
     public Object getValueAt(int row, int col) { 
-        LinkTable lt = data.get(row);
+        Link lt = data.get(row);
         if(lt == null) return null;
         switch (col){
             case 0: return lt.getLink(); 
@@ -25,7 +27,7 @@ public class LinkTableModel extends AbstractTableModel {
             default: return null;
         }
     }
-    public void addLinkTable(LinkTable lt) { data.add(lt); }
+    public void addLinkTable(Link lt) { data.add(lt); }
     public void clear(){ data.clear(); }
     public int getWidth(int i) { return widths[i];}
 }

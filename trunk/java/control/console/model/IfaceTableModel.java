@@ -4,15 +4,17 @@ import java.util.ArrayList;
 import javax.swing.table.AbstractTableModel;
 
 public class IfaceTableModel extends AbstractTableModel {
-    private String[] columnNames = {"iface", "ip", "rates"};
+
+	private static final long serialVersionUID = 5816215241745495815L;
+	private String[] columnNames = {"iface", "ip", "rates"};
     private int[] widths = {2, 2, 6};
-    private ArrayList<IfaceTable> data;
-    public IfaceTableModel(){ data = new ArrayList<IfaceTable>(); }
+    private ArrayList<Iface> data;
+    public IfaceTableModel(){ data = new ArrayList<Iface>(); }
     public int getColumnCount() { return columnNames.length; }
     public int getRowCount() { return data.size(); }
     public String getColumnName(int col) { return columnNames[col];}
     public Object getValueAt(int row, int col) { 
-        IfaceTable it = data.get(row);
+        Iface it = data.get(row);
         if(it == null) return null;
         switch (col){
             case 0: return it.getIface(); 
@@ -21,7 +23,7 @@ public class IfaceTableModel extends AbstractTableModel {
             default: return null;
         }
     }
-    public void addIfaceTable(IfaceTable it) { data.add(it); }
+    public void addIfaceTable(Iface it) { data.add(it); }
     public void clear(){ data.clear(); }
     public int getWidth(int i) { return widths[i];}
 }

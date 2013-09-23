@@ -14,21 +14,23 @@ import java.util.ArrayList;
 
 import javax.swing.table.AbstractTableModel;
 
+import forest.common.Forest;
 import forest.common.NetBuffer;
+import forest.control.NetInfo;
 import forest.control.console.model.AdminProfile;
-import forest.control.console.model.ComtreeTable;
+import forest.control.console.model.Comtree;
 import forest.control.console.model.ComtreeTableModel;
-import forest.control.console.model.IfaceTable;
+import forest.control.console.model.Iface;
 import forest.control.console.model.IfaceTableModel;
-import forest.control.console.model.LinkTable;
+import forest.control.console.model.Link;
 import forest.control.console.model.LinkTableModel;
-import forest.control.console.model.LogFilters;
-import forest.control.console.model.RouteTable;
+import forest.control.console.model.LogFilter;
+import forest.control.console.model.Route;
 import forest.control.console.model.RouteTableModel;
 
 public class ConnectionNetMgr {
 	private String nmAddr;
-	private int nmPort = -1;
+	private int nmPort = 30120;
 	
 	private Charset ascii;
 	private CharsetEncoder enc;
@@ -56,7 +58,11 @@ public class ConnectionNetMgr {
 		bb = ByteBuffer.allocate(1024);
 	}
 	
-	protected boolean connectToNetMgr() {
+	/**
+	 * Connect to NetMgr
+	 * @return successful
+	 */
+	public boolean connectToNetMgr() {
 		// open channel to server
 		// on success, return true
 		try {
@@ -79,7 +85,7 @@ public class ConnectionNetMgr {
 	 * @param  msg message
 	 * @return successful
 	 */
-	protected boolean sendString(String msg){
+	public boolean sendString(String msg){
 		bb.clear(); cb.clear();
 		cb.put(msg); cb.flip();
 		enc.encode(cb,bb,false); bb.flip();
@@ -99,7 +105,7 @@ public class ConnectionNetMgr {
 	 *  @return null if the operation succeeds, otherwise a string
 	 *  containing an error message from the client manager
 	 */
-	protected String login(String user, String pwd){
+	public String login(String user, String pwd){
 		if (user.length() == 0 || pwd.length() == 0)
 			return "missing user name or password";
 		if (!sendString("login: " + user + "\n" +
@@ -129,7 +135,7 @@ public class ConnectionNetMgr {
 	 *  @return null if the operation succeeded, otherwise,
 	 *  a string containing an error message from the net manager
 	 */
-	protected String getProfile(String userName) {
+	public String getProfile(String userName) {
 		String s;
 		boolean gotName, gotEmail;
 		adminProfile.setUserName(userName);
@@ -177,7 +183,7 @@ public class ConnectionNetMgr {
 	 *  @return null if the operation succeeds, otherwise a string
 	 *  containing an error message from the net manager
 	 */
-	protected String newAccount(String user, String pwd) {
+	public String newAccount(String user, String pwd) {
 		if (!sendString("newAccount: " + user + "\n" +
 				"password: " + pwd + "\nover\n"))
 			return "cannot send request to server";
@@ -201,7 +207,7 @@ public class ConnectionNetMgr {
 	 *  @return null if the operation succeeded, otherwise,
 	 *  a string containing an error message from the net manager
 	 */
-	protected String updateProfile(String userName, String realName, String email) {
+	public String updateProfile(String userName, String realName, String email) {
 		if (userName.length() == 0) return "empty user name";
 		if (!sendString("updateProfile: " + userName + "\n" +
 			   	"realName: \"" + realName + "\"\n" +
@@ -225,7 +231,7 @@ public class ConnectionNetMgr {
 	 *  @return null if the operation succeeded, otherwise,
 	 *  a string containing an error message from the net manager
 	 */
-	protected String changePassword(String userName, String pwd) {
+	public String changePassword(String userName, String pwd) {
 		if (userName.length() == 0 || pwd.length() == 0)
 			return "empty user name or password";
 		if (!sendString("changePassword: " + userName + " "
@@ -249,7 +255,7 @@ public class ConnectionNetMgr {
 	 * @param routerName Router Name such as r1
 	 * @return null if successful, otherwise, an error message
 	 */
-	protected String getTable(AbstractTableModel tableModel, String routerName){
+	public String getTable(AbstractTableModel tableModel, String routerName){
 		String type = null;
 		if(tableModel instanceof ComtreeTableModel){
 			type = "Comtree";
@@ -274,16 +280,27 @@ public class ConnectionNetMgr {
 		while(true){
 			String str = inBuf.readLine();
 			System.out.println(str);
+			if(str.equals("could not read comtree table") || 
+					str.equals("could not read iface table") ||
+					str.equals("could not read route table") ||
+					str.equals("could not read link table")){
+				String tmp = inBuf.readLine();
+				if(tmp.equals("over")){
+					return "could not read table";
+				}
+			} else if(str.equals("                                                                                                                                                                                                                                                                                                                                   over")){
+				return "could not read link table";
+			}
 			if(str.equals("over")){
 				if(tableModel instanceof ComtreeTableModel){
 					for(String s : lines){
 						s = s.replaceAll("\\s+", " ");
 						String[] tokens = s.split(" ");
 						if(tokens.length == 6){
-							((ComtreeTableModel) tableModel).addComtreeTable(new ComtreeTable(
+							((ComtreeTableModel) tableModel).addComtreeTable(new Comtree(
 									tokens[1], tokens[2], tokens[3], tokens[4], tokens[5]));
 						} else if (tokens.length == 5){
-							((ComtreeTableModel) tableModel).addComtreeTable(new ComtreeTable(
+							((ComtreeTableModel) tableModel).addComtreeTable(new Comtree(
 									tokens[1], tokens[2], tokens[3], " ", tokens[4]));
 						} else {
 							return "tokens error";
@@ -294,7 +311,7 @@ public class ConnectionNetMgr {
 						s = s.replaceAll("\\s+", " ");
 						String[] tokens = s.split(" ");
 						if(tokens.length == 9){
-							((LinkTableModel) tableModel).addLinkTable(new LinkTable(tokens[1], 
+							((LinkTableModel) tableModel).addLinkTable(new Link(tokens[1], 
 										tokens[2], tokens[3], tokens[4], tokens[5], tokens[6]));
 						} else {
 							return "tokens error";
@@ -305,7 +322,7 @@ public class ConnectionNetMgr {
 						s = s.replaceAll("\\s+", " ");
 						String[] tokens = s.split(" ");
 						if(tokens.length == 4){
-							((IfaceTableModel) tableModel).addIfaceTable(new IfaceTable(tokens[1], 
+							((IfaceTableModel) tableModel).addIfaceTable(new Iface(tokens[1], 
 									tokens[2], tokens[3]));
 						} else {
 							return "tokens error";
@@ -315,7 +332,7 @@ public class ConnectionNetMgr {
 					for(String s : lines){
 						String[] tokens = s.split(" ");
 						if(tokens.length == 3){
-							((RouteTableModel) tableModel).addRouteTable(new RouteTable(tokens[0], 
+							((RouteTableModel) tableModel).addRouteTable(new Route(tokens[0], 
 																		tokens[1], tokens[2]));
 						} else {
 							return "tokens error";
@@ -332,54 +349,179 @@ public class ConnectionNetMgr {
 		tableModel.fireTableDataChanged();
 		return null;
 	}
+	
+	public String addFilter(LogFilter filter){
+		String rtnName = filter.getRtn();
+		String msg = "addFilter: " + rtnName + "\n";
+		if(!sendString(msg))
+			return "connot add log filter to server";
 		
-	public String getNmAddr() {
-		return nmAddr;
-	}
-
-	public void setNmAddr(String nmAddr) {
-		this.nmAddr = nmAddr;
-	}
-
-	public int getNmPort() {
-		return nmPort;
-	}
-
-	public void setNmPort(int nmPort) {
-		this.nmPort = nmPort;
-	}
-
-	public AdminProfile getAdminProfile() {
-		return adminProfile;
-	}
-
-	public String setLogOn(boolean isLogOn) {
-		String flag = "";
-		if(isLogOn){
-			flag = "on";
-		}else{
-			flag = "off";
-		}
-		String msg = "setLog: " + flag + "\nover\n";
-//		if (!sendString(msg))
-//			return "cannot send set logging to server";
-		return null;
-	}
-
-	public String sendLogFilters(LogFilters filter) {
-		String inAndOut = filter.getInAndOut();
-		String link = filter.getLink();
-		String comtree = filter.getComtree();
-		String type = filter.getLink();
-		String cpType = filter.getCpType();
-		String msg = "filters: " + inAndOut + " " + link
-						+ " " + comtree + " " + type
-						+ " " + cpType + "\nover\n"; 
-//		if (!sendString(msg))
-//			return "cannot send filters to server";
+		String str = inBuf.readLine(); //success
+		if(str.equals("could not add log filter"))
+			return "could not add log filter";
+		System.out.println(str);
+		
+		str = inBuf.readLine(); //id
+		System.out.println(str);
+		int id = Integer.valueOf(str);
+		filter.setId(id);
+		
+		str = inBuf.readLine(); //over
+		System.out.println(str);
+		
+		modFilter(filter);
+		
 		return null;
 	}
 	
+	/**
+	 * Modify log filter
+	 * @return null on success, otherwise, error message
+	 */
+	public String modFilter(LogFilter filter){
+		String rtnName = filter.getRtn();
+		int fIndex = filter.getId(); //id
+		StringBuilder filterString = new StringBuilder();
+		
+		filterString.append(1); //on
+		filterString.append(" ");
+		
+		if(filter.getIn()) //in
+			filterString.append(1);
+		else
+			filterString.append(0);
+		filterString.append(" ");
+		
+		if(filter.getOut()) //out
+			filterString.append(1);
+		else
+			filterString.append(0);
+		filterString.append(" ");
+		
+		filterString.append(filter.getComtree()); //comtree
+		filterString.append(" ");
+
+		filterString.append(filter.getSrcAdr()); //src addr
+		filterString.append(" ");
+		filterString.append(filter.getDstAdr());//dest addr
+		filterString.append(" ");
+		
+		filterString.append(filter.getType()); //type
+		filterString.append(" ");
+		filterString.append(filter.getCpType()); //cpType
+		filterString.append(" ");
+		
+		String msg = "modFilter: " + rtnName + " " + fIndex + 
+						"\n" + filterString.toString() + "\n";
+		if(!sendString(msg))
+			return "connot modify log filter";
+		
+		String str = inBuf.readLine(); //success
+		if(str.equals("could not modify log filter"))
+			return "could not modify log filter";
+		System.out.println(str);
+		
+		str = inBuf.readLine(); //over
+		System.out.println(str);
+		
+//		getFilter();
+		return null;
+	}
+	
+	/**
+	 * Drop log filter
+	 * @return
+	 */
+	public String dropFilter(String rtnName, int fx){
+		String msg = "dropFilter: " + rtnName + " " + fx + "\n";
+		if(!sendString(msg))
+			return "connot drop log filter from server";
+		
+		String str = inBuf.readLine(); //success
+		if(str.equals("could not drop log filter"))
+			return "could not drop log filter";
+		System.out.println(str);
+		
+		str = inBuf.readLine();
+		System.out.println(str);
+		
+		return null;
+	}
+	
+	/**
+	 * get log filter
+	 * @return
+	 */
+	public String getFilter(){
+		String rtnName = "r1";
+		String msg = "getFilter: " + rtnName + " " + "1" + "\n";
+		if(!sendString(msg))
+			return "connot get log filter from server";
+		
+		String str = inBuf.readLine(); //success
+		if(str.equals("could not get log filter"))
+			return "could not get log filter";
+		System.out.println(str);
+		
+		str = inBuf.readLine();
+		System.out.println(str);
+		
+		str = inBuf.readLine();
+		System.out.println(str);
+		
+		return null;
+	}
+	
+	/**
+	 * Get log filter set
+	 * @return
+	 */
+	public String getFilterSet(ArrayList<String> filters){
+		String rtnName = "r1";
+		String msg = "getFilterSet: " + rtnName + "\n";
+		if(!sendString(msg))
+			return "connot get log filter set from server";
+		
+		while(true){
+			String str = inBuf.readLine();
+			if(str.equals("over")){
+				break;
+			} else if(str.equals("success")){
+				continue;
+			} else {
+				filters.add(str);
+				System.out.println(str);
+			}
+		}
+		
+		return null;
+	}
+	
+	/**
+	 * Get logged packets
+	 * @return null if successful, otherwise error message
+	 */
+	public String getLoggedPackets(ArrayList<String> logs) {
+		String msg = "getLoggedPackets: "+ "r1" + " " + "\nover\n";
+		if(!sendString(msg))
+			return "connot retrieve logged packets";
+		while(true){
+			String str = inBuf.readLine();
+			if(str.equals("over")){
+				break;
+			} else if(str.equals("success")){
+				continue;
+			} else {
+				logs.add(str);
+				System.out.println(str);
+			}
+		}
+		return null;
+	}
+	
+	/**
+	 * Close socket to Net Mgr
+	 */
 	public void closeSocket(){
 		if(serverChan != null && serverChan.isConnected()){
 			try {
@@ -389,4 +531,45 @@ public class ConnectionNetMgr {
 			}
 		}
 	}
+	
+	/**
+	 * Get NetMgr address
+	 * @return
+	 */
+	public String getNmAddr() {
+		return nmAddr;
+	}
+
+	/**
+	 * Set NetMgr address
+	 * @param nmAddr
+	 */
+	public void setNmAddr(String nmAddr) {
+		this.nmAddr = nmAddr;
+	}
+
+	/**
+	 * Get NetMgr port number
+	 * @return
+	 */
+	public int getNmPort() {
+		return nmPort;
+	}
+
+	/**
+	 * Set NetMgr port number, default: 30120
+	 * @param nmPort
+	 */
+	public void setNmPort(int nmPort) {
+		this.nmPort = nmPort;
+	}
+
+	/**
+	 * Get AmdinProfile
+	 * @return
+	 */
+	public AdminProfile getAdminProfile() {
+		return adminProfile;
+	}
+
 }

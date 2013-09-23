@@ -11,6 +11,7 @@ import javax.swing.JTextField;
 
 public class LoginDialog extends JPanel{
 	
+	private static final long serialVersionUID = 2956041449726807762L;
 	private JLabel username;
 	private JLabel password;
 	private JTextField usernameInput;
@@ -26,6 +27,7 @@ public class LoginDialog extends JPanel{
         c.gridy = 1;
         panel.add(username,c);
         usernameInput = new JTextField(10);
+        
         c.gridx = 1;
         c.gridy = 1;
         panel.add(usernameInput,c);
@@ -35,6 +37,7 @@ public class LoginDialog extends JPanel{
         c.gridy = 2;
         panel.add(password,c);
         passwordInput = new JPasswordField(10);
+        
         c.gridx = 1;
         c.gridy = 2;
         panel.add(passwordInput,c);

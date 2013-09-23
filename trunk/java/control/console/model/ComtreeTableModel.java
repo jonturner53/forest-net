@@ -4,15 +4,17 @@ import java.util.ArrayList;
 import javax.swing.table.AbstractTableModel;
 
 public class ComtreeTableModel extends AbstractTableModel {
+
+	private static final long serialVersionUID = 8309007097508242075L;
 	private String[] columnNames = {"comtree", "inCore", "pLink", "comtLinks", "coreLinks"};
     private int[] widths = {2, 1, 1, 3, 3};
-    private ArrayList<ComtreeTable> data;
-    public ComtreeTableModel(){ data = new ArrayList<ComtreeTable>(); }
+    private ArrayList<Comtree> data;
+    public ComtreeTableModel(){ data = new ArrayList<Comtree>(); }
     public int getColumnCount() { return columnNames.length; }
     public int getRowCount() { return data.size(); }
     public String getColumnName(int col) { return columnNames[col];}
     public Object getValueAt(int row, int col) { 
-        ComtreeTable ct = data.get(row);
+        Comtree ct = data.get(row);
         if(ct == null) return null;
         switch (col){
             case 0: return ct.getComtree(); 
@@ -23,7 +25,7 @@ public class ComtreeTableModel extends AbstractTableModel {
             default: return null;
         }
     }
-    public void addComtreeTable(ComtreeTable ct) { data.add(ct); }
+    public void addComtreeTable(Comtree ct) { data.add(ct); }
     public void clear(){ data.clear(); }
     public int getWidth(int i) { return widths[i];}
 }

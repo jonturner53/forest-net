@@ -6,11 +6,11 @@ import java.awt.GridBagLayout;
 
 import javax.swing.JLabel;
 import javax.swing.JPanel;
-import javax.swing.JPasswordField;
 import javax.swing.JTextField;
 
 public class UpdateProfileDialog extends JPanel{
 	
+	private static final long serialVersionUID = -8498526559314816154L;
 	private JLabel username;
 	private JLabel realName;
 	private JLabel email;
