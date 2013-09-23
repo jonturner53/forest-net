@@ -1,10 +1,10 @@
 package forest.control.console.model;
 
-public class IfaceTable{
+public class Iface{
     private String iface;
     private String ip;
     private String rates;
-    public IfaceTable(String iface, String ip, String rates){
+    public Iface(String iface, String ip, String rates){
         this.iface = iface; this.ip = ip; this.rates = rates;
     }
     public String getIface() {return iface;}

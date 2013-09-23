@@ -4,15 +4,16 @@ import java.util.ArrayList;
 import javax.swing.table.AbstractTableModel;
 
 public class RouteTableModel extends AbstractTableModel {
-    private String[] columnNames = {"Comtree", "Addr", "Link"};
+	private static final long serialVersionUID = 1609850163080109126L;
+	private String[] columnNames = {"Comtree", "Addr", "Link"};
     private int[] widths = {2, 6, 2};
-    private ArrayList<RouteTable> data;
-    public RouteTableModel(){ data = new ArrayList<RouteTable>(); }
+    private ArrayList<Route> data;
+    public RouteTableModel(){ data = new ArrayList<Route>(); }
     public int getColumnCount() { return columnNames.length; }
     public int getRowCount() { return data.size(); }
     public String getColumnName(int col) { return columnNames[col];}
     public Object getValueAt(int row, int col) { 
-        RouteTable rt = data.get(row);
+        Route rt = data.get(row);
         if(rt == null) return null;
         switch (col){
             case 0: return rt.getComtree(); 
@@ -21,7 +22,7 @@ public class RouteTableModel extends AbstractTableModel {
             default: return null;
         }
     }
-    public void addRouteTable(RouteTable rt) { data.add(rt); }
+    public void addRouteTable(Route rt) { data.add(rt); }
     public void clear(){ data.clear(); }
     public int getWidth(int i) { return widths[i];}
 }

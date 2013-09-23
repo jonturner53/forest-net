@@ -1,13 +1,13 @@
 package forest.control.console.model;
 
-public class ComtreeTable{
+public class Comtree{
     private String comtree;
     private String inCore;
     private String pLink;
     private String comtLinks;
     private String coreLinks;
     
-    public ComtreeTable(String comtree, String inCore, 
+    public Comtree(String comtree, String inCore, 
     		String pLink, String link, String coreLinks){
         this.comtree = comtree; this.inCore = inCore;
         this.pLink = pLink; this.comtLinks = link;

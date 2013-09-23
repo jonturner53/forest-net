@@ -8,14 +8,14 @@ package forest.control.console.model;
  *  See http://www.apache.org/licenses/LICENSE-2.0 for details.
  */
 
-public class LinkTable{
+public class Link{
     private String link;
     private String iface;
     private String peerIpAndPort;
     private String peerType;
     private String peerAdr;
     private String rates;
-    public LinkTable(String link, String iface, String peerIpAndPort, 
+    public Link(String link, String iface, String peerIpAndPort, 
     		String peerType, String peerAdr, String rates) {
         this.link = link; this.iface = iface; 
         this.peerIpAndPort = peerIpAndPort;

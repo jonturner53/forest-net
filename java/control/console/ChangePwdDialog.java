@@ -10,7 +10,7 @@ import javax.swing.JPasswordField;
 import javax.swing.JTextField;
 
 public class ChangePwdDialog extends JPanel{
-	
+	private static final long serialVersionUID = 9160718824273923861L;
 	private JLabel username;
 	private JLabel password;
 	private JLabel verifyPassword;

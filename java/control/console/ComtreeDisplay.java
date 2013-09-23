@@ -34,6 +34,7 @@ import forest.control.console.model.Line;
 import forest.control.console.model.Rect;
 
 public class ComtreeDisplay extends JPanel{
+	private static final long serialVersionUID = 1061510936366923979L;
 	public static final int MAXINUM_ZOOM_LEVEL = 3;
 	public static final int MININUM_ZOOM_LEVEL = -5;
 	public static final double  ZOOM_MULTIPLICATION_FACTOR = 1.2;
@@ -42,7 +43,7 @@ public class ComtreeDisplay extends JPanel{
 	private ArrayList<Circle> circles = new ArrayList<Circle>();
 	private ArrayList<Rect> rects = new ArrayList<Rect>();
 	
-	private JPopupMenu popupMenu;
+//	private JPopupMenu popupMenu;
 
 	private AffineTransform tx = new AffineTransform();
 	private int zoomLevel = 0;
@@ -61,7 +62,7 @@ public class ComtreeDisplay extends JPanel{
 		setOpaque(true);
 		setDoubleBuffered(true);
 
-		popupMenu = new JPopupMenu();
+//		popupMenu = new JPopupMenu();
 //		this.setComponentPopupMenu(popupMenu);
 		this.setVisible(true);
 		addMouseListener(new MouseAdapter(){
@@ -77,7 +78,11 @@ public class ComtreeDisplay extends JPanel{
 								l.getRy(), p2.getX(), p2.getY());
 						if(dist >= -1.5 && dist <= 1.5){
 //							if(e.isPopupTrigger())
-							doPop(e, l.getRateSpec().toString(), l.getComtreeRs().toString());
+							if(l.getComtreeRs() == null){
+								doPop(e, l.getRateSpec().toString());
+							} else{
+								doPop(e, l.getRateSpec().toString(), l.getComtreeRs().toString());
+							}
 						}
 					}
 				} catch (NoninvertibleTransformException ex){
@@ -91,10 +96,25 @@ public class ComtreeDisplay extends JPanel{
 				endDragPointScreen = null;
 			}
 		    
+			/**
+			 * 
+			 * @param e MouseEvent
+			 * @param s LinkRate
+			 * @param s2 Comtree Rate
+			 */
 			private void doPop(MouseEvent e, String s, String s2){
 		        PopUp menu = new PopUp(s, s2);
 		        menu.show(e.getComponent(), e.getX(), e.getY());
 		    }
+			/**
+			 * 
+			 * @param e MouseEvent
+			 * @param s LinkRate
+			 */
+			private void doPop(MouseEvent e, String s){
+				PopUp menu = new PopUp(s);
+		        menu.show(e.getComponent(), e.getX(), e.getY());
+			}
 		});
 
 		addMouseMotionListener(new MouseAdapter(){
@@ -237,7 +257,7 @@ public class ComtreeDisplay extends JPanel{
 
         int ctx = comtrees.getComtIndex(ccomt);
 
-        double nodeRadius = .05;
+//        double nodeRadius = .05;
 
         //draw all the links
         for (int lnk = netInfo.firstLink(); lnk != 0; lnk = netInfo.nextLink(lnk)) {
@@ -255,14 +275,14 @@ public class ComtreeDisplay extends JPanel{
             //get LinkRate
             RateSpec rs = new RateSpec(0); 
             RateSpec availableRs = new RateSpec();
-            RateSpec comtreeRs = new RateSpec();
+            RateSpec comtreeRs = null;
             netInfo.getLinkRates(lnk,rs);
             netInfo.getAvailRates(lnk, availableRs);
             
-       
             boolean strong = false;
             if (comtrees.isComtLink(ctx,lnk)){
-                strong = true;
+            	comtreeRs = new RateSpec();
+            	strong = true;
                 //comtree rate
                 int child = -1;
                 int leftNode = netInfo.getLeft(lnk);
@@ -342,7 +362,7 @@ public class ComtreeDisplay extends JPanel{
 			public void actionPerformed(ActionEvent evt) {
 				NetInfo netInfo = connectionComtCtl.getNetInfo();
 				ComtInfo comtrees = connectionComtCtl.getComtrees();
-				String s = connectionComtCtl.getComtree(ccomt);
+				connectionComtCtl.getComtree(ccomt);
 				updateDisplay(ccomt, netInfo, comtrees);
 				
 				if(!connectionComtCtl.isAutoRefresh()) {
@@ -372,6 +392,7 @@ public class ComtreeDisplay extends JPanel{
  *
  */
 class PopUp extends JPopupMenu{
+	private static final long serialVersionUID = 2727825728613037619L;
 	JMenuItem item;
 	JMenuItem item2;
 	public PopUp(String s, String s2){
@@ -379,5 +400,9 @@ class PopUp extends JPopupMenu{
 		item2 = new JMenuItem("Comtree Rate: " + s2);
 		add(item);
 		add(item2);
+	}
+	public PopUp(String s){
+		item = new JMenuItem("Link Rate: " + s);
+		add(item);
 	}
 }
