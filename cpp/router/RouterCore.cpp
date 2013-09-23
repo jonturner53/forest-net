@@ -1079,6 +1079,7 @@ void RouterCore::handleCtlPkt(int px) {
         case CtlPkt::MOD_FILTER:	modFilter(cp,reply); break;
         case CtlPkt::GET_FILTER_SET:	getFilterSet(cp,reply); break;
         case CtlPkt::GET_LOGGED_PACKETS: getLoggedPackets(cp,reply); break;
+        case CtlPkt::ENABLE_LOCAL_LOG:	enableLocalLog(cp,reply); break;
 
 	// setting parameters
 	case CtlPkt::SET_LEAF_RANGE:	setLeafRange(cp,reply); break;
@@ -1195,8 +1196,11 @@ bool RouterCore::getIfaceSet(CtlPkt& cp, CtlPkt& reply) {
 	reply.index1 = ifIndex;
 	int count = min(10,cp.count);
 	int i = 0;
+	string s; stringstream ss;
 	while (i < count && ifIndex != 0) {
-		string s; ift->entry2string(ifIndex,s); //s.push_back('\n');
+		ss.str() = ""; ss << ifIndex << " ";
+		reply.stringData.append(ss.str());
+		ift->entry2string(ifIndex,s); //s.push_back('\n');
 		reply.stringData.append(s);
 		if (reply.stringData.length() > 1300) {
 			reply.errMsg =  "get iface set: error while formatting "
@@ -1372,8 +1376,11 @@ bool RouterCore::getLinkSet(CtlPkt& cp, CtlPkt& reply) {
 	reply.index1 = lnk;
 	int count = min(10,cp.count);
 	int i = 0;
+	string s; stringstream ss;
 	while (i < count && lnk != 0) {
-		string s; lt->link2string(lnk,s); s.push_back('\n');
+		ss.str() = ""; ss << lnk << " ";
+		reply.stringData.append(ss.str());
+		lt->link2string(lnk,s); s.push_back('\n');
 		reply.stringData.append(s);
 		if (reply.stringData.length() > 1300) {
 			reply.errMsg =  "get link set: error while formatting "
@@ -1930,6 +1937,7 @@ bool RouterCore::getRouteSet(CtlPkt& cp, CtlPkt& reply) {
 		i++; rIndex = rt->nextRteIndex(rIndex);
 	}
 	reply.index2 = rIndex; reply.count = i;	
+	return true;
 }
 
 /** Handle an add filter control packet.
@@ -2032,6 +2040,17 @@ bool RouterCore::getFilterSet(CtlPkt& cp, CtlPkt& reply) {
  */
 bool RouterCore::getLoggedPackets(CtlPkt& cp, CtlPkt& reply) {
 	reply.count = pktLog->extract(1300, reply.stringData);
+	return true;
+}
+
+/** Enable local packet logging.
+ *  @param cp is a reference to a received get logged packets control packet
+ *  @param reply is a reference to the reply packet with fields to be
+ *  filled in
+ *  @return true on success, false on failure
+ */
+bool RouterCore::enableLocalLog(CtlPkt& cp, CtlPkt& reply) {
+	pktLog->enableLocalLog(cp.index1 ? true : false);
 	return true;
 }
 

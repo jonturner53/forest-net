@@ -178,6 +178,7 @@ private:
 	bool	modFilter(CtlPkt&, CtlPkt&);
 	bool	getFilterSet(CtlPkt&, CtlPkt&);
 	bool	getLoggedPackets(CtlPkt&, CtlPkt&);
+	bool	enableLocalLog(CtlPkt&, CtlPkt&);
 
 	bool	setLeafRange(CtlPkt&, CtlPkt&);
 
