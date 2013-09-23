@@ -2004,9 +2004,11 @@ bool RouterCore::getFilterSet(CtlPkt& cp, CtlPkt& reply) {
 	reply.index1 = fx;
 	int count = min(10,cp.count);
 	int i = 0;
+	string s; stringstream ss;
 	while (i < count && fx != 0) {
-		string s;
 		PacketFilter& f = pktLog->getFilter(fx);
+		ss.str() = ""; ss << fx << " ";
+		reply.stringData.append(ss.str());
 		reply.stringData.append(f.toString(s));
 		reply.stringData.push_back('\n');
 

@@ -508,15 +508,15 @@ pktx CpHandler::getFilter(fAdr_t dest, int filter, CtlPkt& repCp) {
 /** Send a get filter set request packet.
  *  @param dest is the destination address for the packet
  *  @param firstFilter is the table index for the first filter to be returned;
- *  if zero, start with the first link in the table
- *  @param count is the number of links whose table entries are requested
+ *  if zero, start with the first filter in the table
+ *  @param count is the number of filters whose table entries are requested
  *  @param repCp is a reference to a control packet in which the control
  *  packet in the response is returned (if response is != 0)
  *  @return the index of the response packet or 0 if there is no response
  */
-pktx CpHandler::getFilterSet(fAdr_t dest, int link, int count, CtlPkt& repCp) {
+pktx CpHandler::getFilterSet(fAdr_t dest, int firstFilter, int count, CtlPkt& repCp) {
 	CtlPkt reqCp(CtlPkt::GET_FILTER_SET,CtlPkt::REQUEST,0);
-	reqCp.index1 = link; reqCp.count = count;
+	reqCp.index1 = firstFilter; reqCp.count = count;
 	return sendRequest(reqCp,dest,repCp);
 }
 
@@ -528,6 +528,32 @@ pktx CpHandler::getFilterSet(fAdr_t dest, int link, int count, CtlPkt& repCp) {
  */
 pktx CpHandler::getLoggedPackets(fAdr_t dest, CtlPkt& repCp) {
 	CtlPkt reqCp(CtlPkt::GET_LOGGED_PACKETS,CtlPkt::REQUEST,0);
+	return sendRequest(reqCp,dest,repCp);
+}
+
+/** Send an enable local log request packet.
+ *  @param dest is the destination address for the packet
+ *  @param on specifies whether local logging is to be turned on (true) or off (false)
+ *  @param repCp is a reference to a control packet in which the control
+ *  packet in the response is returned (if response is != 0)
+ *  @return the index of the response packet or 0 if there is no response
+ */
+pktx CpHandler::enableLocalLog(fAdr_t dest, bool on, CtlPkt& repCp) {
+	CtlPkt reqCp(CtlPkt::GET_LOGGED_PACKETS,CtlPkt::REQUEST,0);
+	reqCp.index1 = (on ? 1 : 0);
+	return sendRequest(reqCp,dest,repCp);
+}
+
+/** Send an enable local log request packet.
+ *  @param dest is the destination address for the packet
+ *  @param on specifies whether local logging is to be turned on (true) or off (false)
+ *  @param repCp is a reference to a control packet in which the control
+ *  packet in the response is returned (if response is != 0)
+ *  @return the index of the response packet or 0 if there is no response
+ */
+pktx CpHandler::enableLocalLog(fAdr_t dest, bool on, CtlPkt& repCp) {
+	CtlPkt reqCp(CtlPkt::GET_LOGGED_PACKETS,CtlPkt::REQUEST,0);
+	reqCp.index1 = (on ? 1 : 0);
 	return sendRequest(reqCp,dest,repCp);
 }
 

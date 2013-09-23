@@ -33,7 +33,8 @@ string& PacketFilter::toString(string& s) const {
 
 bool PacketFilter::fromString(string& s) {
 	NetBuffer buf(s); string s1, s2;
-	return	(buf.readBit(on) && buf.readBit(in) && buf.readBit(out) &&
+	return	(buf.readBit(on) && buf.readInt(lnk) &&
+		 buf.readBit(in) && buf.readBit(out) &&
 		 buf.readInt(comt) &&
 		 buf.readForestAddress(s1) &&
 		 (srcAdr = Forest::forestAdr(s1.c_str())) != 0 &&
