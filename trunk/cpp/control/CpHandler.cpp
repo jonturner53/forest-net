@@ -544,19 +544,6 @@ pktx CpHandler::enableLocalLog(fAdr_t dest, bool on, CtlPkt& repCp) {
 	return sendRequest(reqCp,dest,repCp);
 }
 
-/** Send an enable local log request packet.
- *  @param dest is the destination address for the packet
- *  @param on specifies whether local logging is to be turned on (true) or off (false)
- *  @param repCp is a reference to a control packet in which the control
- *  packet in the response is returned (if response is != 0)
- *  @return the index of the response packet or 0 if there is no response
- */
-pktx CpHandler::enableLocalLog(fAdr_t dest, bool on, CtlPkt& repCp) {
-	CtlPkt reqCp(CtlPkt::GET_LOGGED_PACKETS,CtlPkt::REQUEST,0);
-	reqCp.index1 = (on ? 1 : 0);
-	return sendRequest(reqCp,dest,repCp);
-}
-
 /** Send a new session request packet.
  *  @param dest is the destination address for the packet
  *  @param clientIp is the ip address of the client

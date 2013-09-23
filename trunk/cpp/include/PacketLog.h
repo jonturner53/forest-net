@@ -36,7 +36,8 @@ public:
 	void	disable(fltx);
 	fltx	addFilter();
 	void	dropFilter(fltx);
-	PacketFilter& getFilter(fltx f);
+	PacketFilter& getFilter(fltx);
+	void	enableLocalLog(bool);
 
 	int	size() const;
 	void 	log(int,int,bool,uint64_t);	
@@ -101,6 +102,8 @@ inline bool PacketLog::match(fltx f, pktx px, int lnk, bool sendFlag) const {
  *  @return a reference to the PacketFilter object for f
  */
 inline PacketFilter& PacketLog::getFilter(fltx f) { return fvec[f]; }
+
+inline void PacketLog::enableLocalLog(bool on) { logLocal = on; }
 
 } // ends namespace
 
