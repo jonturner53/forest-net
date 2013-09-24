@@ -181,52 +181,57 @@ class Net :
                 	       "\npassword: " + pword + "\nover\n")
 
 		buf = ""
-		print "reading line"
-		line,buf = self.readLine(cmSock,buf)
-		print "got line=", line
-		if line != "success" : return False
+		line, buf = self.readLine(cmSock,buf)
+		if line != "success" :
+			print "unexpected response to login:", line
+			return False
 		line,buf = self.readLine(cmSock,buf)
 		print line
-		if line != "over" : return False
+		if line != "over" :
+			print "unexpected response to login:", line
+			return False
 
 		cmSock.sendall("newSession\nover\n")
 
-		line,buf = self.readLine(cmSock,buf)
-		print line
+		line, buf = self.readLine(cmSock,buf)
 		chunks = line.partition(":")
 		if chunks[0].strip() != "yourAddress" or chunks[1] != ":" :
+			print "unexpected response (expecting address):", line
 			return False
 		self.myFadr = string2fadr(chunks[2].strip())
 
-		line,buf = self.readLine(cmSock,buf)
-		print line
+		line, buf = self.readLine(cmSock,buf)
 		chunks = line.partition(":")
 		if chunks[0].strip() != "yourRouter" or chunks[1] != ":" :
+			print "unexpected response (expecting router info):", line
 			return False
 		triple = chunks[2].strip(); triple = triple[1:-1].strip()
 		chunks = triple.split(",")
-		if len(chunks) != 3 : return False
+		if len(chunks) != 3 :
+			print "unexpected response (expecting router info):", line
+			return False
 		self.rtrIp = string2ip(chunks[0].strip())
 		self.rtrPort = int(chunks[1].strip())
 		self.rtrFadr = string2fadr(chunks[2].strip())
 
 		line,buf = self.readLine(cmSock,buf)
-		print line
 		chunks = line.partition(":")
 		if chunks[0].strip() != "comtCtlAddress" or chunks[1] != ":" :
+			print "unexpected response (expecting comtCtl info):", line
 			return False
 		self.comtCtlFadr = string2fadr(chunks[2].strip())
 
-		line,buf = self.readLine(cmSock,buf)
-		print line
+		line, buf = self.readLine(cmSock,buf)
 		chunks = line.partition(":")
 		if chunks[0].strip() != "connectNonce" or chunks[1] != ":" :
+			print "unexpected response (expecting nonce):", line
 			return False
 		self.nonce = int(chunks[2].strip())
 
 		line,buf = self.readLine(cmSock,buf) 
-		print line
-		if line != "overAndOut" : return False
+		if line != "overAndOut" :
+			print "unexpected response (expecting signoff):", line
+			return False
 
 		cmSock.close()
 
