@@ -79,9 +79,10 @@ public class ComtreeDisplay extends JPanel{
 						if(dist >= -1.5 && dist <= 1.5){
 //							if(e.isPopupTrigger())
 							if(l.getComtreeRs() == null){
-								doPop(e, l.getRateSpec().toString());
+								doPop(e, l.getRateSpec().toString(), l.getAvailableRS().toString());
 							} else{
-								doPop(e, l.getRateSpec().toString(), l.getComtreeRs().toString());
+								doPop(e, l.getRateSpec().toString(), l.getAvailableRS().toString(), 
+										l.getComtreeRs().toString());
 							}
 						}
 					}
@@ -102,8 +103,8 @@ public class ComtreeDisplay extends JPanel{
 			 * @param s LinkRate
 			 * @param s2 Comtree Rate
 			 */
-			private void doPop(MouseEvent e, String s, String s2){
-		        PopUp menu = new PopUp(s, s2);
+			private void doPop(MouseEvent e, String s, String s2, String s3){
+		        PopUp menu = new PopUp(s, s2, s3);
 		        menu.show(e.getComponent(), e.getX(), e.getY());
 		    }
 			/**
@@ -111,8 +112,8 @@ public class ComtreeDisplay extends JPanel{
 			 * @param e MouseEvent
 			 * @param s LinkRate
 			 */
-			private void doPop(MouseEvent e, String s){
-				PopUp menu = new PopUp(s);
+			private void doPop(MouseEvent e, String s, String s2){
+				PopUp menu = new PopUp(s,s2);
 		        menu.show(e.getComponent(), e.getX(), e.getY());
 			}
 		});
@@ -395,14 +396,16 @@ class PopUp extends JPopupMenu{
 	private static final long serialVersionUID = 2727825728613037619L;
 	JMenuItem item;
 	JMenuItem item2;
+	JMenuItem item3;
+	public PopUp(String s, String s2, String s3){
+		item = new JMenuItem("Link Rate: " + s);
+		item2 = new JMenuItem("Available Rate: " + s2);
+		item3 = new JMenuItem("Comtree Rate: " + s3);
+		add(item); add(item2); add(item3);
+	}
 	public PopUp(String s, String s2){
 		item = new JMenuItem("Link Rate: " + s);
-		item2 = new JMenuItem("Comtree Rate: " + s2);
-		add(item);
-		add(item2);
-	}
-	public PopUp(String s){
-		item = new JMenuItem("Link Rate: " + s);
-		add(item);
+		item2 = new JMenuItem("Available Rate: " + s2);
+		add(item); add(item2);
 	}
 }
