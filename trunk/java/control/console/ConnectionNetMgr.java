@@ -386,6 +386,9 @@ public class ConnectionNetMgr {
 		filterString.append(1); //on
 		filterString.append(" ");
 		
+		filterString.append(filter.getLink()); //link
+		filterString.append(" ");
+		
 		if(filter.getIn()) //in
 			filterString.append(1);
 		else

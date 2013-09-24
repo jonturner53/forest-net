@@ -90,14 +90,12 @@ public class NetMgrConsole {
 	private JButton clearLogBtn;
 	private JButton addFilterBtn;
 	private JButton dropFilterBtn;
-	private String[] forestType = {"all", "undef", "sub_unsub", 
+	private String[] forestType = {"all", "sub_unsub", 
 			"client_sig", "connect", "disconnect", "net_sig", 
 			"rte_reply", "rtr_ctl", "voqstatus"
 	};
 	private JComboBox<String> forestTypeComboBox;
 	private String[] cpType = {"all", 
-			"undef", 
-			
 			"client_add_comtree", "client_drop_comtree", "client_get_comtree", 
 			"client_mod_comtree",
 			"client_join_comtree", "client_leave_comtree", "client_resize_comtree",
@@ -685,6 +683,12 @@ public class NetMgrConsole {
 					logFilter.setOut(out); //out
 					
 					String link = linkTextField.getText();
+					try{
+						Integer.parseInt(link);
+					} catch (NumberFormatException ne) {
+						showPopupStatus("Put an interger in link field");
+						return;
+					}
 					logFilter.setLink(link); //link
 					
 					NetInfo net = connectionComtCtl.getNetInfo();
@@ -694,30 +698,35 @@ public class NetMgrConsole {
 					logFilter.setDstAdr(Forest.fAdr2string(destAdr));//dest addr
 					
 					String comtree = comtreeForLogComboBox.getSelectedItem().toString();
+					if(comtree.equals("all")){
+						comtree = "0";
+					}
 					logFilter.setComtree(comtree); //comtree
+					
 					String type = forestTypeComboBox.getSelectedItem().toString();
+					if(type.equals("all")){
+						type = "undef";
+					}
 					logFilter.setType(type); //type
 					String cpType = cpTypeComboBox.getSelectedItem().toString();
+					if(cpType.equals("all")){
+						cpType = "undef";
+					}
 					logFilter.setCpType(cpType); //cpType
 					
-					if(rtnName.equals("all") || type.equals("all") || cpType.equals("all") 
-							|| comtree.equals("all")){
-						
+					String s = connectionNetMgr.addFilter(logFilter);
+					if(s != null){
+						showPopupStatus(s);
 					} else{
-						String s = connectionNetMgr.addFilter(logFilter);
-						if(s != null){
-							showPopupStatus(s);
-						} else{
-							logFilterTableModel.addLogFilterTable(logFilter);
-							logFilterTableModel.fireTableDataChanged();
-						}
+						logFilterTableModel.addLogFilterTable(logFilter);
+						logFilterTableModel.fireTableDataChanged();
 					}
 				} else{
 					showPopupStatus("connection or login required");
 				}
 			}
 		});
-		logMenuPanel.add(addFilterBtn);
+		logMenuPanel2.add(addFilterBtn);
 		
 		//drop filter
 		dropFilterBtn = new JButton("Drop");
@@ -746,7 +755,7 @@ public class NetMgrConsole {
 				}
 			}			
 		});
-		logMenuPanel.add(dropFilterBtn);
+		logMenuPanel2.add(dropFilterBtn);
 		
 		logs = new ArrayList<String>();
 		updateLogBtn = new JButton("Update");
@@ -772,7 +781,7 @@ public class NetMgrConsole {
 				}
 			}
 		});
-		logMenuPanel2.add(updateLogBtn);
+		logMenuPanel.add(updateLogBtn);
 		
 		clearLogBtn = new JButton("Clear");
 		clearLogBtn.addActionListener(new ActionListener() {
@@ -781,7 +790,7 @@ public class NetMgrConsole {
 				logTextArea.setText("");
 			}
 		});
-		logMenuPanel2.add(clearLogBtn);
+		logMenuPanel.add(clearLogBtn);
 		
 		
 		//filter table
