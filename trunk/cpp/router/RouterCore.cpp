@@ -1198,7 +1198,7 @@ bool RouterCore::getIfaceSet(CtlPkt& cp, CtlPkt& reply) {
 	int i = 0;
 	string s; stringstream ss;
 	while (i < count && ifIndex != 0) {
-		ss.str() = ""; ss.clear(); ss << ifIndex << " ";
+		ss.str(""); ss.clear(); ss << ifIndex << " ";
 		reply.stringData.append(ss.str());
 		ift->entry2string(ifIndex,s); //s.push_back('\n');
 		reply.stringData.append(s);
@@ -1378,7 +1378,7 @@ bool RouterCore::getLinkSet(CtlPkt& cp, CtlPkt& reply) {
 	int i = 0;
 	string s; stringstream ss;
 	while (i < count && lnk != 0) {
-		ss.str() = ""; ss.clear(); ss << lnk << " ";
+		ss.str(""); ss.clear(); ss << lnk << " ";
 		reply.stringData.append(ss.str());
 		lt->link2string(lnk,s); s.push_back('\n');
 		reply.stringData.append(s);
@@ -2015,7 +2015,7 @@ bool RouterCore::getFilterSet(CtlPkt& cp, CtlPkt& reply) {
 	string s; stringstream ss;
 	while (i < count && fx != 0) {
 		PacketFilter& f = pktLog->getFilter(fx);
-		ss.str() = ""; ss.clear(); ss << fx << " ";
+		ss.str(""); ss.clear(); ss << fx << " ";
 		reply.stringData.append(ss.str());
 		reply.stringData.append(f.toString(s));
 		reply.stringData.push_back('\n');
