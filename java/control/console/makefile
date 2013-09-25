@@ -1,11 +1,11 @@
 JAVAROOT=~/bin/java
 JAVAC=javac
-CLASSFILES=	model/AdminProfile.class model/ComtreeTable.class\
+CLASSFILES=	model/AdminProfile.class model/Comtree.class\
 			model/ComtreeTableModel.class\
-			model/IfaceTable.class model/IfaceTableModel.class \
-			model/LinkTable.class model/LinkTableModel.class\
-			model/RouteTable.class model/RouteTableModel.class\
-			model/LogFilters.class\
+			model/Iface.class model/IfaceTableModel.class \
+			model/Link.class model/LinkTableModel.class\
+			model/Route.class model/RouteTableModel.class\
+			model/LogFilter.class model/LogFilterTableModel.class\
 			model/Circle.class model/Line.class\
 			model/Rect.class\
 			ConnectionNetMgr.class ConnectionComtCtl.class\
