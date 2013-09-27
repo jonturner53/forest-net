@@ -13,19 +13,19 @@ public class RouteTableModel extends AbstractTableModel {
 		data = new ArrayList<Route>();
 	}
 
-	public int getColumnCount() {
+	public int getColumnCount () {
 		return columnNames.length;
 	}
 
-	public int getRowCount() {
+	public int getRowCount () {
 		return data.size();
 	}
 
-	public String getColumnName(int col) {
+	public String getColumnName (int col) {
 		return columnNames[col];
 	}
 
-	public Object getValueAt(int row, int col) {
+	public Object getValueAt (int row, int col) {
 		Route rt = data.get(row);
 		if (rt == null)
 			return null;
@@ -41,15 +41,15 @@ public class RouteTableModel extends AbstractTableModel {
 		}
 	}
 
-	public void addRouteTable(Route rt) {
+	public void addRouteTable (Route rt) {
 		data.add(rt);
 	}
 
-	public void clear() {
+	public void clear () {
 		data.clear();
 	}
 
-	public int getWidth(int i) {
+	public int getWidth (int i) {
 		return widths[i];
 	}
 }

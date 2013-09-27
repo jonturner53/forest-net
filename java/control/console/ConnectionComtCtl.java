@@ -53,7 +53,7 @@ public class ConnectionComtCtl {
 	/**
 	 * Initialize a connection to Net Manager
 	 */
-	private void setupIo() {
+	private void setupIo () {
 		ascii = Charset.forName("US-ASCII");
 		enc = ascii.newEncoder();
 		enc.onMalformedInput(CodingErrorAction.IGNORE);
@@ -69,7 +69,7 @@ public class ConnectionComtCtl {
 	 *            message
 	 * @return successful
 	 */
-	protected boolean sendString(String msg) {
+	protected boolean sendString (String msg) {
 		bb.clear();
 		cb.clear();
 		cb.put(msg);
@@ -86,7 +86,7 @@ public class ConnectionComtCtl {
 		return true;
 	}
 
-	protected boolean connectToComCtl() {
+	protected boolean connectToComCtl () {
 		try {
 			SocketAddress serverAdr = new InetSocketAddress(
 					InetAddress.getByName(cmAddr), cmPort);
@@ -100,7 +100,7 @@ public class ConnectionComtCtl {
 		return true;
 	}
 
-	protected String getNet() {
+	protected String getNet () {
 		if (!sendString("getNet\n")) {
 			return "connot send request to server";
 		}
@@ -116,7 +116,7 @@ public class ConnectionComtCtl {
 		return null;
 	}
 
-	protected String getComtSet() {
+	protected String getComtSet () {
 		if (!sendString("getComtSet\n")) {
 			return "connot send request to server";
 		}
@@ -132,7 +132,7 @@ public class ConnectionComtCtl {
 	 * 
 	 * @return if working well, it returns null. Otherwise, error message
 	 */
-	private String readComtSet(PushbackReader in) {
+	private String readComtSet (PushbackReader in) {
 		String word = Util.readWord(in);
 		if (word == null || !word.equals("comtSet"))
 			return "readComtSet: unexpected response " + word + "\n";
@@ -153,7 +153,7 @@ public class ConnectionComtCtl {
 		}
 	}
 
-	protected String getComtree(int ccomt) {
+	protected String getComtree (int ccomt) {
 		if (!sendString("getComtree " + ccomt + "\n")) {
 			return "connot send request to server";
 		}
@@ -166,38 +166,38 @@ public class ConnectionComtCtl {
 		return comtrees.toString();
 	}
 
-	public ComtInfo getComtrees() {
+	public ComtInfo getComtrees () {
 		return comtrees;
 	}
 
-	public TreeSet<Integer> getComtTreeSet() {
+	public TreeSet<Integer> getComtTreeSet () {
 		return comtSet;
 	}
 
-	public String getCmAddr() {
+	public String getCmAddr () {
 		return cmAddr;
 	}
 
-	public void setCmAddr(String cmAddr) {
+	public void setCmAddr (String cmAddr) {
 		this.cmAddr = cmAddr;
 	}
 
-	public NetInfo getNetInfo() {
+	public NetInfo getNetInfo () {
 		return netInfo;
 	}
 
-	public boolean isAutoRefresh() {
+	public boolean isAutoRefresh () {
 		return autoRefresh;
 	}
 
-	public void setAutoRefresh(boolean b) {
+	public void setAutoRefresh (boolean b) {
 		this.autoRefresh = b;
 	}
 
 	/**
 	 * Close socket connection to Comtree Controller
 	 */
-	public void closeSocket() {
+	public void closeSocket () {
 		if (serverChan != null && serverChan.isConnected()) {
 			try {
 				serverChan.close();

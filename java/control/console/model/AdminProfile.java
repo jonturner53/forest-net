@@ -14,31 +14,31 @@ public class AdminProfile {
 		this.email = email;
 	}
 
-	public String getUserName() {
+	public String getUserName () {
 		return userName;
 	}
 
-	public void setUserName(String userName) {
+	public void setUserName (String userName) {
 		this.userName = userName;
 	}
 
-	public String getEmail() {
+	public String getEmail () {
 		return email;
 	}
 
-	public void setEmail(String email) {
+	public void setEmail (String email) {
 		this.email = email;
 	}
 
-	public String getRealName() {
+	public String getRealName () {
 		return realName;
 	}
 
-	public void setRealName(String realName) {
+	public void setRealName (String realName) {
 		this.realName = realName;
 	}
 
-	public String toString() {
+	public String toString () {
 		return userName + " " + realName + " " + email;
 	}
 }

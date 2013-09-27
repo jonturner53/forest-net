@@ -52,28 +52,28 @@ public class UpdateProfileDialog extends JPanel {
 
 	}
 
-	protected String getRealName() {
+	protected String getRealName () {
 		return realNameInput.getText();
 	}
 
-	protected String getEmail() {
+	protected String getEmail () {
 		return emailInput.getText();
 	}
 
-	protected String getUserName() {
+	protected String getUserName () {
 		return userNameInput.getText();
 	}
 
-	protected void setUserName(String s) {
+	protected void setUserName (String s) {
 		userNameInput.setText(s);
 		userNameInput.setEditable(false);
 	}
 
-	protected void setRealName(String s) {
+	protected void setRealName (String s) {
 		realNameInput.setText(s);
 	}
 
-	protected void setEmail(String s) {
+	protected void setEmail (String s) {
 		emailInput.setText(s);
 	}
 }

@@ -21,35 +21,35 @@ public class Line {
 		this.comtreeRs = comtreeRs;
 	}
 
-	public int getLx() {
+	public int getLx () {
 		return lx;
 	}
 
-	public int getLy() {
+	public int getLy () {
 		return ly;
 	}
 
-	public int getRx() {
+	public int getRx () {
 		return rx;
 	}
 
-	public int getRy() {
+	public int getRy () {
 		return ry;
 	}
 
-	public boolean isStrong() {
+	public boolean isStrong () {
 		return strong;
 	}
 
-	public RateSpec getRateSpec() {
+	public RateSpec getRateSpec () {
 		return rs;
 	}
 
-	public RateSpec getAvailableRS() {
+	public RateSpec getAvailableRS () {
 		return availableRs;
 	}
 
-	public RateSpec getComtreeRs() {
+	public RateSpec getComtreeRs () {
 		return comtreeRs;
 	}
 }

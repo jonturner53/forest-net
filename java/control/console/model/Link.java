@@ -26,27 +26,27 @@ public class Link {
 		this.rates = rates;
 	}
 
-	public String getLink() {
+	public String getLink () {
 		return link;
 	}
 
-	public String getIface() {
+	public String getIface () {
 		return iface;
 	}
 
-	public String getPeerIpAndPort() {
+	public String getPeerIpAndPort () {
 		return peerIpAndPort;
 	}
 
-	public String getPeerType() {
+	public String getPeerType () {
 		return peerType;
 	}
 
-	public String getPeerAdr() {
+	public String getPeerAdr () {
 		return peerAdr;
 	}
 
-	public String getRates() {
+	public String getRates () {
 		return rates;
 	}
 }

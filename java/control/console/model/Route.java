@@ -11,15 +11,15 @@ public class Route {
 		this.link = link;
 	}
 
-	public String getComtree() {
+	public String getComtree () {
 		return comtree;
 	}
 
-	public String getAddr() {
+	public String getAddr () {
 		return addr;
 	}
 
-	public String getLink() {
+	public String getLink () {
 		return link;
 	}
 }

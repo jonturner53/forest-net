@@ -14,19 +14,19 @@ public class IfaceTableModel extends AbstractTableModel {
 		data = new ArrayList<Iface>();
 	}
 
-	public int getColumnCount() {
+	public int getColumnCount () {
 		return columnNames.length;
 	}
 
-	public int getRowCount() {
+	public int getRowCount () {
 		return data.size();
 	}
 
-	public String getColumnName(int col) {
+	public String getColumnName (int col) {
 		return columnNames[col];
 	}
 
-	public Object getValueAt(int row, int col) {
+	public Object getValueAt (int row, int col) {
 		Iface it = data.get(row);
 		if (it == null)
 			return null;
@@ -42,15 +42,15 @@ public class IfaceTableModel extends AbstractTableModel {
 		}
 	}
 
-	public void addIfaceTable(Iface it) {
+	public void addIfaceTable (Iface it) {
 		data.add(it);
 	}
 
-	public void clear() {
+	public void clear () {
 		data.clear();
 	}
 
-	public int getWidth(int i) {
+	public int getWidth (int i) {
 		return widths[i];
 	}
 }

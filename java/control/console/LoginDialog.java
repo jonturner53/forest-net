@@ -44,15 +44,15 @@ public class LoginDialog extends JPanel {
 
 	}
 
-	protected char[] getPassword() {
+	protected char[] getPassword () {
 		return passwordInput.getPassword();
 	}
 
-	protected String getUserName() {
+	protected String getUserName () {
 		return usernameInput.getText();
 	}
 
-	public void clearAllTextField() {
+	public void clearAllTextField () {
 		usernameInput.setText("");
 		passwordInput.setText("");
 	}

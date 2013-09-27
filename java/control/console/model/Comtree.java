@@ -16,23 +16,23 @@ public class Comtree {
 		this.coreLinks = coreLinks;
 	}
 
-	public String getComtree() {
+	public String getComtree () {
 		return comtree;
 	}
 
-	public String getInCore() {
+	public String getInCore () {
 		return inCore;
 	}
 
-	public String getpLink() {
+	public String getpLink () {
 		return pLink;
 	}
 
-	public String getComtLinks() {
+	public String getComtLinks () {
 		return comtLinks;
 	}
 
-	public String getCoreLink() {
+	public String getCoreLink () {
 		return coreLinks;
 	}
 }
