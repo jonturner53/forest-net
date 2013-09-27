@@ -11,18 +11,19 @@ public class LogFilter {
 	private String comtree;
 	private String type;
 	private String cpType;
-	
-	public LogFilter(){}
-	
-	public int getId(){
+
+	public LogFilter() {
+	}
+
+	public int getId() {
 		return id;
 	}
-	
+
 	public boolean getIn() {
 		return in;
 	}
-	
-	public boolean getOut(){
+
+	public boolean getOut() {
 		return out;
 	}
 
@@ -41,8 +42,8 @@ public class LogFilter {
 	public String getCpType() {
 		return cpType;
 	}
-	
-	public String getRtn(){
+
+	public String getRtn() {
 		return rtn;
 	}
 
@@ -93,5 +94,5 @@ public class LogFilter {
 	public void setDstAdr(String dstAdr) {
 		this.dstAdr = dstAdr;
 	}
-	
+
 }
