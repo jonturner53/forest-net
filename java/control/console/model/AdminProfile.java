@@ -4,9 +4,11 @@ public class AdminProfile {
 	private String userName;
 	private String email;
 	private String realName;
-	
-	public AdminProfile(){}
-	public AdminProfile(String userName, String realName, String email){
+
+	public AdminProfile() {
+	}
+
+	public AdminProfile(String userName, String realName, String email) {
 		this.userName = userName;
 		this.realName = realName;
 		this.email = email;
@@ -35,8 +37,8 @@ public class AdminProfile {
 	public void setRealName(String realName) {
 		this.realName = realName;
 	}
-	
-	public String toString(){
+
+	public String toString() {
 		return userName + " " + realName + " " + email;
 	}
 }
