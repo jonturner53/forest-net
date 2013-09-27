@@ -15,83 +15,83 @@ public class LogFilter {
 	public LogFilter() {
 	}
 
-	public int getId() {
+	public int getId () {
 		return id;
 	}
 
-	public boolean getIn() {
+	public boolean getIn () {
 		return in;
 	}
 
-	public boolean getOut() {
+	public boolean getOut () {
 		return out;
 	}
 
-	public String getLink() {
+	public String getLink () {
 		return link;
 	}
 
-	public String getComtree() {
+	public String getComtree () {
 		return comtree;
 	}
 
-	public String getType() {
+	public String getType () {
 		return type;
 	}
 
-	public String getCpType() {
+	public String getCpType () {
 		return cpType;
 	}
 
-	public String getRtn() {
+	public String getRtn () {
 		return rtn;
 	}
 
-	public void setId(int id) {
+	public void setId (int id) {
 		this.id = id;
 	}
 
-	public void setRtn(String rtn) {
+	public void setRtn (String rtn) {
 		this.rtn = rtn;
 	}
 
-	public void setIn(boolean in) {
+	public void setIn (boolean in) {
 		this.in = in;
 	}
 
-	public void setOut(boolean out) {
+	public void setOut (boolean out) {
 		this.out = out;
 	}
 
-	public void setLink(String link) {
+	public void setLink (String link) {
 		this.link = link;
 	}
 
-	public void setComtree(String comtree) {
+	public void setComtree (String comtree) {
 		this.comtree = comtree;
 	}
 
-	public void setType(String type) {
+	public void setType (String type) {
 		this.type = type;
 	}
 
-	public void setCpType(String cpType) {
+	public void setCpType (String cpType) {
 		this.cpType = cpType;
 	}
 
-	public String getSrcAdr() {
+	public String getSrcAdr () {
 		return srcAdr;
 	}
 
-	public void setSrcAdr(String srcAdr) {
+	public void setSrcAdr (String srcAdr) {
 		this.srcAdr = srcAdr;
 	}
 
-	public String getDstAdr() {
+	public String getDstAdr () {
 		return dstAdr;
 	}
 
-	public void setDstAdr(String dstAdr) {
+	public void setDstAdr (String dstAdr) {
 		this.dstAdr = dstAdr;
 	}
 

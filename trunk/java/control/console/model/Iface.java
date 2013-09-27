@@ -11,15 +11,15 @@ public class Iface {
 		this.rates = rates;
 	}
 
-	public String getIface() {
+	public String getIface () {
 		return iface;
 	}
 
-	public String getIp() {
+	public String getIp () {
 		return ip;
 	}
 
-	public String getRates() {
+	public String getRates () {
 		return rates;
 	}
 }

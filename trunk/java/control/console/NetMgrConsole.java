@@ -11,6 +11,9 @@ package forest.control.console;
 import java.util.*;
 import java.awt.*;
 import java.awt.event.*;
+import java.io.FileNotFoundException;
+import java.io.PrintWriter;
+import java.io.UnsupportedEncodingException;
 
 import javax.swing.*;
 import javax.swing.border.BevelBorder;
@@ -26,15 +29,21 @@ public class NetMgrConsole {
 	public static final int MAIN_HEIGHT = 700;
 	public static final int MENU_HEIGHT = 50;
 
+	// menu bar
 	private JFrame mainFrame;
 	private JMenuBar menuBar;
 	private JMenu menu;
+	private JMenu optionMenu;
 	private JMenuItem connectMenuItem;
 	private JMenuItem loginMenuItem;
 	private JMenuItem newAccountMenuItem;
 	private JMenuItem updateProfileMenuItem;
 	private JMenuItem changePwdMenuItem;
 	private JMenuItem closeMenuItem;
+	private JCheckBoxMenuItem saveAsFileMOption;
+	
+	//Save as File
+	private PrintWriter writer;
 
 	private JPanel mainPanel;
 	private JPanel statusPanel;
@@ -200,7 +209,7 @@ public class NetMgrConsole {
 		displayNetMgr();
 
 		mainFrame.addWindowListener(new CloseEvent(connectionNetMgr,
-				connectionComtCtl));
+												connectionComtCtl, writer));
 		mainFrame.pack();
 		mainFrame.setVisible(true);
 	}
@@ -208,13 +217,13 @@ public class NetMgrConsole {
 	/**
 	 * Initialize menu bar
 	 */
-	private void initMenuBar() {
+	private void initMenuBar () {
 		menu = new JMenu("Menu");
 		menuBar.add(menu);
 
 		connectMenuItem = new JMenuItem("Connect");
 		connectMenuItem.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent evt) {
+			public void actionPerformed (ActionEvent evt) {
 				String[] options = { "Connect", "Cancel" };
 				int n = JOptionPane.showOptionDialog(mainFrame, connectDialog,
 						"Connect to the server", JOptionPane.OK_CANCEL_OPTION,
@@ -266,7 +275,7 @@ public class NetMgrConsole {
 		menu.addSeparator();
 		loginMenuItem = new JMenuItem("Login");
 		loginMenuItem.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent evt) {
+			public void actionPerformed (ActionEvent evt) {
 				if (isConnected) {
 					String[] options = { "Login", "Cancel" };
 					int n = JOptionPane.showOptionDialog(mainFrame,
@@ -299,7 +308,7 @@ public class NetMgrConsole {
 		menu.addSeparator();
 		newAccountMenuItem = new JMenuItem("New Account");
 		newAccountMenuItem.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent evt) {
+			public void actionPerformed (ActionEvent evt) {
 				if (isConnected && isLoggedin) {
 					String[] options = { "Add", "Cancel" };
 					int n = JOptionPane.showOptionDialog(mainFrame,
@@ -326,7 +335,7 @@ public class NetMgrConsole {
 
 		updateProfileMenuItem = new JMenuItem("Update Profile");
 		updateProfileMenuItem.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent evt) {
+			public void actionPerformed (ActionEvent evt) {
 				if (isConnected && isLoggedin) {
 					String[] options = { "Update", "Cancel" };
 					AdminProfile adminProfile = connectionNetMgr
@@ -361,7 +370,7 @@ public class NetMgrConsole {
 
 		changePwdMenuItem = new JMenuItem("Change Password");
 		changePwdMenuItem.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent evt) {
+			public void actionPerformed (ActionEvent evt) {
 				if (isConnected && isLoggedin) {
 					String[] options = { "Change", "Cancel" };
 					AdminProfile adminProfile = connectionNetMgr
@@ -397,7 +406,7 @@ public class NetMgrConsole {
 		menu.addSeparator();
 		closeMenuItem = new JMenuItem("Close");
 		closeMenuItem.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent evt) {
+			public void actionPerformed (ActionEvent evt) {
 				if (connectionNetMgr != null && connectionComtCtl != null) {
 					connectionNetMgr.closeSocket();
 					connectionComtCtl.closeSocket();
@@ -407,12 +416,19 @@ public class NetMgrConsole {
 			}
 		});
 		menu.add(closeMenuItem);
+
+		optionMenu = new JMenu("Option"); // optionMenu
+		menuBar.add(optionMenu);
+
+		saveAsFileMOption = new JCheckBoxMenuItem("SaveAsFile");
+		saveAsFileMOption.setSelected(true);
+		optionMenu.add(saveAsFileMOption);
 	}
 
 	/**
 	 * Display Net Manager Console
 	 */
-	private void displayNetMgr() {
+	private void displayNetMgr () {
 		comtreeTableModel = new ComtreeTableModel();
 		linkTableModel = new LinkTableModel();
 		ifaceTableModel = new IfaceTableModel();
@@ -444,7 +460,7 @@ public class NetMgrConsole {
 		comtreeMenuPanel.add(comtreeComboBox);
 		comtreeDisUpdateBtn = new JButton("Update"); // button
 		comtreeDisUpdateBtn.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent e) {
+			public void actionPerformed (ActionEvent e) {
 				if (isConnected && isLoggedin) {
 					String c = comtreeComboBox.getSelectedItem().toString();
 					if (c == null) {
@@ -464,7 +480,7 @@ public class NetMgrConsole {
 		comtreeMenuPanel.add(comtreeDisUpdateBtn);
 		comtreeDisClearBtn = new JButton("Clear"); // button
 		comtreeDisClearBtn.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent e) {
+			public void actionPerformed (ActionEvent e) {
 				if (isConnected && isLoggedin) {
 					comtreeDisplayPanel.clearUI();
 				} else {
@@ -476,7 +492,7 @@ public class NetMgrConsole {
 		refreshCheckBox = new JCheckBox("refresh");// refresh button
 		refreshCheckBox.addItemListener(new ItemListener() {
 			@Override
-			public void itemStateChanged(ItemEvent e) {
+			public void itemStateChanged (ItemEvent e) {
 				if (e.getStateChange() == ItemEvent.SELECTED) {
 					connectionComtCtl.setAutoRefresh(true);
 					if (isLoggedin && isConnected) {
@@ -537,7 +553,7 @@ public class NetMgrConsole {
 
 		tablesComboBox = new JComboBox<String>(type); // info selection
 		tablesComboBox.addItemListener(new ItemListener() {
-			public void itemStateChanged(ItemEvent e) {
+			public void itemStateChanged (ItemEvent e) {
 				if (e.getStateChange() == 1) {
 					if (e.getItem().equals("Comtree")) {
 						infoTable.setModel(comtreeTableModel);
@@ -555,7 +571,7 @@ public class NetMgrConsole {
 		routerInfoMenuPanel.add(tablesComboBox);
 		routerInfoUpdateButton = new JButton("Update");
 		routerInfoUpdateButton.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent e) {
+			public void actionPerformed (ActionEvent e) {
 				if (isConnected && isLoggedin) {
 					table = tablesComboBox.getSelectedItem().toString();
 					routerName = routerComboBox.getSelectedItem().toString();
@@ -582,7 +598,7 @@ public class NetMgrConsole {
 		});
 		routerInfoClearButton = new JButton("Clear");
 		routerInfoClearButton.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent e) {
+			public void actionPerformed (ActionEvent e) {
 				linkTableModel.clear();
 				ifaceTableModel.clear();
 				comtreeTableModel.clear();
@@ -674,7 +690,7 @@ public class NetMgrConsole {
 		addFilterBtn = new JButton("Add");
 		addFilterBtn.addActionListener(new ActionListener() {
 			@Override
-			public void actionPerformed(ActionEvent e) {
+			public void actionPerformed (ActionEvent e) {
 				if (isConnected && isLoggedin) {
 					LogFilter logFilter = new LogFilter();
 					boolean in = false;
@@ -705,8 +721,7 @@ public class NetMgrConsole {
 					int srcAdr = net.getNodeAdr(net.getNodeNum("netMgr"));
 					logFilter.setSrcAdr(Forest.fAdr2string(srcAdr)); // src addr
 					int destAdr = net.getNodeAdr(net.getNodeNum(rtnName));
-					logFilter.setDstAdr(Forest.fAdr2string(destAdr));// dest
-																		// addr
+					logFilter.setDstAdr(Forest.fAdr2string(destAdr));// destAddr
 
 					String comtree = comtreeForLogComboBox.getSelectedItem()
 							.toString();
@@ -745,7 +760,7 @@ public class NetMgrConsole {
 		dropFilterBtn = new JButton("Drop");
 		dropFilterBtn.addActionListener(new ActionListener() {
 			@Override
-			public void actionPerformed(ActionEvent e) {
+			public void actionPerformed (ActionEvent e) {
 				if (isConnected && isLoggedin) {
 					int i = filterTable.getSelectedRow();
 					if (i >= 0) {
@@ -775,23 +790,29 @@ public class NetMgrConsole {
 		updateLogBtn = new JButton("Update");
 		updateLogBtn.addActionListener(new ActionListener() {
 			@Override
-			public void actionPerformed(ActionEvent e) {
+			public void actionPerformed (ActionEvent e) {
 				logs.clear();
 				String s = connectionNetMgr.getLoggedPackets(logs);
+				StringBuilder sb = new StringBuilder();
 				if (s != null) {
 					showPopupStatus(s);
 				} else {
 					for (String l : logs) {
-						logTextArea.append(l);
-						logTextArea.append("\n");
+						sb.append(l);
+						sb.append("\n");
 					}
 				}
 				ArrayList<String> filters = new ArrayList<String>();
-				connectionNetMgr.getFilterSet(filters);
-				logTextArea.append("*********FILTER SET***********\n");
-				for (String f : filters) {
-					logTextArea.append(f);
-					logTextArea.append("\n");
+				s = connectionNetMgr.getFilterSet(filters);
+				if (s == null) {
+					sb.append("*********FILTER SET***********\n");
+					for (String f : filters) {
+						sb.append(f);
+						sb.append("\n");
+					}
+				}
+				if (sb.length() > 0) {
+					log(sb.toString());
 				}
 			}
 		});
@@ -800,7 +821,7 @@ public class NetMgrConsole {
 		clearLogBtn = new JButton("Clear");
 		clearLogBtn.addActionListener(new ActionListener() {
 			@Override
-			public void actionPerformed(ActionEvent e) {
+			public void actionPerformed (ActionEvent e) {
 				logTextArea.setText("");
 			}
 		});
@@ -843,7 +864,7 @@ public class NetMgrConsole {
 	 *            information table
 	 * 
 	 */
-	private void setPreferredWidth(JTable infoTable) {
+	private void setPreferredWidth (JTable infoTable) {
 		for (int i = 0; i < infoTable.getModel().getColumnCount(); ++i) {
 			AbstractTableModel tableModel = (AbstractTableModel) infoTable
 					.getModel();
@@ -880,7 +901,7 @@ public class NetMgrConsole {
 		}
 
 		@Override
-		public Component getTableCellRendererComponent(JTable table,
+		public Component getTableCellRendererComponent (JTable table,
 				Object value, boolean isSelected, boolean hasFocus, int row,
 				int col) {
 			return renderer.getTableCellRendererComponent(table, value,
@@ -888,13 +909,35 @@ public class NetMgrConsole {
 		}
 	}
 
-	public void showPopupStatus(String status) {
+	public void showPopupStatus (String status) {
 		JOptionPane.showMessageDialog(mainFrame, status);
 	}
 
-	public static void main(String[] args) {
+	public void log (String str) {
+		if (saveAsFileMOption.isSelected()) { //save logs as files
+			if (writer == null) {
+				try {
+					writer = new PrintWriter("log.txt", "UTF-8");
+				} catch (FileNotFoundException e) {
+					writer.close();
+					e.printStackTrace();
+					return;
+				} catch (UnsupportedEncodingException e) {
+					writer.close();
+					e.printStackTrace();
+					return;
+				}
+			}
+			writer.println(str);
+			writer.flush();
+		}
+		
+		logTextArea.append(str);
+	}
+
+	public static void main (String[] args) {
 		SwingUtilities.invokeLater(new Runnable() {
-			public void run() {
+			public void run () {
 				new NetMgrConsole();
 			}
 		});
@@ -904,14 +947,20 @@ public class NetMgrConsole {
 class CloseEvent extends WindowAdapter {
 	private ConnectionNetMgr netMgr;
 	private ConnectionComtCtl comtCtl;
+	private PrintWriter writer;
 
-	public CloseEvent(ConnectionNetMgr netMgr, ConnectionComtCtl comtCtl) {
+	public CloseEvent(ConnectionNetMgr netMgr, ConnectionComtCtl comtCtl,
+			PrintWriter writer) {
 		this.netMgr = netMgr;
 		this.comtCtl = comtCtl;
+		this.writer = writer;
 	}
 
-	public void windowClosing(WindowEvent e) {
-		if (netMgr != null && comtCtl != null) {
+	public void windowClosing (WindowEvent e) {
+		if (writer != null) { // file
+			writer.close();
+		}
+		if (netMgr != null && comtCtl != null) { //socket 
 			netMgr.closeSocket();
 			comtCtl.closeSocket();
 			System.out.println("Connections are closing...");

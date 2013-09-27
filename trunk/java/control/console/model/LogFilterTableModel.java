@@ -16,19 +16,19 @@ public class LogFilterTableModel extends AbstractTableModel {
 		data = new ArrayList<LogFilter>();
 	}
 
-	public int getColumnCount() {
+	public int getColumnCount () {
 		return columnNames.length;
 	}
 
-	public int getRowCount() {
+	public int getRowCount () {
 		return data.size();
 	}
 
-	public String getColumnName(int col) {
+	public String getColumnName (int col) {
 		return columnNames[col];
 	}
 
-	public Object getValueAt(int row, int col) {
+	public Object getValueAt (int row, int col) {
 		LogFilter lf = data.get(row);
 		if (lf == null)
 			return null;
@@ -54,23 +54,23 @@ public class LogFilterTableModel extends AbstractTableModel {
 		}
 	}
 
-	public void addLogFilterTable(LogFilter ct) {
+	public void addLogFilterTable (LogFilter ct) {
 		data.add(ct);
 	}
 
-	public void clear() {
+	public void clear () {
 		data.clear();
 	}
 
-	public ArrayList<LogFilter> getLogFilterList() {
+	public ArrayList<LogFilter> getLogFilterList () {
 		return data;
 	}
 
-	public int getWidth(int i) {
+	public int getWidth (int i) {
 		return widths[i];
 	}
 
-	public void removeLogFilterTable(int i) {
+	public void removeLogFilterTable (int i) {
 		data.remove(i);
 	}
 

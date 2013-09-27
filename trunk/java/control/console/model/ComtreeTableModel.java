@@ -15,19 +15,19 @@ public class ComtreeTableModel extends AbstractTableModel {
 		data = new ArrayList<Comtree>();
 	}
 
-	public int getColumnCount() {
+	public int getColumnCount () {
 		return columnNames.length;
 	}
 
-	public int getRowCount() {
+	public int getRowCount () {
 		return data.size();
 	}
 
-	public String getColumnName(int col) {
+	public String getColumnName (int col) {
 		return columnNames[col];
 	}
 
-	public Object getValueAt(int row, int col) {
+	public Object getValueAt (int row, int col) {
 		Comtree ct = data.get(row);
 		if (ct == null)
 			return null;
@@ -47,15 +47,15 @@ public class ComtreeTableModel extends AbstractTableModel {
 		}
 	}
 
-	public void addComtreeTable(Comtree ct) {
+	public void addComtreeTable (Comtree ct) {
 		data.add(ct);
 	}
 
-	public void clear() {
+	public void clear () {
 		data.clear();
 	}
 
-	public int getWidth(int i) {
+	public int getWidth (int i) {
 		return widths[i];
 	}
 }

@@ -52,24 +52,24 @@ public class ChangePwdDialog extends JPanel {
 
 	}
 
-	protected char[] getPassword() {
+	protected char[] getPassword () {
 		return passwordInput.getPassword();
 	}
 
-	protected char[] getVerifyPassword() {
+	protected char[] getVerifyPassword () {
 		return verifyPasswordInput.getPassword();
 	}
 
-	protected String getUserName() {
+	protected String getUserName () {
 		return usernameInput.getText();
 	}
 
-	protected void setUserName(String s) {
+	protected void setUserName (String s) {
 		usernameInput.setText(s);
 		usernameInput.setEditable(false);
 	}
 
-	public void clearAllTextField() {
+	public void clearAllTextField () {
 		usernameInput.setText("");
 		passwordInput.setText("");
 	}

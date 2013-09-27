@@ -16,19 +16,19 @@ public class LinkTableModel extends AbstractTableModel {
 		data = new ArrayList<Link>();
 	}
 
-	public int getColumnCount() {
+	public int getColumnCount () {
 		return columnNames.length;
 	}
 
-	public int getRowCount() {
+	public int getRowCount () {
 		return data.size();
 	}
 
-	public String getColumnName(int col) {
+	public String getColumnName (int col) {
 		return columnNames[col];
 	}
 
-	public Object getValueAt(int row, int col) {
+	public Object getValueAt (int row, int col) {
 		Link lt = data.get(row);
 		if (lt == null)
 			return null;
@@ -50,15 +50,15 @@ public class LinkTableModel extends AbstractTableModel {
 		}
 	}
 
-	public void addLinkTable(Link lt) {
+	public void addLinkTable (Link lt) {
 		data.add(lt);
 	}
 
-	public void clear() {
+	public void clear () {
 		data.clear();
 	}
 
-	public int getWidth(int i) {
+	public int getWidth (int i) {
 		return widths[i];
 	}
 }

@@ -67,7 +67,7 @@ public class ComtreeDisplay extends JPanel {
 		this.setVisible(true);
 		addMouseListener(new MouseAdapter() {
 			@Override
-			public void mouseClicked(MouseEvent e) {
+			public void mouseClicked (MouseEvent e) {
 				try {
 					Point p = e.getPoint();
 					Point2D p2 = tx.inverseTransform(p, null);
@@ -94,7 +94,7 @@ public class ComtreeDisplay extends JPanel {
 			}
 
 			@Override
-			public void mousePressed(MouseEvent e) {
+			public void mousePressed (MouseEvent e) {
 				zoomEnabled = true;
 				startDragPointScreen = e.getPoint();
 				endDragPointScreen = null;
@@ -102,21 +102,26 @@ public class ComtreeDisplay extends JPanel {
 
 			/**
 			 * 
-			 * @param e MouseEvent
-			 * @param s LinkRate
-			 * @param s2 Comtree Rate
+			 * @param e
+			 *            MouseEvent
+			 * @param s
+			 *            LinkRate
+			 * @param s2
+			 *            Comtree Rate
 			 */
-			private void doPop(MouseEvent e, String s, String s2, String s3) {
+			private void doPop (MouseEvent e, String s, String s2, String s3) {
 				PopUp menu = new PopUp(s, s2, s3);
 				menu.show(e.getComponent(), e.getX(), e.getY());
 			}
 
 			/**
 			 * 
-			 * @param e MouseEvent
-			 * @param s LinkRate
+			 * @param e
+			 *            MouseEvent
+			 * @param s
+			 *            LinkRate
 			 */
-			private void doPop(MouseEvent e, String s, String s2) {
+			private void doPop (MouseEvent e, String s, String s2) {
 				PopUp menu = new PopUp(s, s2);
 				menu.show(e.getComponent(), e.getX(), e.getY());
 			}
@@ -124,7 +129,7 @@ public class ComtreeDisplay extends JPanel {
 
 		addMouseMotionListener(new MouseAdapter() {
 			@Override
-			public void mouseDragged(MouseEvent e) {
+			public void mouseDragged (MouseEvent e) {
 				endDragPointScreen = e.getPoint();
 				try {
 					tx.inverseTransform(startDragPointScreen, startDragPoint);
@@ -145,7 +150,7 @@ public class ComtreeDisplay extends JPanel {
 
 		addMouseWheelListener(new MouseAdapter() {
 			@Override
-			public void mouseWheelMoved(MouseWheelEvent e) {
+			public void mouseWheelMoved (MouseWheelEvent e) {
 				if (e.getScrollType() == MouseWheelEvent.WHEEL_UNIT_SCROLL) {
 					zoomEnabled = true;
 					int wheelRotation = e.getWheelRotation();
@@ -181,7 +186,7 @@ public class ComtreeDisplay extends JPanel {
 	}
 
 	@Override
-	public void paintComponent(Graphics g) {
+	public void paintComponent (Graphics g) {
 		super.paintComponent(g);
 		Graphics2D g2D = (Graphics2D) g;
 		FontMetrics fm = g2D.getFontMetrics(); // for font size
@@ -243,7 +248,7 @@ public class ComtreeDisplay extends JPanel {
 	 * @param netInfo
 	 * @param comtrees
 	 */
-	public void updateDisplay(int ccomt, NetInfo netInfo, ComtInfo comtrees) {
+	public void updateDisplay (int ccomt, NetInfo netInfo, ComtInfo comtrees) {
 		// find min and max latitude and longitude
 		// expressed in degrees
 		int MAIN_WIDTH = 700;
@@ -353,27 +358,27 @@ public class ComtreeDisplay extends JPanel {
 		repaint();
 	}
 
-	public void clearLines() {
+	public void clearLines () {
 		lines.clear();
 	}
 
-	public void addLine(Line line) {
+	public void addLine (Line line) {
 		lines.add(line);
 	}
 
-	public void clearCircles() {
+	public void clearCircles () {
 		circles.clear();
 	}
 
-	public void addCircle(Circle circle) {
+	public void addCircle (Circle circle) {
 		circles.add(circle);
 	}
 
-	public void clearRects() {
+	public void clearRects () {
 		rects.clear();
 	}
 
-	public void addRect(Rect rect) {
+	public void addRect (Rect rect) {
 		rects.add(rect);
 	}
 
@@ -382,9 +387,9 @@ public class ComtreeDisplay extends JPanel {
 	 * 
 	 * @param ccomt
 	 */
-	public void autoUpdateDisplay(final int ccomt) {
+	public void autoUpdateDisplay (final int ccomt) {
 		timer = new Timer(2000, new ActionListener() {
-			public void actionPerformed(ActionEvent evt) {
+			public void actionPerformed (ActionEvent evt) {
 				NetInfo netInfo = connectionComtCtl.getNetInfo();
 				ComtInfo comtrees = connectionComtCtl.getComtrees();
 				connectionComtCtl.getComtree(ccomt);
@@ -401,7 +406,7 @@ public class ComtreeDisplay extends JPanel {
 	/**
 	 * Clean Comtree Display
 	 */
-	public void clearUI() {
+	public void clearUI () {
 		if (timer != null)
 			timer.stop();
 		clearLines();

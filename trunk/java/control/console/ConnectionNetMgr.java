@@ -49,7 +49,7 @@ public class ConnectionNetMgr {
 	/**
 	 * Initialize a connection to Net Manager
 	 */
-	private void setupIo() {
+	private void setupIo () {
 		ascii = Charset.forName("US-ASCII");
 		enc = ascii.newEncoder();
 		enc.onMalformedInput(CodingErrorAction.IGNORE);
@@ -63,7 +63,7 @@ public class ConnectionNetMgr {
 	 * 
 	 * @return successful
 	 */
-	public boolean connectToNetMgr() {
+	public boolean connectToNetMgr () {
 		// open channel to server
 		// on success, return true
 		try {
@@ -91,7 +91,7 @@ public class ConnectionNetMgr {
 	 *            message
 	 * @return successful
 	 */
-	public boolean sendString(String msg) {
+	public boolean sendString (String msg) {
 		bb.clear();
 		cb.clear();
 		cb.put(msg);
@@ -118,7 +118,7 @@ public class ConnectionNetMgr {
 	 * @return null if the operation succeeds, otherwise a string containing an
 	 *         error message from the client manager
 	 */
-	public String login(String user, String pwd) {
+	public String login (String user, String pwd) {
 		if (user.length() == 0 || pwd.length() == 0)
 			return "missing user name or password";
 		if (!sendString("login: " + user + "\n" + "password: " + pwd
@@ -150,7 +150,7 @@ public class ConnectionNetMgr {
 	 * @return null if the operation succeeded, otherwise, a string containing
 	 *         an error message from the net manager
 	 */
-	public String getProfile(String userName) {
+	public String getProfile (String userName) {
 		String s;
 		boolean gotName, gotEmail;
 		adminProfile.setUserName(userName);
@@ -203,7 +203,7 @@ public class ConnectionNetMgr {
 	 * @return null if the operation succeeds, otherwise a string containing an
 	 *         error message from the net manager
 	 */
-	public String newAccount(String user, String pwd) {
+	public String newAccount (String user, String pwd) {
 		if (!sendString("newAccount: " + user + "\n" + "password: " + pwd
 				+ "\nover\n"))
 			return "cannot send request to server";
@@ -228,7 +228,7 @@ public class ConnectionNetMgr {
 	 * @return null if the operation succeeded, otherwise, a string containing
 	 *         an error message from the net manager
 	 */
-	public String updateProfile(String userName, String realName, String email) {
+	public String updateProfile (String userName, String realName, String email) {
 		if (userName.length() == 0)
 			return "empty user name";
 		if (!sendString("updateProfile: " + userName + "\n" + "realName: \""
@@ -256,7 +256,7 @@ public class ConnectionNetMgr {
 	 * @return null if the operation succeeded, otherwise, a string containing
 	 *         an error message from the net manager
 	 */
-	public String changePassword(String userName, String pwd) {
+	public String changePassword (String userName, String pwd) {
 		if (userName.length() == 0 || pwd.length() == 0)
 			return "empty user name or password";
 		if (!sendString("changePassword: " + userName + " " + pwd + "\nover\n"))
@@ -282,7 +282,7 @@ public class ConnectionNetMgr {
 	 *            Router Name such as r1
 	 * @return null if successful, otherwise, an error message
 	 */
-	public String getTable(AbstractTableModel tableModel, String routerName) {
+	public String getTable (AbstractTableModel tableModel, String routerName) {
 		String type = null;
 		if (tableModel instanceof ComtreeTableModel) {
 			type = "Comtree";
@@ -386,7 +386,7 @@ public class ConnectionNetMgr {
 		return null;
 	}
 
-	public String addFilter(LogFilter filter) {
+	public String addFilter (LogFilter filter) {
 		String rtnName = filter.getRtn();
 		String msg = "addFilter: " + rtnName + "\n";
 		if (!sendString(msg))
@@ -415,7 +415,7 @@ public class ConnectionNetMgr {
 	 * 
 	 * @return null on success, otherwise, error message
 	 */
-	public String modFilter(LogFilter filter) {
+	public String modFilter (LogFilter filter) {
 		String rtnName = filter.getRtn();
 		int fIndex = filter.getId(); // id
 		StringBuilder filterString = new StringBuilder();
@@ -473,7 +473,7 @@ public class ConnectionNetMgr {
 	 * 
 	 * @return
 	 */
-	public String dropFilter(String rtnName, int fx) {
+	public String dropFilter (String rtnName, int fx) {
 		String msg = "dropFilter: " + rtnName + " " + fx + "\n";
 		if (!sendString(msg))
 			return "connot drop log filter from server";
@@ -494,7 +494,7 @@ public class ConnectionNetMgr {
 	 * 
 	 * @return
 	 */
-	public String getFilter() {
+	public String getFilter () {
 		String rtnName = "r1";
 		String msg = "getFilter: " + rtnName + " " + "1" + "\n";
 		if (!sendString(msg))
@@ -519,7 +519,7 @@ public class ConnectionNetMgr {
 	 * 
 	 * @return
 	 */
-	public String getFilterSet(ArrayList<String> filters) {
+	public String getFilterSet (ArrayList<String> filters) {
 		String rtnName = "r1";
 		String msg = "getFilterSet: " + rtnName + "\n";
 		if (!sendString(msg))
@@ -545,7 +545,7 @@ public class ConnectionNetMgr {
 	 * 
 	 * @return null if successful, otherwise error message
 	 */
-	public String getLoggedPackets(ArrayList<String> logs) {
+	public String getLoggedPackets (ArrayList<String> logs) {
 		String msg = "getLoggedPackets: " + "r1" + " " + "\nover\n";
 		if (!sendString(msg))
 			return "connot retrieve logged packets";
@@ -566,7 +566,7 @@ public class ConnectionNetMgr {
 	/**
 	 * Close socket to Net Mgr
 	 */
-	public void closeSocket() {
+	public void closeSocket () {
 		if (serverChan != null && serverChan.isConnected()) {
 			try {
 				serverChan.close();
@@ -581,7 +581,7 @@ public class ConnectionNetMgr {
 	 * 
 	 * @return
 	 */
-	public String getNmAddr() {
+	public String getNmAddr () {
 		return nmAddr;
 	}
 
@@ -590,7 +590,7 @@ public class ConnectionNetMgr {
 	 * 
 	 * @param nmAddr
 	 */
-	public void setNmAddr(String nmAddr) {
+	public void setNmAddr (String nmAddr) {
 		this.nmAddr = nmAddr;
 	}
 
@@ -599,7 +599,7 @@ public class ConnectionNetMgr {
 	 * 
 	 * @return
 	 */
-	public int getNmPort() {
+	public int getNmPort () {
 		return nmPort;
 	}
 
@@ -608,7 +608,7 @@ public class ConnectionNetMgr {
 	 * 
 	 * @param nmPort
 	 */
-	public void setNmPort(int nmPort) {
+	public void setNmPort (int nmPort) {
 		this.nmPort = nmPort;
 	}
 
@@ -617,7 +617,7 @@ public class ConnectionNetMgr {
 	 * 
 	 * @return
 	 */
-	public AdminProfile getAdminProfile() {
+	public AdminProfile getAdminProfile () {
 		return adminProfile;
 	}
 

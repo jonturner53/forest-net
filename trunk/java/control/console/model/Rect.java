@@ -19,31 +19,31 @@ public class Rect {
 		this.nodeAddr = nodeAddr;
 	}
 
-	public int getX() {
+	public int getX () {
 		return x;
 	}
 
-	public int getY() {
+	public int getY () {
 		return y;
 	}
 
-	public int getWidth() {
+	public int getWidth () {
 		return width;
 	}
 
-	public int getHeight() {
+	public int getHeight () {
 		return height;
 	}
 
-	public Color getColor() {
+	public Color getColor () {
 		return color;
 	}
 
-	public String getName() {
+	public String getName () {
 		return name;
 	}
 
-	public String getNodeAddr() {
+	public String getNodeAddr () {
 		return nodeAddr;
 	}
 }
