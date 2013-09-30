@@ -4,6 +4,7 @@ AUTO = False	# flag for enabling automatic mode
 SHOW = False	# flag for enabling display
 AUDIO = False   # flag for enabling/disabling audio features
 		# to use audio, you must have pyAudio and portAudio installed
+NOSUB = False	# flag for disabling multicast subscriptions
 DEBUG = 0	# controls amount of debugging output
 
 def ip2string(ip) :
