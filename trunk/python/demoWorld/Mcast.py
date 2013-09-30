@@ -3,6 +3,8 @@ import direct.directbase.DirectStart
 from panda3d.core import *
 from direct.task import Task
 
+import Util
+
 class Mcast :
 	""" Multicast group management.
 
@@ -18,7 +20,6 @@ class Mcast :
 		myAvatar is a reference to the Avatar object
 		"""
 
-		if Util.NOSUB : return
 		self.net = net
 		self.myAvatar = myAvatar
 
@@ -30,6 +31,8 @@ class Mcast :
 		self.nY = int(limit[1]/10.0);
 		self.cellSizeY = (limit[1]+0.0)/self.nY
 		self.subLimit = 10
+
+		if Util.NOSUB : return
 
 		# create array of visibility sets, one per cell
 		self.vsets = [ None ] * (self.nX*self.nY)
