@@ -1,7 +1,5 @@
 """ Avatar - script that displays Avatar's view of world and controls movement
 
-This module is intended to be called by DemoWorld.py.
- 
 Author: Chao Wang and Jon Turner
 World Model: Chao Wang
  

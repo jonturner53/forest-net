@@ -2,7 +2,7 @@
 
 usage:
       demoWorld cliMgr comtree userName avaModel
-		[ auto ] [ show ] [ audio ] [ debug ]
+		[ auto ] [ show ] [nosub] [ audio ] [ debug ]
 
 - cliMgrIp is the host name or IP address of the client manager's server
 - comtree is the number of a pre-configured Forest comtree
@@ -14,6 +14,8 @@ usage:
 - the show option, if present, opens a window showing the world from
   the avatar's viewpoint; for auto avatars, this is required to see what
   the avatar sees; for manually controlled avatars, a window is always opened
+- the nosub option, if present, disables multicast subscription processing;
+  this can be used with auto avatars to reduce processing effort
 - the audio option, if present, sending/receiving audio
   is enabled; to use this option, you must have pyaudio and portaudio installed;
   this is always disabled for auto avatars
@@ -55,6 +57,7 @@ Util.AUTO = False; Util.SHOW = False; Util.AUDIO = False; Util.DEBUG = 0
 for i in range(5,len(sys.argv)) :
 	if   sys.argv[i] == "auto" : Util.AUTO = True
 	elif sys.argv[i] == "show" : Util.SHOW = True
+	elif sys.argv[i] == "nosub" : Util.NOSUB = True
 	elif sys.argv[i] == "audio" : Util.AUDIO = True
 	elif sys.argv[i] == "debug"   : Util.DEBUG = 1
 	elif sys.argv[i] == "debugg"  : Util.DEBUG = 2
@@ -66,7 +69,6 @@ password = "pass"
 if userName != "user" :
 	password = getpass.getpass()
 
-print "DEBUG=", Util.DEBUG
 myAvatar = Avatar(userName, avaModel)
 net = Net(cliMgrIp, myComtree, userName, avaModel, myAvatar)
 

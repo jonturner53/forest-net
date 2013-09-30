@@ -18,6 +18,7 @@ class Mcast :
 		myAvatar is a reference to the Avatar object
 		"""
 
+		if Util.NOSUB : return
 		self.net = net
 		self.myAvatar = myAvatar
 
@@ -178,6 +179,7 @@ class Mcast :
 
 		x, y is the current coordinates of the avatar
 		"""
+		if Util.NOSUB : return
 		col = int(x/self.cellSizeX); row = int(y/self.cellSizeX)
 		if col == self.col and row == self.row : return
 		self.col = col; self.row = row
