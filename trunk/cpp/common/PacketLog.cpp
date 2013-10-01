@@ -130,14 +130,15 @@ int PacketLog::extract(int maxLen, string& s) {
 	while (eventCount > 0) {
 		ss.str("");
 		int px = evec[firstEvent].px;
-		ss << Misc::nstime2string(evec[firstEvent].time,s);
+		string s1;
+		ss << Misc::nstime2string(evec[firstEvent].time,s1);
 		if (px == 0) {
 			ss << " missing " << evec[firstEvent].link << endl;
 		} else {
 			if (evec[firstEvent].sendFlag)	ss << " send ";
 			else				ss << " recv ";
 			ss << "link " << setw(2) << evec[firstEvent].link;
-			ss << " " << ps->getPacket(px).toString(s);
+			ss << " " << ps->getPacket(px).toString(s1);
 		}
 		if (s.length() + ss.str().length() > maxLen) break;
 		s += ss.str();
