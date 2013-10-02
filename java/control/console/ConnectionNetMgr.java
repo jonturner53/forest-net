@@ -388,16 +388,24 @@ public class ConnectionNetMgr {
 
 	public String addFilter (LogFilter filter) {
 		String rtnName = filter.getRtn();
-		String msg = "addFilter: " + rtnName + "\n";
-		if (!sendString(msg))
-			return "connot add log filter to server";
-
+		if (rtnName.equals("all")) {
+			
+		} else {
+			String msg = "addFilter: " + rtnName + "\n";
+			if (!sendString(msg))
+				return "connot add log filter to server";
+		}
+		
 		String str = inBuf.readLine(); // success
 		if (str.equals("could not add log filter"))
 			return "could not add log filter";
 		System.out.println(str);
 
 		str = inBuf.readLine(); // id
+		if (str.equals("invalid request")) {
+			return "invalid request";
+		}
+		
 		System.out.println(str);
 		int id = Integer.valueOf(str);
 		filter.setId(id);
@@ -473,8 +481,8 @@ public class ConnectionNetMgr {
 	 * 
 	 * @return
 	 */
-	public String dropFilter (String rtnName, int fx) {
-		String msg = "dropFilter: " + rtnName + " " + fx + "\n";
+	public String dropFilter (String rtnName, int fIdx) {
+		String msg = "dropFilter: " + rtnName + " " + fIdx + "\n";
 		if (!sendString(msg))
 			return "connot drop log filter from server";
 
@@ -494,15 +502,17 @@ public class ConnectionNetMgr {
 	 * 
 	 * @return
 	 */
-	public String getFilter () {
-		String rtnName = "r1";
-		String msg = "getFilter: " + rtnName + " " + "1" + "\n";
+	public String getFilter (String rtrName, int fIdx) {
+		String msg = "getFilter: " + rtrName + " " + fIdx + "\n";
 		if (!sendString(msg))
 			return "connot get log filter from server";
 
 		String str = inBuf.readLine(); // success
 		if (str.equals("could not get log filter"))
 			return "could not get log filter";
+		else if (str.equals("invalid request"))
+			return "invalid request";
+		
 		System.out.println(str);
 
 		str = inBuf.readLine();
@@ -519,20 +529,57 @@ public class ConnectionNetMgr {
 	 * 
 	 * @return
 	 */
-	public String getFilterSet (ArrayList<String> filters) {
-		String rtnName = "r1";
-		String msg = "getFilterSet: " + rtnName + "\n";
+	public String getFilterSet (ArrayList<LogFilter> filters, String rtrName) {
+		ArrayList<String> strList = new ArrayList<String>();
+		String msg = "getFilterSet: " + rtrName + "\n";
 		if (!sendString(msg))
 			return "connot get log filter set from server";
 
 		while (true) {
 			String str = inBuf.readLine();
 			if (str.equals("over")) {
+				for (String s : strList) {
+					String[] tokens = s.split(" ");
+					if (tokens.length == 9) {
+						LogFilter filter = new LogFilter();
+						filter.setRtn(rtrName);
+						filter.setId(Integer.parseInt(tokens[0]));
+						if (tokens[1].equals("1")) {
+							filter.setOn(true);
+						} else {
+							filter.setOn(false);
+						}
+						filter.setLink(tokens[2]);
+						if (tokens[3].substring(0, 1).equals("1")) {
+							filter.setIn(true);
+						} else {
+							filter.setIn(false);
+						}
+						if (tokens[3].substring(1, 2).equals("1")) {
+							filter.setOut(true);
+						} else {
+							filter.setOut(false);
+						}
+						filter.setComtree(tokens[4]);
+						filter.setSrcAdr(tokens[5]);
+						filter.setDstAdr(tokens[6]);
+						filter.setType(tokens[7]);
+						filter.setCpType(tokens[8]);
+						
+						filters.add(filter);
+					} else {
+						System.out.println("Can't parse due to the token length"
+								+ " of " + tokens.length);
+						break;
+					}
+				}
 				break;
 			} else if (str.equals("success")) {
 				continue;
+			} else if (str.equals("invalid request")) {
+				return "invalid request";
 			} else {
-				filters.add(str);
+				strList.add(str);
 				System.out.println(str);
 			}
 		}
