@@ -36,7 +36,7 @@ public class LogFilterTableModel extends AbstractTableModel {
 		case 0:
 			return lf.getId();
 		case 1:
-			return lf.getRtn();
+			return lf.getRtr();
 		case 2:
 			return lf.getIn();
 		case 3:

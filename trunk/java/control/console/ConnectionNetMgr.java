@@ -387,11 +387,11 @@ public class ConnectionNetMgr {
 	}
 
 	public String addFilter (LogFilter filter) {
-		String rtnName = filter.getRtn();
-		if (rtnName.equals("all")) {
-			
+		String rtrName = filter.getRtr();
+		if (!rtrName.subSequence(0, 1).equals("r")) {
+			return "invalid request" + rtrName;
 		} else {
-			String msg = "addFilter: " + rtnName + "\n";
+			String msg = "addFilter: " + rtrName + "\n";
 			if (!sendString(msg))
 				return "connot add log filter to server";
 		}
@@ -424,7 +424,7 @@ public class ConnectionNetMgr {
 	 * @return null on success, otherwise, error message
 	 */
 	public String modFilter (LogFilter filter) {
-		String rtnName = filter.getRtn();
+		String rtnName = filter.getRtr();
 		int fIndex = filter.getId(); // id
 		StringBuilder filterString = new StringBuilder();
 
@@ -542,7 +542,7 @@ public class ConnectionNetMgr {
 					String[] tokens = s.split(" ");
 					if (tokens.length == 9) {
 						LogFilter filter = new LogFilter();
-						filter.setRtn(rtrName);
+						filter.setRtr(rtrName);
 						filter.setId(Integer.parseInt(tokens[0]));
 						if (tokens[1].equals("1")) {
 							filter.setOn(true);
