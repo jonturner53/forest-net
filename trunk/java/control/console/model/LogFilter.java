@@ -2,6 +2,7 @@ package forest.control.console.model;
 
 public class LogFilter {
 	private int id;
+	private boolean on;
 	private String rtn;
 	private boolean in;
 	private boolean out;
@@ -14,7 +15,11 @@ public class LogFilter {
 
 	public LogFilter() {
 	}
-
+	
+	public boolean getOn (){
+		return on;
+	}
+	
 	public int getId () {
 		return id;
 	}
@@ -47,6 +52,10 @@ public class LogFilter {
 		return rtn;
 	}
 
+	public void setOn (boolean on) {
+		this.on = on;
+	}
+	
 	public void setId (int id) {
 		this.id = id;
 	}

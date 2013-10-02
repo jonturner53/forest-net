@@ -24,7 +24,7 @@ import forest.control.NetInfo;
 import forest.control.console.model.*;
 
 public class NetMgrConsole {
-
+	
 	public static final int MAIN_WIDTH = 1400;
 	public static final int MAIN_HEIGHT = 700;
 	public static final int MENU_HEIGHT = 50;
@@ -198,6 +198,12 @@ public class NetMgrConsole {
 				comtForLogCBoxItems);
 		comtreeForLogComboBoxModel.addElement("all");
 
+		comtreeTableModel = new ComtreeTableModel();
+		linkTableModel = new LinkTableModel();
+		ifaceTableModel = new IfaceTableModel();
+		routeTableModel = new RouteTableModel();
+		logFilterTableModel = new LogFilterTableModel();
+		
 		connectDialog = new ConnectDialog();
 		loginDialog = new LoginDialog();
 		updateProfileDialog = new UpdateProfileDialog();
@@ -243,6 +249,11 @@ public class NetMgrConsole {
 						comtSet = connectionComtCtl.getComtTreeSet();
 						if (comtSet.size() <= 0) {
 							showPopupStatus("No Comtrees");
+							if (connectionNetMgr != null &&
+										connectionComtCtl != null){
+								connectionNetMgr.closeSocket();
+								connectionComtCtl.closeSocket();
+							}
 						} else {
 							for (Integer c : comtSet) {
 								comtreeComboBoxModel.addElement(c);
@@ -255,8 +266,8 @@ public class NetMgrConsole {
 
 							// retrieving routers' name
 							NetInfo netInfo = connectionComtCtl.getNetInfo();
-							for (int node = netInfo.firstNode(); node != 0; node = netInfo
-									.nextNode(node)) {
+							for (int node = netInfo.firstNode(); node != 0; 
+									node = netInfo.nextNode(node)) {
 								String name = netInfo.getNodeName(node);
 								if (name.substring(0, 1).equals("r")) {
 									routerComboBoxModel.addElement(name);
@@ -266,6 +277,11 @@ public class NetMgrConsole {
 						}
 					} else {
 						showPopupStatus("Connection is failed.");
+						if (connectionNetMgr != null &&
+								connectionComtCtl != null){
+							connectionNetMgr.closeSocket();
+							connectionComtCtl.closeSocket();
+						}
 					}
 				}
 			}
@@ -285,8 +301,7 @@ public class NetMgrConsole {
 					if (n == 0) { // login
 						char[] passwd = loginDialog.getPassword();
 						String userName = loginDialog.getUserName();
-						String ret = connectionNetMgr.login(userName,
-								new String(passwd));
+						String ret = connectionNetMgr.login(userName, new String(passwd));
 						if (ret == null) {
 							showPopupStatus("Logged in as " + userName);
 							statusLabel2.setText(" Logged in as " + userName);
@@ -294,7 +309,20 @@ public class NetMgrConsole {
 							loginMenuItem.setText("Log out");
 
 							// getting filter sets from routers
-
+							String rtr = ""; String str = "";
+							for (int i = 1 ; i < routerForLogComboBoxModel.getSize() ; i++) {
+								ArrayList<LogFilter> filters = new ArrayList<LogFilter>();
+								rtr = routerForLogComboBoxModel.getElementAt(i);
+								str = connectionNetMgr.getFilterSet(filters, rtr);
+								if (str == null) {
+									for (LogFilter f : filters)
+										logFilterTableModel.addLogFilterTable(f);
+									
+									if (filters.size() > 0) {
+										logFilterTableModel.fireTableDataChanged();
+									}
+								}
+							}
 						} else
 							showPopupStatus(ret);
 					}
@@ -429,12 +457,6 @@ public class NetMgrConsole {
 	 * Display Net Manager Console
 	 */
 	private void displayNetMgr () {
-		comtreeTableModel = new ComtreeTableModel();
-		linkTableModel = new LinkTableModel();
-		ifaceTableModel = new IfaceTableModel();
-		routeTableModel = new RouteTableModel();
-		logFilterTableModel = new LogFilterTableModel();
-
 		comtreeDisplayPanel = new ComtreeDisplay(connectionComtCtl);
 
 		mainPanel = new JPanel();
@@ -791,28 +813,31 @@ public class NetMgrConsole {
 		updateLogBtn.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed (ActionEvent e) {
-				logs.clear();
-				String s = connectionNetMgr.getLoggedPackets(logs);
-				StringBuilder sb = new StringBuilder();
-				if (s != null) {
-					showPopupStatus(s);
+				if (isLoggedin && isConnected) {
+					logs.clear();
+					String s = connectionNetMgr.getLoggedPackets(logs);
+					StringBuilder sb = new StringBuilder();
+					if (s != null) {
+						showPopupStatus(s);
+					} else {
+						for (String l : logs) {
+							sb.append(l);
+							sb.append("\n");
+						}
+					}
+					
+//					if (s == null) {
+//						sb.append("*********FILTER SET***********\n");
+//						for (String f : filters) {
+//							sb.append(f);
+//							sb.append("\n");
+//						}
+//					}
+					if (sb.length() > 0) {
+						log(sb.toString());
+					}
 				} else {
-					for (String l : logs) {
-						sb.append(l);
-						sb.append("\n");
-					}
-				}
-				ArrayList<String> filters = new ArrayList<String>();
-				s = connectionNetMgr.getFilterSet(filters);
-				if (s == null) {
-					sb.append("*********FILTER SET***********\n");
-					for (String f : filters) {
-						sb.append(f);
-						sb.append("\n");
-					}
-				}
-				if (sb.length() > 0) {
-					log(sb.toString());
+					showPopupStatus("connection or login required");
 				}
 			}
 		});
@@ -856,7 +881,8 @@ public class NetMgrConsole {
 		mainFrame.pack();
 		mainFrame.repaint();
 	}
-
+	
+	
 	/**
 	 * Set preferred column header's width
 	 * 
