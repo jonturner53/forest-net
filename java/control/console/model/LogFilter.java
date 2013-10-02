@@ -3,7 +3,7 @@ package forest.control.console.model;
 public class LogFilter {
 	private int id;
 	private boolean on;
-	private String rtn;
+	private String rtr;
 	private boolean in;
 	private boolean out;
 	private String srcAdr;
@@ -48,8 +48,8 @@ public class LogFilter {
 		return cpType;
 	}
 
-	public String getRtn () {
-		return rtn;
+	public String getRtr () {
+		return rtr;
 	}
 
 	public void setOn (boolean on) {
@@ -60,8 +60,8 @@ public class LogFilter {
 		this.id = id;
 	}
 
-	public void setRtn (String rtn) {
-		this.rtn = rtn;
+	public void setRtr (String rtr) {
+		this.rtr = rtr;
 	}
 
 	public void setIn (boolean in) {
