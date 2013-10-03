@@ -96,8 +96,8 @@ public class NetMgrConsole {
 	private DefaultComboBoxModel<String> comtLogComBoxModel;
 	private JCheckBox inChBox;
 	private JCheckBox outChBox;
-	// private JButton onOffLogBtn;
 	private JCheckBox updateLogChBox;
+	private JCheckBox localLogChBox;
 	private JButton clearLogBtn;
 	private JButton addFilterBtn;
 	private JButton dropFilterBtn;
@@ -126,6 +126,9 @@ public class NetMgrConsole {
 
 			"add_route", "drop_route", "get_route", "mod_route",
 			"add_route_link", "drop_route_link",
+			
+			"add_filter", "drop_filter", "get_filter", "mod_filter",
+			"get_filter_set", "get_logged_packets", "enable_local_log",
 
 			"new_session", "cancel_session", "client_connect",
 			"client_disconnect",
@@ -672,25 +675,23 @@ public class NetMgrConsole {
 				.setPreferredSize(new Dimension(MAIN_WIDTH / 2, MENU_HEIGHT));
 		logMenuPanel.setMaximumSize(logMenuPanel.getPreferredSize());
 
-		rtrLogComBox = new JComboBox<String>( // router selection
-				rtrLogComBoxModel);
+		rtrLogComBox = new JComboBox<String>(rtrLogComBoxModel);
+				
 		logMenuPanel.add(rtrLogComBox);
 		inChBox = new JCheckBox("in");
 		logMenuPanel.add(inChBox);
 		outChBox = new JCheckBox("out");
 		logMenuPanel.add(outChBox);
-		linkTextField = new JTextField(5);
+		linkTextField = new JTextField(4);
 		logMenuPanel.add(linkTextField);
 		logMenuPanel.add(new JLabel("link"));
-		comtLogComBox = new JComboBox<String>(
-				comtLogComBoxModel);
+		comtLogComBox = new JComboBox<String>(comtLogComBoxModel);
 		logMenuPanel.add(comtLogComBox);
-		logMenuPanel.add(new JLabel("comtree"));
+		logMenuPanel.add(new JLabel("comt"));
 
 		logMenuPanel2 = new JPanel(new FlowLayout(FlowLayout.LEFT));
 		logMenuPanel2.setBorder(BorderFactory.createTitledBorder(""));
-		logMenuPanel2.setPreferredSize(new Dimension(MAIN_WIDTH / 2,
-				MENU_HEIGHT));
+		logMenuPanel2.setPreferredSize(new Dimension(MAIN_WIDTH/2,MENU_HEIGHT));
 		logMenuPanel2.setMaximumSize(logMenuPanel.getPreferredSize());
 		forestTypeComBox = new JComboBox<String>(forestType);
 		logMenuPanel2.add(forestTypeComBox);
@@ -775,16 +776,39 @@ public class NetMgrConsole {
 		logs = new ArrayList<String>();
 		updateLogChBox = new JCheckBox("Update");
 		updateLogChBox.setSelected(true);
+		
+		localLogChBox = new JCheckBox("Local"); //local checkbox
+		autoRefreshUpdateLog();
+		logMenuPanel.add(updateLogChBox);
+		logMenuPanel.add(localLogChBox);
+
 		updateLogChBox.addItemListener(new ItemListener() {
 			@Override
 			public void itemStateChanged (ItemEvent e) {
 				if (e.getStateChange() == ItemEvent.SELECTED) {
+					localLogChBox.setSelected(false);
 					autoRefreshUpdateLog();
 				}
 			}
 		});
-		autoRefreshUpdateLog();
-		logMenuPanel.add(updateLogChBox);
+		
+		localLogChBox.addItemListener(new ItemListener() {
+			@Override
+			public void itemStateChanged (ItemEvent e) {
+				if (e.getStateChange() == ItemEvent.SELECTED) {
+					if (isLoggedin && isConnected) {
+						updateLogChBox.setSelected(false);
+						timer.stop(); //thread for logged packet
+						connectionNetMgr.enableLocalLog("r1", true);
+					}
+				} else{
+					if (isLoggedin && isConnected) {
+						connectionNetMgr.enableLocalLog("r1", false);
+					}
+				}
+			}
+		});
+		
 
 		clearLogBtn = new JButton("Clear");
 		clearLogBtn.addActionListener(new ActionListener() {
@@ -825,6 +849,11 @@ public class NetMgrConsole {
 		mainFrame.repaint();
 	}
 	
+	/**
+	 * Add a log filter 
+	 * @param rtrName router name
+	 * @return null if successful otherwise error message
+	 */
 	private String addFilter (String rtrName) {
 		LogFilter logFilter = new LogFilter();
 		boolean in = false;
