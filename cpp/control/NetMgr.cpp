@@ -275,18 +275,20 @@ cerr << "cmd=" << cmd << endl;
 			getIfaceTable(buf,reply,cph);
 		} else if (cmd == "getRouteTable") {
 			getRouteTable(buf,reply,cph);
-		} else if (cmd == "addFilter"){
+		} else if (cmd == "addFilter") {
 			addFilter(buf,reply,cph);
-		} else if (cmd == "modFilter"){
+		} else if (cmd == "modFilter") {
 			modFilter(buf,reply,cph);
-		} else if (cmd == "dropFilter"){
+		} else if (cmd == "dropFilter") {
 			dropFilter(buf,reply,cph);
-		} else if (cmd == "getFilter"){
+		} else if (cmd == "getFilter") {
 			getFilter(buf,reply,cph);
-		} else if (cmd == "getFilterSet"){
+		} else if (cmd == "getFilterSet") {
 			getFilterSet(buf,reply,cph);
-		} else if (cmd == "getLoggedPackets"){
+		} else if (cmd == "getLoggedPackets") {
 			getLoggedPackets(buf,reply,cph);
+		} else if (cmd == "enableLocalLog") {
+			enableLocalLog(buf,reply,cph);
 		} else {
 			reply = "unrecognized input\n";
 		}
@@ -601,6 +603,28 @@ void getLoggedPackets(NetBuffer& buf, string& reply, CpHandler& cph){
 	}
 	reply.append(repCp.stringData);
 	reply.append("\n");
+}
+
+/** Enable local log in router
+ *  Reads router name from the socket.
+ *  @param buf is a reference to a NetBuffer object for the socket
+ *  @param reply is a reference to a string to be returned to console
+ *  @param cph is a reference to this thread's control packet hander
+ */
+void enableLocalLog(NetBuffer& buf, string& reply, CpHandler& cph){
+	string rtrName; int rtr; bool on;
+	if (!buf.verify(':') || !buf.readName(rtrName) ||
+			((rtr = net->getNodeNum(rtrName)) == 0) ||
+			!buf.readBit(on)){
+		reply.assign("invalid request\n"); return;
+	}
+	fAdr_t radr = net->getNodeAdr(rtr);
+	pktx repx; CtlPkt repCp;
+	repCp.reset();
+	repx = cph.enableLocalLog(radr, on, repCp);
+	if (repx == 0 || repCp.mode != CtlPkt::POS_REPLY) {
+		reply.assign("could not get logged packets \n"); return;
+	}
 }
 
 /** Get link table from router and return to Console.

@@ -103,6 +103,7 @@ void	dropFilter(NetBuffer&, string&, CpHandler&);
 void	getFilter(NetBuffer&, string&, CpHandler&);
 void	getFilterSet(NetBuffer&, string&, CpHandler&);
 void 	getLoggedPackets(NetBuffer& buf, string& reply, CpHandler& cph);
+void 	enableLocalLog(NetBuffer& buf, string& reply, CpHandler& cph);
 
 uint64_t generateNonce();
 fAdr_t	setupLeaf(int, pktx, CtlPkt&, int, int, uint64_t,CpHandler&,bool=false);
