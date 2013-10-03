@@ -16,10 +16,12 @@ import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
 
 import javax.swing.*;
+import javax.swing.Timer;
 import javax.swing.border.BevelBorder;
 import javax.swing.table.*;
 
 import forest.common.Forest;
+import forest.control.ComtInfo;
 import forest.control.NetInfo;
 import forest.control.console.model.*;
 
@@ -95,7 +97,7 @@ public class NetMgrConsole {
 	private JCheckBox inChBox;
 	private JCheckBox outChBox;
 	// private JButton onOffLogBtn;
-	private JButton updateLogBtn;
+	private JCheckBox updateLogChBox;
 	private JButton clearLogBtn;
 	private JButton addFilterBtn;
 	private JButton dropFilterBtn;
@@ -167,6 +169,8 @@ public class NetMgrConsole {
 	private boolean isConnected = false;
 
 	// private boolean isLogOn = false;
+	
+	private Timer timer; 
 
 	public NetMgrConsole() {
 
@@ -190,8 +194,7 @@ public class NetMgrConsole {
 		rtrItems = new Vector<String>();
 		rtrComBoxModel = new DefaultComboBoxModel<String>(rtrItems);
 		rtrLogItems = new Vector<String>();
-		rtrLogComBoxModel = new DefaultComboBoxModel<String>(
-				rtrLogItems);
+		rtrLogComBoxModel = new DefaultComboBoxModel<String>(rtrLogItems);
 		rtrLogComBoxModel.addElement("all");
 		comtLogComBoxItems = new Vector<String>();
 		comtLogComBoxModel = new DefaultComboBoxModel<String>(
@@ -717,7 +720,7 @@ public class NetMgrConsole {
 					String rtr = rtrLogComBox.getSelectedItem().toString();
 					String s = null;
 					if (rtr.equals("all")) { //repeat all routers
-						for (int i = 1 ; i < rtrLogComBoxModel.getSize() ; i++) {
+						for (int i = 1 ; i < rtrLogComBoxModel.getSize() ; i++){
 							rtr = rtrLogComBoxModel.getElementAt(i);
 							s = addFilter(rtr);
 							if (s != null) {
@@ -770,39 +773,18 @@ public class NetMgrConsole {
 		logMenuPanel2.add(dropFilterBtn);
 
 		logs = new ArrayList<String>();
-		updateLogBtn = new JButton("Update");
-		updateLogBtn.addActionListener(new ActionListener() {
+		updateLogChBox = new JCheckBox("Update");
+		updateLogChBox.setSelected(true);
+		updateLogChBox.addItemListener(new ItemListener() {
 			@Override
-			public void actionPerformed (ActionEvent e) {
-				if (isLoggedin && isConnected) {
-					logs.clear();
-					String s = connectionNetMgr.getLoggedPackets(logs);
-					StringBuilder sb = new StringBuilder();
-					if (s != null) {
-						showPopupStatus(s);
-					} else {
-						for (String l : logs) {
-							sb.append(l);
-							sb.append("\n");
-						}
-					}
-					
-//					if (s == null) {
-//						sb.append("*********FILTER SET***********\n");
-//						for (String f : filters) {
-//							sb.append(f);
-//							sb.append("\n");
-//						}
-//					}
-					if (sb.length() > 0) {
-						log(sb.toString());
-					}
-				} else {
-					showPopupStatus("connection or login required");
+			public void itemStateChanged (ItemEvent e) {
+				if (e.getStateChange() == ItemEvent.SELECTED) {
+					autoRefreshUpdateLog();
 				}
 			}
 		});
-		logMenuPanel.add(updateLogBtn);
+		autoRefreshUpdateLog();
+		logMenuPanel.add(updateLogChBox);
 
 		clearLogBtn = new JButton("Clear");
 		clearLogBtn.addActionListener(new ActionListener() {
@@ -873,15 +855,13 @@ public class NetMgrConsole {
 		int destAdr = net.getNodeAdr(net.getNodeNum(rtrName));
 		logFilter.setDstAdr(Forest.fAdr2string(destAdr));// destAddr
 
-		String comtree = comtLogComBox.getSelectedItem()
-				.toString();
+		String comtree = comtLogComBox.getSelectedItem().toString();
 		if (comtree.equals("all")) {
 			comtree = "0";
 		}
 		logFilter.setComtree(comtree); // comtree
 
-		String type = forestTypeComBox.getSelectedItem()
-				.toString();
+		String type = forestTypeComBox.getSelectedItem().toString();
 		if (type.equals("all")) {
 			type = "undef";
 		}
@@ -959,7 +939,11 @@ public class NetMgrConsole {
 		JOptionPane.showMessageDialog(mainFrame, status);
 	}
 
-	public void log (String str) {
+	/**
+	 * Write log to display panel and as a file if the option is selected 
+	 * @param str
+	 */
+	public void writeLog (String str) {
 		if (saveAsFileMOption.isSelected()) { //save logs as files
 			if (writer == null) {
 				try {
@@ -980,7 +964,36 @@ public class NetMgrConsole {
 		
 		logTextArea.append(str);
 	}
-
+	
+	public void autoRefreshUpdateLog(){
+		timer = new Timer(1000, new ActionListener() {
+			public void actionPerformed (ActionEvent evt) {
+				if (!updateLogChBox.isSelected()) {
+					timer.stop();
+				} else {
+					if (isLoggedin && isConnected 
+							&& (logFilterTableModel.getRowCount() > 0)) {
+						logs.clear();
+						String s = connectionNetMgr.getLoggedPackets(logs, "r1");
+						StringBuilder sb = new StringBuilder();
+						if (s != null) {
+							showPopupStatus(s);
+						} else {
+							for (String l : logs) {
+								sb.append(l);
+								sb.append("\n");
+							}
+						}
+						if (sb.length() > 0) {
+							writeLog(sb.toString());
+						}
+					}
+				}
+			}
+		});
+		timer.start();
+	}
+	
 	public static void main (String[] args) {
 		SwingUtilities.invokeLater(new Runnable() {
 			public void run () {
