@@ -592,8 +592,8 @@ public class ConnectionNetMgr {
 	 * 
 	 * @return null if successful, otherwise error message
 	 */
-	public String getLoggedPackets (ArrayList<String> logs) {
-		String msg = "getLoggedPackets: " + "r1" + " " + "\nover\n";
+	public String getLoggedPackets (ArrayList<String> logs, String rtrName) {
+		String msg = "getLoggedPackets: " + rtrName + " " + "\nover\n";
 		if (!sendString(msg))
 			return "connot retrieve logged packets";
 		while (true) {
