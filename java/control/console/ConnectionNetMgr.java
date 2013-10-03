@@ -14,6 +14,7 @@ import java.util.ArrayList;
 
 import javax.swing.table.AbstractTableModel;
 
+
 //import forest.common.Forest;
 import forest.common.NetBuffer;
 //import forest.control.NetInfo;
@@ -610,6 +611,25 @@ public class ConnectionNetMgr {
 		return null;
 	}
 
+	/**
+	 * Enable or disable local log in router
+	 * @param b
+	 * @return
+	 */
+	public String enableLocalLog(String rtrName, boolean b){
+		String bit = (b == true) ? "1" : "0";
+		String msg = "enableLocalLog: " + rtrName + " " + bit + "\nover\n";
+		if (!sendString(msg))
+			return "connot enable local log";
+		
+		String str = inBuf.readLine(); //sucess 
+		System.out.println(str);
+		str = inBuf.readLine(); //over
+		System.out.println(str);
+		
+		return null;
+	}
+	
 	/**
 	 * Close socket to Net Mgr
 	 */
