@@ -14,8 +14,6 @@ class Mcast :
 
 		numg*numg is the number of multicast groups used to
 		share status info
-		subLimit limits number of multicast groups we subscribe to;
-		we subscribe only if x-distance + y-distance is <= subLimit
 		net is a reference to the Net object
 		myAvatar is a reference to the Avatar object
 		"""
@@ -30,7 +28,7 @@ class Mcast :
 		self.cellSizeX = (limit[0]+0.0)/self.nX
 		self.nY = int(limit[1]/10.0);
 		self.cellSizeY = (limit[1]+0.0)/self.nY
-		self.subLimit = 10
+		self.subLimit = 7
 
 		if Util.NOSUB : return
 

@@ -24,6 +24,7 @@ from pandac.PandaModules import CardMaker
 
 import Util
 from Util import *
+import Places
 
 if Util.AUDIO : import pyaudio; import wave
 
@@ -46,6 +47,11 @@ class Avatar(DirectObject):
 		self.userName = userName
 		self.avaModel = avaModel
 
+		print(cpMgr)
+		#cvMgr.listVariables()
+		#clock-mode.setValue("limited")
+		#clock-frame-rate.setValue(20)
+
 		# Setup graphics
 		if Util.SHOW :
 			base.windowType = 'onscreen' 
@@ -60,13 +66,14 @@ class Avatar(DirectObject):
 
 		self.setupLimits()
 		self.setupAvatar()
-		self.setupCollisions()
-		self.setupRemotes()
 		if Util.AUTO :
 			self.setupAuto()
 		else :
 			self.setupKeyMappings()
+		if Util.SHOW or (not Util.NOSUB) :
+			self.setupCollisions()
 		if Util.SHOW :
+			self.setupRemotes()
 			base.setBackgroundColor(0.5,0.7,1,1)
 			self.title = addTitle("demo world")
 			self.setupScreenText()
@@ -83,7 +90,6 @@ class Avatar(DirectObject):
 		size = maxBounds - minBounds
 		self.modelSizeX = size.getX()
 		self.modelSizeY = size.getY()
-		print 'Size is ', self.modelSizeX, self.modelSizeY
 
 	def setupAuto(self) :
 		""" Initialize variables that control automatic wandering.
@@ -118,9 +124,18 @@ class Avatar(DirectObject):
 		self.avatarNP = NodePath("ourAvatarNP")
 		self.avatarNP.reparentTo(render)
 		if Util.AUTO :
-			self.avatarNP.setPos(63,77,0)
-			angle = 90*random.randint(0,3) + random.randint(-10,10)
-			self.avatarNP.setH(angle)
+			p = random.randint(1,Places.getNumPlaces())
+			nbors = Places.getNeighbors(p)
+			self.avatarNP.setPos(Places.getLoc(p)[0],
+					     Places.getLoc(p)[1],0)
+			t = nbors[random.randint(0,len(nbors)-1)]
+			self.avatarNP.setH(self.heading(
+				self.avatarNP.getX(), self.avatarNP.getY(),
+				Places.getLoc(t)[0], Places.getLoc(t)[1]))
+			self.oldPlace = p
+			self.targetPlace = t
+			self.turning = False
+			self.deltaH = 0
 		else :
 			self.avatarNP.setPos(63,84,0)
 			self.avatarNP.setH(0)
@@ -143,7 +158,8 @@ class Avatar(DirectObject):
 		base.camera.setPos(self.avatarNP.getPos())
 		base.camera.setZ(self.avatarNP.getZ()+1.5)
 		base.camera.setHpr(self.avatarNP.getHpr()[0],0,0)		
-		self.fieldAngle = 46.8 # similar to human eye; change this to zoom in/out
+		self.fieldAngle = 46.8	# similar to human eye;
+					# change this to zoom in/out
 		base.camLens.setFov(self.fieldAngle)		
 			
 	def setupMap(self) :
@@ -417,6 +433,7 @@ class Avatar(DirectObject):
 		
 		p3 = base.cam.getRelativePoint(render, Point3(x,y,z))
 		p2 = Point2()
+		name = "" # blank for now
 		if base.camLens.project(p3, p2):
 			r2d = Point3(p2[0], 0, p2[1])
 			a2d = aspect2d.getRelativePoint(render2d, r2d) 
@@ -457,6 +474,7 @@ class Avatar(DirectObject):
 		
 		p3 = base.cam.getRelativePoint(render, Point3(x,y,z))
 		p2 = Point2()
+		name = "" # blank for now
 		if base.camLens.project(p3, p2) and id in self.visList:
 			r2d = Point3(p2[0], 0, p2[1])
 			a2d = aspect2d.getRelativePoint(render2d, r2d) 
@@ -643,6 +661,7 @@ class Avatar(DirectObject):
 		It responds to various keys to control the avatar and its
 		viewpoint.
 		"""
+
 		self.moveMyAvatar()
 
 		if not Util.SHOW : return task.cont
@@ -683,10 +702,59 @@ class Avatar(DirectObject):
 		self.avatarNP.setFluidX(self.avatarNP, newX)
 		self.avatarNP.setFluidY(self.avatarNP, newY)
 
+	def heading(self,x1,y1,x2,y2) :
+		dx = x2 - x1; dy = y2 - y1
+		hyp = math.sqrt(dx*dx + dy*dy)
+		if hyp < .000001 : return 0
+		h = math.asin(dy/hyp)*360/(2*3.14159)
+		if dx < 0 : h = 180 - h
+		return h + 90
+
 	def autoMove(self) :
 		""" Move the avatar randomly, without user input.
 		"""
 
+		dx = Places.getLoc(self.targetPlace)[0] - self.avatarNP.getX()
+		dy = Places.getLoc(self.targetPlace)[1] - self.avatarNP.getY()
+		dist = math.sqrt(dx*dx + dy*dy)
+		h0 = self.avatarNP.getH()
+		if dist < 4 :
+			# pick new target and determine deltaH
+			nbors = Places.getNeighbors(self.targetPlace)
+			x = random.randint(0,len(nbors)-1)
+			if nbors[x] == self.oldPlace :
+				x = (1 if x == 0 else x-1)
+			t = nbors[x]
+			h = self.heading(
+				self.avatarNP.getX(), self.avatarNP.getY(),
+				Places.getLoc(t)[0], Places.getLoc(t)[1])
+			self.deltaH = h - h0
+			if self.deltaH > 180 : self.deltaH -= 360
+			elif self.deltaH < -180 : self.deltaH += 360
+			self.deltaH /= 2
+			self.oldPlace = self.targetPlace
+			self.targetPlace = t
+			self.turning = True
+
+		# adjust heading and position
+		t = self.targetPlace
+		h = self.heading(self.avatarNP.getX(), self.avatarNP.getY(),
+				 Places.getLoc(t)[0], Places.getLoc(t)[1])
+		dh1 = h - h0
+		if dh1 > 180 : dh1 -= 360
+		elif dh1 < -180 : dh1 += 360
+		if self.turning :
+			dh2 = self.deltaH * globalClock.getDt()
+			if math.fabs(dh1) <= math.fabs(dh2) : 
+				self.turning = False
+			else :
+				h = h0 + dh2
+		self.avatarNP.setH(h)
+		self.avatarNP.setFluidY(self.avatarNP,-2 * globalClock.getDt())
+		
+		return
+
+		"""
 		if self.rotateDir == -1:
 			self.rotateDir = random.randint(1,25) #chances to rotate
 		if self.rotateDuration == -1:
@@ -734,9 +802,10 @@ class Avatar(DirectObject):
 	#				-1 * globalClock.getDt(),
 	#				self.avatarNP.getZ() )
 		return
+		"""
 
 	def updateView(self) :
-		""" Update what appears on-screen in response to view controles.
+		""" Update what appears on-screen in response to view controls.
 		"""
 		base.camera.setPos(self.avatarNP.getPos())
 		# uncomment the following line for a third-persion view
@@ -781,9 +850,11 @@ class Avatar(DirectObject):
 		""" Update informational text shown on the screen.
 		"""
 		# Update the text showing avatar's position
-		self.avPos.setText("Your location (x, y, z): (%d, %d, %d)"%\
-			(self.avatarNP.getX(), self.avatarNP.getY(),
-			 self.avatarNP.getZ()))
+		h = self.avatarNP.getH()
+		if h < -180 : h += 360
+		elif h > 180 : h -= 360
+		self.avPos.setText("Your location (x, y, dir): (%d, %d, %d)"%\
+			(self.avatarNP.getX(), self.avatarNP.getY(), h))
 
 		# update text showing visible avatars
  		self.showNumVisible.setText("Visible avatars: " + \
