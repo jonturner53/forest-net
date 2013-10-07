@@ -172,10 +172,8 @@ class Net :
 		the client manager returns several configuration parameters
 		as part of the dialog
 		"""
-		print "connecting to client manager"
 		cmSock = socket(AF_INET, SOCK_STREAM);
 		cmSock.connect((self.cliMgrIp,30122))
-		print "connected to client manager"
 	
 		cmSock.sendall("Forest-login-v1\nlogin: " + uname + \
                 	       "\npassword: " + pword + "\nover\n")
@@ -186,7 +184,6 @@ class Net :
 			print "unexpected response to login:", line
 			return False
 		line,buf = self.readLine(cmSock,buf)
-		print line
 		if line != "over" :
 			print "unexpected response to login:", line
 			return False
@@ -235,7 +232,6 @@ class Net :
 
 		cmSock.close()
 
-		print "DEBUG=", Util.DEBUG
 		if Util.DEBUG >= 1 :
 			print "avatar address =", fadr2string(self.myFadr)
 			print "router info = (", ip2string(self.rtrIp), \

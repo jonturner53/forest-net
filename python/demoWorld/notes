@@ -5,16 +5,18 @@ Code for names and downloading pictures
 - add command-line argument, pass to Net
 - add missing components to UserWorld (take from wuTour)
 
-Audio
-- add command-line flag so can easily turn on/off
-- test that it still works
-
-Standard names: ava-123.egg, walk-123.egg, tex-123.egg
-Chao suggests changing these to facilitate export from Blender
-
 Other things that need work - ask Chao to look at these
-- model origin is (-5,-5); shift to (0,0)
 - view self feature only works for panda avatar
-- collision detection not working
 - user names not being placed correctly; adjust so they hover just over
   avatar; may want to add keyboard shortcut to toggle names on/off also
+
+Collision detection produces poor results for automated bots.
+Also, consumes lots of processing time. Replace with graph-based
+model. Define a set of "places". Each place has a pair of coordinates
+and a list of neighbors. The line joining neighbors is guaranteed to
+be collision-free.
+
+Start each auto avatar at some random place, pointing to a neighbor
+which is its current target. When an avatar gets close to the current
+target, pick a new target at random from among the current target's
+neighbors, and start turning in its direction.
