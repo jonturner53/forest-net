@@ -114,6 +114,7 @@ void CtlPkt::reset() {
 	count = -1;
 	queue = 0;
 	zipCode = 0;
+	intVec = 0;
 	errMsg.clear();
 	stringData.clear();
 	payload = 0; paylen = 0;
@@ -642,6 +643,69 @@ int CtlPkt::pack() {
 	case BOOT_COMPLETE:
 	case BOOT_ABORT:
 		break;
+
+	case COMTREE_PATH:
+		if (mode == REQUEST) {
+			// request contains address of client and
+			// the number of the comtree we want to join
+			if (adr1 == 0 || comtree == 0) return 0;
+			packPair(ADR1,adr1); packPair(COMTREE, comtree);
+		} else {
+			// reply contains a vector of local link numbers
+			// that define a path from the new leaf router
+			// to the root of the comtree
+			// it also contains a default ratespec for the
+			// backbone link and access links
+			if (!rspec1.isSet() || !rspec2.isSet() || intVec == 0)
+				return 0;
+			packRspec(RSPEC1,rspec1);
+			packRspec(RSPEC2,rspec2);
+			payload[pp++] = htonl(INTVEC);
+			int len = intVec[0];
+			if (len > 50) return 0;
+			for (int i = 0; i <= len; i++) 
+				payload[pp++] = htonl(intVec[i]);
+		}
+		break;
+
+	case COMTREE_NEW_LEAF:
+		if (mode == REQUEST) {
+			// Sent by router to inform ComtCtl of new leaf.
+			// Contains address of leaf, ratespec for access link,
+			// comtree number
+			// and path used to connect to comtree. This is
+			// represented by a vector of local link numbers
+			// at the new routers along the path. The vector
+			// may have zero length, but must be present.
+			if (adr1 == 0 || comtree == 0 ||
+			    !rspec1.isSet() || intVec == 0)
+				return 0;
+			packPair(COMTREE,comtree);
+			packPair(ADR1,adr1);
+			packRspec(RSPEC1,rspec1);
+			payload[pp++] = htonl(INTVEC);
+			int len = intVec[0];
+			if (len > 50) return 0;
+			for (int i = 0; i <= len; i++) 
+				payload[pp++] = htonl(intVec[i]);
+		} 
+		break;
+
+	case COMTREE_PRUNE:
+		if (mode == REQUEST) {
+			// Sent by router to ComtCtl to inform it when
+			// a node has left the comtree. There are two
+			// cases. When a client leaves, the access router
+			// sends a prune message containing the forest
+			// address of the leaf that is dropping out.
+			// When a router leaves the comtree, it
+			// sends a message with its own address.
+			if (adr1 == 0 || comtree == 0) return 0;
+			packPair(COMTREE,comtree);
+			packPair(ADR1,adr1);
+		}
+		break;
+
 	default: break;
 	}
 	paylen = 4*pp;
@@ -708,6 +772,11 @@ bool CtlPkt::unpack() {
 				stringData.assign((char *) &payload[pp], len);
 				pp += (len+3)/4;
 				break;
+		case INTVEC:	unpackWord(len);
+				for (int i = 1; i <= len; i++) {
+					int x; unpackWord(x);
+					intVec[i] = x;
+				}
 		default:	return false;
 		}
 	}
@@ -975,6 +1044,26 @@ bool CtlPkt::unpack() {
 	case BOOT_COMPLETE:
 	case BOOT_ABORT:
 		break;
+
+	case COMTREE_PATH:
+		if ((mode == REQUEST && (adr1 == 0 || comtree == 0)) ||
+		    (mode == POS_REPLY &&
+		     (!rspec1.isSet() || !rspec2.isSet() || intVec == 0)))
+			return 0;
+		break;
+
+	case COMTREE_NEW_LEAF:
+		if (mode == REQUEST &&	
+		     (adr1 == 0 || comtree == 0 || !rspec1.isSet() ||
+		      intVec == 0))
+			return 0;
+		break;
+
+	case COMTREE_PRUNE:
+		if (mode == REQUEST && (comtree == 0 || adr1 == 0))
+			return 0;
+		break;
+
 	default: return false;
 	}
 	return true;
@@ -1060,6 +1149,13 @@ string& CtlPkt::avPair2string(CpAttr attr, string& s) {
 	case STRING:
 		if (stringData.length() != 0) ss << "stringData=" << stringData;
 		break;
+	case INTVEC:
+		if (intVec != 0) {
+			ss << "intVec=";
+			for (int i = 1; i <= intVec[0]; i++)
+				ss << intVec[i] << " ";
+		}
+		break;
 	default: break;
 	}
 	s = ss.str();
@@ -1123,6 +1219,9 @@ string& CtlPkt::cpType2string(CpType type, string& s) {
 	case BOOT_LEAF: s = "boot_leaf"; break;
 	case BOOT_COMPLETE: s = "boot_complete"; break;
 	case BOOT_ABORT: s = "boot_abort"; break;
+	case COMTREE_PATH: s = "comtree_path"; break;
+	case COMTREE_NEW_LEAF: s = "comtree_new_leaf"; break;
+	case COMTREE_PRUNE: s = "comtree_prune"; break;
 	default: s = "undefined"; break;
 	}
 	return s;
@@ -1188,6 +1287,10 @@ bool CtlPkt::string2cpType(string& s, CpType& type) {
 	else if (s == "boot_complete") type = BOOT_COMPLETE;
 	else if (s == "boot_abort") type = BOOT_ABORT;
 	else if (s == "boot_leaf") type = BOOT_LEAF;
+
+	else if (s == "comtree_path") type = COMTREE_PATH;
+	else if (s == "comtree_new_leaf") type = COMTREE_NEW_LEAF;
+	else if (s == "comtree_prune") type = COMTREE_PRUNE;
 
 	else return false;
 	return true;
@@ -1621,6 +1724,34 @@ string& CtlPkt::toString(string& s) {
 	case BOOT_COMPLETE:
 	case BOOT_ABORT:
 		break;
+
+	case COMTREE_PATH:
+		if (mode == REQUEST) {
+			ss << " " << avPair2string(COMTREE,s);
+			ss << " " << avPair2string(ADR1,s);
+		} else {
+			ss << " " << avPair2string(RSPEC1,s);
+			ss << " " << avPair2string(RSPEC2,s);
+			ss << " " << avPair2string(INTVEC,s);
+		}
+		break;
+
+	case COMTREE_NEW_LEAF:
+		if (mode == REQUEST) {
+			ss << " " << avPair2string(COMTREE,s);
+			ss << " " << avPair2string(ADR1,s);
+			ss << " " << avPair2string(RSPEC1,s);
+			ss << " " << avPair2string(INTVEC,s);
+		}
+		break;
+
+	case COMTREE_PRUNE:
+		if (mode == REQUEST) {
+			ss << " " << avPair2string(COMTREE,s);
+			ss << " " << avPair2string(ADR1,s);
+		}
+		break;
+
 	default: break;
 	}
 	ss << endl;
