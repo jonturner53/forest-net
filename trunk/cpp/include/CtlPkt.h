@@ -83,7 +83,9 @@ public:
 		SET_LEAF_RANGE = 110, CONFIG_LEAF = 111,
 
 		BOOT_ROUTER = 120, BOOT_COMPLETE = 121, BOOT_ABORT = 122,
-		BOOT_LEAF = 123
+		BOOT_LEAF = 123,
+
+		COMTREE_PATH = 130, COMTREE_NEW_LEAF = 131, COMTREE_PRUNE = 132
 	};
 
 	// Control packet attribute types
@@ -106,7 +108,8 @@ public:
 		ZIPCODE = 72,
 		ERRMSG = 100,
 		STRING = 101,
-		RAWBUF = 102
+		RAWBUF = 102,
+		INTVEC = 103
 	};
 	static const int MAX_STRING = 200;
 
@@ -162,6 +165,7 @@ public:
 	int	zipCode;		///< zip code
 	char*	rawBuf;			///< pointer to packed buffer
 	int	rawBufSize;		///< number of bytes in rawBuf
+	int*	intVec;			///< pointer to a vector of integers
 
 	uint32_t* payload;		///< pointer to start of packet payload
 	int	paylen;			///< payload length in bytes
