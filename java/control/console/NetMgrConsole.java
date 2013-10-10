@@ -21,7 +21,7 @@ import javax.swing.border.BevelBorder;
 import javax.swing.table.*;
 
 import forest.common.Forest;
-import forest.control.ComtInfo;
+//import forest.control.ComtInfo;
 import forest.control.NetInfo;
 import forest.control.console.model.*;
 
@@ -51,7 +51,7 @@ public class NetMgrConsole {
 	private JPanel statusPanel;
 	private JLabel statusLabel;
 	private JLabel statusLabel2;
-	private JLabel statusLabel3;
+//	private JLabel statusLabel3;s
 
 	// comtree menu
 	private JPanel comtMenuPanel;
@@ -101,10 +101,12 @@ public class NetMgrConsole {
 	private JButton clearLogBtn;
 	private JButton addFilterBtn;
 	private JButton dropFilterBtn;
-	private String[] forestType = { "all", "sub_unsub", "client_sig",
+	private JCheckBox srcChBox;
+	private JCheckBox dstChBox;
+	private String[] pktType = { "all", "sub_unsub", "client_sig",
 			"connect", "disconnect", "net_sig", "rte_reply", "rtr_ctl",
 			"voqstatus" };
-	private JComboBox<String> forestTypeComBox;
+	private JComboBox<String> pktTypeComBox;
 	private String[] cpType = { "all", "client_add_comtree",
 			"client_drop_comtree", "client_get_comtree", "client_mod_comtree",
 			"client_join_comtree", "client_leave_comtree",
@@ -655,6 +657,7 @@ public class NetMgrConsole {
 				.setPreferredSize(new Dimension(MAIN_WIDTH / 2, 150));
 		rtrInfoPanel.add(infoTableScrollPane);
 
+		
 		/******************** LOG ********************/
 		// Log Display
 		logDisplayPanel = new JPanel();
@@ -671,8 +674,7 @@ public class NetMgrConsole {
 		// Log Menu
 		logMenuPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
 		logMenuPanel.setBorder(BorderFactory.createTitledBorder(""));
-		logMenuPanel
-				.setPreferredSize(new Dimension(MAIN_WIDTH / 2, MENU_HEIGHT));
+		logMenuPanel.setPreferredSize(new Dimension(MAIN_WIDTH/2,MENU_HEIGHT));
 		logMenuPanel.setMaximumSize(logMenuPanel.getPreferredSize());
 
 		rtrLogComBox = new JComboBox<String>(rtrLogComBoxModel);
@@ -689,21 +691,26 @@ public class NetMgrConsole {
 		logMenuPanel.add(comtLogComBox);
 		logMenuPanel.add(new JLabel("comt"));
 
+
 		logMenuPanel2 = new JPanel(new FlowLayout(FlowLayout.LEFT));
 		logMenuPanel2.setBorder(BorderFactory.createTitledBorder(""));
 		logMenuPanel2.setPreferredSize(new Dimension(MAIN_WIDTH/2,MENU_HEIGHT));
 		logMenuPanel2.setMaximumSize(logMenuPanel.getPreferredSize());
-		forestTypeComBox = new JComboBox<String>(forestType);
-		logMenuPanel2.add(forestTypeComBox);
-		logMenuPanel2.add(new JLabel("type"));
-		cpTypeComBox = new JComboBox<String>(cpType);
+		srcChBox = new JCheckBox("all src");
+		logMenuPanel2.add(srcChBox);
+		dstChBox = new JCheckBox("all dst");
+		logMenuPanel2.add(dstChBox);
+		pktTypeComBox = new JComboBox<String>(pktType); //pkt Type
+		logMenuPanel2.add(pktTypeComBox);
+//		logMenuPanel2.add(new JLabel("type"));
+		cpTypeComBox = new JComboBox<String>(cpType); //ControlPkt Type
 		logMenuPanel2.add(cpTypeComBox);
-		logMenuPanel2.add(new JLabel("cptype"));
+//		logMenuPanel2.add(new JLabel("cptype"));
 
 		// status
-		statusPanel.add(new JLabel(" || "));
-		statusLabel3 = new JLabel("Logging OFF");
-		statusPanel.add(statusLabel3);
+//		statusPanel.add(new JLabel(" || "));
+//		statusLabel3 = new JLabel("Logging OFF");
+//		statusPanel.add(statusLabel3);
 
 		// onOffLogBtn = new JButton("OFF");
 		// onOffLogBtn.addActionListener(new ActionListener() {
@@ -879,22 +886,31 @@ public class NetMgrConsole {
 		logFilter.setLink(link); // link
 
 		NetInfo net = connectionComtCtl.getNetInfo();
-		int srcAdr = net.getNodeAdr(net.getNodeNum("netMgr"));
-		logFilter.setSrcAdr(Forest.fAdr2string(srcAdr)); // src addr
-		int destAdr = net.getNodeAdr(net.getNodeNum(rtrName));
-		logFilter.setDstAdr(Forest.fAdr2string(destAdr));// destAddr
-
+		if (srcChBox.isSelected()) { // src addr
+			logFilter.setSrcAdr("0"); 
+		} else {
+			int srcAdr = net.getNodeAdr(net.getNodeNum("netMgr"));
+			logFilter.setSrcAdr(Forest.fAdr2string(srcAdr));
+		}
+		if (dstChBox.isSelected()) { // dst Addr
+			logFilter.setDstAdr("0");
+		} else {
+			int dstAdr = net.getNodeAdr(net.getNodeNum(rtrName));
+			logFilter.setDstAdr(Forest.fAdr2string(dstAdr));
+		}
+		
 		String comtree = comtLogComBox.getSelectedItem().toString();
 		if (comtree.equals("all")) {
 			comtree = "0";
 		}
 		logFilter.setComtree(comtree); // comtree
 
-		String type = forestTypeComBox.getSelectedItem().toString();
+		String type = pktTypeComBox.getSelectedItem().toString();
 		if (type.equals("all")) {
 			type = "undef";
 		}
 		logFilter.setType(type); // type
+		
 		String cpType = cpTypeComBox.getSelectedItem().toString();
 		if (cpType.equals("all")) {
 			cpType = "undef";
@@ -923,7 +939,7 @@ public class NetMgrConsole {
 		for (int i = 0; i < infoTable.getModel().getColumnCount(); ++i) {
 			AbstractTableModel tableModel = (AbstractTableModel) infoTable
 					.getModel();
-			int j = 1;
+			float j = 1;
 			if (tableModel instanceof ComtreeTableModel) {
 				j = ((ComtreeTableModel) infoTable.getModel()).getWidth(i);
 			} else if (tableModel instanceof LinkTableModel) {
