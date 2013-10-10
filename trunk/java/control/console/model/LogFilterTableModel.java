@@ -8,8 +8,8 @@ public class LogFilterTableModel extends AbstractTableModel {
 
 	private static final long serialVersionUID = -8601706496073175363L;
 	private String[] columnNames = { "id", "rtn", "in", "out", "link",
-			"comtree", "type", "cpType" };
-	private int[] widths = { 1, 1, 1, 1, 1, 1, 2, 2 };
+			 "comtree", "src", "dst", "type", "cpType" };
+	private float[] widths = { 0.5f, 0.5f, 0.5f, 0.5f, 0.5f, 1, 1, 1, 2, 2.5f };
 	private ArrayList<LogFilter> data;
 
 	public LogFilterTableModel() {
@@ -46,8 +46,12 @@ public class LogFilterTableModel extends AbstractTableModel {
 		case 5:
 			return lf.getComtree();
 		case 6:
-			return lf.getType();
+			return lf.getSrcAdr();
 		case 7:
+			return lf.getDstAdr();
+		case 8:
+			return lf.getType();
+		case 9:
 			return lf.getCpType();
 		default:
 			return null;
@@ -66,7 +70,7 @@ public class LogFilterTableModel extends AbstractTableModel {
 		return data;
 	}
 
-	public int getWidth (int i) {
+	public float getWidth (int i) {
 		return widths[i];
 	}
 
