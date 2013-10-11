@@ -114,9 +114,9 @@ void CtlPkt::reset() {
 	count = -1;
 	queue = 0;
 	zipCode = 0;
-	intVec = 0;
 	errMsg.clear();
 	stringData.clear();
+	ivec.clear();
 	payload = 0; paylen = 0;
 }
 
@@ -124,6 +124,7 @@ void CtlPkt::reset() {
 #define packNonce(x,y) {payload[pp++] = htonl(x); \
 		payload[pp++] = htonl((int) (((y)>>32)&0xffffffff)); \
 		payload[pp++] = htonl((int) ((y)&0xffffffff)); }
+#define packWord(x) {payload[pp++] = htonl(x); }
 #define packRspec(x,y) {payload[pp++] = htonl(x); \
 				payload[pp++] = htonl(y.bitRateUp); \
 				payload[pp++] = htonl(y.bitRateDown); \
@@ -657,15 +658,16 @@ int CtlPkt::pack() {
 			// it also contains two rate specs;
 			// the first is to be used for new backbone links,
 			// the second is an upper bound on the access link rate
-			if (!rspec1.isSet() || !rspec2.isSet() || intVec == 0)
+			if (!rspec1.isSet() || !rspec2.isSet())
 				return 0;
 			packRspec(RSPEC1,rspec1);
 			packRspec(RSPEC2,rspec2);
-			payload[pp++] = htonl(INTVEC);
-			int len = intVec[0];
+			packWord(INTVEC);
+			int len = ivec.size();
 			if (len > 50) return 0;
-			for (int i = 0; i <= len; i++) 
-				payload[pp++] = htonl(intVec[i]);
+			packWord(len);
+			for (int i = 0; i < len; i++) 
+				packWord(ivec[i]);
 		}
 		break;
 
@@ -678,36 +680,34 @@ int CtlPkt::pack() {
 			// represented by a vector of local link numbers
 			// at the new routers along the path. The vector
 			// may have zero length, but must be present.
-			if (adr1 == 0 || comtree == 0 ||
-			    !rspec1.isSet() || intVec == 0)
+			if (adr1 == 0 || comtree == 0 || !rspec1.isSet())
 				return 0;
 			packPair(COMTREE,comtree);
 			packPair(ADR1,adr1);
 			packRspec(RSPEC1,rspec1);
-			payload[pp++] = htonl(INTVEC);
-			int len = intVec[0];
+			packWord(INTVEC);
+			int len = ivec.size();
 			if (len > 50) return 0;
-			for (int i = 0; i <= len; i++) 
-				payload[pp++] = htonl(intVec[i]);
+			packWord(len);
+			for (int i = 0; i < len; i++) packWord(ivec[i]);
 		} 
 		break;
 
 	case COMTREE_ADD_BRANCH:
 		if (mode == REQUEST) {
 			// Sent by router to the next one up the new branch
-			// being added. Contains an intVec containing the link
+			// being added. Contains an ivec containing the link
 			// numbers that define the path from the leaf
 			// router to the root, along with an index that
-			// identifies the position in the intVec of the
+			// identifies the position in the ivec of the
 			// next router in the path. Also contains an
 			// rspec to be used for the links on the path.
-			if (intVec == 0 || index1 == 0 || !rspec1.isSet())
+			if (index1 == 0 || !rspec1.isSet())
 				return 0;
-			payload[pp++] = htonl(INTVEC);
-			int len = intVec[0];
+			packWord(INTVEC);
+			int len = ivec.size();
 			if (len > 50) return 0;
-			for (int i = 0; i <= len; i++) 
-				payload[pp++] = htonl(intVec[i]);
+			for (int i = 0; i < len; i++) packWord(ivec[i]);
 			packPair(INDEX1,index1);
 			packRspec(RSPEC1,rspec1);
 		} else {
@@ -727,6 +727,8 @@ int CtlPkt::pack() {
 			// address of the leaf that is dropping out.
 			// When a router leaves the comtree, it
 			// sends a message with its own address.
+			// This can also be used by a router to inform
+			// its parent that it is leaving the comtree.
 			if (adr1 == 0 || comtree == 0) return 0;
 			packPair(COMTREE,comtree);
 			packPair(ADR1,adr1);
@@ -800,9 +802,11 @@ bool CtlPkt::unpack() {
 				pp += (len+3)/4;
 				break;
 		case INTVEC:	unpackWord(len);
-				for (int i = 1; i <= len; i++) {
+				ivec.resize(len);
+				for (int i = 0; i < len; i++) {
 					int x; unpackWord(x);
-					intVec[i] = x;
+					ivec.append(x);
+					ivec[i= = x;
 				}
 		default:	return false;
 		}
@@ -1074,21 +1078,18 @@ bool CtlPkt::unpack() {
 
 	case COMTREE_PATH:
 		if ((mode == REQUEST && (adr1 == 0 || comtree == 0)) ||
-		    (mode == POS_REPLY &&
-		     (!rspec1.isSet() || !rspec2.isSet() || intVec == 0)))
+		    (mode == POS_REPLY && (!rspec1.isSet() || !rspec2.isSet())))
 			return 0;
 		break;
 
 	case COMTREE_NEW_LEAF:
 		if (mode == REQUEST &&	
-		     (adr1 == 0 || comtree == 0 || !rspec1.isSet() ||
-		      intVec == 0))
+		     (adr1 == 0 || comtree == 0 || !rspec1.isSet()))
 			return 0;
 		break;
 
 	case COMTREE_ADD_BRANCH:
-		if ((mode == REQUEST && 
-		     (intVec == 0 || index1 == 0 || !rspec1.isSet())) ||
+		if ((mode == REQUEST && (index1 == 0 || !rspec1.isSet())) ||
 		    (mode == POS_REPLY && adr1 == 0))
 			return 0;
 		break;
@@ -1184,10 +1185,11 @@ string& CtlPkt::avPair2string(CpAttr attr, string& s) {
 		if (stringData.length() != 0) ss << "stringData=" << stringData;
 		break;
 	case INTVEC:
-		if (intVec != 0) {
-			ss << "intVec=";
-			for (int i = 1; i <= intVec[0]; i++)
-				ss << intVec[i] << " ";
+		len = ivec.size();
+		if (len != 0) {
+			ss << "ivec=";
+			for (int i = 0; i < len; i++)
+				ss << ivec[i] << " ";
 		}
 		break;
 	default: break;
