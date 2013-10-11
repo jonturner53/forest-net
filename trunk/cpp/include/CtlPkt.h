@@ -12,6 +12,7 @@
 #include "Forest.h"
 #include "Packet.h"
 #include "RateSpec.h"
+#include <vector>
 
 namespace forest {
 
@@ -164,15 +165,13 @@ public:
 	int	count;			///< count field
 	int	queue;			///< queue number
 	int	zipCode;		///< zip code
-	char*	rawBuf;			///< pointer to packed buffer
-	int	rawBufSize;		///< number of bytes in rawBuf
-	int*	intVec;			///< pointer to a vector of integers
 
 	uint32_t* payload;		///< pointer to start of packet payload
 	int	paylen;			///< payload length in bytes
 
 	string	errMsg;			///< buffer for error messages
 	string	stringData;		///< buffer for string data
+	vector<int> ivec;		///< vector of integers
 
 private:
 };
