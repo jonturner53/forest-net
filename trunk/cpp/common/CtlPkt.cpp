@@ -674,16 +674,18 @@ int CtlPkt::pack() {
 	case COMTREE_NEW_LEAF:
 		if (mode == REQUEST) {
 			// Sent by router to inform ComtCtl of new leaf.
-			// Contains address of leaf, ratespec for access link,
-			// comtree number
+			// Contains address and link number of new leaf,
+			// ratespec for comtree on access link, comtree number
 			// and path used to connect to comtree. This is
 			// represented by a vector of local link numbers
 			// at the new routers along the path. The vector
 			// may have zero length, but must be present.
-			if (adr1 == 0 || comtree == 0 || !rspec1.isSet())
+			if (adr1 == 0 || link == 0 || comtree == 0 ||
+			    !rspec1.isSet())
 				return 0;
 			packPair(COMTREE,comtree);
 			packPair(ADR1,adr1);
+			packPair(LINK,link);
 			packRspec(RSPEC1,rspec1);
 			packWord(INTVEC);
 			int len = ivec.size();
