@@ -680,13 +680,16 @@ int CtlPkt::pack() {
 			// represented by a vector of local link numbers
 			// at the new routers along the path. The vector
 			// may have zero length, but must be present.
+			// Also contains a second rspec which is represents
+			// the rates reserved on the path added to the comtree
 			if (adr1 == 0 || link == 0 || comtree == 0 ||
-			    !rspec1.isSet())
+			    !rspec1.isSet() || !rspec2.isSet())
 				return 0;
 			packPair(COMTREE,comtree);
 			packPair(ADR1,adr1);
 			packPair(LINK,link);
 			packRspec(RSPEC1,rspec1);
+			packRspec(RSPEC2,rspec2);
 			packWord(INTVEC);
 			int len = ivec.size();
 			if (len > 50) return 0;
@@ -703,8 +706,10 @@ int CtlPkt::pack() {
 			// router to the root, along with an index that
 			// identifies the position in the ivec of the
 			// next router in the path. Also contains an
-			// rspec to be used for the links on the path.
-			if (index1 == 0 || !rspec1.isSet())
+			// rspec to be used for the links on the path,
+			// and a second RSPEC that represents the default
+			// for new elaf nodes.
+			if (index1 == 0 || !rspec1.isSet() || !rspec2.isSet())
 				return 0;
 			packWord(INTVEC);
 			int len = ivec.size();
@@ -712,6 +717,7 @@ int CtlPkt::pack() {
 			for (int i = 0; i < len; i++) packWord(ivec[i]);
 			packPair(INDEX1,index1);
 			packRspec(RSPEC1,rspec1);
+			packRspec(RSPEC2,rspec2);
 		} else {
 			// Reply contains address of "branch router",
 			// that is, the first router on the branch path
@@ -806,9 +812,7 @@ bool CtlPkt::unpack() {
 		case INTVEC:	unpackWord(len);
 				ivec.resize(len);
 				for (int i = 0; i < len; i++) {
-					int x; unpackWord(x);
-					ivec.append(x);
-					ivec[i= = x;
+					int x; unpackWord(x); ivec[i] = x;
 				}
 		default:	return false;
 		}
@@ -1086,12 +1090,14 @@ bool CtlPkt::unpack() {
 
 	case COMTREE_NEW_LEAF:
 		if (mode == REQUEST &&	
-		     (adr1 == 0 || comtree == 0 || !rspec1.isSet()))
+		     (adr1 == 0 || comtree == 0 ||
+		      !rspec1.isSet() || !rspec2.isSet()))
 			return 0;
 		break;
 
 	case COMTREE_ADD_BRANCH:
-		if ((mode == REQUEST && (index1 == 0 || !rspec1.isSet())) ||
+		if ((mode == REQUEST && (index1 == 0 || !rspec1.isSet() ||
+		     !rspec2.isSet())) ||
 		    (mode == POS_REPLY && adr1 == 0))
 			return 0;
 		break;
@@ -1112,7 +1118,7 @@ bool CtlPkt::unpack() {
  *  @return a reference to s
  */
 string& CtlPkt::avPair2string(CpAttr attr, string& s) {
-	stringstream ss;
+	stringstream ss; int len;
 	switch (attr) {
 	case ADR1:
 		if (adr1 != 0) ss << "adr1=" << Forest::fAdr2string(adr1,s);
@@ -1190,8 +1196,7 @@ string& CtlPkt::avPair2string(CpAttr attr, string& s) {
 		len = ivec.size();
 		if (len != 0) {
 			ss << "ivec=";
-			for (int i = 0; i < len; i++)
-				ss << ivec[i] << " ";
+			for (int i = 0; i < len; i++) ss << ivec[i] << " ";
 		}
 		break;
 	default: break;
@@ -1781,6 +1786,7 @@ string& CtlPkt::toString(string& s) {
 			ss << " " << avPair2string(COMTREE,s);
 			ss << " " << avPair2string(ADR1,s);
 			ss << " " << avPair2string(RSPEC1,s);
+			ss << " " << avPair2string(RSPEC2,s);
 			ss << " " << avPair2string(INTVEC,s);
 		}
 		break;
@@ -1790,6 +1796,7 @@ string& CtlPkt::toString(string& s) {
 			ss << " " << avPair2string(INTVEC,s);
 			ss << " " << avPair2string(INDEX1,s);
 			ss << " " << avPair2string(RSPEC1,s);
+			ss << " " << avPair2string(RSPEC2,s);
 		} else if (mode == POS_REPLY) {
 			ss << " " << avPair2string(ADR1,s);
 		}
