@@ -680,7 +680,7 @@ int CtlPkt::pack() {
 			// represented by a vector of local link numbers
 			// at the new routers along the path. The vector
 			// may have zero length, but must be present.
-			// Also contains a second rspec which is represents
+			// Also contains a second rspec which represents
 			// the rates reserved on the path added to the comtree
 			if (adr1 == 0 || link == 0 || comtree == 0 ||
 			    !rspec1.isSet() || !rspec2.isSet())
