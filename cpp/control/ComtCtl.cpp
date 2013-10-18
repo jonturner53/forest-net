@@ -287,6 +287,15 @@ void* handler(void *qp) {
 			case CtlPkt::CLIENT_LEAVE_COMTREE:
 				success = handleLeaveComtReq(px,cp,cph);
 				break;
+			case CtlPkt::COMTREE_PATH:
+				success = handleComtPath(px,cp,cph);
+				break;
+			case CtlPkt::COMTREE_NEW_LEAF:
+				success = handleComtNewLeaf(px,cp,cph);
+				break;
+			case CtlPkt::COMTREE_PRUNE:
+				success = handleComtPrune(px,cp,cph);
+				break;
 			default:
 				cph.errReply(px,cp,"invalid control packet "
 						   "type for ComtCtl");
@@ -568,6 +577,201 @@ bool handleDropComtReq(pktx px, CtlPkt& cp, CpHandler& cph) {
 	// send positive reply to client
 	CtlPkt repCp(cp.type,CtlPkt::POS_REPLY,cp.seqNum);
 	cph.sendReply(cp,p.srcAdr);
+	return true;
+}
+
+/** Handle a comtree path request.
+ *  A comtree path request, asks for a path that can be used to
+ *  join an existing comtree. We look for a path with sufficient
+ *  unused capacity and if successful, return that path in the
+ *  form of a vector of router local link numbers.
+ *  @param p is the packet number of the request packet
+ *  @param cp is the control packet structure for p (already unpacked)
+ *  @return true if the operation is completed successfully;
+ *  sending an error reply is considered a success; the operation
+ *  fails if it cannot allocate required packets, or if no path
+ *  can be found between the client's access router and the comtree.
+ */
+bool handleComtPath(pktx px, CtlPkt& cp, CpHandler& cph) {
+	Packet& p = ps->getPacket(px);
+	fAdr_t cliRtrAdr = p.srcAdr;
+	comt_t comt = cp.comtree;
+	fAdr_t cliAdr = cp.adr1;
+
+	net->lock();
+	int cliRtr = net->getNodeNum(cliRtrAdr);
+	if (cliRtr == 0) {
+		net->unlock();
+		cph.errReply(px,cp,"no such router");
+		return true;
+	}
+
+	// acquire lock on comtree
+	// hold this lock as long as this operation is in progress
+	int ctx = comtrees->getComtIndex(comt);
+	if (ctx == 0) {
+		net->unlock();
+		cph.errReply(px,cp,"no such comtree");
+		return true;
+	}
+
+	RateSpec leafDefRates = comtrees->getDefLeafRates(ctx);
+	RateSpec bbDefRates = comtrees->getDefBbRates(ctx);
+
+	bool autoConfig = comtrees->getConfigMode(ctx);
+	RateSpec pathRates = (autoConfig ?  leafDefRates : bbDefRates);
+	vector<int> path;
+	if (!comtrees->findRootPath(ctx,cliRtr,pathRates,path)) {
+		net->unlock(); comtrees->releaseComtree(ctx);
+		cph.errReply(px,cp,"cannot find path to comtree");
+		return true;
+	}
+	net->unlock(); comtrees->releaseComtree(ctx);
+
+	// send positive reply to client router and return
+	CtlPkt repCp(cp.type, CtlPkt::POS_REPLY, cp.seqNum);
+	repCp.rspec1 = pathRates; repCp.rspec2 = leafDefRates;
+	repCp.ivec = path;
+	cph.sendReply(repCp,cliRtrAdr);
+	return true;
+}
+
+/** Handle a comtree new leaf request.
+ *  A new leaf message informs us of the addition of a new leaf,
+ *  plus possibly some other nodes. We update the local comtree
+ *  data structure to include the new leaf, and update the rate specs
+ *  for links.
+ *  @param p is the packet number of the request packet
+ *  @param cp is the control packet structure for p (already unpacked)
+ *  @return true if the operation is completed successfully
+ */
+bool handleComtNewLeaf(pktx px, CtlPkt& cp, CpHandler& cph) {
+	Packet& p = ps->getPacket(px);
+	fAdr_t cliRtrAdr = p.srcAdr;
+	comt_t comt = cp.comtree;
+	fAdr_t cliAdr = cp.adr1;
+	vector<int>& path = cp.ivec;
+
+	net->lock();
+	int cliRtr = net->getNodeNum(cliRtrAdr);
+	if (cliRtr == 0) {
+		net->unlock();
+		cph.errReply(px,cp,"no such router");
+		return true;
+	}
+
+	// acquire lock on comtree
+	// hold this lock as long as this operation is in progress
+	int ctx = comtrees->getComtIndex(comt);
+	if (ctx == 0) {
+		net->unlock();
+		cph.errReply(px,cp,"no such comtree");
+		return true;
+	}
+
+	// add the new leaf
+	if (!comtrees->addNode(ctx, cliAdr)) {
+		net->unlock(); comtrees->releaseComtree(comt);
+		cph.errReply(px,cp,"unable to add new leaf to comtree");
+		return true;
+	}
+	comtrees->setParent(ctx, cliAdr, cliRtrAdr, cp.link);
+	comtrees->getLinkRates(ctx, cliAdr) = cp.rspec1;
+
+	// go up the path adding new routers and their links
+	int len = path.size();
+	int r = net->getNodeNum(cliRtrAdr);
+	RateSpec flipped = cp.rspec2; flipped.flip();
+	for (int i = 0; i < len; i++) {
+		int lnk = net->getLinkNum(r,path[i]);
+		fAdr_t radr = net->getNodeAdr(r);
+		comtrees->addNode(ctx, radr);
+		comtrees->setPlink(ctx, radr, lnk);
+		comtrees->getLinkRates(ctx, radr) = flipped;
+		// note: may be better to have router return a
+		// vector with the available rates on all the links;
+		// this would reduce potential for inconsistent
+		// values between routers and ComtCtl;
+		// still another approach would be to update the
+		// rates from link-state updates only and not track
+		// the individual changes at all; leave for now
+                if (r == net->getLeft(lnk)) {
+                	net->getAvailRates(lnk).subtract(flipped);
+		} else {
+                	net->getAvailRates(lnk).subtract(cp.rspec1);
+		}
+		r = net->getPeer(r,lnk);
+	}
+	net->unlock(); comtrees->releaseComtree(comt);
+
+	// send positive reply to router and return
+	CtlPkt repCp(cp.type, CtlPkt::POS_REPLY, cp.seqNum);
+	cph.sendReply(repCp,cliRtrAdr);
+	return true;
+}
+
+/** Handle a comtree prune request.
+ *  A prune message informs us that either a leaf has been dropped,
+ *  or that a router is removing itself from the comtree.
+ *  Update the local comtree data structures to reflect the change.
+ *  @param p is the packet number of the request packet
+ *  @param cp is the control packet structure for p (already unpacked)
+ *  @return true if the operation is completed successfully
+ */
+bool handleComtPrune(pktx px, CtlPkt& cp, CpHandler& cph) {
+	Packet& p = ps->getPacket(px);
+	fAdr_t rtrAdr = p.srcAdr;
+	comt_t comt = cp.comtree;
+	fAdr_t pruneAdr = cp.adr1;
+
+	net->lock();
+	int rtr = net->getNodeNum(rtrAdr);
+	if (rtr == 0) {
+		net->unlock();
+		cph.errReply(px,cp,"no such router");
+		return true;
+	}
+
+	// acquire lock on comtree
+	// hold this lock as long as this operation is in progress
+	int ctx = comtrees->getComtIndex(comt);
+	if (ctx == 0) {
+		net->unlock();
+		cph.errReply(px,cp,"no such comtree");
+		return true;
+	}
+
+	if (comtrees->isComtLeaf(ctx,pruneAdr)) {
+		// if pruneAdr is a leaf, remove it
+		int llnk = comtrees->getPlink(ctx,pruneAdr);
+		int lnk = net->getLinkNum(rtr,llnk);
+		net->getAvailRates(lnk).add(
+			comtrees->getLinkRates(ctx,pruneAdr));
+		comtrees->removeNode(ctx,pruneAdr);
+	} else if (comtrees->isComtRtr(ctx,pruneAdr)) {
+		if (pruneAdr != rtrAdr) {
+			net->unlock(); comtrees->releaseComtree(ctx);
+			cph.errReply(px,cp,"cannot prune a different router");
+			return true;
+		}
+		if (comtrees->getLinkCnt(ctx,rtrAdr) == 1) {
+			int lnk = comtrees->getPlink(ctx,rtrAdr);
+			RateSpec rs = comtrees->getLinkRates(ctx,rtrAdr);
+			if (rtr != net->getLeft(lnk)) rs.flip();
+			net->getAvailRates(lnk).add(rs);
+			comtrees->removeNode(ctx,rtrAdr);
+		} else { // should not happen, but still need to handle it
+			// remove entire subtree
+			// write separate method for this
+			// requires identifying comtree routers in subtree
+			// then removing them and their leaf nodes; ugly
+		}
+	}
+	net->unlock(); comtrees->releaseComtree(ctx);
+
+	// send positive reply to router and return
+	CtlPkt repCp(cp.type, CtlPkt::POS_REPLY, cp.seqNum);
+	cph.sendReply(repCp,rtrAdr);
 	return true;
 }
 

@@ -10,7 +10,6 @@
 
 namespace forest {
 
-
 /** Constructor for ComtInfo, allocates space and initializes private data.
  *  @param maxNode1 is the maximum number of nodes in this ComtInfo object
  *  @param maxLink1 is the maximum number of links in this ComtInfo object
@@ -1092,6 +1091,98 @@ int ComtInfo::findPath(int ctx, int src, RateSpec& rs, list<LinkMod>& path) {
 		}
 	}
 	return 0;
+}
+
+/** Find a path from a vertex to the root of a comtree.
+ *  This method builds a shortest path tree with a given source node.
+ *  The search is done over all network links that have the available capacity
+ *  to handle a specified RateSpec. The search halts when it reaches any
+ *  node in the comtree, then follows the path to the root.
+ *  This method is not ideal, since it can return paths that do not
+ *  provide for future growth. It is also not necessarily the best
+ *  path from a cost standpoint.
+ *  Assumes that current thread holds a lock on comtree and NetInfo object.
+ *  @param ctx is a valid comtree index for the comtree of interest
+ *  @param src is the router at which the path search starts
+ *  @param rs specifies the rates required on the links in the path
+ *  @param path is an integer vector in which the result returned;
+ *  Values are router local link numbers that define the path in a bottom-up
+ *  fashion.
+ *  @return true on success, false on failure
+ */
+bool ComtInfo::findRootPath(int ctx, int src, RateSpec& rs, vector<int>& path) {
+	fAdr_t srcAdr = net->getNodeAdr(src);
+
+	path.clear();
+	// if src is in comtree, just return path to root
+	if (isComtNode(ctx,srcAdr)) {
+		int u = src;
+		int pl = getPlink(ctx,net->getNodeAdr(u));
+		while (pl != 0) {
+			path.push_back(net->getLLnum(pl,u));
+			u = net->getPeer(u,pl);
+			pl = getPlink(ctx,net->getNodeAdr(u));
+		}
+		return true;
+	}
+	
+	int n = 0;
+	for (fAdr_t r = net->firstRouter(); r != 0; r = net->nextRouter(r)) {
+		n = max(r,n);
+	}
+	Heap h(n); int d[n+1];
+	int plnk[n+1]; // note: reverse from direction in comtree
+	for (fAdr_t r = net->firstRouter(); r != 0; r = net->nextRouter(r)) {
+		plnk[r] = 0; d[r] = BIGINT;
+	}
+	RateSpec availRates;
+	d[src] = 0;
+	h.insert(src,d[src]);
+	while (!h.empty()) {
+		fAdr_t r = h.deletemin();
+		for (int lnk = net->firstLinkAt(r); lnk != 0;
+			 lnk = net->nextLinkAt(r,lnk)) {
+			if (lnk == plnk[r]) continue;
+			int peer = net->getPeer(r,lnk);
+			if (!net->isRouter(peer)) continue;
+			// if this link cannot take the specified rate spec,
+			// ignore it
+			availRates = net->getAvailRates(lnk);
+			if (r != net->getLeft(lnk)) availRates.flip();
+			if (!rs.leq(availRates)) continue;
+			if (isComtNode(ctx,net->getNodeAdr(peer))) { // done
+				// copy spt path to path vector in reverse order
+				plnk[peer] = lnk;
+				int u = peer;
+				int len = 0;
+				for (int pl = plnk[u]; pl != 0; pl = plnk[u]) 
+					len++;
+				path.reserve(len);
+				int i = len-1;
+				for (int pl = plnk[u]; pl != 0; pl = plnk[u]) 
+					path[i--] = net->getLLnum(pl,
+							net->getPeer(u,pl));
+
+				// continue up the comtree
+				u = peer;
+				int pl = getPlink(ctx,net->getNodeAdr(u));
+				while (pl != 0) {
+					path.push_back(net->getLLnum(pl,u));
+					u = net->getPeer(u,pl);
+					pl = getPlink(ctx,net->getNodeAdr(u));
+				}
+				path[0] = i-1;
+				return true;
+			}
+			if (d[peer] > d[r] + net->getLinkLength(lnk)) {
+				plnk[peer] = lnk;
+				d[peer] = d[r] + net->getLinkLength(lnk);
+				if (h.member(peer)) h.changekey(peer,d[peer]);
+				else h.insert(peer,d[peer]);
+			}
+		}
+	}
+	return false;
 }
 
 /** Add a path from a router to a comtree.

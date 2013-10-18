@@ -91,6 +91,7 @@ public:
 	void	setAutoConfigRates(int);
 	bool	checkComtRates(int);
 	int	findPath(int,int,RateSpec&,list<LinkMod>&);
+	bool	findRootPath(int,int,RateSpec&,vector<int>&); 
 	void	addPath(int,list<LinkMod>&);
 	void	removePath(int,list<LinkMod>&);
 	bool	adjustSubtreeRates(int,int,RateSpec&);
@@ -455,6 +456,7 @@ inline RateSpec& ComtInfo::getLinkRates(int ctx, fAdr_t fa) const {
 	lp = comtree[ctx].leafMap->find(fa);
 	return lp->second.plnkRates;
 }
+
 /** Set the owner of a comtree.
  *  @param ctx is the index of the comtree
  *  @param owner is the forest address of the comtree owner
@@ -523,6 +525,7 @@ inline bool ComtInfo::addCoreNode(int ctx, fAdr_t rtrAdr) {
 }
 
 /** Remove a core node from a comtree.
+ *  Really just removes it from mapping.
  *  @param ctx is the comtree index
  *  @param rtrAdr is the forest address of the core node
  *  @return true on success, false on failure

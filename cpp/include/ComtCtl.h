@@ -95,6 +95,9 @@ bool 	handleAddComtReq(int,CtlPkt&, CpHandler&);
 bool 	handleDropComtReq(int,CtlPkt&, CpHandler&);
 bool 	handleJoinComtReq(int,CtlPkt&, CpHandler&);
 bool 	handleLeaveComtReq(int,CtlPkt&, CpHandler&);
+bool 	handleComtPath(int,CtlPkt&, CpHandler&);
+bool 	handleComtNewLeaf(int,CtlPkt&, CpHandler&);
+bool 	handleComtPrune(int,CtlPkt&, CpHandler&);
 
 // helper functions for allocating comtree numbers from pool
 int	newComtreeNum();

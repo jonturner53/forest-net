@@ -475,8 +475,10 @@ void addFilter(NetBuffer& buf, string& reply, CpHandler& cph) {
 	if (repx == 0 || repCp.mode != CtlPkt::POS_REPLY) {
 		reply.assign("could not add log filter\n"); return;
 	}
-	string index = to_string(repCp.index1);
-	reply.append(index);
+	stringstream ss; ss << repCp.index1;
+	reply.append(ss.str());
+	//string index = to_string(repCp.index1);
+	//reply.append(index);
 	reply.append("\n");
 }
 
