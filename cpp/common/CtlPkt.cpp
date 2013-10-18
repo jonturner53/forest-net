@@ -709,15 +709,14 @@ int CtlPkt::pack() {
 			// rspec to be used for the links on the path,
 			// and a second RSPEC that represents the default
 			// for new elaf nodes.
-			if (index1 == 0 || !rspec1.isSet() || !rspec2.isSet())
-				return 0;
+			if (index1 == 0 || !rspec1.isSet()) return 0;
 			packWord(INTVEC);
 			int len = ivec.size();
 			if (len > 50) return 0;
 			for (int i = 0; i < len; i++) packWord(ivec[i]);
 			packPair(INDEX1,index1);
 			packRspec(RSPEC1,rspec1);
-			packRspec(RSPEC2,rspec2);
+			if (rspec2.isSet()) packRspec(RSPEC2,rspec2);
 		} else {
 			// Reply contains address of "branch router",
 			// that is, the first router on the branch path
@@ -1090,8 +1089,7 @@ bool CtlPkt::unpack() {
 
 	case COMTREE_NEW_LEAF:
 		if (mode == REQUEST &&	
-		     (adr1 == 0 || comtree == 0 ||
-		      !rspec1.isSet() || !rspec2.isSet()))
+		     (adr1 == 0 || comtree == 0 || !rspec1.isSet()))
 			return 0;
 		break;
 
