@@ -650,6 +650,7 @@ bool handleComtNewLeaf(pktx px, CtlPkt& cp, CpHandler& cph) {
 	fAdr_t cliRtrAdr = p.srcAdr;
 	comt_t comt = cp.comtree;
 	fAdr_t cliAdr = cp.adr1;
+	fAdr_t branchRtrAdr = cp.adr2;
 	vector<int>& path = cp.ivec;
 
 	net->lock();
@@ -685,6 +686,7 @@ bool handleComtNewLeaf(pktx px, CtlPkt& cp, CpHandler& cph) {
 	for (int i = 0; i < len; i++) {
 		int lnk = net->getLinkNum(r,path[i]);
 		fAdr_t radr = net->getNodeAdr(r);
+		if (radr == branchRtrAdr) break;
 		comtrees->addNode(ctx, radr);
 		comtrees->setPlink(ctx, radr, lnk);
 		comtrees->getLinkRates(ctx, radr) = flipped;
