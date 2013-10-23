@@ -674,12 +674,17 @@ int CtlPkt::pack() {
 	case COMTREE_NEW_LEAF:
 		if (mode == REQUEST) {
 			// Sent by router to inform ComtCtl of new leaf.
+			// This is typically sent to the ComtCtl after the
+			// successful completion of a NEW_BRANCH operation.
 			// Contains address and link number of new leaf,
 			// ratespec for comtree on access link, comtree number
-			// and path used to connect to comtree. This is
-			// represented by a vector of local link numbers
-			// at the new routers along the path. The vector
-			// may have zero length, but must be present.
+			// and path to the comtree root used when adding
+			// the branch. This is represented by a vector of
+			// local link numbers at the new routers along the
+			// path. The vector may have zero length, but must
+			// be present. The packet also contains the address
+			// of the first router on the path that was already
+			// in the comtree when the new branch was added.
 			// Also contains a second rspec which represents
 			// the rates reserved on the path added to the comtree
 			if (adr1 == 0 || link == 0 || adr2 == 0 ||
