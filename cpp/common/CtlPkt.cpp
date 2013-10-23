@@ -682,11 +682,12 @@ int CtlPkt::pack() {
 			// may have zero length, but must be present.
 			// Also contains a second rspec which represents
 			// the rates reserved on the path added to the comtree
-			if (adr1 == 0 || link == 0 || comtree == 0 ||
-			    !rspec1.isSet() || !rspec2.isSet())
+			if (adr1 == 0 || link == 0 || adr2 == 0 ||
+			    comtree == 0 || !rspec1.isSet() || !rspec2.isSet())
 				return 0;
 			packPair(COMTREE,comtree);
 			packPair(ADR1,adr1);
+			packPair(ADR2,adr2);
 			packPair(LINK,link);
 			packRspec(RSPEC1,rspec1);
 			packRspec(RSPEC2,rspec2);
@@ -708,7 +709,7 @@ int CtlPkt::pack() {
 			// next router in the path. Also contains an
 			// rspec to be used for the links on the path,
 			// and a second RSPEC that represents the default
-			// for new elaf nodes.
+			// for new leaf nodes.
 			if (index1 == 0 || !rspec1.isSet()) return 0;
 			packWord(INTVEC);
 			int len = ivec.size();
@@ -1089,7 +1090,8 @@ bool CtlPkt::unpack() {
 
 	case COMTREE_NEW_LEAF:
 		if (mode == REQUEST &&	
-		     (adr1 == 0 || comtree == 0 || !rspec1.isSet()))
+		     (adr1 == 0 || link == 0 || adr2 == 0 || comtree == 0 ||
+		      !rspec1.isSet() || !rspec2.isSet()))
 			return 0;
 		break;
 
@@ -1783,6 +1785,8 @@ string& CtlPkt::toString(string& s) {
 		if (mode == REQUEST) {
 			ss << " " << avPair2string(COMTREE,s);
 			ss << " " << avPair2string(ADR1,s);
+			ss << " " << avPair2string(LINK,s);
+			ss << " " << avPair2string(ADR2,s);
 			ss << " " << avPair2string(RSPEC1,s);
 			ss << " " << avPair2string(RSPEC2,s);
 			ss << " " << avPair2string(INTVEC,s);
