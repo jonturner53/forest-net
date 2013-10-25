@@ -596,7 +596,6 @@ bool handleComtPath(pktx px, CtlPkt& cp, CpHandler& cph) {
 	Packet& p = ps->getPacket(px);
 	fAdr_t cliRtrAdr = p.srcAdr;
 	comt_t comt = cp.comtree;
-	fAdr_t cliAdr = cp.adr1;
 
 	net->lock();
 	int cliRtr = net->getNodeNum(cliRtrAdr);
@@ -670,12 +669,22 @@ bool handleComtNewLeaf(pktx px, CtlPkt& cp, CpHandler& cph) {
 		return true;
 	}
 
+	if (comtrees->isComtLeaf(ctx,cliAdr)) {
+		// if client already in comtree, this is probably a
+		// second attempt, caused by a lost acknowledgment
+		net->unlock(); comtrees->releaseComtree(ctx);
+		CtlPkt repCp(cp.type,CtlPkt::POS_REPLY,cp.seqNum);
+		cph.sendReply(repCp,cliAdr);
+		return true;
+	}
+
 	// add the new leaf
 	if (!comtrees->addNode(ctx, cliAdr)) {
 		net->unlock(); comtrees->releaseComtree(ctx);
 		cph.errReply(px,cp,"unable to add new leaf to comtree");
 		return true;
 	}
+	comtrees->setParent(ctx, cliAdr, cliRtrAdr, cp.link);
 	comtrees->getLinkRates(ctx, cliAdr) = cp.rspec1;
 
 	// go up the path adding new routers and their links
