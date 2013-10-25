@@ -719,6 +719,7 @@ int CtlPkt::pack() {
 			packWord(INTVEC);
 			int len = ivec.size();
 			if (len > 50) return 0;
+			packWord(len);
 			for (int i = 0; i < len; i++) packWord(ivec[i]);
 			packPair(INDEX1,index1);
 			packRspec(RSPEC1,rspec1);

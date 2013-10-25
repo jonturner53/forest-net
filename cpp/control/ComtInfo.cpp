@@ -1155,13 +1155,15 @@ bool ComtInfo::findRootPath(int ctx, int src, RateSpec& rs, vector<int>& path) {
 				plnk[peer] = lnk;
 				int u = peer;
 				int len = 0;
-				for (int pl = plnk[u]; pl != 0; pl = plnk[u]) 
-					len++;
-				path.reserve(len);
-				int i = len-1;
-				for (int pl = plnk[u]; pl != 0; pl = plnk[u]) 
-					path[i--] = net->getLLnum(pl,
-							net->getPeer(u,pl));
+				for (int pl = plnk[u]; pl != 0; pl = plnk[u]) {
+					len++; u = net->getPeer(u,pl);
+				}
+				path.resize(len);
+				int i = len-1; u = peer;
+				for (int pl = plnk[u]; pl != 0; pl = plnk[u]) {
+					u = net->getPeer(u,pl);
+					path[i--] = net->getLLnum(pl,u);
+				}
 
 				// continue up the comtree
 				u = peer;
@@ -1171,7 +1173,6 @@ bool ComtInfo::findRootPath(int ctx, int src, RateSpec& rs, vector<int>& path) {
 					u = net->getPeer(u,pl);
 					pl = getPlink(ctx,net->getNodeAdr(u));
 				}
-				path[0] = i-1;
 				return true;
 			}
 			if (d[peer] > d[r] + net->getLinkLength(lnk)) {
