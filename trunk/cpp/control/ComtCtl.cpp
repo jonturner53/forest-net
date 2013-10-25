@@ -676,7 +676,6 @@ bool handleComtNewLeaf(pktx px, CtlPkt& cp, CpHandler& cph) {
 		cph.errReply(px,cp,"unable to add new leaf to comtree");
 		return true;
 	}
-	comtrees->setParent(ctx, cliAdr, cliRtrAdr, cp.link);
 	comtrees->getLinkRates(ctx, cliAdr) = cp.rspec1;
 
 	// go up the path adding new routers and their links
