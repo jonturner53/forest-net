@@ -672,7 +672,7 @@ bool handleComtNewLeaf(pktx px, CtlPkt& cp, CpHandler& cph) {
 
 	// add the new leaf
 	if (!comtrees->addNode(ctx, cliAdr)) {
-		net->unlock(); comtrees->releaseComtree(comt);
+		net->unlock(); comtrees->releaseComtree(ctx);
 		cph.errReply(px,cp,"unable to add new leaf to comtree");
 		return true;
 	}
@@ -704,7 +704,7 @@ bool handleComtNewLeaf(pktx px, CtlPkt& cp, CpHandler& cph) {
 		}
 		r = net->getPeer(r,lnk);
 	}
-	net->unlock(); comtrees->releaseComtree(comt);
+	net->unlock(); comtrees->releaseComtree(ctx);
 
 	// send positive reply to router and return
 	CtlPkt repCp(cp.type, CtlPkt::POS_REPLY, cp.seqNum);
