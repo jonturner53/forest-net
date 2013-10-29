@@ -74,7 +74,7 @@ public:
 	pktx getFilter(fAdr_t,int,CtlPkt&);
 	pktx getFilterSet(fAdr_t,int,int,CtlPkt&);
 	pktx getLoggedPackets(fAdr_t,CtlPkt&);
-	pktx enableLocalLog(fAdr_t,bool,CtlPkt&);
+	pktx enablePacketLog(fAdr_t,bool,bool,CtlPkt&);
 
 	pktx newSession(fAdr_t,ipa_t,RateSpec&,CtlPkt&);
 	pktx cancelSession(fAdr_t,fAdr_t,fAdr_t,CtlPkt&);
