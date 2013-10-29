@@ -1079,7 +1079,7 @@ void RouterCore::handleCtlPkt(int px) {
         case CtlPkt::MOD_FILTER:	modFilter(cp,reply); break;
         case CtlPkt::GET_FILTER_SET:	getFilterSet(cp,reply); break;
         case CtlPkt::GET_LOGGED_PACKETS: getLoggedPackets(cp,reply); break;
-        case CtlPkt::ENABLE_LOCAL_LOG:	enableLocalLog(cp,reply); break;
+        case CtlPkt::ENABLE_PACKET_LOG:	enablePacketLog(cp,reply); break;
 
 	// setting parameters
 	case CtlPkt::SET_LEAF_RANGE:	setLeafRange(cp,reply); break;
@@ -2049,8 +2049,9 @@ bool RouterCore::getLoggedPackets(CtlPkt& cp, CtlPkt& reply) {
  *  filled in
  *  @return true on success, false on failure
  */
-bool RouterCore::enableLocalLog(CtlPkt& cp, CtlPkt& reply) {
-	pktLog->enableLocalLog(cp.index1 ? true : false);
+bool RouterCore::enablePacketLog(CtlPkt& cp, CtlPkt& reply) {
+	pktLog->turnOnLogging(cp.index1 == 1 ? true : false);
+	pktLog->enableLocalLog(cp.index2 == 1 ? true : false);
 	return true;
 }
 

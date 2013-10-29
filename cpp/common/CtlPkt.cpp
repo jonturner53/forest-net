@@ -583,9 +583,11 @@ int CtlPkt::pack() {
 			if (count > 0) packString();
 		}
 		break;
-	case ENABLE_LOCAL_LOG:
-		if (mode == REQUEST && index1 == -1) return false;
+	case ENABLE_PACKET_LOG:
+		if (mode == REQUEST && (index1 == -1 || index2 == -1))
+			return false;
 		packPair(INDEX1,index1);
+		packPair(INDEX2,index2);
 		break;
 
 	case NEW_SESSION:
@@ -1049,8 +1051,9 @@ bool CtlPkt::unpack() {
 		    (count > 0 && stringData.length() == 0)))
 				return false;
 		break;
-	case ENABLE_LOCAL_LOG:
-		if (mode == REQUEST && index1 == -1) return false;
+	case ENABLE_PACKET_LOG:
+		if (mode == REQUEST && (index1 == -1 || index2 == -1))
+			return false;
 		break;
 
 	case NEW_SESSION:
@@ -1256,7 +1259,7 @@ string& CtlPkt::cpType2string(CpType type, string& s) {
 	case MOD_FILTER: s = "mod_filter"; break;
 	case GET_FILTER_SET: s = "get_filter_set"; break;
 	case GET_LOGGED_PACKETS: s = "get_logged_packets"; break;
-	case ENABLE_LOCAL_LOG: s = "enable_local_log"; break;
+	case ENABLE_PACKET_LOG: s = "enable_packet_log"; break;
 
 	case NEW_SESSION: s = "new_session"; break;
 	case CANCEL_SESSION: s = "cancel_session"; break;
@@ -1323,7 +1326,7 @@ bool CtlPkt::string2cpType(string& s, CpType& type) {
 	else if (s == "get_filter") type = GET_FILTER;
 	else if (s == "get_filter_set") type = GET_FILTER_SET;
 	else if (s == "get_logged_packets") type = GET_LOGGED_PACKETS;
-	else if (s == "enable_local_log") type = ENABLE_LOCAL_LOG;
+	else if (s == "enable_packet_log") type = ENABLE_PACKET_LOG;
 
 	else if (s == "new_session") type = NEW_SESSION;
 	else if (s == "cancel_session") type = CANCEL_SESSION;
@@ -1719,9 +1722,10 @@ string& CtlPkt::toString(string& s) {
 			ss << " " << avPair2string(STRING,s);
 		}
 		break;
-	case ENABLE_LOCAL_LOG:
+	case ENABLE_PACKET_LOG:
 		if (mode == REQUEST)
-			ss << " " << (index1 ? "true" : "false");
+			ss << " " << (index1 ? "on" : "off");
+			ss << " " << (index2 ? "local" : "remote");
 		break;
 
 	case NEW_SESSION:
