@@ -23,7 +23,7 @@ typedef int fltx;	// filter index
 
 class PacketLog {
 public:
-		PacketLog(int,int,PacketStore*);
+		PacketLog(PacketStore*);
 		~PacketLog();
 
 	fltx	firstFilter() const;
@@ -37,19 +37,27 @@ public:
 	fltx	addFilter();
 	void	dropFilter(fltx);
 	PacketFilter& getFilter(fltx);
+	void	turnOnLogging(bool);
 	void	enableLocalLog(bool);
 
 	int	size() const;
 	void 	log(int,int,bool,uint64_t);	
 	int	extract(int, string&);
 	void	write(ostream&);
+	void	purge();
 
 private:
-	int	maxEvents;		///< max # of events to record
-	int	maxFilters;		///< max # of filters
+	static const int MAX_EVENTS=1000;	///< max # of event records
+	static const int MAX_FILTERS=100;	///< max # of filters
 
+	bool	logOn;			///< turns on capture of packets
 	bool	logLocal;		///< if true, dump events to cout
 	uint64_t dumpTime;		///< next time to dump events to cout
+	int	numOut;			///< number of packets sent to cout
+	int	numDataOut;		///< number of data packets sent to cout
+
+	static const int OUT_LIMIT = 50000; ///< max # pkt records to cout
+	static const int DATA_OUT_LIMIT = 10000; ///< max # data pkts to cout
 
 	struct EventStruct {
 	pktx px;			///< index of some packet
@@ -103,7 +111,20 @@ inline bool PacketLog::match(fltx f, pktx px, int lnk, bool sendFlag) const {
  */
 inline PacketFilter& PacketLog::getFilter(fltx f) { return fvec[f]; }
 
-inline void PacketLog::enableLocalLog(bool on) { logLocal = on; }
+/** Enable or disable logging of packets.
+ *  Whenever logging is enabled, purge any left-over packets.
+ */
+inline void PacketLog::turnOnLogging(bool on) {
+	logOn = on; if (logOn) purge();
+}
+
+/** Enable or disable local logging of packets.
+ *  Whenever local logging is enabled, clear counts of packets sent to cout,
+ *  allowing a new batch of records to be logged to a file.
+ */
+inline void PacketLog::enableLocalLog(bool on) {
+	logLocal = on; if (logLocal) { numOut = numDataOut = 0; }
+}
 
 } // ends namespace
 
