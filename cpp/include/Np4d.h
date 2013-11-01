@@ -44,6 +44,7 @@ public:
 	static void extractSockAdr(sockaddr_in*, ipa_t&, ipp_t&); 
 	static ipp_t getSockPort(int);
 	static ipa_t getSockIp(int);
+	static ipa_t getPeerIp(int);
 
 	// setting up sockets
 	static int  datagramSocket();
