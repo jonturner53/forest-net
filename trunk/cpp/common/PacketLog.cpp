@@ -18,6 +18,9 @@ PacketLog::PacketLog(PacketStore *ps1) : ps(ps1) {
 	fvec = new PacketFilter[MAX_FILTERS+1];
 	filters = new UiSetPair(MAX_FILTERS);
 
+	firstEvent = lastEvent = eventCount = 0;
+	dumpTime = 0;
+
 	// default behavior just logs all packets to stdout
 	logOn = true; logLocal = true;
 	numOut = numDataOut = 0;

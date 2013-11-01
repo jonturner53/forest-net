@@ -47,7 +47,7 @@ public:
 	void	purge();
 
 private:
-	static const int MAX_EVENTS=1000;	///< max # of event records
+	static const int MAX_EVENTS=10000;	///< max # of event records
 	static const int MAX_FILTERS=100;	///< max # of filters
 
 	bool	logOn;			///< turns on capture of packets
