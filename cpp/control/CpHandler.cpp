@@ -540,7 +540,7 @@ pktx CpHandler::getLoggedPackets(fAdr_t dest, CtlPkt& repCp) {
  *  @return the index of the response packet or 0 if there is no response
  */
 pktx CpHandler::enablePacketLog(fAdr_t dest,bool on,bool local,CtlPkt& repCp) {
-	CtlPkt reqCp(CtlPkt::GET_LOGGED_PACKETS,CtlPkt::REQUEST,0);
+	CtlPkt reqCp(CtlPkt::ENABLE_PACKET_LOG,CtlPkt::REQUEST,0);
 	reqCp.index1 = (on ? 1 : 0); reqCp.index2 = (local ? 1 : 0);
 	return sendRequest(reqCp,dest,repCp);
 }
