@@ -114,6 +114,17 @@ ipa_t Np4d::getSockIp(int sock) {
 	return ntohl(sa.sin_addr.s_addr);
 }
 
+/** Get the IP address of the peer for a given socket.
+ *  @param sock is the number of a connected TCP socket
+ *  @return the address of the peer, or 0 on failure
+ */
+ipa_t Np4d::getPeerIp(int sock) {
+	sockaddr_in sa; socklen_t len = sizeof(sa);
+	if (getpeername(sock, (struct sockaddr *) &sa, &len) < 0)
+		return 0;
+	return ntohl(sa.sin_addr.s_addr);
+}
+
 /** Configure a socket to be nonblocking.
  *  @param sock is the socket number
  *  @return true on success, false on failure
