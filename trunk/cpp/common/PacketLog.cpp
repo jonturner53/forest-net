@@ -59,13 +59,14 @@ void PacketLog::log(pktx px, int lnk, bool sendFlag, uint64_t now) {
 		// number of packets that were missed (size of gap)
 		if (eventCount > 0 && evec[lastEvent].px == 0) {
 			// existing gap record
-			evec[lastEvent].link++; return;
+			evec[lastEvent].link++;
+		} else {
+			// convert last record to a gap record
+			evec[lastEvent].px = 0;
+			evec[lastEvent].link = 1;
+			evec[lastEvent].time = now;
+			if (eventCount == 0) eventCount = 1;
 		}
-		// need to convert last record to a gap record
-		evec[lastEvent].px = 0;
-		evec[lastEvent].link = 1;
-		evec[lastEvent].time = now;
-		if (eventCount == 0) eventCount++;
 	} else {
 		// common case - just add new record for packet
 		if (eventCount > 0)
@@ -93,12 +94,12 @@ void PacketLog::write(ostream& out) {
 	stringstream ss;
 	while (eventCount > 0) {
 		int px = evec[firstEvent].px;
-		string s;
-		out << Misc::nstime2string(evec[firstEvent].time,s);
 		if (numOut <= OUT_LIMIT) {
+			string s;
+			out << Misc::nstime2string(evec[firstEvent].time,s);
 			if (px == 0) {
 				out << " missing " << evec[firstEvent].link
-				    << endl;
+				    << " packets " << endl;
 				numOut++;
 			} else {
 				Packet& p = ps->getPacket(px);
@@ -118,8 +119,8 @@ void PacketLog::write(ostream& out) {
 			}
 		}
 		ps->free(px);
-		eventCount--;
-		if (++firstEvent >= MAX_EVENTS) firstEvent = 0;
+		if (--eventCount > 0)
+			if (++firstEvent >= MAX_EVENTS) firstEvent = 0;
 	}
 	out.flush();
 }
@@ -153,7 +154,8 @@ int PacketLog::extract(int maxLen, string& s) {
 		string s1;
 		ss << Misc::nstime2string(evec[firstEvent].time,s1);
 		if (px == 0) {
-			ss << " missing " << evec[firstEvent].link << endl;
+			ss << " missing " << evec[firstEvent].link
+			   << " packets " << endl;
 		} else {
 			if (evec[firstEvent].sendFlag)	ss << " send ";
 			else				ss << " recv ";
@@ -163,8 +165,9 @@ int PacketLog::extract(int maxLen, string& s) {
 		if (s.length() + ss.str().length() > maxLen) break;
 		s += ss.str();
 		ps->free(px);
-		count++; eventCount--;
-		if (++firstEvent >= MAX_EVENTS) firstEvent = 0;
+		count++;
+		if (--eventCount > 0)
+			if (++firstEvent >= MAX_EVENTS) firstEvent = 0;
 	}
 	return count;
 }
