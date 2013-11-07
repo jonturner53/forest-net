@@ -678,23 +678,32 @@ bool handleComtNewLeaf(pktx px, CtlPkt& cp, CpHandler& cph) {
 		return true;
 	}
 
-	// add the new leaf
-	if (!comtrees->addNode(ctx, cliAdr)) {
-		net->unlock(); comtrees->releaseComtree(ctx);
-		cph.errReply(px,cp,"unable to add new leaf to comtree");
-		return true;
-	}
-	comtrees->setParent(ctx, cliAdr, cliRtrAdr, cp.link);
-	comtrees->getLinkRates(ctx, cliAdr) = cp.rspec1;
+	// should probably do some error checking here
 
-	// go up the path adding new routers and their links
 	int len = path.size();
 	int r = net->getNodeNum(cliRtrAdr);
-	RateSpec flipped = cp.rspec2; flipped.flip();
+	// first find the branch point in the path
+	// note: must deal with the case where the branchRtrAdr in the
+	// received packet is not currently a node in the local comtree
+	// data structure
+	int top = len;
 	for (int i = 0; i < len; i++) {
 		int lnk = net->getLinkNum(r,path[i]);
 		fAdr_t radr = net->getNodeAdr(r);
-		if (radr == branchRtrAdr) break;
+		if ((radr == branchRtrAdr && comtrees->isComtRtr(ctx,radr)) ||
+		    ((radr == branchRtrAdr || comtrees->isComtRtr(ctx,radr)) &&
+		     top < len)) {
+			top = i-1; break;
+		}
+	}
+	RateSpec flipped = cp.rspec2; flipped.flip();
+	// now, go down the path adding new routers and their links
+	// note: some of these routers may already be in comtree;
+	// addNode just returns normally in this case; we may change
+	// comtree topology as a result of this process
+	for (int i = top; i >= 0; i--) {
+		int lnk = net->getLinkNum(r,path[i]);
+		fAdr_t radr = net->getNodeAdr(r);
 		comtrees->addNode(ctx, radr);
 		comtrees->setPlink(ctx, radr, lnk);
 		comtrees->getLinkRates(ctx, radr) = flipped;
@@ -712,6 +721,11 @@ bool handleComtNewLeaf(pktx px, CtlPkt& cp, CpHandler& cph) {
 		}
 		r = net->getPeer(r,lnk);
 	}
+	// finally, add the new leaf
+	comtrees->addNode(ctx, cliAdr);
+	comtrees->setParent(ctx, cliAdr, cliRtrAdr, cp.link);
+	comtrees->getLinkRates(ctx, cliAdr) = cp.rspec1;
+
 	net->unlock(); comtrees->releaseComtree(ctx);
 
 	// send positive reply to router and return
@@ -784,6 +798,38 @@ bool handleComtPrune(pktx px, CtlPkt& cp, CpHandler& cph) {
 	cph.sendReply(repCp,rtrAdr);
 	return true;
 }
+
+/* not quite ready yet
+void removeRtr(int ctx, rtrAdr) {
+	set<fAdr_t> dropset;
+	dropset.add(rtrAdr);
+	if (comtrees->getLinkCnt(ctx,rtrAdr) > 1) {
+		// remove all leaf children
+		for (fAdr_t ladr = comtrees->firstLeaf(ctx); ladr != 0;
+             		    ladr = comtrees-nextLeaf(ctx,ladr)) {
+			if (comtrees->getParent(ctx,ladr) != rtrAdr) continue;
+			int llnk = comtrees->getPlink(ctx,ladr);
+			int lnk = net->getLinkNum(rtr,llnk);
+			net->getAvailRates(lnk).add(
+				comtrees->getLinkRates(ctx,ladr));
+			comtrees->removeNode(ctx,ladr);
+		}
+	}
+	if (comtrees->getLinkCnt(ctx,rtrAdr) > 1) {
+		// if still have children, find and remove
+		for (fAdr_t cadr = comtrees->firstRouter(ctx); cadr != 0;
+             		    cadr = comtrees-nextRouter(ctx,cadr)) {
+			if (comtrees->getParent(ctx,cadr) != rtrAdr) continue;
+			removeRtr(ctx,cadr);
+		}
+	}
+	int lnk = comtrees->getPlink(ctx,rtrAdr);
+	RateSpec rs = comtrees->getLinkRates(ctx,rtrAdr);
+	if (rtr != net->getLeft(lnk)) rs.flip();
+	net->getAvailRates(lnk).add(rs);
+	comtrees->removeNode(ctx,rtrAdr);
+}
+*/
 
 /** Handle a join comtree request.
  *  This requires selecting a path from the client's access router
