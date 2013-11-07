@@ -545,11 +545,23 @@ inline bool ComtInfo::removeCoreNode(int ctx, fAdr_t rtrAdr) {
 inline bool ComtInfo::setPlink(int ctx, fAdr_t rtr, int plnk) {
 	map<fAdr_t,ComtRtrInfo>::iterator rp;
 	rp = comtree[ctx].rtrMap->find(rtr);
+	if (rp->second.plnk != 0) {
+		// handle case when moving a node already in comtree
+		// note: no cycle checking
+		fAdr_t parent = net->getNodeAdr(net->getPeer(
+					net->getNodeNum(rtr),rp->second.plnk));
+		map<fAdr_t,ComtRtrInfo>::iterator rpp;
+		rpp = comtree[ctx].rtrMap->find(parent);
+		rpp->second.lnkCnt--;
+		if (plnk == 0) rp->second.lnkCnt--;
+	} else if (plnk != 0) {
+		rp->second.lnkCnt++;
+	}
 	rp->second.plnk = plnk;
-	rp->second.lnkCnt++;
 	if (plnk == 0) return true;
 
-	fAdr_t parent = net->getNodeAdr(net->getPeer(net->getNodeNum(rtr),plnk));
+	fAdr_t parent = net->getNodeAdr(net->getPeer(
+					net->getNodeNum(rtr),plnk));
 	rp = comtree[ctx].rtrMap->find(parent);
 	rp->second.lnkCnt++;
 	return true;

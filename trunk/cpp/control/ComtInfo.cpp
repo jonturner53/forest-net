@@ -193,6 +193,7 @@ bool ComtInfo::addNode(int ctx, fAdr_t fa) {
 	    	if (rp != comtree[ctx].rtrMap->end()) return true;
 		pair<fAdr_t,ComtRtrInfo> newPair;
 		newPair.first = fa;
+		newPair.second.plnk = 0;
 		comtree[ctx].rtrMap->insert(newPair);
 		return true;
 	}
