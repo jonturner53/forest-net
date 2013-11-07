@@ -75,6 +75,7 @@ public class NetMgrConsole {
 	private JComboBox<String> rtrComBox;
 	private String[] type = { "Comtree", "Link", "Iface", "Route" };
 	private JComboBox<String> tablesComBox;
+	private JTextField rangeTxFld;
 	private JButton rtrInfoUpdateBtn;
 	private JButton rtrInfoClearBtn;
 
@@ -90,19 +91,17 @@ public class NetMgrConsole {
 	private Vector<String> rtrLogItems;
 	private DefaultComboBoxModel<String> rtrLogComBoxModel;
 	private JComboBox<String> rtrLogComBox;
-	private JTextField linkTextField;
-	private Vector<String> comtLogComBoxItems;
-	private JComboBox<String> comtLogComBox;
-	private DefaultComboBoxModel<String> comtLogComBoxModel;
+	private JTextField linkLogTxFld;
+	private JTextField comtLogTxFld;
 	private JCheckBox inChBox;
 	private JCheckBox outChBox;
-	private JCheckBox updateLogChBox;
+	private JCheckBox logChBox;
 	private JCheckBox localLogChBox;
 	private JButton clearLogBtn;
 	private JButton addFilterBtn;
 	private JButton dropFilterBtn;
-	private JCheckBox srcChBox;
-	private JCheckBox dstChBox;
+	private JTextField srcTxFld;
+	private JTextField dstTxFld;
 	private String[] pktType = { "all", "sub_unsub", "client_sig",
 			"connect", "disconnect", "net_sig", "rte_reply", "rtr_ctl",
 			"voqstatus" };
@@ -162,7 +161,7 @@ public class NetMgrConsole {
 
 	// Comtree
 	TreeSet<Integer> comtSet;
-	private String routerName;
+	private String rtrName;
 	private String table;
 
 	private ComtreeTableModel comtreeTableModel;
@@ -170,7 +169,7 @@ public class NetMgrConsole {
 	private IfaceTableModel ifaceTableModel;
 	private RouteTableModel routeTableModel;
 
-	private boolean isLoggedin = false;
+	private boolean isLoggedIn = false;
 	private boolean isConnected = false;
 
 	// private boolean isLogOn = false;
@@ -194,17 +193,12 @@ public class NetMgrConsole {
 		mainFrame.setJMenuBar(menuBar);
 
 		comtComBoxItems = new Vector<Integer>();
-		comtComBoxModel = new DefaultComboBoxModel<Integer>(
-				comtComBoxItems);
+		comtComBoxModel = new DefaultComboBoxModel<Integer>(comtComBoxItems);
 		rtrItems = new Vector<String>();
 		rtrComBoxModel = new DefaultComboBoxModel<String>(rtrItems);
 		rtrLogItems = new Vector<String>();
 		rtrLogComBoxModel = new DefaultComboBoxModel<String>(rtrLogItems);
 		rtrLogComBoxModel.addElement("all");
-		comtLogComBoxItems = new Vector<String>();
-		comtLogComBoxModel = new DefaultComboBoxModel<String>(
-				comtLogComBoxItems);
-		comtLogComBoxModel.addElement("all");
 
 		comtreeTableModel = new ComtreeTableModel();
 		linkTableModel = new LinkTableModel();
@@ -222,8 +216,8 @@ public class NetMgrConsole {
 
 		displayNetMgr();
 
-		mainFrame.addWindowListener(new CloseEvent(connectionNetMgr,
-												connectionComtCtl, writer));
+		mainFrame.addWindowListener(new CloseEvent(connectionNetMgr, 
+													connectionComtCtl, writer));
 		mainFrame.pack();
 		mainFrame.setVisible(true);
 	}
@@ -238,59 +232,8 @@ public class NetMgrConsole {
 		connectMenuItem = new JMenuItem("Connect");
 		connectMenuItem.addActionListener(new ActionListener() {
 			public void actionPerformed (ActionEvent evt) {
-				String[] options = { "Connect", "Cancel" };
-				int n = JOptionPane.showOptionDialog(mainFrame, connectDialog,
-						"Connect to the server", JOptionPane.OK_CANCEL_OPTION,
-						JOptionPane.INFORMATION_MESSAGE, null, options,
-						options[0]);
-				if (n == 0 && !isConnected) { // connect
-					String nmAddr = connectDialog.getNmAddr();
-					connectionNetMgr.setNmAddr(nmAddr);
-					String ctmAddr = connectDialog.getCtAddr();
-					connectionComtCtl.setCmAddr(ctmAddr);
-					if (connectionNetMgr.connectToNetMgr()
-							&& connectionComtCtl.connectToComCtl()) {
-						isConnected = true;
-						// connect to NetMgr
-						connectionComtCtl.getNet();
-						connectionComtCtl.getComtSet();
-						comtSet = connectionComtCtl.getComtTreeSet();
-						if (comtSet.size() <= 0) {
-							showPopupStatus("No Comtrees");
-							if (connectionNetMgr != null &&
-										connectionComtCtl != null){
-								connectionNetMgr.closeSocket();
-								connectionComtCtl.closeSocket();
-							}
-						} else {
-							for (Integer c : comtSet) {
-								comtComBoxModel.addElement(c);
-								comtLogComBoxModel.addElement(Integer
-										.toString(c));
-							}
-							statusLabel.setText("Connected to \"" + nmAddr
-									+ "\"" + " and \"" + ctmAddr + "\"");
-							showPopupStatus("Connected");
-
-							// retrieving routers' name
-							NetInfo netInfo = connectionComtCtl.getNetInfo();
-							for (int node = netInfo.firstNode(); node != 0; 
-									node = netInfo.nextNode(node)) {
-								String name = netInfo.getNodeName(node);
-								if (name.substring(0, 1).equals("r")) {
-									rtrComBoxModel.addElement(name);
-									rtrLogComBoxModel.addElement(name);
-								}
-							}
-						}
-					} else {
-						showPopupStatus("Connection is failed.");
-						if (connectionNetMgr != null &&
-								connectionComtCtl != null){
-							connectionNetMgr.closeSocket();
-							connectionComtCtl.closeSocket();
-						}
-					}
+				if (!isConnected) {
+					connectNetMgrComtCtl();
 				}
 			}
 		});
@@ -301,42 +244,10 @@ public class NetMgrConsole {
 		loginMenuItem.addActionListener(new ActionListener() {
 			public void actionPerformed (ActionEvent evt) {
 				if (isConnected) {
-					String[] options = { "Login", "Cancel" };
-					int n = JOptionPane.showOptionDialog(mainFrame,
-							loginDialog, "Login", JOptionPane.OK_CANCEL_OPTION,
-							JOptionPane.INFORMATION_MESSAGE, null, options,
-							options[0]);
-					if (n == 0) { // login
-						char[] passwd = loginDialog.getPassword();
-						String userName = loginDialog.getUserName();
-						String ret = connectionNetMgr.login(userName, new String(passwd));
-						if (ret == null) {
-							showPopupStatus("Logged in as " + userName);
-							statusLabel2.setText(" Logged in as " + userName);
-							isLoggedin = true;
-							loginMenuItem.setText("Log out");
-
-							// getting filter sets from routers
-							String rtr = ""; String str = "";
-							for (int i = 1 ; i < rtrLogComBoxModel.getSize() ; i++) {
-								ArrayList<LogFilter> filters = new ArrayList<LogFilter>();
-								rtr = rtrLogComBoxModel.getElementAt(i);
-								str = connectionNetMgr.getFilterSet(filters, rtr);
-								if (str == null) {
-									for (LogFilter f : filters)
-										logFilterTableModel.addLogFilterTable(f);
-									
-									if (filters.size() > 0) {
-										logFilterTableModel.fireTableDataChanged();
-									}
-								}
-							}
-						} else
-							showPopupStatus(ret);
-					}
+					logIn();
 				} else {
 					showPopupStatus("Connection required");
-				}
+				}		
 			}
 		});
 		menu.add(loginMenuItem);
@@ -345,7 +256,7 @@ public class NetMgrConsole {
 		newAccountMenuItem = new JMenuItem("New Account");
 		newAccountMenuItem.addActionListener(new ActionListener() {
 			public void actionPerformed (ActionEvent evt) {
-				if (isConnected && isLoggedin) {
+				if (isConnected && isLoggedIn) {
 					String[] options = { "Add", "Cancel" };
 					int n = JOptionPane.showOptionDialog(mainFrame,
 							loginDialog, "Add a new account",
@@ -355,8 +266,7 @@ public class NetMgrConsole {
 					if (n == 0) { // add
 						char[] passwd = loginDialog.getPassword();
 						String userName = loginDialog.getUserName();
-						String ret = connectionNetMgr.newAccount(userName,
-								new String(passwd));
+						String ret = connectionNetMgr.newAccount(userName, new String(passwd));
 						if (ret == null)
 							showPopupStatus("New account created");
 						else
@@ -372,10 +282,9 @@ public class NetMgrConsole {
 		updateProfileMenuItem = new JMenuItem("Update Profile");
 		updateProfileMenuItem.addActionListener(new ActionListener() {
 			public void actionPerformed (ActionEvent evt) {
-				if (isConnected && isLoggedin) {
+				if (isConnected && isLoggedIn) {
 					String[] options = { "Update", "Cancel" };
-					AdminProfile adminProfile = connectionNetMgr
-							.getAdminProfile();
+					AdminProfile adminProfile = connectionNetMgr.getAdminProfile();
 					updateProfileDialog.setUserName(adminProfile.getUserName());
 					updateProfileDialog.setRealName(adminProfile.getRealName());
 					updateProfileDialog.setEmail(adminProfile.getEmail());
@@ -407,7 +316,7 @@ public class NetMgrConsole {
 		changePwdMenuItem = new JMenuItem("Change Password");
 		changePwdMenuItem.addActionListener(new ActionListener() {
 			public void actionPerformed (ActionEvent evt) {
-				if (isConnected && isLoggedin) {
+				if (isConnected && isLoggedIn) {
 					String[] options = { "Change", "Cancel" };
 					AdminProfile adminProfile = connectionNetMgr
 							.getAdminProfile();
@@ -476,13 +385,11 @@ public class NetMgrConsole {
 		// Comtree Menu
 		JPanel comtreePanel = new JPanel();
 		comtreePanel.setLayout(new BoxLayout(comtreePanel, BoxLayout.Y_AXIS));
-		comtreePanel
-				.setPreferredSize(new Dimension(MAIN_WIDTH / 2, MAIN_HEIGHT));
+		comtreePanel.setPreferredSize(new Dimension(MAIN_WIDTH/2,MAIN_HEIGHT));
 
 		comtMenuPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
 		comtMenuPanel.setBorder(BorderFactory.createTitledBorder(""));
-		comtMenuPanel.setPreferredSize(new Dimension(MAIN_WIDTH / 2,
-				MENU_HEIGHT));
+		comtMenuPanel.setPreferredSize(new Dimension(MAIN_WIDTH/2,MENU_HEIGHT));
 		comtMenuPanel.setMaximumSize(comtMenuPanel.getPreferredSize());
 		comtNameLabel = new JLabel("ComTree:");
 		comtMenuPanel.add(comtNameLabel);
@@ -491,7 +398,7 @@ public class NetMgrConsole {
 		comtDisUpdateBtn = new JButton("Update"); // button
 		comtDisUpdateBtn.addActionListener(new ActionListener() {
 			public void actionPerformed (ActionEvent e) {
-				if (isConnected && isLoggedin) {
+				if (isConnected && isLoggedIn) {
 					String c = comtComBox.getSelectedItem().toString();
 					if (c == null) {
 						showPopupStatus("Choose one of comtrees");
@@ -511,7 +418,7 @@ public class NetMgrConsole {
 		comtDisClearBtn = new JButton("Clear"); // button
 		comtDisClearBtn.addActionListener(new ActionListener() {
 			public void actionPerformed (ActionEvent e) {
-				if (isConnected && isLoggedin) {
+				if (isConnected && isLoggedIn) {
 					comtDisplayPanel.clearUI();
 				} else {
 					showPopupStatus("login required");
@@ -525,7 +432,7 @@ public class NetMgrConsole {
 			public void itemStateChanged (ItemEvent e) {
 				if (e.getStateChange() == ItemEvent.SELECTED) {
 					connectionComtCtl.setAutoRefresh(true);
-					if (isLoggedin && isConnected) {
+					if (isLoggedIn && isConnected) {
 						String c = comtComBox.getSelectedItem().toString();
 						if (c == null) {
 							showPopupStatus("Choose one of comtrees");
@@ -562,20 +469,16 @@ public class NetMgrConsole {
 		// Router Info Menu
 		JPanel routerPanel = new JPanel();
 		routerPanel.setLayout(new BoxLayout(routerPanel, BoxLayout.Y_AXIS));
-		routerPanel
-				.setPreferredSize(new Dimension(MAIN_WIDTH / 2, MAIN_HEIGHT));
+		routerPanel.setPreferredSize(new Dimension(MAIN_WIDTH/2, MAIN_HEIGHT));
 
-		infoTable = new JTable(comtreeTableModel); // initially
-													// comtreeTableModel
+		infoTable = new JTable(comtreeTableModel); //comtreeTableModel
 		centerRenderer = new DefaultTableCellRenderer();
 		centerRenderer.setHorizontalAlignment(JLabel.CENTER);
 		setPreferredWidth(infoTable);
 		rtrInfoMenuPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
 		rtrInfoMenuPanel.setBorder(BorderFactory.createTitledBorder(""));
-		rtrInfoMenuPanel.setPreferredSize(new Dimension(MAIN_WIDTH / 2,
-				MENU_HEIGHT));
-		rtrInfoMenuPanel.setMaximumSize(rtrInfoMenuPanel
-				.getPreferredSize());
+		rtrInfoMenuPanel.setPreferredSize(new Dimension(MAIN_WIDTH/2, MENU_HEIGHT));
+		rtrInfoMenuPanel.setMaximumSize(rtrInfoMenuPanel.getPreferredSize());
 		rtrNameLabel = new JLabel("Router:");
 		rtrInfoMenuPanel.add(rtrNameLabel);
 		rtrComBox = new JComboBox<String>(rtrComBoxModel); // router
@@ -598,34 +501,56 @@ public class NetMgrConsole {
 				}
 			}
 		});
+		
 		rtrInfoMenuPanel.add(tablesComBox);
+		
+		rangeTxFld = new JTextField(5); //range Text Field
+		rtrInfoMenuPanel.add(rangeTxFld);
+		rtrInfoMenuPanel.add(new JLabel("range"));
+		
 		rtrInfoUpdateBtn = new JButton("Update");
 		rtrInfoUpdateBtn.addActionListener(new ActionListener() {
 			public void actionPerformed (ActionEvent e) {
-				if (isConnected && isLoggedin) {
+				if (isConnected && isLoggedIn) {
 					table = tablesComBox.getSelectedItem().toString();
-					routerName = rtrComBox.getSelectedItem().toString();
+					rtrName = rtrComBox.getSelectedItem().toString();
+					String range = rangeTxFld.getText();
+					int start = 0;
+					int end = 0;
+					
+					if (range.contains(",")) {
+						String[] tokens = range.split(",");
+						if (tokens.length == 2) {
+							start = Integer.valueOf(tokens[0]);
+							end = Integer.valueOf(tokens[1]);
+						} else {
+							showPopupStatus("invalid input, e.g. 0, 100");
+							return;
+						}
+					}
+					
+					/* TODO : Add the exception for invalid input like colon */
+				
 					String s = null;
 					if (table.equals("Link")) {
-						s = connectionNetMgr.getTable(linkTableModel,
-								routerName);
+						s = connectionNetMgr.getTable(linkTableModel,rtrName,start,end);
 					} else if (table.equals("Comtree")) {
-						s = connectionNetMgr.getTable(comtreeTableModel,
-								routerName);
+						s = connectionNetMgr.getTable(comtreeTableModel,rtrName,start,end);
 					} else if (table.equals("Iface")) {
-						s = connectionNetMgr.getTable(ifaceTableModel,
-								routerName);
+						s = connectionNetMgr.getTable(ifaceTableModel,rtrName,start,end);
 					} else if (table.equals("Route")) {
-						s = connectionNetMgr.getTable(routeTableModel,
-								routerName);
+						s = connectionNetMgr.getTable(routeTableModel,rtrName,start,end);
 					}
 					if (s != null)
 						showPopupStatus(s);
+					
 				} else {
 					showPopupStatus("login required");
 				}
 			}
 		});
+		rtrInfoMenuPanel.add(rtrInfoUpdateBtn);
+		
 		rtrInfoClearBtn = new JButton("Clear");
 		rtrInfoClearBtn.addActionListener(new ActionListener() {
 			public void actionPerformed (ActionEvent e) {
@@ -640,7 +565,6 @@ public class NetMgrConsole {
 
 			}
 		});
-		rtrInfoMenuPanel.add(rtrInfoUpdateBtn);
 		rtrInfoMenuPanel.add(rtrInfoClearBtn);
 
 		// Router Info Table
@@ -653,8 +577,7 @@ public class NetMgrConsole {
 		infoTable.setFillsViewportHeight(true);
 
 		infoTableScrollPane = new JScrollPane(infoTable);
-		infoTableScrollPane
-				.setPreferredSize(new Dimension(MAIN_WIDTH / 2, 150));
+		infoTableScrollPane.setPreferredSize(new Dimension(MAIN_WIDTH/2, 150));
 		rtrInfoPanel.add(infoTableScrollPane);
 
 		
@@ -684,11 +607,11 @@ public class NetMgrConsole {
 		logMenuPanel.add(inChBox);
 		outChBox = new JCheckBox("out");
 		logMenuPanel.add(outChBox);
-		linkTextField = new JTextField(4);
-		logMenuPanel.add(linkTextField);
+		linkLogTxFld = new JTextField(4);
+		logMenuPanel.add(linkLogTxFld);
 		logMenuPanel.add(new JLabel("link"));
-		comtLogComBox = new JComboBox<String>(comtLogComBoxModel);
-		logMenuPanel.add(comtLogComBox);
+		comtLogTxFld = new JTextField(4);
+		logMenuPanel.add(comtLogTxFld);
 		logMenuPanel.add(new JLabel("comt"));
 
 
@@ -696,10 +619,12 @@ public class NetMgrConsole {
 		logMenuPanel2.setBorder(BorderFactory.createTitledBorder(""));
 		logMenuPanel2.setPreferredSize(new Dimension(MAIN_WIDTH/2,MENU_HEIGHT));
 		logMenuPanel2.setMaximumSize(logMenuPanel.getPreferredSize());
-		srcChBox = new JCheckBox("all src");
-		logMenuPanel2.add(srcChBox);
-		dstChBox = new JCheckBox("all dst");
-		logMenuPanel2.add(dstChBox);
+		srcTxFld = new JTextField(4);
+		logMenuPanel2.add(srcTxFld);
+		logMenuPanel2.add(new JLabel("src"));
+		dstTxFld = new JTextField(4);
+		logMenuPanel2.add(dstTxFld);
+		logMenuPanel2.add(new JLabel("dst"));
 		pktTypeComBox = new JComboBox<String>(pktType); //pkt Type
 		logMenuPanel2.add(pktTypeComBox);
 //		logMenuPanel2.add(new JLabel("type"));
@@ -724,7 +649,7 @@ public class NetMgrConsole {
 		addFilterBtn.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed (ActionEvent e) {
-				if (isConnected && isLoggedin) {
+				if (isConnected && isLoggedIn) {
 					String rtr = rtrLogComBox.getSelectedItem().toString();
 					String s = null;
 					if (rtr.equals("all")) { //repeat all routers
@@ -742,6 +667,11 @@ public class NetMgrConsole {
 							showPopupStatus(s);
 							return;
 						}
+						ArrayList<LogFilter> filters = new ArrayList<LogFilter>();
+						connectionNetMgr.getFilterSet(filters, rtr);
+						for (LogFilter f : filters) {
+							writeLog(f.toString());
+						}
 					}
 				} else {
 					showPopupStatus("connection or login required");
@@ -755,13 +685,12 @@ public class NetMgrConsole {
 		dropFilterBtn.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed (ActionEvent e) {
-				if (isConnected && isLoggedin) {
+				if (isConnected && isLoggedIn) {
 					int i = filterTable.getSelectedRow();
 					if (i >= 0) {
 						int fx = (Integer) logFilterTableModel.getValueAt(i, 0);
-						String rtnName = (String) logFilterTableModel
-								.getValueAt(i, 1);
-						String s = connectionNetMgr.dropFilter(rtnName, fx);
+						String rtrName = (String) logFilterTableModel.getValueAt(i, 1);
+						String s = connectionNetMgr.dropFilter(rtrName, fx);
 						if (s == null) {
 							logFilterTableModel.removeLogFilterTable(i);
 							logFilterTableModel.fireTableDataChanged();
@@ -781,20 +710,36 @@ public class NetMgrConsole {
 		logMenuPanel2.add(dropFilterBtn);
 
 		logs = new ArrayList<String>();
-		updateLogChBox = new JCheckBox("Update");
-		updateLogChBox.setSelected(true);
+		logChBox = new JCheckBox("Log");
+		logChBox.setSelected(false);
 		
 		localLogChBox = new JCheckBox("Local"); //local checkbox
+		localLogChBox.setSelected(false);
 		autoRefreshUpdateLog();
-		logMenuPanel.add(updateLogChBox);
+		logMenuPanel.add(logChBox);
 		logMenuPanel.add(localLogChBox);
 
-		updateLogChBox.addItemListener(new ItemListener() {
+		logChBox.addItemListener(new ItemListener() {
 			@Override
 			public void itemStateChanged (ItemEvent e) {
+				boolean on = false;
+				boolean local = localLogChBox.isSelected();
 				if (e.getStateChange() == ItemEvent.SELECTED) {
-					localLogChBox.setSelected(false);
-					autoRefreshUpdateLog();
+					on = true;
+				} else {
+					on = false;
+				}
+				
+				if (isLoggedIn && isConnected) {
+					//all routers
+					for (int i = 1 ; i < rtrLogComBoxModel.getSize() ; i++) {
+						String rtr = rtrLogComBoxModel.getElementAt(i);
+						enablePacketLog(rtr, on, local);
+					}
+					
+					if (on) {
+						autoRefreshUpdateLog();
+					}
 				}
 			}
 		});
@@ -802,15 +747,18 @@ public class NetMgrConsole {
 		localLogChBox.addItemListener(new ItemListener() {
 			@Override
 			public void itemStateChanged (ItemEvent e) {
-				if (e.getStateChange() == ItemEvent.SELECTED) {
-					if (isLoggedin && isConnected) {
-						updateLogChBox.setSelected(false);
-						timer.stop(); //thread for logged packet
-						connectionNetMgr.enableLocalLog("r1", true);
-					}
-				} else{
-					if (isLoggedin && isConnected) {
-						connectionNetMgr.enableLocalLog("r1", false);
+				boolean on = logChBox.isSelected();
+				boolean local = false;
+				if (e.getStateChange() == ItemEvent.SELECTED)
+					local = true;
+				else
+					local = false;
+				
+				if (isLoggedIn && isConnected) {
+					//all routers
+					for (int i = 1 ; i < rtrLogComBoxModel.getSize() ; i++) {
+						String rtr = rtrLogComBoxModel.getElementAt(i);
+						enablePacketLog(rtr, on, local);
 					}
 				}
 			}
@@ -834,8 +782,7 @@ public class NetMgrConsole {
 		filterTable.setAutoResizeMode(JTable.AUTO_RESIZE_OFF); // size
 		filterTable.setFillsViewportHeight(true);
 		filterTableScrollPane = new JScrollPane(filterTable);
-		filterTableScrollPane.setPreferredSize(new Dimension(MAIN_WIDTH / 2,
-				150));
+		filterTableScrollPane.setPreferredSize(new Dimension(MAIN_WIDTH/2,150));
 
 		filterPanel = new JPanel();
 		filterPanel.setBorder(BorderFactory.createTitledBorder(""));
@@ -876,7 +823,7 @@ public class NetMgrConsole {
 		logFilter.setIn(in); // in
 		logFilter.setOut(out); // out
 
-		String link = linkTextField.getText();
+		String link = linkLogTxFld.getText();
 		try {
 			Integer.parseInt(link);
 		} catch (NumberFormatException ne) {
@@ -885,22 +832,19 @@ public class NetMgrConsole {
 		}
 		logFilter.setLink(link); // link
 
-		NetInfo net = connectionComtCtl.getNetInfo();
-		if (srcChBox.isSelected()) { // src addr
-			logFilter.setSrcAdr("0"); 
-		} else {
-			int srcAdr = net.getNodeAdr(net.getNodeNum("netMgr"));
-			logFilter.setSrcAdr(Forest.fAdr2string(srcAdr));
-		}
-		if (dstChBox.isSelected()) { // dst Addr
-			logFilter.setDstAdr("0");
-		} else {
-			int dstAdr = net.getNodeAdr(net.getNodeNum(rtrName));
-			logFilter.setDstAdr(Forest.fAdr2string(dstAdr));
-		}
+//		NetInfo net = connectionComtCtl.getNetInfo();
+//		int srcAdr = net.getNodeAdr(net.getNodeNum("netMgr"));
+//		logFilter.setSrcAdr(Forest.fAdr2string(srcAdr));
 		
-		String comtree = comtLogComBox.getSelectedItem().toString();
-		if (comtree.equals("all")) {
+		logFilter.setSrcAdr(srcTxFld.getText()); // src addr
+		
+//		int dstAdr = net.getNodeAdr(net.getNodeNum(rtrName));
+//		logFilter.setDstAdr(Forest.fAdr2string(dstAdr));
+		
+		logFilter.setDstAdr(dstTxFld.getText()); // dst addr
+		
+		String comtree = comtLogTxFld.getText();
+		if (comtree.equals("0")) {
 			comtree = "0";
 		}
 		logFilter.setComtree(comtree); // comtree
@@ -924,21 +868,126 @@ public class NetMgrConsole {
 			logFilterTableModel.addLogFilterTable(logFilter);
 			logFilterTableModel.fireTableDataChanged();
 		}
-		
+	
 		return null;
 	}
 	
 	/**
+	 * Enable packet log in remote router
+	 * @param rtr router name
+	 * @param on controls whether logging is to be turned on (true) or off (false)
+	 * @param local controls local logging in the same way
+	 * @return null if success, otherwise error message
+	 */
+	private String enablePacketLog (String rtr, boolean on, boolean local) {
+		String ret = connectionNetMgr.enablePacketLog(rtr, on, local);
+		return ret;
+	}
+	
+	/**
+	 * Log in NetMgr
+	 */
+	private void logIn () {
+		String[] options = { "Login", "Cancel" };
+		int n = JOptionPane.showOptionDialog(mainFrame, loginDialog, "Login", 
+											JOptionPane.OK_CANCEL_OPTION, 
+											JOptionPane.INFORMATION_MESSAGE, 
+											null, options, options[0]);
+		
+		if (n == 0) { // login
+			char[] passwd = loginDialog.getPassword();
+			String userName = loginDialog.getUserName();
+			String ret = connectionNetMgr.login(userName, new String(passwd));
+			if (ret == null) {
+				isLoggedIn = true;
+				loginMenuItem.setText("Log out");
+				showPopupStatus("Logged in as " + userName);
+				statusLabel2.setText(" Logged in as " + userName);
+				
+				// getting filter sets from routers
+				String rtr = ""; 
+				String str = "";
+				for (int i = 1 ; i < rtrLogComBoxModel.getSize() ; i++) {
+					ArrayList<LogFilter> filters = new ArrayList<LogFilter>();
+					rtr = rtrLogComBoxModel.getElementAt(i);
+					str = connectionNetMgr.getFilterSet(filters, rtr);
+					if (str == null) {
+						for (LogFilter f : filters)
+							logFilterTableModel.addLogFilterTable(f);
+
+						if (filters.size() > 0) {
+							logFilterTableModel.fireTableDataChanged();
+						} else {
+							enablePacketLog(rtr, false, false); //all logs off
+						}
+					}
+				}
+			} else {
+				showPopupStatus(ret);
+			}
+		}
+	}
+	
+	/**
+	 * Connect to NetMgr and ComtCtl
+	 */
+	private void connectNetMgrComtCtl() {
+		String[] options = { "Connect", "Cancel" };
+		int n = JOptionPane.showOptionDialog(mainFrame, connectDialog,
+				"Connect to the server", JOptionPane.OK_CANCEL_OPTION,
+				JOptionPane.INFORMATION_MESSAGE, null, options, options[0]);
+		
+		if (n == 0) { //connect
+			String nmAddr = connectDialog.getNmAddr();
+			connectionNetMgr.setNmAddr(nmAddr);
+			String ctAddr = connectDialog.getCtAddr();
+			connectionComtCtl.setCmAddr(ctAddr);
+			if (connectionNetMgr.connectToNetMgr() && connectionComtCtl.connectToComCtl()) {
+				connectionComtCtl.getNet();
+				connectionComtCtl.getComtSet();
+				comtSet = connectionComtCtl.getComtTreeSet();
+				if (comtSet.size() <= 0) {
+					showPopupStatus("No Comtrees");
+					if (connectionNetMgr != null && connectionComtCtl != null){
+						connectionNetMgr.closeSocket();
+						connectionComtCtl.closeSocket();
+					}
+				} else {
+					for (Integer c : comtSet) {
+						comtComBoxModel.addElement(c);
+					}
+					statusLabel.setText("Connected to \"" + nmAddr + "\"" 
+											+ " and \"" + ctAddr + "\"");
+					// retrieving routers' name
+					NetInfo netInfo = connectionComtCtl.getNetInfo();
+					for (int node = netInfo.firstNode(); node != 0; 
+							node = netInfo.nextNode(node)) {
+						String name = netInfo.getNodeName(node);
+						if (name.substring(0, 1).equals("r")) {
+							rtrComBoxModel.addElement(name);
+							rtrLogComBoxModel.addElement(name);
+						}
+					}
+					isConnected = true;
+					showPopupStatus("Connected");
+				}
+			} else {
+				showPopupStatus("Connection is failed.");
+				if (connectionNetMgr != null && connectionComtCtl != null){
+					connectionNetMgr.closeSocket();
+					connectionComtCtl.closeSocket();
+				}
+			}
+		}
+	}
+	
+	/**
 	 * Set preferred column header's width
-	 * 
-	 * @param infoTable
-	 *            information table
-	 * 
+	 * @param infoTable information table
 	 */
 	private void setPreferredWidth (JTable infoTable) {
 		for (int i = 0; i < infoTable.getModel().getColumnCount(); ++i) {
-			AbstractTableModel tableModel = (AbstractTableModel) infoTable
-					.getModel();
+			AbstractTableModel tableModel = (AbstractTableModel)infoTable.getModel();
 			float j = 1;
 			if (tableModel instanceof ComtreeTableModel) {
 				j = ((ComtreeTableModel) infoTable.getModel()).getWidth(i);
@@ -1010,13 +1059,17 @@ public class NetMgrConsole {
 		logTextArea.append(str);
 	}
 	
+	/**
+	 * Retreiving packeted log from remote log periodically say 1s
+	 * FIXME: Temporally now only from the router, r1 
+	 */
 	public void autoRefreshUpdateLog(){
 		timer = new Timer(1000, new ActionListener() {
 			public void actionPerformed (ActionEvent evt) {
-				if (!updateLogChBox.isSelected()) {
+				if (!logChBox.isSelected()) {
 					timer.stop();
 				} else {
-					if (isLoggedin && isConnected 
+					if (isLoggedIn && isConnected 
 							&& (logFilterTableModel.getRowCount() > 0)) {
 						logs.clear();
 						String s = connectionNetMgr.getLoggedPackets(logs, "r1");
@@ -1025,8 +1078,8 @@ public class NetMgrConsole {
 							showPopupStatus(s);
 						} else {
 							for (String l : logs) {
-								sb.append(l);
-								sb.append("\n");
+								if (l.equals("")) break;
+								sb.append(l); sb.append("\n");
 							}
 						}
 						if (sb.length() > 0) {

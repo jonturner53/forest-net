@@ -103,5 +103,10 @@ public class LogFilter {
 	public void setDstAdr (String dstAdr) {
 		this.dstAdr = dstAdr;
 	}
-
+	
+	public String toString() {
+		return id + " "  + on + " " + rtr + " " + in + " " + out + " "
+				+ srcAdr + " " + dstAdr + " " + link + " " + comtree + " "
+				+ type + " " + cpType + "\n";
+	}
 }
