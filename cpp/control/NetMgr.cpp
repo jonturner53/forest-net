@@ -287,8 +287,8 @@ cerr << "cmd=" << cmd << endl;
 			getFilterSet(buf,reply,cph);
 		} else if (cmd == "getLoggedPackets") {
 			getLoggedPackets(buf,reply,cph);
-		} else if (cmd == "enableLocalLog") {
-			enableLocalLog(buf,reply,cph);
+		} else if (cmd == "enablePacketLog") {
+			enablePacketLog(buf,reply,cph);
 		} else {
 			reply = "unrecognized input\n";
 		}
@@ -607,25 +607,25 @@ void getLoggedPackets(NetBuffer& buf, string& reply, CpHandler& cph){
 	reply.append("\n");
 }
 
-/** Enable local log in router
+/** Enable packet log in remote router
  *  Reads router name from the socket.
  *  @param buf is a reference to a NetBuffer object for the socket
  *  @param reply is a reference to a string to be returned to console
  *  @param cph is a reference to this thread's control packet hander
  */
-void enableLocalLog(NetBuffer& buf, string& reply, CpHandler& cph){
-	string rtrName; int rtr; bool on;
+void enablePacketLog(NetBuffer& buf, string& reply, CpHandler& cph){
+	string rtrName; int rtr = -1; bool on = false; bool local = false;
 	if (!buf.verify(':') || !buf.readName(rtrName) ||
 			((rtr = net->getNodeNum(rtrName)) == 0) ||
-			!buf.readBit(on)){
+			!buf.readBit(on) || !buf.readBit(local)){
 		reply.assign("invalid request\n"); return;
 	}
 	fAdr_t radr = net->getNodeAdr(rtr);
 	pktx repx; CtlPkt repCp;
 	repCp.reset();
-	repx = cph.enableLocalLog(radr, on, repCp);
+	repx = cph.enablePacketLog(radr, on, local, repCp);
 	if (repx == 0 || repCp.mode != CtlPkt::POS_REPLY) {
-		reply.assign("could not get logged packets \n"); return;
+		reply.assign("could not enable packet log \n"); return;
 	}
 }
 
