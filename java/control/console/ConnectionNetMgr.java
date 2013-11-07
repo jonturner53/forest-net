@@ -88,8 +88,7 @@ public class ConnectionNetMgr {
 	/**
 	 * Send a string msg to Net Manager
 	 * 
-	 * @param msg
-	 *            message
+	 * @param msg	message
 	 * @return successful
 	 */
 	public boolean sendString (String msg) {
@@ -100,7 +99,7 @@ public class ConnectionNetMgr {
 		enc.encode(cb, bb, false);
 		bb.flip();
 		try {
-			System.out.println("SENDING: " + msg);
+			System.out.print("SENDING: " + msg);
 			serverChan.write(bb);
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -112,10 +111,8 @@ public class ConnectionNetMgr {
 	/**
 	 * Login to a specific account.
 	 * 
-	 * @param user
-	 *            is the name of the user whose account we're logging into
-	 * @param pwd
-	 *            is the password
+	 * @param user	the name of the user whose account we're logging into
+	 * @param pwd	the password
 	 * @return null if the operation succeeds, otherwise a string containing an
 	 *         error message from the client manager
 	 */
@@ -276,14 +273,14 @@ public class ConnectionNetMgr {
 	/**
 	 * Retrieve router table info(link, comtree, iface, route) and put them into
 	 * AbstractTableModel class
-	 * 
-	 * @param tableModel
-	 *            TableModel for each router info
-	 * @param routerName
-	 *            Router Name such as r1
+	 * @param tableModel TableModel for each router info
+	 * @param routerName Router Name such as r1
+	 * @param start start number in range
+	 * @param end end number in range
 	 * @return null if successful, otherwise, an error message
 	 */
-	public String getTable (AbstractTableModel tableModel, String routerName) {
+	public String getTable (AbstractTableModel tableModel, String rtrName,
+							int start, int end) {
 		String type = null;
 		if (tableModel instanceof ComtreeTableModel) {
 			type = "Comtree";
@@ -300,8 +297,8 @@ public class ConnectionNetMgr {
 		} else {
 			return "no type defined";
 		}
-		String sendMsg = "get" + type + "Table: ";
-		if (!sendString(sendMsg + routerName + "\n")) {
+		String sendMsg = "get" + type + "Table: " + rtrName + "\n";
+		if (!sendString(sendMsg)) {
 			return "connot send request to server";
 		}
 		ArrayList<String> lines = new ArrayList<String>();
@@ -321,20 +318,30 @@ public class ConnectionNetMgr {
 				return "could not read link table";
 			}
 			if (str.equals("over")) {
+				boolean isAll = false;
+				if (start == 0 && end == 0) isAll = true;
+				
 				if (tableModel instanceof ComtreeTableModel) {
 					for (String s : lines) {
 						s = s.replaceAll("\\s+", " ");
 						String[] tokens = s.split(" ");
 						if (tokens.length == 6) {
-							((ComtreeTableModel) tableModel)
-									.addComtreeTable(new Comtree(tokens[1],
-											tokens[2], tokens[3], tokens[4],
-											tokens[5]));
+							int comt = Integer.valueOf(tokens[1]);
+							
+							if ((comt >= start && comt <= end) || isAll) {
+								((ComtreeTableModel) tableModel)
+										.addComtreeTable(new Comtree(tokens[1],
+												tokens[2], tokens[3], tokens[4],
+												tokens[5]));
+							}
 						} else if (tokens.length == 5) {
-							((ComtreeTableModel) tableModel)
-									.addComtreeTable(new Comtree(tokens[1],
-											tokens[2], tokens[3], " ",
-											tokens[4]));
+							int comt = Integer.valueOf(tokens[1]);
+							if ((comt >= start && comt <= end) || isAll) {
+								((ComtreeTableModel) tableModel)
+										.addComtreeTable(new Comtree(tokens[1],
+												tokens[2], tokens[3], " ",
+												tokens[4]));
+							}
 						} else {
 							return "tokens error";
 						}
@@ -344,10 +351,13 @@ public class ConnectionNetMgr {
 						s = s.replaceAll("\\s+", " ");
 						String[] tokens = s.split(" ");
 						if (tokens.length == 9) {
-							((LinkTableModel) tableModel)
-									.addLinkTable(new Link(tokens[1],
-											tokens[2], tokens[3], tokens[4],
-											tokens[5], tokens[6]));
+							int lnk = Integer.parseInt(tokens[1]);
+							if ((lnk >= start && lnk <= end) || isAll) {
+								((LinkTableModel) tableModel)
+										.addLinkTable(new Link(tokens[1],
+												tokens[2], tokens[3], tokens[4],
+												tokens[5], tokens[6]));
+							}
 						} else {
 							return "tokens error";
 						}
@@ -357,9 +367,12 @@ public class ConnectionNetMgr {
 						s = s.replaceAll("\\s+", " ");
 						String[] tokens = s.split(" ");
 						if (tokens.length == 4) {
-							((IfaceTableModel) tableModel)
-									.addIfaceTable(new Iface(tokens[1],
-											tokens[2], tokens[3]));
+							int iface = Integer.parseInt(tokens[1]);
+							if ((iface >= start && iface <= end) || isAll) {
+								((IfaceTableModel) tableModel)
+										.addIfaceTable(new Iface(tokens[1],
+														tokens[2], tokens[3]));
+							}
 						} else {
 							return "tokens error";
 						}
@@ -368,9 +381,12 @@ public class ConnectionNetMgr {
 					for (String s : lines) {
 						String[] tokens = s.split(" ");
 						if (tokens.length == 3) {
-							((RouteTableModel) tableModel)
-									.addRouteTable(new Route(tokens[0],
-											tokens[1], tokens[2]));
+							int comt = Integer.valueOf(tokens[0]);
+							if ((comt >= start && comt <= end) || isAll) {
+								((RouteTableModel) tableModel)
+										.addRouteTable(new Route(tokens[0],
+														tokens[1], tokens[2]));
+							}
 						} else {
 							return "tokens error";
 						}
@@ -612,15 +628,17 @@ public class ConnectionNetMgr {
 	}
 
 	/**
-	 * Enable or disable local log in router
-	 * @param b
-	 * @return
+	 * Send an enable packet log request packet.
+	 * @param on controls whether logging is to be turned on (true) or off (false)
+	 * @param local controls local logging in the same way
+	 * @return null if success, otherwise error message
 	 */
-	public String enableLocalLog(String rtrName, boolean b){
-		String bit = (b == true) ? "1" : "0";
-		String msg = "enableLocalLog: " + rtrName + " " + bit + "\nover\n";
+	public String enablePacketLog(String rtrName, boolean on, boolean local){
+		String bit1 = (on == true) ? "1" : "0";
+		String bit2 = (local == true) ? "1" : "0";
+		String msg = "enablePacketLog: " + rtrName + " " + bit1 + " " + bit2 + "\nover\n";
 		if (!sendString(msg))
-			return "connot enable local log";
+			return "connot enable packet log";
 		
 		String str = inBuf.readLine(); //sucess 
 		System.out.println(str);
