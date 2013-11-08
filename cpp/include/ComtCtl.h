@@ -99,6 +99,8 @@ bool 	handleComtPath(int,CtlPkt&, CpHandler&);
 bool 	handleComtNewLeaf(int,CtlPkt&, CpHandler&);
 bool 	handleComtPrune(int,CtlPkt&, CpHandler&);
 
+void	removeSubtree(int, fAdr_t);
+
 // helper functions for allocating comtree numbers from pool
 int	newComtreeNum();
 void	releaseComtreeNum(int);
