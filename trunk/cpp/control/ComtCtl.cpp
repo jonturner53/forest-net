@@ -778,18 +778,7 @@ bool handleComtPrune(pktx px, CtlPkt& cp, CpHandler& cph) {
 			cph.errReply(px,cp,"cannot prune a different router");
 			return true;
 		}
-		if (comtrees->getLinkCnt(ctx,rtrAdr) == 1) {
-			int lnk = comtrees->getPlink(ctx,rtrAdr);
-			RateSpec rs = comtrees->getLinkRates(ctx,rtrAdr);
-			if (rtr != net->getLeft(lnk)) rs.flip();
-			net->getAvailRates(lnk).add(rs);
-			comtrees->removeNode(ctx,rtrAdr);
-		} else { // should not happen, but still need to handle it
-			// remove entire subtree
-			// write separate method for this
-			// requires identifying comtree routers in subtree
-			// then removing them and their leaf nodes; ugly
-		}
+		removeSubtree(ctx,rtrAdr);
 	}
 	net->unlock(); comtrees->releaseComtree(ctx);
 
@@ -799,14 +788,20 @@ bool handleComtPrune(pktx px, CtlPkt& cp, CpHandler& cph) {
 	return true;
 }
 
-/* not quite ready yet
-void removeRtr(int ctx, rtrAdr) {
-	set<fAdr_t> dropset;
-	dropset.add(rtrAdr);
+/** Update local data structures to reflect removal of a subtree from a comtree.
+ *  Normally when this is called, the subtree is a single router,
+ *  but we handle the general case as well.
+ *  The net object and comtree are assumed to be locked
+ *  @param ctx is the comtree index of the comtree being pruned
+ *  @param rtrAdr is is the address of a router in the comtree
+ *  @return true if the operation is completed successfully
+ */
+void removeSubtree(int ctx, fAdr_t rtrAdr) {
+	int rtr = net->getNodeNum(rtrAdr);
 	if (comtrees->getLinkCnt(ctx,rtrAdr) > 1) {
-		// remove all leaf children
+		// remove all children that are leaf nodes
 		for (fAdr_t ladr = comtrees->firstLeaf(ctx); ladr != 0;
-             		    ladr = comtrees-nextLeaf(ctx,ladr)) {
+             		    ladr = comtrees->nextLeaf(ctx,ladr)) {
 			if (comtrees->getParent(ctx,ladr) != rtrAdr) continue;
 			int llnk = comtrees->getPlink(ctx,ladr);
 			int lnk = net->getLinkNum(rtr,llnk);
@@ -814,13 +809,13 @@ void removeRtr(int ctx, rtrAdr) {
 				comtrees->getLinkRates(ctx,ladr));
 			comtrees->removeNode(ctx,ladr);
 		}
-	}
-	if (comtrees->getLinkCnt(ctx,rtrAdr) > 1) {
-		// if still have children, find and remove
-		for (fAdr_t cadr = comtrees->firstRouter(ctx); cadr != 0;
-             		    cadr = comtrees-nextRouter(ctx,cadr)) {
-			if (comtrees->getParent(ctx,cadr) != rtrAdr) continue;
-			removeRtr(ctx,cadr);
+		if (comtrees->getLinkCnt(ctx,rtrAdr) > 1) {
+			// if still have children, find and remove
+			for (fAdr_t cadr = comtrees->firstRouter(ctx); cadr !=0;
+	             		    cadr = comtrees->nextRouter(ctx,cadr)) {
+				if (comtrees->getParent(ctx,cadr) == rtrAdr)
+					removeSubtree(ctx,cadr);
+			}
 		}
 	}
 	int lnk = comtrees->getPlink(ctx,rtrAdr);
@@ -829,7 +824,6 @@ void removeRtr(int ctx, rtrAdr) {
 	net->getAvailRates(lnk).add(rs);
 	comtrees->removeNode(ctx,rtrAdr);
 }
-*/
 
 /** Handle a join comtree request.
  *  This requires selecting a path from the client's access router
