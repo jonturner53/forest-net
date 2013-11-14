@@ -678,22 +678,41 @@ bool handleComtNewLeaf(pktx px, CtlPkt& cp, CpHandler& cph) {
 		return true;
 	}
 
-	// should probably do some error checking here
-
 	int len = path.size();
-	int r = net->getNodeNum(cliRtrAdr);
-	// first find the branch point in the path
-	// note: must deal with the case where the branchRtrAdr in the
-	// received packet is not currently a node in the local comtree
-	// data structure
-	int top = len;
-	for (int i = 0; i < len; i++) {
-		int lnk = net->getLinkNum(r,path[i]);
-		fAdr_t radr = net->getNodeAdr(r);
-		if ((radr == branchRtrAdr && comtrees->isComtRtr(ctx,radr)) ||
-		    ((radr == branchRtrAdr || comtrees->isComtRtr(ctx,radr)) &&
-		     top < len)) {
-			top = i-1; break;
+	int top = -1; int topRtr = 0; // router just below branch router
+	if (len == 0) {
+		if (branchRtrAdr != cliRtrAdr ||
+		    !comtrees->isComtRtr(ctx,cliRtrAdr)) {
+			net->unlock(); comtrees->releaseComtree(ctx);
+			cph.errReply(px,cp,"specified client and branch router "
+				   	"not consistent with comtree topology");
+			return true;
+		}
+	} else {
+		// find the branch router
+		fAdr_t radr = cliRtrAdr;
+		int r = net->getNodeNum(cliRtrAdr);
+		for (int i = 0; i < len; i++) {
+			int lnk = net->getLinkNum(r,path[i]);
+			if (radr == branchRtrAdr) {
+				if (!comtrees->isComtRtr(ctx,radr)) {
+					net->unlock();
+					comtrees->releaseComtree(ctx);
+					cph.errReply(px,cp,"specified branch "
+						"router not in comtree");
+					return true;
+				}
+				top = i-1; break;
+			}
+			topRtr = r;
+			r = net->getPeer(r,lnk);
+			radr = net->getNodeAdr(r);
+		}
+		if (top == -1) {
+			net->unlock(); comtrees->releaseComtree(ctx);
+			cph.errReply(px,cp,"specified branch router not "
+				   	"in path");
+			return true;
 		}
 	}
 	RateSpec flipped = cp.rspec2; flipped.flip();
@@ -701,25 +720,21 @@ bool handleComtNewLeaf(pktx px, CtlPkt& cp, CpHandler& cph) {
 	// note: some of these routers may already be in comtree;
 	// addNode just returns normally in this case; we may change
 	// comtree topology as a result of this process
+	int r = topRtr; fAdr_t radr = net->getNodeAdr(r);
 	for (int i = top; i >= 0; i--) {
 		int lnk = net->getLinkNum(r,path[i]);
-		fAdr_t radr = net->getNodeAdr(r);
 		comtrees->addNode(ctx, radr);
 		comtrees->setPlink(ctx, radr, lnk);
 		comtrees->getLinkRates(ctx, radr) = flipped;
-		// note: may be better to have router return a
-		// vector with the available rates on all the links;
-		// this would reduce potential for inconsistent
-		// values between routers and ComtCtl;
-		// still another approach would be to update the
-		// rates from link-state updates only and not track
-		// the individual changes at all; leave for now
                 if (r == net->getLeft(lnk)) {
                 	net->getAvailRates(lnk).subtract(flipped);
 		} else {
                 	net->getAvailRates(lnk).subtract(cp.rspec1);
 		}
-		r = net->getPeer(r,lnk);
+		if (i > 0) {
+			r = net->getPeer(r,net->getLinkNum(r,path[i-1]));
+			radr = net->getNodeAdr(r);
+		}
 	}
 	// finally, add the new leaf
 	comtrees->addNode(ctx, cliAdr);
@@ -800,6 +815,7 @@ void removeSubtree(int ctx, fAdr_t rtrAdr) {
 	int rtr = net->getNodeNum(rtrAdr);
 	if (comtrees->getLinkCnt(ctx,rtrAdr) > 1) {
 		// remove all children that are leaf nodes
+		vector<fAdr_t> dropVec;
 		for (fAdr_t ladr = comtrees->firstLeaf(ctx); ladr != 0;
              		    ladr = comtrees->nextLeaf(ctx,ladr)) {
 			if (comtrees->getParent(ctx,ladr) != rtrAdr) continue;
@@ -807,8 +823,9 @@ void removeSubtree(int ctx, fAdr_t rtrAdr) {
 			int lnk = net->getLinkNum(rtr,llnk);
 			net->getAvailRates(lnk).add(
 				comtrees->getLinkRates(ctx,ladr));
-			comtrees->removeNode(ctx,ladr);
+			dropVec.push_back(ladr);
 		}
+		for (fAdr_t ladr : dropVec) comtrees->removeNode(ctx,ladr);
 		if (comtrees->getLinkCnt(ctx,rtrAdr) > 1) {
 			// if still have children, find and remove
 			for (fAdr_t cadr = comtrees->firstRouter(ctx); cadr !=0;
