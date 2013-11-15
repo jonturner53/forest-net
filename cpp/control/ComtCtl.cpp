@@ -694,14 +694,8 @@ bool handleComtNewLeaf(pktx px, CtlPkt& cp, CpHandler& cph) {
 		int r = net->getNodeNum(cliRtrAdr);
 		for (int i = 0; i < len; i++) {
 			int lnk = net->getLinkNum(r,path[i]);
-			if (radr == branchRtrAdr) {
-				if (!comtrees->isComtRtr(ctx,radr)) {
-					net->unlock();
-					comtrees->releaseComtree(ctx);
-					cph.errReply(px,cp,"specified branch "
-						"router not in comtree");
-					return true;
-				}
+			if (radr == branchRtrAdr &&
+			    comtrees->isComtRtr(ctx,radr)) {
 				top = i-1; break;
 			}
 			topRtr = r;
@@ -782,10 +776,6 @@ bool handleComtPrune(pktx px, CtlPkt& cp, CpHandler& cph) {
 
 	if (comtrees->isComtLeaf(ctx,pruneAdr)) {
 		// if pruneAdr is a leaf, remove it
-		int llnk = comtrees->getPlink(ctx,pruneAdr);
-		int lnk = net->getLinkNum(rtr,llnk);
-		net->getAvailRates(lnk).add(
-			comtrees->getLinkRates(ctx,pruneAdr));
 		comtrees->removeNode(ctx,pruneAdr);
 	} else if (comtrees->isComtRtr(ctx,pruneAdr)) {
 		if (pruneAdr != rtrAdr) {
@@ -818,12 +808,8 @@ void removeSubtree(int ctx, fAdr_t rtrAdr) {
 		vector<fAdr_t> dropVec;
 		for (fAdr_t ladr = comtrees->firstLeaf(ctx); ladr != 0;
              		    ladr = comtrees->nextLeaf(ctx,ladr)) {
-			if (comtrees->getParent(ctx,ladr) != rtrAdr) continue;
-			int llnk = comtrees->getPlink(ctx,ladr);
-			int lnk = net->getLinkNum(rtr,llnk);
-			net->getAvailRates(lnk).add(
-				comtrees->getLinkRates(ctx,ladr));
-			dropVec.push_back(ladr);
+			if (comtrees->getParent(ctx,ladr) == rtrAdr)
+				dropVec.push_back(ladr);
 		}
 		for (fAdr_t ladr : dropVec) comtrees->removeNode(ctx,ladr);
 		if (comtrees->getLinkCnt(ctx,rtrAdr) > 1) {
