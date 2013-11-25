@@ -44,7 +44,7 @@ public class NetMgrConsole {
 	private JCheckBoxMenuItem saveAsFileMOption;
 	
 	//Save as File
-	private PrintWriter writer;
+	private HashMap<String, PrintWriter> hashMapWriter;
 
 	private JPanel mainPanel;
 	private JPanel statusPanel;
@@ -209,13 +209,16 @@ public class NetMgrConsole {
 		
 		hashMapLogFrame = new HashMap<String, LogFrame>(); 
 		setUsingRtr = new HashSet<String>(); 
+		
+		hashMapWriter = new HashMap<String, PrintWriter>();
 
 		connectionNetMgr = new ConnectionNetMgr();
 		connectionComtCtl = new ConnectionComtCtl();
 
 		displayNetMgr();
 
-		mainFrame.addWindowListener(new CloseEvent(connectionNetMgr,connectionComtCtl,writer));
+		mainFrame.addWindowListener(new CloseEvent(connectionNetMgr,connectionComtCtl,
+				hashMapWriter));
 		mainFrame.pack();
 		mainFrame.setVisible(true);
 	}
@@ -1038,15 +1041,16 @@ public class NetMgrConsole {
 	 */
 	public void writeLog (String str, String rtr) {
 		if (saveAsFileMOption.isSelected()) { //save logs as files
-			if (writer == null) {
+			PrintWriter writer = hashMapWriter.get(rtr);
+			if (writer == null && !hashMapWriter.containsKey(rtr)) {
 				try {
-					writer = new PrintWriter("log.txt", "UTF-8");
+					String fileName = "log_" + rtr + ".txt";
+					writer = new PrintWriter(fileName, "UTF-8");
+					hashMapWriter.put(rtr, writer);
 				} catch (FileNotFoundException e) {
-					writer.close();
 					e.printStackTrace();
 					return;
 				} catch (UnsupportedEncodingException e) {
-					writer.close();
 					e.printStackTrace();
 					return;
 				}
@@ -1055,7 +1059,7 @@ public class NetMgrConsole {
 			writer.flush();
 		}
 		
-		if (hashMapLogFrame.containsKey(rtr)) {
+		if (hashMapLogFrame.containsKey(rtr) && (hashMapLogFrame.get(rtr) != null)) {
 			LogFrame logFrame = hashMapLogFrame.get(rtr);
 			logFrame.write(str);
 		}
@@ -1109,18 +1113,20 @@ public class NetMgrConsole {
 class CloseEvent extends WindowAdapter {
 	private ConnectionNetMgr netMgr;
 	private ConnectionComtCtl comtCtl;
-	private PrintWriter writer;
+	private HashMap<String, PrintWriter> hashMapWriter;
 
 	public CloseEvent(ConnectionNetMgr netMgr, ConnectionComtCtl comtCtl,
-			PrintWriter writer) {
+						HashMap<String, PrintWriter> hashMapWriter) {
 		this.netMgr = netMgr;
 		this.comtCtl = comtCtl;
-		this.writer = writer;
+		this.hashMapWriter = hashMapWriter;
 	}
 
 	public void windowClosing (WindowEvent e) {
-		if (writer != null) { // file
-			writer.close();
+		if (!hashMapWriter.isEmpty()) {
+			for (PrintWriter writer : hashMapWriter.values()) {
+				writer.close();
+			}
 		}
 		if (netMgr != null && comtCtl != null) { //socket 
 			netMgr.closeSocket();
