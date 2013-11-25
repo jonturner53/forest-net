@@ -20,7 +20,6 @@ import javax.swing.Timer;
 import javax.swing.border.BevelBorder;
 import javax.swing.table.*;
 
-import forest.common.Forest;
 //import forest.control.ComtInfo;
 import forest.control.NetInfo;
 import forest.control.console.model.*;
@@ -97,7 +96,6 @@ public class NetMgrConsole {
 	private JCheckBox outChBox;
 	private JCheckBox logChBox;
 	private JCheckBox localLogChBox;
-	private JButton clearLogBtn;
 	private JButton addFilterBtn;
 	private JButton dropFilterBtn;
 	private JTextField srcTxFld;
@@ -147,14 +145,14 @@ public class NetMgrConsole {
 
 	// log display
 	private ArrayList<String> logs;
-	private JPanel logDisplayPanel;
-	private JTextArea logTextArea;
-	private JScrollPane logTextAreaScrollPane;
 
 	private ConnectDialog connectDialog;
 	private LoginDialog loginDialog;
 	private UpdateProfileDialog updateProfileDialog;
 	private ChangePwdDialog changePwdDialog;
+	
+	private HashMap<String, LogFrame> hashMapLogFrame; //map to Log Frame
+	private HashSet<String> setUsingRtr; //A set of router to which currently filter added 
 
 	private ConnectionNetMgr connectionNetMgr;
 	private ConnectionComtCtl connectionComtCtl;
@@ -171,11 +169,9 @@ public class NetMgrConsole {
 
 	private boolean isLoggedIn = false;
 	private boolean isConnected = false;
-
-	// private boolean isLogOn = false;
 	
 	private Timer timer; 
-
+	
 	public NetMgrConsole() {
 
 		mainFrame = new JFrame();
@@ -210,14 +206,16 @@ public class NetMgrConsole {
 		loginDialog = new LoginDialog();
 		updateProfileDialog = new UpdateProfileDialog();
 		changePwdDialog = new ChangePwdDialog();
+		
+		hashMapLogFrame = new HashMap<String, LogFrame>(); 
+		setUsingRtr = new HashSet<String>(); 
 
 		connectionNetMgr = new ConnectionNetMgr();
 		connectionComtCtl = new ConnectionComtCtl();
 
 		displayNetMgr();
 
-		mainFrame.addWindowListener(new CloseEvent(connectionNetMgr, 
-													connectionComtCtl, writer));
+		mainFrame.addWindowListener(new CloseEvent(connectionNetMgr,connectionComtCtl,writer));
 		mainFrame.pack();
 		mainFrame.setVisible(true);
 	}
@@ -577,23 +575,11 @@ public class NetMgrConsole {
 		infoTable.setFillsViewportHeight(true);
 
 		infoTableScrollPane = new JScrollPane(infoTable);
-		infoTableScrollPane.setPreferredSize(new Dimension(MAIN_WIDTH/2, 150));
+		infoTableScrollPane.setPreferredSize(new Dimension(MAIN_WIDTH/2, 300));
 		rtrInfoPanel.add(infoTableScrollPane);
 
 		
 		/******************** LOG ********************/
-		// Log Display
-		logDisplayPanel = new JPanel();
-		// logDisplayPanel.setBorder(BorderFactory.createTitledBorder(""));
-		logTextArea = new JTextArea(10, 58);
-		logTextArea.setLineWrap(true);
-		// logTextArea.setPreferredSize(new Dimension(MAIN_WIDTH/2-100,
-		// MAIN_HEIGHT -
-		// (MENU_HEIGHT*3 + 250 + 20)));
-		logTextArea.setEditable(true);
-		logTextAreaScrollPane = new JScrollPane(logTextArea);
-		logDisplayPanel.add(logTextAreaScrollPane);
-
 		// Log Menu
 		logMenuPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
 		logMenuPanel.setBorder(BorderFactory.createTitledBorder(""));
@@ -613,7 +599,6 @@ public class NetMgrConsole {
 		comtLogTxFld = new JTextField(4);
 		logMenuPanel.add(comtLogTxFld);
 		logMenuPanel.add(new JLabel("comt"));
-
 
 		logMenuPanel2 = new JPanel(new FlowLayout(FlowLayout.LEFT));
 		logMenuPanel2.setBorder(BorderFactory.createTitledBorder(""));
@@ -660,6 +645,20 @@ public class NetMgrConsole {
 								showPopupStatus(s);
 								return;
 							}
+							//create a logFrame
+							if (!hashMapLogFrame.containsKey(rtr)) { //check if exists
+								LogFrame logFrame = new LogFrame(rtr);
+								logFrame.setVisible(true);
+								hashMapLogFrame.put(rtr, logFrame);
+								setUsingRtr.add(rtr);
+							}
+							
+							//FIXME: temporally retreiving filters
+							ArrayList<LogFilter> filters = new ArrayList<LogFilter>();
+							connectionNetMgr.getFilterSet(filters, rtr);
+							for (LogFilter f : filters) {
+								writeLog(f.toString(), rtr);
+							}
 						}
 					} else {
 						s = addFilter(rtr);
@@ -667,10 +666,19 @@ public class NetMgrConsole {
 							showPopupStatus(s);
 							return;
 						}
+						//create a logFrame
+						if (!hashMapLogFrame.containsKey(rtr)) { //check if exists
+							LogFrame logFrame = new LogFrame(rtr);
+							logFrame.setVisible(true);
+							hashMapLogFrame.put(rtr, logFrame);
+							setUsingRtr.add(rtr);
+						}
+						
+						//FIXME: temporally retreiving filters
 						ArrayList<LogFilter> filters = new ArrayList<LogFilter>();
 						connectionNetMgr.getFilterSet(filters, rtr);
 						for (LogFilter f : filters) {
-							writeLog(f.toString());
+							writeLog(f.toString(), rtr);
 						}
 					}
 				} else {
@@ -695,6 +703,9 @@ public class NetMgrConsole {
 							logFilterTableModel.removeLogFilterTable(i);
 							logFilterTableModel.fireTableDataChanged();
 							showPopupStatus("filter: " + fx + " was dropped");
+							if (setUsingRtr.contains(rtrName)) {
+								setUsingRtr.remove(rtrName);
+							}
 						} else {
 							showPopupStatus(s);
 						}
@@ -763,16 +774,6 @@ public class NetMgrConsole {
 				}
 			}
 		});
-		
-
-		clearLogBtn = new JButton("Clear");
-		clearLogBtn.addActionListener(new ActionListener() {
-			@Override
-			public void actionPerformed (ActionEvent e) {
-				logTextArea.setText("");
-			}
-		});
-		logMenuPanel.add(clearLogBtn);
 
 		// filter table
 		filterTable = new JTable(logFilterTableModel);
@@ -782,7 +783,7 @@ public class NetMgrConsole {
 		filterTable.setAutoResizeMode(JTable.AUTO_RESIZE_OFF); // size
 		filterTable.setFillsViewportHeight(true);
 		filterTableScrollPane = new JScrollPane(filterTable);
-		filterTableScrollPane.setPreferredSize(new Dimension(MAIN_WIDTH/2,150));
+		filterTableScrollPane.setPreferredSize(new Dimension(MAIN_WIDTH/2,200));
 
 		filterPanel = new JPanel();
 		filterPanel.setBorder(BorderFactory.createTitledBorder(""));
@@ -793,7 +794,6 @@ public class NetMgrConsole {
 		routerPanel.add(logMenuPanel);
 		routerPanel.add(logMenuPanel2);
 		routerPanel.add(filterPanel);
-		routerPanel.add(logDisplayPanel);
 
 		mainPanel.add(comtreePanel);
 		mainPanel.add(routerPanel);
@@ -894,7 +894,7 @@ public class NetMgrConsole {
 											JOptionPane.INFORMATION_MESSAGE, 
 											null, options, options[0]);
 		
-		if (n == 0) { // login
+		if (n == 0) { // login option
 			char[] passwd = loginDialog.getPassword();
 			String userName = loginDialog.getUserName();
 			String ret = connectionNetMgr.login(userName, new String(passwd));
@@ -905,21 +905,20 @@ public class NetMgrConsole {
 				statusLabel2.setText(" Logged in as " + userName);
 				
 				// getting filter sets from routers
-				String rtr = ""; 
-				String str = "";
+				String rtr = ""; String str = "";
 				for (int i = 1 ; i < rtrLogComBoxModel.getSize() ; i++) {
 					ArrayList<LogFilter> filters = new ArrayList<LogFilter>();
 					rtr = rtrLogComBoxModel.getElementAt(i);
 					str = connectionNetMgr.getFilterSet(filters, rtr);
 					if (str == null) {
-						for (LogFilter f : filters)
-							logFilterTableModel.addLogFilterTable(f);
-
-						if (filters.size() > 0) {
-							logFilterTableModel.fireTableDataChanged();
-						} else {
-							enablePacketLog(rtr, false, false); //all logs off
+						for (LogFilter f : filters) {
+							//logFilterTableModel.addLogFilterTable(f);
+							String str2 = connectionNetMgr.dropFilter(rtr, f.getId());
+							if ( str2 != null) {
+								showPopupStatus(str2);
+							}
 						}
+						enablePacketLog(rtr, false, false); // all logs off
 					}
 				}
 			} else {
@@ -956,8 +955,7 @@ public class NetMgrConsole {
 					for (Integer c : comtSet) {
 						comtComBoxModel.addElement(c);
 					}
-					statusLabel.setText("Connected to \"" + nmAddr + "\"" 
-											+ " and \"" + ctAddr + "\"");
+					statusLabel.setText("Connected to \""+nmAddr+"\""+" and \""+ctAddr+"\"");
 					// retrieving routers' name
 					NetInfo netInfo = connectionComtCtl.getNetInfo();
 					for (int node = netInfo.firstNode(); node != 0; 
@@ -1034,10 +1032,11 @@ public class NetMgrConsole {
 	}
 
 	/**
-	 * Write log to display panel and as a file if the option is selected 
-	 * @param str
+	 * Write log to separate log frame and as a file if the option is selected 
+	 * @param str A string of logs
+	 * @param rtr router name to write log to separate log frame  
 	 */
-	public void writeLog (String str) {
+	public void writeLog (String str, String rtr) {
 		if (saveAsFileMOption.isSelected()) { //save logs as files
 			if (writer == null) {
 				try {
@@ -1056,12 +1055,14 @@ public class NetMgrConsole {
 			writer.flush();
 		}
 		
-		logTextArea.append(str);
+		if (hashMapLogFrame.containsKey(rtr)) {
+			LogFrame logFrame = hashMapLogFrame.get(rtr);
+			logFrame.write(str);
+		}
 	}
 	
 	/**
 	 * Retreiving packeted log from remote log periodically say 1s
-	 * FIXME: Temporally now only from the router, r1 
 	 */
 	public void autoRefreshUpdateLog(){
 		timer = new Timer(1000, new ActionListener() {
@@ -1069,21 +1070,25 @@ public class NetMgrConsole {
 				if (!logChBox.isSelected()) {
 					timer.stop();
 				} else {
-					if (isLoggedIn && isConnected 
+					if (isLoggedIn && isConnected && (setUsingRtr.size() > 0)
 							&& (logFilterTableModel.getRowCount() > 0)) {
-						logs.clear();
-						String s = connectionNetMgr.getLoggedPackets(logs, "r1");
-						StringBuilder sb = new StringBuilder();
-						if (s != null) {
-							showPopupStatus(s);
-						} else {
-							for (String l : logs) {
-								if (l.equals("")) break;
-								sb.append(l); sb.append("\n");
+						Iterator<String> iter = setUsingRtr.iterator();
+						while (iter.hasNext()) {
+							String rtr = iter.next();
+							logs.clear(); //remove all log strings in arrayList
+							String s = connectionNetMgr.getLoggedPackets(logs, rtr);
+							StringBuilder sb = new StringBuilder();
+							if (s != null) {
+								showPopupStatus(s);
+							} else {
+								for (String l : logs) {
+									if (l.equals("")) break;
+									sb.append(l); sb.append("\n");
+								}
 							}
-						}
-						if (sb.length() > 0) {
-							writeLog(sb.toString());
+							if (sb.length() > 0) {
+								writeLog(sb.toString(), rtr);
+							}
 						}
 					}
 				}
