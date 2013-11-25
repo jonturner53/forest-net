@@ -12,6 +12,7 @@ CLASSFILES=	model/AdminProfile.class model/Comtree.class\
 			ComtreeDisplay.class\
 			ChangePwdDialog.class ConnectDialog.class\
 			LoginDialog.class UpdateProfileDialog.class\
+			LogFrame.class\
 			NetMgrConsole.class
                         
 %.class: %.java
