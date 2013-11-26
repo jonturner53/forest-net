@@ -16,7 +16,6 @@ import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
 
 import javax.swing.*;
-import javax.swing.Timer;
 import javax.swing.border.BevelBorder;
 import javax.swing.table.*;
 
@@ -94,8 +93,6 @@ public class NetMgrConsole {
 	private JTextField comtLogTxFld;
 	private JCheckBox inChBox;
 	private JCheckBox outChBox;
-	private JCheckBox logChBox;
-	private JCheckBox localLogChBox;
 	private JButton addFilterBtn;
 	private JButton dropFilterBtn;
 	private JTextField srcTxFld;
@@ -143,9 +140,6 @@ public class NetMgrConsole {
 	private JTableHeader filterTableHeader;
 	private JScrollPane filterTableScrollPane;
 
-	// log display
-	private ArrayList<String> logs;
-
 	private ConnectDialog connectDialog;
 	private LoginDialog loginDialog;
 	private UpdateProfileDialog updateProfileDialog;
@@ -169,8 +163,6 @@ public class NetMgrConsole {
 
 	private boolean isLoggedIn = false;
 	private boolean isConnected = false;
-	
-	private Timer timer; 
 	
 	public NetMgrConsole() {
 
@@ -563,7 +555,8 @@ public class NetMgrConsole {
 				ifaceTableModel.fireTableDataChanged();
 				comtreeTableModel.fireTableDataChanged();
 				routeTableModel.fireTableDataChanged();
-
+				
+				new LogFrame("r1", connectionNetMgr).setVisible(true);
 			}
 		});
 		rtrInfoMenuPanel.add(rtrInfoClearBtn);
@@ -602,17 +595,17 @@ public class NetMgrConsole {
 		comtLogTxFld = new JTextField(4);
 		logMenuPanel.add(comtLogTxFld);
 		logMenuPanel.add(new JLabel("comt"));
+		srcTxFld = new JTextField(4);
+		logMenuPanel.add(srcTxFld);
+		logMenuPanel.add(new JLabel("src"));
+		dstTxFld = new JTextField(4);
+		logMenuPanel.add(dstTxFld);
+		logMenuPanel.add(new JLabel("dst"));
 
 		logMenuPanel2 = new JPanel(new FlowLayout(FlowLayout.LEFT));
 		logMenuPanel2.setBorder(BorderFactory.createTitledBorder(""));
 		logMenuPanel2.setPreferredSize(new Dimension(MAIN_WIDTH/2,MENU_HEIGHT));
 		logMenuPanel2.setMaximumSize(logMenuPanel.getPreferredSize());
-		srcTxFld = new JTextField(4);
-		logMenuPanel2.add(srcTxFld);
-		logMenuPanel2.add(new JLabel("src"));
-		dstTxFld = new JTextField(4);
-		logMenuPanel2.add(dstTxFld);
-		logMenuPanel2.add(new JLabel("dst"));
 		pktTypeComBox = new JComboBox<String>(pktType); //pkt Type
 		logMenuPanel2.add(pktTypeComBox);
 //		logMenuPanel2.add(new JLabel("type"));
@@ -650,7 +643,7 @@ public class NetMgrConsole {
 							}
 							//create a logFrame
 							if (!hashMapLogFrame.containsKey(rtr)) { //check if exists
-								LogFrame logFrame = new LogFrame(rtr);
+								LogFrame logFrame = new LogFrame(rtr, connectionNetMgr);
 								logFrame.setVisible(true);
 								hashMapLogFrame.put(rtr, logFrame);
 								setUsingRtr.add(rtr);
@@ -671,7 +664,7 @@ public class NetMgrConsole {
 						}
 						//create a logFrame
 						if (!hashMapLogFrame.containsKey(rtr)) { //check if exists
-							LogFrame logFrame = new LogFrame(rtr);
+							LogFrame logFrame = new LogFrame(rtr, connectionNetMgr);
 							logFrame.setVisible(true);
 							hashMapLogFrame.put(rtr, logFrame);
 							setUsingRtr.add(rtr);
@@ -722,62 +715,7 @@ public class NetMgrConsole {
 			}
 		});
 		logMenuPanel2.add(dropFilterBtn);
-
-		logs = new ArrayList<String>();
-		logChBox = new JCheckBox("Log");
-		logChBox.setSelected(false);
 		
-		localLogChBox = new JCheckBox("Local"); //local checkbox
-		localLogChBox.setSelected(false);
-		autoRefreshUpdateLog();
-		logMenuPanel.add(logChBox);
-		logMenuPanel.add(localLogChBox);
-
-		logChBox.addItemListener(new ItemListener() {
-			@Override
-			public void itemStateChanged (ItemEvent e) {
-				boolean on = false;
-				boolean local = localLogChBox.isSelected();
-				if (e.getStateChange() == ItemEvent.SELECTED) {
-					on = true;
-				} else {
-					on = false;
-				}
-				
-				if (isLoggedIn && isConnected) {
-					//all routers
-					for (int i = 1 ; i < rtrLogComBoxModel.getSize() ; i++) {
-						String rtr = rtrLogComBoxModel.getElementAt(i);
-						enablePacketLog(rtr, on, local);
-					}
-					
-					if (on) {
-						autoRefreshUpdateLog();
-					}
-				}
-			}
-		});
-		
-		localLogChBox.addItemListener(new ItemListener() {
-			@Override
-			public void itemStateChanged (ItemEvent e) {
-				boolean on = logChBox.isSelected();
-				boolean local = false;
-				if (e.getStateChange() == ItemEvent.SELECTED)
-					local = true;
-				else
-					local = false;
-				
-				if (isLoggedIn && isConnected) {
-					//all routers
-					for (int i = 1 ; i < rtrLogComBoxModel.getSize() ; i++) {
-						String rtr = rtrLogComBoxModel.getElementAt(i);
-						enablePacketLog(rtr, on, local);
-					}
-				}
-			}
-		});
-
 		// filter table
 		filterTable = new JTable(logFilterTableModel);
 		setPreferredWidth(filterTable);
@@ -875,17 +813,7 @@ public class NetMgrConsole {
 		return null;
 	}
 	
-	/**
-	 * Enable packet log in remote router
-	 * @param rtr router name
-	 * @param on controls whether logging is to be turned on (true) or off (false)
-	 * @param local controls local logging in the same way
-	 * @return null if success, otherwise error message
-	 */
-	private String enablePacketLog (String rtr, boolean on, boolean local) {
-		String ret = connectionNetMgr.enablePacketLog(rtr, on, local);
-		return ret;
-	}
+
 	
 	/**
 	 * Log in NetMgr
@@ -1064,41 +992,17 @@ public class NetMgrConsole {
 			logFrame.write(str);
 		}
 	}
-	
+
 	/**
-	 * Retreiving packeted log from remote log periodically say 1s
+	 * Enable packet log in remote router
+	 * @param rtr router name
+	 * @param on controls whether logging is to be turned on (true) or off (false)
+	 * @param local controls local logging in the same way
+	 * @return null if success, otherwise error message
 	 */
-	public void autoRefreshUpdateLog(){
-		timer = new Timer(1000, new ActionListener() {
-			public void actionPerformed (ActionEvent evt) {
-				if (!logChBox.isSelected()) {
-					timer.stop();
-				} else {
-					if (isLoggedIn && isConnected && (setUsingRtr.size() > 0)
-							&& (logFilterTableModel.getRowCount() > 0)) {
-						Iterator<String> iter = setUsingRtr.iterator();
-						while (iter.hasNext()) {
-							String rtr = iter.next();
-							logs.clear(); //remove all log strings in arrayList
-							String s = connectionNetMgr.getLoggedPackets(logs, rtr);
-							StringBuilder sb = new StringBuilder();
-							if (s != null) {
-								showPopupStatus(s);
-							} else {
-								for (String l : logs) {
-									if (l.equals("")) break;
-									sb.append(l); sb.append("\n");
-								}
-							}
-							if (sb.length() > 0) {
-								writeLog(sb.toString(), rtr);
-							}
-						}
-					}
-				}
-			}
-		});
-		timer.start();
+	private String enablePacketLog (String rtr, boolean on, boolean local) {
+		String ret = connectionNetMgr.enablePacketLog(rtr, on, local);
+		return ret;
 	}
 	
 	public static void main (String[] args) {
