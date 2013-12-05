@@ -9,6 +9,7 @@ import java.awt.event.ItemListener;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.util.ArrayList;
+import java.util.HashMap;
 
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
@@ -38,16 +39,19 @@ public class LogFrame extends JFrame{
 	private JCheckBox onChBox;
 
 	private ConnectionNetMgr connectionNetMgr;
+	private HashMap<String,LogFrame> hashMapLogFrame;
 
 	private String rtr; //router name
 
 	private Timer timer;
 
-	public LogFrame(String rtrName, ConnectionNetMgr connectionNetMgr) {
+	public LogFrame(String rtrName, ConnectionNetMgr connectionNetMgr, 
+			HashMap<String,LogFrame> hashMapLogFrame) {
 		this.connectionNetMgr = connectionNetMgr;
+		this.hashMapLogFrame = hashMapLogFrame;
 		this.rtr = rtrName;
 
-		this.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
+		this.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
 		this.setTitle(this.rtr);
 		this.setPreferredSize(new Dimension(WIDTH,HEIGHT));
 		this.setLayout(new BorderLayout());
@@ -143,7 +147,7 @@ public class LogFrame extends JFrame{
 	public void clearLogs() {
 		logTextArea.setText("");
 	}
-
+	
 	/**
 	 * Retreiving packeted log from remote log periodically say 1s
 	 */
@@ -205,6 +209,14 @@ public class LogFrame extends JFrame{
 	public Timer getTimer() {
 		return timer;
 	}
+	
+	public HashMap<String, LogFrame> getHashMap() {
+		return hashMapLogFrame;
+	}
+	
+	public String getRouterName() {
+		return rtr;
+	}
 }
 
 /**
@@ -213,16 +225,17 @@ public class LogFrame extends JFrame{
  *
  */
 class CloseEventInLogFrame extends WindowAdapter {
-	private Timer timer;
+	private LogFrame logFrame;
 	public CloseEventInLogFrame(LogFrame logFrame) {
-		timer = logFrame.getTimer();
+		this.logFrame = logFrame;
 	}
 	
 	@Override
 	public void windowClosing(WindowEvent e) {
-		if (timer != null) {
-			timer.stop();
+		if (logFrame.getTimer() != null) {
+			logFrame.getTimer() .stop();
 			System.out.println("timer stopped");
 		}
+		logFrame.getHashMap().remove(logFrame.getRouterName());
 	}
 }

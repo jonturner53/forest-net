@@ -555,8 +555,6 @@ public class NetMgrConsole {
 				ifaceTableModel.fireTableDataChanged();
 				comtreeTableModel.fireTableDataChanged();
 				routeTableModel.fireTableDataChanged();
-				
-				new LogFrame("r1", connectionNetMgr).setVisible(true);
 			}
 		});
 		rtrInfoMenuPanel.add(rtrInfoClearBtn);
@@ -643,7 +641,7 @@ public class NetMgrConsole {
 							}
 							//create a logFrame
 							if (!hashMapLogFrame.containsKey(rtr)) { //check if exists
-								LogFrame logFrame = new LogFrame(rtr, connectionNetMgr);
+								LogFrame logFrame = new LogFrame(rtr, connectionNetMgr, hashMapLogFrame);
 								logFrame.setVisible(true);
 								hashMapLogFrame.put(rtr, logFrame);
 								setUsingRtr.add(rtr);
@@ -664,7 +662,7 @@ public class NetMgrConsole {
 						}
 						//create a logFrame
 						if (!hashMapLogFrame.containsKey(rtr)) { //check if exists
-							LogFrame logFrame = new LogFrame(rtr, connectionNetMgr);
+							LogFrame logFrame = new LogFrame(rtr, connectionNetMgr, hashMapLogFrame);
 							logFrame.setVisible(true);
 							hashMapLogFrame.put(rtr, logFrame);
 							setUsingRtr.add(rtr);
