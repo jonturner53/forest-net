@@ -77,7 +77,7 @@ void sendFile(string fileName, int sock)
 		{
 			echo += " ";
 		}
-		echo += '/n';
+		echo += '\n';
 		Np4d::sendString(sock, echo);
 		char * ap = &memblock[0];
 		
@@ -100,7 +100,7 @@ void sendFile(string fileName, int sock)
 	else {
 		//std::cout << "didn't open" << std::endl;
 		Np4d::sendString(sock,"failure:00404\n");
-		close(sock); return NULL;
+		close(sock); return;
 	}
 
 
@@ -143,10 +143,10 @@ void* handler(void* sockp) {
 					string tex_file_type;
 					if (buf.readAlphas(s3) && s3 != "")
 					{
-						switch (s3){
-							case "H": tex_file_type = string(".png");
-							case "M": tex_file_type = string(".jpg");
-							case "L": tex_file_type = string("_lo.jpg");
+						switch (s3.at(0)){
+							case 'H': tex_file_type = string(".png");
+							case 'M': tex_file_type = string(".jpg");
+							case 'L': tex_file_type = string("_lo.jpg");
 							default: tex_file_type = string(".jpg");
 						}
 					}
