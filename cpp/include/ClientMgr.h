@@ -59,7 +59,7 @@ void newSession(int, CpHandler&, NetBuffer&, string&, string&);
 void getProfile(NetBuffer&, string&, string&);
 void updateProfile(NetBuffer&, string&, string&);
 void changePassword(NetBuffer&, string&, string&);
-void uploadPhoto(int, NetBuffer&, string&, string&);
+void uploadFile(string, int, NetBuffer&, string&, string&);
 void getSessions(NetBuffer&, string&, string&);
 void cancelSession(NetBuffer&, string&, CpHandler&, string&);
 void cancelAllSessions(NetBuffer&, string&, CpHandler&, string&);
