@@ -268,8 +268,8 @@ void* handler(void *qp) {
 			close(sock);
 		} else {
 			Packet& p = ps->getPacket(px);
-string s;
-cerr << "handler, got packet " << p.toString(s) << endl;
+			string s;
+			cerr << "handler, got packet " << p.toString(s) << endl;
 			CtlPkt cp(p);
 			switch (cp.type) {
 			case CtlPkt::CLIENT_CONNECT: 
@@ -302,7 +302,7 @@ cerr << "handler, got packet " << p.toString(s) << endl;
  */
 bool handleClient(int sock,CpHandler& cph) {
 	NetBuffer buf(sock,1024);
-	string cmd, reply, clientName;
+	string cmd, reply, clientName, type;
 	bool loggedIn;
 
 	// verify initial "greeting"
@@ -314,7 +314,7 @@ bool handleClient(int sock,CpHandler& cph) {
 	// main processing loop for requests from client
 	loggedIn = false;
 	while (buf.readAlphas(cmd)) {
-cerr << "cmd=" << cmd << endl;
+		cerr << "cmd=" << cmd << endl;
 		reply = "success";
 		if (cmd == "over") {
 			// shouldn't happen, but ignore it, if it does
@@ -336,7 +336,17 @@ cerr << "cmd=" << cmd << endl;
 		} else if (cmd == "changePassword") {
 			changePassword(buf,clientName,reply);
 		} else if (cmd == "uploadPhoto") {
-			uploadPhoto(sock,buf,clientName,reply);
+			type = "photo";
+			uploadFile(type, sock,buf,clientName,reply);
+		} else if (cmd == "uploadAvatar") {
+			type = "avatar";
+			uploadFile(type, sock, buf,clientName,reply);
+		} else if (cmd == "uploadTexH"){
+			type = "hi_res";
+			uploadFile(type, sock, buf, clientName, reply);
+		} else if (cmd == "uploadTexM"){
+			type = "medium_res";
+			uploadFile(type, sock, buf, clientName, reply);
 		} else if (cmd == "getSessions") {
 			getSessions(buf,clientName,reply);
 		} else if (cmd == "cancelSession") {
@@ -672,7 +682,7 @@ void changePassword(NetBuffer& buf, string& clientName, string& reply) {
 	return;
 }
 
-/** Handle an upload photo request.
+/** Handle an upload request.
  *  Reads from the socket to identify the target client. This operation
  *  requires either that the target client is the currently logged-in
  *  client, or that the logged-in client has administrative privileges.
@@ -682,20 +692,36 @@ void changePassword(NetBuffer& buf, string& clientName, string& reply) {
  *  @param reply is a reference to a string in which an error message may be
  *  returned if the operation does not succeed.
  */
-void uploadPhoto(int sock, NetBuffer& buf, string& clientName, string& reply) {
+void uploadFile(string& type, int sock, NetBuffer& buf, string& clientName, string& reply) {
 	int length;
+	int limit;
+	string fileName;
 	if (!buf.verify(':') || !buf.readInt(length) || !buf.nextLine()) {
 		reply = "misformatted upload photo request"; return;
 	}
-	if (length > 50000) {
-		reply = "photo file exceeds 50000 byte limit"; return;
+	if (type == "photo"){
+		limit = 50000;
+		fileName = "clientPhotos/" + clientName + ".jpg";
+	}	
+	else{
+		limit = 200000;
+		if(type == "avatar")
+			fileName = "clientAvatars/" + clientName + ".zip";
+		else if (type == "hi_res")
+			fileName = "clientTextures/" + clientName + ".png";
+		else// (type == "medium_res")
+			fileName = "clientTextures/" + clientName + ".jpg";
 	}
+		
+	if (length > limit) {
+		reply = "file exceeds byte limit"; return;
+	}
+
 	int clx = cliTbl->getClient(clientName);
-	ofstream photoFile;
-	string photoName = "clientPhotos/"; photoName += clientName + ".jpg";
-	photoFile.open(photoName.c_str(), ofstream::binary);
-	if (!photoFile.good()) {
-		reply = "cannot open photo file"; return;
+	ofstream inFile;
+	inFile.open(fileName.c_str(), ofstream::binary);
+	if (!inFile.good()) {
+		reply = "cannot open file to write"; return;
 	}
 	cliTbl->releaseClient(clx);
 	Np4d::sendString(sock,"proceed\n");
@@ -704,7 +730,7 @@ void uploadPhoto(int sock, NetBuffer& buf, string& clientName, string& reply) {
 	while (true) {
 		int n = buf.readBlock(xbuf,min(1000,length-numRcvd));
 		if (n <= 0) break;
-		photoFile.write(xbuf,n);
+		inFile.write(xbuf,n);
 		numRcvd += n;
 		if (numRcvd == length) break;
 	}
@@ -712,11 +738,11 @@ void uploadPhoto(int sock, NetBuffer& buf, string& clientName, string& reply) {
 		reply = "could not transfer complete file"; return;
 	}
 	string s1, s2;
-	if (!buf.readLine(s1) || s1 != "photo finished" ||
+	if (!buf.readLine(s1) || s1 != "upload finished" ||
 	    !buf.readLine(s2) || s2 != "over") {
-		reply = "misformatted photo request"; return;
+		reply = "misformatted upload request"; return;
 	}
-	photoFile.close();
+	inFile.close();
 	return;
 }
 
