@@ -11,7 +11,7 @@
 using namespace forest;
 
 /*
- * usage: AvatarServer
+ * usage: avatarServer
  * This script handles requests from users to save and download avatar files.
  * 09/25: download done, separated send_file
  */
@@ -77,7 +77,7 @@ void sendFile(string fileName, int sock)
 		{
 			echo += " ";
 		}
-		echo += '\n';
+		echo += '/n';
 		Np4d::sendString(sock, echo);
 		char * ap = &memblock[0];
 		
@@ -100,7 +100,7 @@ void sendFile(string fileName, int sock)
 	else {
 		//std::cout << "didn't open" << std::endl;
 		Np4d::sendString(sock,"failure:00404\n");
-		close(sock); return;
+		close(sock); return NULL;
 	}
 
 
@@ -114,9 +114,9 @@ void* handler(void* sockp) {
 	string s1;
 	string pkt_type;
 
-	if (!buf.readAlphas(s1) || s1 != "") {
+	if (buf.readAlphas(s1)) {
 		if (s1 == "getAvatar") { pkt_type = "get"; }
-		else if (s1 == "uploadAvatar") { pkt_type = "upload"; }
+		else if (s1 == "getTexture") { pkt_type = "getTex"; }
 		else
 		{
 			Np4d::sendString(sock,"unrecognized input, should've been a getAvatar request.\noverAndOut\n");
@@ -143,14 +143,14 @@ void* handler(void* sockp) {
 					string tex_file_type;
 					if (buf.readAlphas(s3) && s3 != "")
 					{
-						switch (s3.at(0)){
-							case 'H': tex_file_type = string(".png");
-							case 'M': tex_file_type = string(".jpg");
-							case 'L': tex_file_type = string("_lo.jpg");
+						switch (s3){
+							case "H": tex_file_type = string(".png");
+							case "M": tex_file_type = string(".jpg");
+							case "L": tex_file_type = string("_lo.jpg");
 							default: tex_file_type = string(".jpg");
 						}
 					}
-					string tex_to_send = string("clientAvatars/") + s2 + tex_file_type;
+					string tex_to_send = string("clientTextures/") + s2 + tex_file_type;
 					sendFile(tex_to_send, sock);
 				}
 				else
@@ -178,7 +178,30 @@ void* handler(void* sockp) {
 	}
 	else
 	{
-		//it's an upload request
+		/send texture file
+				if(buf.verify(':'))
+				{
+					string s3;
+					string tex_file_type;
+					if (buf.readAlphas(s3) && s3 != "")
+					{
+						switch (s3){
+							case "H": tex_file_type = string(".png");
+							case "M": tex_file_type = string(".jpg");
+							case "L": tex_file_type = string("_lo.jpg");
+							default: tex_file_type = string(".jpg");
+						}
+					}
+					string tex_to_send = string("clientTextures/") + s2 + tex_file_type;
+					sendFile(tex_to_send, sock);
+				}
+				else
+	 			{				
+					Np4d::sendString(sock,"unrecognized input, missing : (colon)\n"
+					      "overAndOut\n");
+					close(sock); return NULL;		
+				}
+		
 
 	}
 		
