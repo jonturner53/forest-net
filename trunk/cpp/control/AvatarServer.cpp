@@ -100,7 +100,7 @@ void sendFile(string fileName, int sock)
 	else {
 		//std::cout << "didn't open" << std::endl;
 		Np4d::sendString(sock,"failure:00404\n");
-		close(sock); return NULL;
+		close(sock); return;
 	}
 
 
@@ -125,14 +125,14 @@ void* handler(void* sockp) {
 	}
 
 	//process a getAvatar request by looking up files and send them
+	string s2;
 	if (pkt_type == "get") 
 	{
 		if (buf.verify(':')) 
 		{
-			string s2;
 			if (buf.readAlphas(s2) && s2 != ""){				
 				// get the egg files first
-				fileName = string("clientAvatars/") + s2 + string(".zip");
+				fileName = string("clientAvatars/") + s2 + string(".egg.pz");
 				std::cout << fileName << std::endl;
 				sendFile(fileName, sock);
 
@@ -143,11 +143,11 @@ void* handler(void* sockp) {
 					string tex_file_type;
 					if (buf.readAlphas(s3) && s3 != "")
 					{
-						switch (s3){
-							case "H": tex_file_type = string(".png");
-							case "M": tex_file_type = string(".jpg");
-							case "L": tex_file_type = string("_lo.jpg");
-							default: tex_file_type = string(".jpg");
+						switch (s3.at(0)){
+							case 'H': tex_file_type = string(".png"); break;
+							case 'M': tex_file_type = string(".jpg"); break;
+							case 'L': tex_file_type = string("_lo.jpg"); break;
+							default: tex_file_type = string(".jpg"); break;
 						}
 					}
 					string tex_to_send = string("clientTextures/") + s2 + tex_file_type;
@@ -176,31 +176,29 @@ void* handler(void* sockp) {
 			close(sock); return NULL;		
 		}
 	}
-	else
-	{
-		/send texture file
-				if(buf.verify(':'))
-				{
-					string s3;
-					string tex_file_type;
-					if (buf.readAlphas(s3) && s3 != "")
-					{
-						switch (s3){
-							case "H": tex_file_type = string(".png");
-							case "M": tex_file_type = string(".jpg");
-							case "L": tex_file_type = string("_lo.jpg");
-							default: tex_file_type = string(".jpg");
-						}
-					}
-					string tex_to_send = string("clientTextures/") + s2 + tex_file_type;
-					sendFile(tex_to_send, sock);
+	else {
+		// send texture file
+		if(buf.verify(':')) {
+			string s3;
+			string tex_file_type;
+			if (buf.readAlphas(s3) && s3 != "")
+			{
+				switch (s3.at(0)){
+					case 'H': tex_file_type = string(".png"); break;
+					case 'M': tex_file_type = string(".jpg"); break;
+					case 'L': tex_file_type = string("_lo.jpg"); break;
+					default: tex_file_type = string(".jpg"); break;
 				}
-				else
-	 			{				
-					Np4d::sendString(sock,"unrecognized input, missing : (colon)\n"
-					      "overAndOut\n");
-					close(sock); return NULL;		
-				}
+			}
+			string tex_to_send = string("clientTextures/") + s2 + tex_file_type;
+			sendFile(tex_to_send, sock);
+		}
+		else
+			{				
+			Np4d::sendString(sock,"unrecognized input, missing : (colon)\n"
+			      "overAndOut\n");
+			close(sock); return NULL;		
+		}
 		
 
 	}
