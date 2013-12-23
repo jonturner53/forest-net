@@ -123,7 +123,7 @@ bool Substrate::run(int finTimeSec) {
 				pool[t].seqNum = 0;
 			}
 		}
-		if (nothing2do && threads->firstIn() == 0) usleep(1000);
+		if (nothing2do && threads->firstIn() == 0) {} // usleep(1000);
 		sched_yield();
 		now = Misc::getTimeNs();
 	}

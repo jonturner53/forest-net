@@ -40,11 +40,14 @@ int ComtreeTable::addEntry(comt_t comt) {
 
 	tbl[ctx].comt = comt;
 	tbl[ctx].plnk = 0;
+	tbl[ctx].lock = 0;
+	tbl[ctx].ppkt = 0;
 	tbl[ctx].cFlag = false;
 	tbl[ctx].comtLinks = new set<int>();
 	tbl[ctx].rtrLinks = new set<int>();
 	tbl[ctx].coreLinks = new set<int>();
-
+	//feng
+	tbl[ctx].pktNums = new vector<pktx>();
 	return ctx;
 }
 
@@ -74,6 +77,8 @@ bool ComtreeTable::removeEntry(int ctx) {
 	delete tbl[ctx].comtLinks;
 	delete tbl[ctx].rtrLinks;
 	delete tbl[ctx].coreLinks;
+	//feng
+	delete tbl[ctx].pktNums;
 	return true;
 }
 

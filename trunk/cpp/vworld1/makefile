@@ -10,7 +10,7 @@ WARN := -Wall -Wno-c++11-extensions
 CXXFLAGS := ${WARN} ${ARCH} ${INCLUDES} -O2
 JAVAC := javac
 
-XFILES = Avatar Monitor genWalls # Avatar cliProxy
+XFILES = Avatar Avatar_test Monitor genWalls # Avatar cliProxy
 
 .cpp.o:
 	${CXX} ${CXXFLAGS} -c $<
@@ -20,6 +20,9 @@ all : ${FLIB} ${XFILES}
 
 Avatar : Avatar.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
+Avatar_test : Avatar_test.o ${LIBS}
+	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
+
 
 Monitor : Monitor.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@

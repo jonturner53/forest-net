@@ -77,6 +77,7 @@ private:
 	double	direction;		///< direction avatar is facing in deg
 	double	deltaDir;		///< change in direction per period
 	double	speed;			///< speed moving in UNITS/update period
+	int 	joinleave;
 
 	// data structures defining walls in virtual world
 	const static int MAX_VIS=20;	///< max distance can "see" (in squares)

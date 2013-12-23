@@ -29,5 +29,5 @@ cd $1
 echo Router mode=remote bootIp=$2 myAdr=$3 nmIp=$4 nmAdr=$5 statSpec=ss \
 finTime=$6 >log/r 2>err/r >echoOut
 
-Router mode=remote bootIp=$2 myAdr=$3 nmIp=$4 nmAdr=$5 statSpec=ss \
+Router mode=remote bootIp=$2 myAdr=$3 nmIp=$4 nmAdr=$5 statSpec=ss ccAdr=2.90 \
 finTime=$6 >log/r 2>err/r &

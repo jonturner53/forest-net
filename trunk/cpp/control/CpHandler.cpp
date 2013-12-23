@@ -817,6 +817,7 @@ void CpHandler::sendReply(CtlPkt& cp, fAdr_t dest) {
 	p.flags = 0; p.dstAdr = dest; p.srcAdr = myAdr;
 	p.tunIp = tunIp; p.tunPort = tunPort;
 	p.pack();
+	cerr<<"we r in sendReply"<<endl;
 	outq->enq(px);
 }
 

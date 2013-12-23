@@ -359,6 +359,7 @@ inline int ComtInfo::getPlink(int ctx, fAdr_t nfa) const {
 	rp = comtree[ctx].rtrMap->find(nfa);
 	if (rp != comtree[ctx].rtrMap->end())
 		return rp->second.plnk;
+	cerr<<"getPlink"<<nfa<<endl;
         map<fAdr_t,ComtLeafInfo>::iterator lp;
 	lp = comtree[ctx].leafMap->find(nfa);
 	return lp->second.llnk;
@@ -543,27 +544,34 @@ inline bool ComtInfo::removeCoreNode(int ctx, fAdr_t rtrAdr) {
  *  @return true on success, false on failure
  */
 inline bool ComtInfo::setPlink(int ctx, fAdr_t rtr, int plnk) {
+	cerr<<"panfenginsetPlink:"<<rtr<<"plnk"<<plnk<<endl;
 	map<fAdr_t,ComtRtrInfo>::iterator rp;
 	rp = comtree[ctx].rtrMap->find(rtr);
+	cerr<<"lnkCnt"<<rp->second.lnkCnt<<endl;
+	cerr<<"rp->second.plnk"<<rp->second.plnk<<endl;
 	if (rp->second.plnk != 0) {
 		// handle case when moving a node already in comtree
 		// note: no cycle checking
+		cerr<<"setPlink already in comtree"<<endl;
 		fAdr_t parent = net->getNodeAdr(net->getPeer(
 					net->getNodeNum(rtr),rp->second.plnk));
+		cerr<<"parent:"<<parent<<endl;
 		map<fAdr_t,ComtRtrInfo>::iterator rpp;
 		rpp = comtree[ctx].rtrMap->find(parent);
 		rpp->second.lnkCnt--;
-		if (plnk == 0) rp->second.lnkCnt--;
+		if (plnk == 0) {cerr<<"plnk not zero set to zero"<<endl;rp->second.lnkCnt--;}
 	} else if (plnk != 0) {
 		rp->second.lnkCnt++;
 	}
 	rp->second.plnk = plnk;
+	cerr<<rtr<<"lnkCnt"<<rp->second.lnkCnt<<endl;
 	if (plnk == 0) return true;
 
 	fAdr_t parent = net->getNodeAdr(net->getPeer(
 					net->getNodeNum(rtr),plnk));
 	rp = comtree[ctx].rtrMap->find(parent);
-	rp->second.lnkCnt++;
+	rp->second.lnkCnt++;	
+	cerr<<getComtree(ctx)<<"parent:"<<parent<<":"<<rp->second.lnkCnt<<endl;
 	return true;
 }
 

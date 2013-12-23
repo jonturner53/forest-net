@@ -798,8 +798,10 @@ bool handleNewSession(pktx px, CtlPkt& cp, CpHandler& cph) {
 	uint64_t nonce = generateNonce();
 
 	fAdr_t clientAdr = setupLeaf(0,px,cp,rtr,iface,nonce,cph);
+	cerr<<"clientAdr"<<endl;
 	if (clientAdr == 0) return false;
-
+	cerr<<"we r here in new session"<<clientAdr<<endl;
+	cerr<<"p.srcAdr"<<p.srcAdr<<endl;
 	// send positive reply back to sender
 	CtlPkt repCp(CtlPkt::NEW_SESSION,CtlPkt::POS_REPLY,cp.seqNum);
         repCp.adr1 = clientAdr; repCp.adr2 = rtrAdr; repCp.adr3 = comtCtlAdr;
@@ -996,7 +998,6 @@ bool handleBootLeaf(pktx px, CtlPkt& cp, CpHandler& cph) {
 		net->setStatus(leaf,NetInfo::DOWN);
 		return false;
 	}
-
 	// find first iface for this router - refine this later
 	int iface = 1;
 	while (iface < net->getNumIf(rtr) && !net->validIf(rtr,iface)) iface++;
@@ -1008,7 +1009,6 @@ bool handleBootLeaf(pktx px, CtlPkt& cp, CpHandler& cph) {
 		net->setStatus(leaf,NetInfo::DOWN);
 		return false;
 	}
-
 	// Send configuration parameters to leaf
 	// 0 destination address tells cph/substrate to send using
  	// cph's tunnel parameters; this sends it to leaf
@@ -1239,6 +1239,8 @@ bool setupEndpoint(int lnk, int rtr, pktx px, CtlPkt& cp, CpHandler& cph,
 	// now, send modify link message, to set data rates
 	RateSpec rs = net->getLinkRates(lnk);
 	if (rtr == net->getLeft(lnk)) rs.flip();
+string s;
+cerr << "setting link rates " << rs.toString(s) << endl;
 	reply = cph.modLink(dest,llnk,rs,repCp);
 	if (!processReply(px,cp,reply,repCp,cph,
 			  "could not set link rates at router"))
@@ -1358,6 +1360,7 @@ bool readPrefixInfo(char filename[]) {
 			break;
 		prefixes[i].prefix = pfix;
 		prefixes[i].rtrAdr = rtrAdr;
+		cout<<"rtrAdr"<<rtrAdr<<endl;
 		Misc::skipBlank(ifs);
 		i++;
 	}
