@@ -72,6 +72,7 @@ private:
 	uint64_t now;			///< current time in 64 bit form
 
 	uint64_t seqNum;		///< seq # for outgoing control packets
+
 	fAdr_t	firstLeafAdr;		///< first leaf address
 	UiSetPair *leafAdr;		///< offsets for in-use and free leaf
 					///< addresses
@@ -83,7 +84,7 @@ private:
 	uint64_t timestamp;		///< time when we last sent a request
 	};
 	map<uint64_t,ControlInfo> *pending; ///< map of pending requests
-	map<comt_t,pktx> *pending1; ///< map of pending requests
+
 	int	nIfaces;		///< max number of interfaces
 	int	nLnks;			///< max number of links
 	int	nComts;			///< max number of comtrees
@@ -144,50 +145,32 @@ private:
 	bool	dropIface(CtlPkt&, CtlPkt&);
 	bool	getIface(CtlPkt&, CtlPkt&);
 	bool	modIface(CtlPkt&, CtlPkt&);
+	bool 	getIfaceSet(CtlPkt&, CtlPkt&);
 
 	bool	addLink(CtlPkt&, CtlPkt&);
 	bool	dropLink(CtlPkt&, CtlPkt&);
 	void	dropLink(int,fAdr_t=0);
 	bool	getLink(CtlPkt&, CtlPkt&);
-	bool	getLinkSet(CtlPkt&, CtlPkt&);
-	bool 	getComtreeSet(CtlPkt&, CtlPkt&);
-	bool 	getIfaceSet(CtlPkt&, CtlPkt&);
-	bool 	getRouteSet(CtlPkt&, CtlPkt&);
 	bool	modLink(CtlPkt&, CtlPkt&);
-	
+	bool	getLinkSet(CtlPkt&, CtlPkt&);
+
 	bool	addComtree(CtlPkt&, CtlPkt&);
 	bool	dropComtree(CtlPkt&, CtlPkt&);
-	bool    dropComtree(comt_t);
 	bool	getComtree(CtlPkt&, CtlPkt&);
 	bool	modComtree(CtlPkt&, CtlPkt&);
-	//feng
-	bool 	modComtree(comt_t, int, CtlPkt&);
+	bool 	getComtreeSet(CtlPkt&, CtlPkt&);
+
 	bool	addComtreeLink(CtlPkt&, CtlPkt&);
-	//feng
-	bool    addComtreeLink(comt_t, int, CtlPkt&);
 	bool	dropComtreeLink(CtlPkt&, CtlPkt&);
 	void	dropComtreeLink(int, int, int);
 	bool	modComtreeLink(CtlPkt&, CtlPkt&);
-	//feng
-	bool 	modComtreeLink(comt_t, int, RateSpec, CtlPkt&);
 	bool	getComtreeLink(CtlPkt&, CtlPkt&);
-	//feng
-	void    handleClientJoinComtree(pktx, CtlPkt&, CtlPkt&);
-	void 	handleClientLeaveComtree(pktx, CtlPkt&, CtlPkt&);
-	void 	handleComtPath(pktx, CtlPkt&); 	
-	void 	handleComtAddBranch(pktx, CtlPkt&, CtlPkt&);
-	void	handleComtPrune(pktx, CtlPkt&, CtlPkt&);
-	void	handleAllPending(vector<pktx>&, CtlPkt&);
-	void 	handleComtPruneReply(pktx, CtlPkt&);
-	void 	handleComtNewLeafReply(pktx, CtlPkt&);
-        void    handleAddBranchConfirm(pktx, CtlPkt&, CtlPkt&);
-	void 	handleAddBranchReply(pktx, CtlPkt&);
-	void 	handleConfirmReply(pktx, CtlPkt&); 
-		
+
 	bool	addRoute(CtlPkt&, CtlPkt&);
 	bool	dropRoute(CtlPkt&, CtlPkt&);
 	bool	getRoute(CtlPkt&, CtlPkt&);
 	bool	modRoute(CtlPkt&, CtlPkt&);
+	bool 	getRouteSet(CtlPkt&, CtlPkt&);
 
 	bool	addFilter(CtlPkt&, CtlPkt&);
 	bool	dropFilter(CtlPkt&, CtlPkt&);

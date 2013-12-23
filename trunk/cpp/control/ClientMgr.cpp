@@ -482,7 +482,6 @@ void newSession(int sock, CpHandler& cph, NetBuffer& buf,
 	// proceed with new session setup
 	CtlPkt repCp;
 	ipa_t clientIp = Np4d::getPeerIp(sock);
-	cerr<<"panfeng:clientIp"<<clientIp<<endl;
 	pktx rpx = cph.newSession(nmAdr, clientIp, rs, repCp);
 	clx = cliTbl->getClient(clientName);
 	if (clx == 0) {

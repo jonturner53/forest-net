@@ -10,14 +10,11 @@
 #define COMTREETABLE_H
 
 #include <set>
-#include <vector>
 #include "Forest.h"
 #include "IdMap.h"
 #include "LinkTable.h"
 
 namespace forest {
-
-typedef int pktx;
 
 
 /** Class that implements a table of information on comtrees.
@@ -40,7 +37,7 @@ public:
 	// predicates
 	bool	validComtree(comt_t) const;		
 	bool	validComtIndex(int) const;		
-	bool	validComtLink(int) const;			
+	bool	validComtLink(int) const;		
 	bool	checkEntry(int) const;
 	bool	inCore(int) const;
 	bool	isLink(int, int) const;
@@ -48,8 +45,7 @@ public:
 	bool	isRtrLink(int) const;
 	bool	isCoreLink(int, int) const;
 	bool	isCoreLink(int) const;
-	//feng
-	bool 	isLocked(int) const;
+
 	// iteration methods
 	int	firstComtIndex() const;
 	int	nextComtIndex(int) const;
@@ -64,16 +60,11 @@ public:
 	int	getPCLink(int) const;
 	int	getLinkQ(int) const;
 	fAdr_t	getDest(int) const;
-	pktx	getPrunePkt(int) const;
-	//feng
-	RateSpec& getUpperBoundRates(int) const;
 	RateSpec& getRates(int) const;
 	set<int>& getLinks(int) const;
 	set<int>& getRtrLinks(int) const;
 	set<int>& getCoreLinks(int) const;
 	set<int>& getRteSet(int) const;
-	//feng
-	vector<pktx>& getPktNums(int) const;
 
 	// add/remove/modify table entries
 	int	addEntry(comt_t);
@@ -82,17 +73,10 @@ public:
 	bool 	removeLink(int, int);
 	void	setCoreFlag(int, bool);
 	void	setPlink(int, int);
-	void	setLock(int, int);
-	void    setPrunePkt(int, pktx);
-	void 	addRequest(int, pktx);
-	void	removeRequest(int, pktx);
-	void 	setUpperBoundRates(int, RateSpec&);
 	void	setLinkQ(int, int);
 	void	registerRte(int,int);
 	void	deregisterRte(int,int);
-	//feng
-	void 	cleanPktNums(int);
-	
+
 	// input/output of table contents 
 	bool 	read(istream&);
 	string&	toString(string&) const;
@@ -100,20 +84,15 @@ public:
 private:
 	int	maxCtx;			///< largest comtree index
 	int	maxComtLink;		///< largest comtLink
+
 	struct TblEntry { 		///< comtree table entry
 	int	comt;			///< comtree for this table entry
 	int	plnk;			///< parent link in comtree
-	int 	lock;		        ///< lock bit
-	pktx 	ppkt;			///< prune packet number 
 	int	pCLnk;			///< corresponding cLnk value
 	bool	cFlag;			///< true if this router is in core
-	//feng
-	RateSpec upperBoundRates;		///< upper bound rate for access link rate
 	set<int> *comtLinks;		///< list of comtLink #s in comtree
 	set<int> *rtrLinks;		///< comtLinks to other routers
 	set<int> *coreLinks;		///< comtLinks to core routers
-	//feng
-	vector<pktx> *pktNums;		///< packet Numbers of join/leave requests
 	};
 	TblEntry *tbl;
 	IdMap *comtMap;			///< maps comtree numbers to indices
@@ -219,20 +198,7 @@ inline bool ComtreeTable::isCoreLink(int cLnk) const {
 	set<int>& cl = *tbl[clTbl[cLnk].ctx].coreLinks;
 	return (cl.find(cLnk) != cl.end());
 }
-
-/** Determine if a given comtree is locked.
- *  @param ctx is the comtree number
- *  @return true if comtree is locked
- */
-inline bool ComtreeTable::isLocked(int ctx) const {
-        if (!validComtIndex(ctx)) return false;
-        return (tbl[ctx].lock == 1);
-}
-
-inline pktx ComtreeTable::getPrunePkt(int ctx) const {
-        if (!validComtIndex(ctx)) return 0;
-        return tbl[ctx].ppkt;
-}	
+	
 /** Get the first comtree index.
  *  This method is used to iterate through all the comtrees.
  *  The order of the comtree indices is arbitrary.
@@ -304,15 +270,6 @@ inline int ComtreeTable::getPlink(int ctx) const { return tbl[ctx].plnk; }
  */
 inline int ComtreeTable::getPCLink(int ctx) const { return tbl[ctx].pCLnk; }
 
-//feng
-/** Get the rate spec for a given comtree link.
- *  @param cLnk is a comtree link number
- *  @return a reference to the rate spec for cLnk
- */
-inline RateSpec& ComtreeTable::getUpperBoundRates(int ctx) const {
-        return tbl[ctx].upperBoundRates;
-}
-
 /** Get the link number for a given comtree link.
  *  @param cLnk is a comtree link number
  *  @return the number of the associated link
@@ -382,22 +339,6 @@ inline set<int>& ComtreeTable::getCoreLinks(int ctx) const {
 	return *(tbl[ctx].coreLinks);
 }
 
-/** Get a reference to the set of comtree links leading to a core router.
- *  This method is provided to allow the client program
- *  to iterate through all the "core links" in the comtree.
- *  It must not be used to modify the set of links.
- *  @param ctx is a comtree index
- *  @return a reference to a set of integers, each of
- *  which is a comtree link number
- */
-inline vector<pktx>& ComtreeTable::getPktNums(int ctx) const {
-        return *(tbl[ctx].pktNums);
-}
-
-inline void ComtreeTable::cleanPktNums(int ctx) {
-	tbl[ctx].pktNums->clear();
-}
-
 /** Get a reference to the set of routes registered with a comtree link.
  *  This method is provided to allow the client program
  *  to iterate through all the routes that use a comtree link.
@@ -425,30 +366,6 @@ inline void ComtreeTable::setPlink(int ctx, int plink) {
 	if (!validComtLink(cLnk)) return;
 	if (!isRtrLink(ctx,plink)) return;
 	tbl[ctx].plnk = plink; tbl[ctx].pCLnk =cLnk;
-}
-
-inline void ComtreeTable::setUpperBoundRates(int ctx, RateSpec& rs) {
-	if (validComtIndex(ctx)) tbl[ctx].upperBoundRates = rs;
-}
-
-//feng
-/** Set the lock bit for a comtree
- *  @param ctx is the comtree index
- *  @param lock is the lock bit, 1 means the comtree is locked
- */
-inline void ComtreeTable::setLock(int ctx, int lock) {
-        if (!validComtIndex(ctx)) return;
-        if (tbl[ctx].lock != lock) {
-                tbl[ctx].lock = lock;
-                return;
-        }
-}
-
-/** Set the prune request packet number for a comtree
- *  @param ctx is the comtree index
- */
-inline void ComtreeTable::setPrunePkt(int ctx, pktx ppkt) {
-        if (validComtIndex(ctx)) tbl[ctx].ppkt = ppkt;
 }
 
 /** Set the core flag for a given table entry.
@@ -505,31 +422,6 @@ inline void ComtreeTable::registerRte(int cLnk, int rtx) {
  */
 inline void ComtreeTable::deregisterRte(int cLnk, int rtx) {
 	if (validComtLink(cLnk)) clTbl[cLnk].rteSet->erase(rtx);
-}
-
-/** Register a route with a given comtree link.
- *  @param cLnk is a valid comtree link number
- *  @param rtx is an integer that is presumed to be a route index
- */
-inline void ComtreeTable::addRequest(int ctx, pktx px) {
-        if (validComtIndex(ctx)) {
-		vector<pktx>::iterator pn;	
-		for (pn = tbl[ctx].pktNums->begin(); pn != tbl[ctx].pktNums->end(); pn++) {
-                	pktx curpx = *pn;
-			if (curpx == px)
-				return;
-		}
-		tbl[ctx].pktNums->push_back(px);
-	}
-}
-
-/** Deegister a route with a given comtree link.
- *  @param cLnk is a valid comtree link number
- *  @param rtx is an integer that is presumed to be a route index
- */
-inline void ComtreeTable::removeRequest(int ctx, pktx px) {
-	//return;
-        //if (validComtIndex(ctx)) tbl[ctx].pktNums->erase(px);
 }
 
 /** Set the outgoing packet rate for a comtree link.

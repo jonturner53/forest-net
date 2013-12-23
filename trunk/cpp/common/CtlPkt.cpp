@@ -208,7 +208,6 @@ int CtlPkt::pack() {
 				return 0;
 			packPair(COMTREE,comtree);
 			packPair(IP1,ip1); packPair(PORT1,port1);
-			packRspec(RSPEC1,rspec1);
 		}
 		break;
 	case CLIENT_LEAVE_COMTREE:
@@ -669,33 +668,36 @@ int CtlPkt::pack() {
 			int len = ivec.size();
 			if (len > 50) return 0;
 			packWord(len);
-			for (int i = 0; i < len; i++){ 
+			for (int i = 0; i < len; i++) 
 				packWord(ivec[i]);
-			}
 		}
 		break;
 
 	case COMTREE_NEW_LEAF:
 		if (mode == REQUEST) {
 			// Sent by router to inform ComtCtl of new leaf.
+			// This is typically sent to the ComtCtl after the
+			// successful completion of a NEW_BRANCH operation.
 			// Contains address and link number of new leaf,
 			// ratespec for comtree on access link, comtree number
-			// and path used to connect to comtree. This is
-			// represented by a vector of local link numbers
-			// at the new routers along the path. The vector
-			// may have zero length, but must be present.
+			// and path to the comtree root used when adding
+			// the branch. This is represented by a vector of
+			// local link numbers at the new routers along the
+			// path. The vector may have zero length, but must
+			// be present. The packet also contains the address
+			// of the first router on the path that was already
+			// in the comtree when the new branch was added.
 			// Also contains a second rspec which represents
 			// the rates reserved on the path added to the comtree
-			if (adr1 == 0 || link == 0 || comtree == 0 || index1 == 0 ||
-			    !rspec1.isSet())
+			if (adr1 == 0 || link == 0 || adr2 == 0 ||
+			    comtree == 0 || !rspec1.isSet() || !rspec2.isSet())
 				return 0;
 			packPair(COMTREE,comtree);
 			packPair(ADR1,adr1);
 			packPair(ADR2,adr2);
 			packPair(LINK,link);
-			packPair(INDEX1,index1);
 			packRspec(RSPEC1,rspec1);
-			if (rspec2.isSet()) packRspec(RSPEC2,rspec2);
+			packRspec(RSPEC2,rspec2);
 			packWord(INTVEC);
 			int len = ivec.size();
 			if (len > 50) return 0;
@@ -714,10 +716,8 @@ int CtlPkt::pack() {
 			// next router in the path. Also contains an
 			// rspec to be used for the links on the path,
 			// and a second RSPEC that represents the default
-			// for new elaf nodes.
-			if (index1 == -1 || comtree == 0 || !rspec1.isSet()) 
-				return 0;
-			packPair(COMTREE,comtree);
+			// for new leaf nodes.
+			if (index1 == 0 || !rspec1.isSet()) return 0;
 			packWord(INTVEC);
 			int len = ivec.size();
 			if (len > 50) return 0;
@@ -725,7 +725,6 @@ int CtlPkt::pack() {
 			for (int i = 0; i < len; i++) packWord(ivec[i]);
 			packPair(INDEX1,index1);
 			packRspec(RSPEC1,rspec1);
-			packPair(ADR1,adr1);
 			if (rspec2.isSet()) packRspec(RSPEC2,rspec2);
 		} else {
 			// Reply contains address of "branch router",
@@ -735,19 +734,6 @@ int CtlPkt::pack() {
 			packPair(ADR1,adr1);
 		}
 		break;
-
-	case ADD_BRANCH_CONFIRM:
-		if (mode == REQUEST) {
-			// Sent by router to the child along the branch
-			// asking for a confirmation from child router that 
-			// the path from leaf router the child router has been
-			// built up correctlt. Contains the comtree number
-			if (comtree == 0) 
-				return 0;
-			packPair(COMTREE,comtree);
-		}
-		break;
-
 	case COMTREE_PRUNE:
 		if (mode == REQUEST) {
 			// Sent by router to ComtCtl to inform it when
@@ -762,7 +748,6 @@ int CtlPkt::pack() {
 			if (adr1 == 0 || comtree == 0) return 0;
 			packPair(COMTREE,comtree);
 			packPair(ADR1,adr1);
-			if (adr2 != 0) packPair(ADR2,adr2);
 		}
 		break;
 
@@ -800,6 +785,7 @@ bool CtlPkt::unpack() {
 		}
 		return true;
 	}
+
 	while (4*pp < paylen) { 
 		uint32_t attr;
 		unpackWord(attr);
@@ -836,10 +822,10 @@ bool CtlPkt::unpack() {
 				for (int i = 0; i < len; i++) {
 					int x; unpackWord(x); ivec[i] = x;
 				}
-				break;
 		default:	return false;
 		}
 	}
+
 	switch (type) {
 	case CLIENT_ADD_COMTREE:
 		if ((mode == REQUEST && zipCode == 0) ||
@@ -1107,33 +1093,27 @@ bool CtlPkt::unpack() {
 
 	case COMTREE_PATH:
 		if ((mode == REQUEST && (adr1 == 0 || comtree == 0)) ||
-		    (mode == POS_REPLY && (!rspec1.isSet() || !rspec2.isSet()))){
+		    (mode == POS_REPLY && (!rspec1.isSet() || !rspec2.isSet())))
 			return 0;
-		}
 		break;
 
 	case COMTREE_NEW_LEAF:
 		if (mode == REQUEST &&	
-		     (adr1 == 0 || comtree == 0 || !rspec1.isSet()))
+		     (adr1 == 0 || link == 0 || adr2 == 0 || comtree == 0 ||
+		      !rspec1.isSet() || !rspec2.isSet()))
 			return 0;
 		break;
 
 	case COMTREE_ADD_BRANCH:
-		if ((mode == REQUEST && (index1 == -1 || !rspec1.isSet() ||
+		if ((mode == REQUEST && (index1 == 0 || !rspec1.isSet() ||
 		     !rspec2.isSet())) ||
 		    (mode == POS_REPLY && adr1 == 0))
 			return 0;
 		break;
 
-	case ADD_BRANCH_CONFIRM:
-		if (mode == REQUEST && comtree == 0)
-			return 0;
-		break;
-
 	case COMTREE_PRUNE:
-		if (mode == REQUEST && (comtree == 0 || adr1 == 0)){
+		if (mode == REQUEST && (comtree == 0 || adr1 == 0))
 			return 0;
-		}
 		break;
 
 	default: return false;
@@ -1294,7 +1274,6 @@ string& CtlPkt::cpType2string(CpType type, string& s) {
 	case COMTREE_PATH: s = "comtree_path"; break;
 	case COMTREE_NEW_LEAF: s = "comtree_new_leaf"; break;
 	case COMTREE_ADD_BRANCH: s = "comtree_add_branch"; break;
-	case ADD_BRANCH_CONFIRM: s = "add_branch_confirm"; break;
 	case COMTREE_PRUNE: s = "comtree_prune"; break;
 	default: s = "undefined"; break;
 	}
@@ -1365,7 +1344,6 @@ bool CtlPkt::string2cpType(string& s, CpType& type) {
 	else if (s == "comtree_path") type = COMTREE_PATH;
 	else if (s == "comtree_new_leaf") type = COMTREE_NEW_LEAF;
 	else if (s == "comtree_add_branch") type = COMTREE_ADD_BRANCH;
-	else if (s == "add_branch_confirm") type = ADD_BRANCH_CONFIRM;
 	else if (s == "comtree_prune") type = COMTREE_PRUNE;
 
 	else return false;
@@ -1817,6 +1795,8 @@ string& CtlPkt::toString(string& s) {
 		if (mode == REQUEST) {
 			ss << " " << avPair2string(COMTREE,s);
 			ss << " " << avPair2string(ADR1,s);
+			ss << " " << avPair2string(LINK,s);
+			ss << " " << avPair2string(ADR2,s);
 			ss << " " << avPair2string(RSPEC1,s);
 			ss << " " << avPair2string(RSPEC2,s);
 			ss << " " << avPair2string(INTVEC,s);
@@ -1833,11 +1813,6 @@ string& CtlPkt::toString(string& s) {
 			ss << " " << avPair2string(ADR1,s);
 		}
 		break;
-		
-	case ADD_BRANCH_CONFIRM:
-		if (mode == REQUEST) {
-			ss << " " << avPair2string(COMTREE,s);
-		}
 
 	case COMTREE_PRUNE:
 		if (mode == REQUEST) {
