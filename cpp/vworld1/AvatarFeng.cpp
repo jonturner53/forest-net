@@ -9,7 +9,7 @@
 
 #include "stdinc.h"
 #include "Forest.h"
-#include "Avatar.h"
+#include "Avatar_test.h"
 #include <string>
 #include <algorithm>
 
@@ -406,7 +406,6 @@ void Avatar::run(uint32_t finishTime) {
 	uint32_t comtSwitchTime = now+1;
 	comt = 0;
 	joinleave = 0;
-
 	bool waiting4switch = false;
 	while (finishTime == 0 || now <= finishTime) {
 		//reset hashtables and report
@@ -469,7 +468,7 @@ void Avatar::run(uint32_t finishTime) {
 					startComtSwitch(newComt,now);
 					waiting4switch = true;
 				}
-				comtSwitchTime = now + randint(1,3)*5000000;
+				comtSwitchTime = now + randint(1,3)*100000;
 			}
 		}
 
@@ -480,7 +479,6 @@ void Avatar::run(uint32_t finishTime) {
 		if (delay < ((uint32_t) 1) << 31) usleep(delay);
 		else nextTime = now + 1000*UPDATE_PERIOD;
 	}
-	cerr<<"count"<<joinleave<<endl;
 	disconnect(); 		// send final disconnect packet
 }
 
@@ -494,12 +492,12 @@ void Avatar::startComtSwitch(comt_t newComt, uint32_t now) {
 	nextComt = newComt;
 	if (comt != 0) {
 		unsubscribeAll();
-		send2comtCtl(CtlPkt::CLIENT_LEAVE_COMTREE);
+		send2router(CtlPkt::CLIENT_LEAVE_COMTREE);
 		switchState = LEAVING;
 		switchTimer = now; switchCnt = 1;
 	} else {
 		comt = nextComt;
-		send2comtCtl(CtlPkt::CLIENT_JOIN_COMTREE);
+		send2router(CtlPkt::CLIENT_JOIN_COMTREE);
 		switchState = JOINING;
 		switchTimer = now; switchCnt = 1;
 	}
@@ -531,7 +529,7 @@ bool Avatar::completeComtSwitch(pktx px, uint32_t now) {
 				comt = 0; switchState = IDLE; return true;
 			}
 			// try again
-			send2comtCtl(CtlPkt::CLIENT_LEAVE_COMTREE,RETRY);
+			send2router(CtlPkt::CLIENT_LEAVE_COMTREE,RETRY);
 			switchTimer = now; switchCnt++;
 			return false;
 		}
@@ -540,9 +538,9 @@ bool Avatar::completeComtSwitch(pktx px, uint32_t now) {
 		cp.unpack();
 		if (cp.type == CtlPkt::CLIENT_LEAVE_COMTREE) {
 			if (cp.mode == CtlPkt::POS_REPLY) {
-				joinleave++;
 				comt = nextComt;
-				send2comtCtl(CtlPkt::CLIENT_JOIN_COMTREE);
+				joinleave++;
+				send2router(CtlPkt::CLIENT_JOIN_COMTREE);
 				switchState = JOINING;
 				switchTimer = now; switchCnt = 1;
 				return false;
@@ -564,7 +562,7 @@ bool Avatar::completeComtSwitch(pktx px, uint32_t now) {
 				comt = 0; switchState = IDLE; return true;
 			}
 			// try again
-			send2comtCtl(CtlPkt::CLIENT_JOIN_COMTREE,RETRY);
+			send2router(CtlPkt::CLIENT_JOIN_COMTREE,RETRY);
 			switchTimer = now; switchCnt++;
 			return false;
 		}
@@ -679,6 +677,33 @@ void Avatar::send2comtCtl(CtlPkt::CpType joinLeave, bool retry) {
         p.type = Forest::CLIENT_SIG; p.flags = 0;
         p.comtree = Forest::CLIENT_SIG_COMT;
 	p.srcAdr = myAdr; p.dstAdr = ccAdr;
+        p.pack();
+	send(px);
+}
+
+/*feng's version
+ ** Send join or leave packet packet to the Router.
+ *  @param joinLeave is either CLIENT_JOIN_COMTREE or CLIENT_LEAVE_COMTREE,
+ *  depending on whether we want to join or leave the comtree
+ */
+void Avatar::send2router(CtlPkt::CpType joinLeave, bool retry) {
+        pktx px = ps->alloc();
+        if (px == 0)
+		fatal("Avatar::send2router: no packets left to allocate");
+        Packet& p = ps->getPacket(px);
+	if (!retry) seqNum++;
+        CtlPkt cp(joinLeave,CtlPkt::REQUEST,seqNum,p.payload());
+        cp.comtree = comt;
+        cp.ip1 = myIp;
+        cp.port1 = Np4d::getSockPort(sock);
+	cp.adr1 = myAdr;
+        int len = cp.pack();
+	if (len == 0) 
+		fatal("Avatar::send2router: control packet packing error");
+	p.length = Forest::OVERHEAD + len;
+        p.type = Forest::CLIENT_SIG; p.flags = 0;
+        p.comtree = Forest::CLIENT_SIG_COMT;
+	p.srcAdr = myAdr; p.dstAdr = rtrAdr;
         p.pack();
 	send(px);
 }
@@ -827,7 +852,7 @@ bool Avatar::disconnect() {
 void Avatar::send(pktx px) {
 	Packet& p = ps->getPacket(px);
 	p.pack();
-//string s;
+string s;
 //cerr << "sending to (" << Np4d::ip2string(rtrIp,s) << "," << rtrPort << ")\n";
 //cerr << p.toString(s);
 	int rv = Np4d::sendto4d(sock,(void *) p.buffer, p.length,
