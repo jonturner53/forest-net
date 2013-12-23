@@ -32,7 +32,8 @@ public:
 
 	// getters 
         Packet& getPacket(pktx) const;
-	int	getFreeSpace() const;
+        //buffer_t& getBuffer(pktx) const;      
+        //uint32_t* getPayload(pktx) const;    
 
 	// setters 
         //void setPacket(pktx, const Packet&);
@@ -67,7 +68,31 @@ inline Packet& PacketStore::getPacket(pktx px) const {
 	return pkt[px];
 }
 
-inline int PacketStore::getFreeSpace() const { return min(N-n,M-m); }
+/** Get reference to packet buffer.
+ *  @param px is a packet index
+ *  @return a reference to the buffer for packet p
+inline buffer_t& PacketStore::getBuffer(pktx px) const {
+	return *(pkt[px].buffer); //buff[pb[px]];
+}
+ */
+
+/** Get pointer to start of a packet payload.
+ *  @param px is a packet index
+ *  @return a pointer to first word of the payload for p
+inline uint32_t* PacketStore::getPayload(pktx px) const {
+	return pkt[px].payload();
+	//return &buff[pb[px]][Forest::HDR_LENG/sizeof(uint32_t)];
+}
+ */
+
+/** Set the fields in a packet.
+ *  @param px is the packet whose header is to be updated
+ *  @param p is a reference to a header whose value is to be
+ *  copied into the header for px
+inline void PacketStore::setPacket(pktx px, const Packet& p) {
+	pkt[px] = p;
+}
+*/
 
 } // ends namespace
 

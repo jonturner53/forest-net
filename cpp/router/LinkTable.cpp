@@ -273,6 +273,7 @@ string& LinkTable::toString(string& s) const {
 /** Pack a link table entry into a packet buffer.
  *  Omit the comtSet, but include the number of elements it contains.
  *  @return true on success, false on failure
+ */
 char* LinkTable::pack(int lnk, char *buf) const {
 	if (!valid(lnk)) return 0;
 	pack32(lnk);
@@ -293,7 +294,6 @@ char* LinkTable::pack(int lnk, char *buf) const {
 	pack32(lnkTbl[lnk].comtCount);
 	return buf;
 }
- */
 
 #define unpack8(x) (x = *buf, buf += 1)
 #define unpack16(x) (x = ntohs(*((uint16_t*) buf)), buf += sizeof(uint16_t))
@@ -305,6 +305,7 @@ char* LinkTable::pack(int lnk, char *buf) const {
 
 /** Unpack a link table entry from a packet buffer.
  *  @return true on success, false on failure
+ */
 char* LinkTable::unpack(int lnk, char *buf) {
 	if (!valid(lnk)) return 0;
 	unpack32(lnk);
@@ -324,7 +325,6 @@ char* LinkTable::unpack(int lnk, char *buf) {
 	unpack32(lnkTbl[lnk].comtCount);
 	return buf;
 }
- */
 
 } // ends namespace
 

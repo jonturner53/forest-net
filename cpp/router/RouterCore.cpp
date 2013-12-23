@@ -142,7 +142,6 @@ RouterCore::RouterCore(bool booting1, const RouterInfo& config)
 
 	seqNum = 1;
 	pending = new map<uint64_t,ControlInfo>();
-	pending1 = new map<comt_t,pktx>();
 }
 
 RouterCore::~RouterCore() {
@@ -989,10 +988,10 @@ void RouterCore::handleConnDisc(pktx px) {
 		}
 		lt->setConnectStatus(inLnk,true);
 		if (nmAdr != 0 && lt->getPeerType(inLnk) == Forest::CLIENT) {
-                        CtlPkt cp(CtlPkt::CLIENT_CONNECT,CtlPkt::REQUEST,0);
-                        cp.adr1 = p.srcAdr; cp.adr2 = myAdr;
-                        sendCpReq(cp,nmAdr);
-                }
+			CtlPkt cp(CtlPkt::CLIENT_CONNECT,CtlPkt::REQUEST,0);
+			cp.adr1 = p.srcAdr; cp.adr2 = myAdr;
+			sendCpReq(cp,nmAdr);
+		}
 	} else if (p.type == Forest::DISCONNECT) {
 		lt->setConnectStatus(inLnk,false);
 		lt->revertEntry(inLnk);
@@ -1000,7 +999,6 @@ void RouterCore::handleConnDisc(pktx px) {
 			dropLink(inLnk);
 			CtlPkt cp(CtlPkt::CLIENT_DISCONNECT,CtlPkt::REQUEST,0);
 			cp.adr1 = p.srcAdr; cp.adr2 = myAdr;
-			cerr<<"disConnect p.comtree:"<<p.comtree<<endl;
 			sendCpReq(cp,nmAdr);
 		}
 	}
@@ -1019,9 +1017,9 @@ void RouterCore::handleCtlPkt(int px) {
 	Packet& p = ps->getPacket(px);
 	CtlPkt cp(p.payload(), p.length - Packet::OVERHEAD);
 
-	/*if (p.type != Forest::NET_SIG || p.comtree != Forest::NET_SIG_COMT) {
+	if (p.type != Forest::NET_SIG || p.comtree != Forest::NET_SIG_COMT) {
 		ps->free(px); return;
-	}*/
+	}
 	if (!cp.unpack()) {
 		string s;
 		cerr << "RouterCore::handleCtlPkt: misformatted control "
@@ -1035,6 +1033,7 @@ void RouterCore::handleCtlPkt(int px) {
 	if (cp.mode != CtlPkt::REQUEST) { 
 		handleControlReply(px); return;
 	}
+	
 	// Prepare positive reply packet for use where appropriate
 	CtlPkt reply(cp.type,CtlPkt::POS_REPLY,cp.seqNum);
 
@@ -1060,16 +1059,6 @@ void RouterCore::handleCtlPkt(int px) {
         case CtlPkt::GET_COMTREE:	getComtree(cp,reply); break;
         case CtlPkt::MOD_COMTREE:	modComtree(cp,reply); break;
 	case CtlPkt::GET_COMTREE_SET: 	getComtreeSet(cp,reply); break;
-	
-	//handle client joins and leaves
-	case CtlPkt::CLIENT_JOIN_COMTREE:   handleClientJoinComtree(px,cp,reply); return;
-	case CtlPkt::CLIENT_LEAVE_COMTREE:  handleClientLeaveComtree(px,cp,reply);return;
-	//handle add_branch request
-	case CtlPkt::COMTREE_ADD_BRANCH:    handleComtAddBranch(px,cp,reply); return;
-	//handle add_branch_confirm request
-	case CtlPkt::ADD_BRANCH_CONFIRM:    handleAddBranchConfirm(px,cp,reply);return;
-	//handle comtree_prune request
-	case CtlPkt::COMTREE_PRUNE: 	    handleComtPrune(px,cp,reply);return;
 
 	case CtlPkt::ADD_COMTREE_LINK:	addComtreeLink(cp,reply); break;
 	case CtlPkt::DROP_COMTREE_LINK: dropComtreeLink(cp,reply); break;
@@ -1079,30 +1068,29 @@ void RouterCore::handleCtlPkt(int px) {
 	// configuring routes
         case CtlPkt::ADD_ROUTE:		addRoute(cp,reply); break;
         case CtlPkt::DROP_ROUTE:	dropRoute(cp,reply); break;
-	case CtlPkt::GET_ROUTE:         getRoute(cp,reply); break;
-        case CtlPkt::MOD_ROUTE:         modRoute(cp,reply); break;
-        case CtlPkt::GET_ROUTE_SET:     getRouteSet(cp,reply); break;
-	
+        case CtlPkt::GET_ROUTE:		getRoute(cp,reply); break;
+        case CtlPkt::MOD_ROUTE:		modRoute(cp,reply); break;
+    	case CtlPkt::GET_ROUTE_SET:	getRouteSet(cp,reply); break;
+
 	// configuring filters and retrieving pacets
-        case CtlPkt::ADD_FILTER:        addFilter(cp,reply); break;
-        case CtlPkt::DROP_FILTER:       dropFilter(cp,reply); break;
-        case CtlPkt::GET_FILTER:        getFilter(cp,reply); break;
-        case CtlPkt::MOD_FILTER:        modFilter(cp,reply); break;
-        case CtlPkt::GET_FILTER_SET:    getFilterSet(cp,reply); break;
+        case CtlPkt::ADD_FILTER:	addFilter(cp,reply); break;
+        case CtlPkt::DROP_FILTER:	dropFilter(cp,reply); break;
+        case CtlPkt::GET_FILTER:	getFilter(cp,reply); break;
+        case CtlPkt::MOD_FILTER:	modFilter(cp,reply); break;
+        case CtlPkt::GET_FILTER_SET:	getFilterSet(cp,reply); break;
         case CtlPkt::GET_LOGGED_PACKETS: getLoggedPackets(cp,reply); break;
         case CtlPkt::ENABLE_PACKET_LOG:	enablePacketLog(cp,reply); break;
 
-        // setting parameters
-        case CtlPkt::SET_LEAF_RANGE:    setLeafRange(cp,reply); break;
+	// setting parameters
+	case CtlPkt::SET_LEAF_RANGE:	setLeafRange(cp,reply); break;
 
-        default:
-                cerr << "unrecognized control packet type " << cp.type
-                     << endl;
-                reply.errMsg = "invalid control packet for router";
-                reply.mode = CtlPkt::NEG_REPLY;
-                break;
-        }
-
+	default:
+		cerr << "unrecognized control packet type " << cp.type
+		     << endl;
+		reply.errMsg = "invalid control packet for router";
+		reply.mode = CtlPkt::NEG_REPLY;
+		break;
+	}
 
 	returnToSender(px,reply);
 
@@ -1475,32 +1463,6 @@ bool RouterCore::dropComtree(CtlPkt& cp, CtlPkt& reply) {
 	return true;
 }
 
-
-bool RouterCore::dropComtree(comt_t comt) {
-	int ctx = ctt->getComtIndex(comt);
-	if (!ctt->validComtIndex(ctx))
-		return true; // so dropComtree op is idempotent
-	int plink = ctt->getPlink(ctx);
-	// remove all routes involving this comtree
-	// also degisters each route in the comtree table
-	rt->purgeRoutes(comt);
-
-	// remove all the comtree links
-	// first, copy out the comtree links, then remove them
-	// two step process is needed because dropComtreeLink modifies linkSet
-	set<int>& linkSet = ctt->getLinks(ctx);
-	set<int>::iterator pp;
-	int *clnks = new int[linkSet.size()]; int i = 0;
-	for (pp = linkSet.begin(); pp != linkSet.end(); pp++) clnks[i++] = *pp;
-	while (--i >= 0)  {
-		dropComtreeLink(ctx,ctt->getLink(clnks[i]),clnks[i]);
-	}
-	delete [] clnks;
-
-	ctt->removeEntry(ctx); // and finally drop entry in comtree table
-	return true;
-}
-
 bool RouterCore::getComtree(CtlPkt& cp, CtlPkt& reply) {
 	comt_t comt = cp.comtree;
 	int ctx = ctt->getComtIndex(comt);
@@ -1579,167 +1541,6 @@ bool RouterCore::getComtreeSet(CtlPkt& cp, CtlPkt& reply) {
 	}
 	reply.index2 = comtIndex; reply.count = i;
 	return true;
-}
-
-
-//feng
-bool RouterCore::addComtreeLink(comt_t comt, int link, CtlPkt& reply) {
-	int ctx = ctt->getComtIndex(comt);
-	if (ctx == 0) {
-		reply.errMsg = "panfeng add comtree link: invalid comtree";
-		reply.mode = CtlPkt::NEG_REPLY;
-		return false;
-	}
-	int lnk = link; 
-	
-	if (!lt->valid(lnk)) {
-		reply.errMsg = "add comtree link: invalid link or "
-					"peer IP and port";
-		reply.mode = CtlPkt::NEG_REPLY;
-		return false;
-	}
-	bool isRtr = (lt->getPeerType(lnk) == Forest::ROUTER);
-	bool isCore = false;
-	
-	int cLnk = ctt->getComtLink(comt,lnk);
-	if (cLnk != 0) {
-		if (ctt->isRtrLink(cLnk) == isRtr &&
-		    ctt->isCoreLink(cLnk) == isCore) {
-			reply.link = lnk;
-			return true;
-		} else {
-			reply.errMsg = "add comtree link: specified "
-				       "link already in comtree";
-			reply.mode = CtlPkt::NEG_REPLY;
-			return false;
-		}
-	}
-	// define new comtree link
-	if (!ctt->addLink(ctx,lnk,isRtr,isCore)) {
-		reply.errMsg =	"add comtree link: cannot add "
-				"requested comtree link";
-		reply.mode = CtlPkt::NEG_REPLY;
-		return false;
-	}
-	cLnk = ctt->getComtLink(comt,lnk);
-
-	// add unicast route to cLnk if peer is a leaf or a router
-	// in a different zip code
-	fAdr_t peerAdr = lt->getPeerAdr(lnk);
-	if (lt->getPeerType(lnk) != Forest::ROUTER) {
-		int rtx = rt->getRteIndex(comt,peerAdr);
-		if (rtx == 0) rt->addEntry(comt,peerAdr,cLnk);
-	} else {
-		int zipPeer = Forest::zipCode(peerAdr);
-		if (zipPeer != Forest::zipCode(myAdr)) {
-			fAdr_t dest = Forest::forestAdr(zipPeer,0);
-			int rtx = rt->getRteIndex(comt,dest);
-			if (rtx == 0) rt->addEntry(comt,dest,cLnk);
-		}
-	}
-
-	// allocate queue and bind it to lnk and comtree link
-	int qid = qm->allocQ(lnk);
-	if (qid == 0) {
-		ctt->removeLink(ctx,cLnk);
-		reply.errMsg = "add comtree link: no queues "
-					"available for link";
-		reply.mode = CtlPkt::NEG_REPLY;
-		return false;
-	}
-	ctt->setLinkQ(cLnk,qid);
-
-	// adjust rates for link comtree and queue
-	RateSpec minRates(Forest::MINBITRATE,Forest::MINBITRATE,
-		    	  Forest::MINPKTRATE,Forest::MINPKTRATE);
-	if (!minRates.leq(lt->getAvailRates(lnk))) {
-		reply.errMsg = "add comtree link: request "
-			       "exceeds link capacity";
-		reply.mode = CtlPkt::NEG_REPLY;
-		return false;
-	}
-	lt->getAvailRates(lnk).subtract(minRates);
-	ctt->getRates(cLnk) = minRates;
-
-	qm->setQRates(qid,minRates);
-	if (isRtr) qm->setQLimits(qid,500,1000000);
-	else	   qm->setQLimits(qid,500,1000000);
-	sm->clearQuStats(qid);
-	reply.link = lnk;
-	reply.rspec1 = lt->getAvailRates(lnk);
-	return true;
-}
-
-bool RouterCore::modComtreeLink(comt_t comtree, int link, RateSpec rspec1,  CtlPkt& reply) {
-	comt_t comt = comtree;
-	int ctx = ctt->getComtIndex(comt);
-	if (ctx == 0) {
-		reply.errMsg = "modify comtree link: invalid comtree";
-		reply.mode = CtlPkt::NEG_REPLY;
-		return false;
-	}
-	int lnk = link;
-	if (!lt->valid(lnk)) {
-		reply.errMsg = "modify comtree link: invalid link number";
-		reply.mode = CtlPkt::NEG_REPLY;
-		return false;
-	}
-	int cLnk = ctt->getComtLink(comt,lnk);
-	if (cLnk == 0) {
-		reply.errMsg = "modify comtree link: specified link "
-			       "not defined in specified comtree";
-		reply.mode = CtlPkt::NEG_REPLY;
-		return false;
-	}
-
-	RateSpec rs = rspec1;
-	if (!rs.isSet()) return true;
-	RateSpec diff = rs; diff.subtract(ctt->getRates(cLnk));
-	if (!diff.leq(lt->getAvailRates(lnk))) {
-		reply.errMsg = "modify comtree link: new rate spec "
-				"exceeds available link capacity";
-		reply.mode = CtlPkt::NEG_REPLY;
-{
-string s;
-cerr << "mod comtree link exceeding link capacity on link " << lnk <<
-"\nrequested " << rs.toString(s);
-cerr << " only " << lt->getAvailRates(lnk).toString(s) << "available\n";
-}
-		return false;
-	}
-	lt->getAvailRates(lnk).subtract(diff);
-	ctt->getRates(cLnk) = rs;
-	reply.rspec1 = lt->getAvailRates(lnk); // return available rate on link
-	return true;
-}
-
-bool RouterCore::modComtree(comt_t comtree, int link, CtlPkt& reply) {
-	comt_t comt = comtree;
-	int ctx = ctt->getComtIndex(comt);
-	if (ctx != 0) {
-		//if (cp.coreFlag >= 0)
-		//	ctt->setCoreFlag(ctx,cp.coreFlag);
-		if (link != 0) {
-			int plnk = link;
-			if (plnk != 0 && !ctt->isLink(ctx,plnk)) {
-				reply.errMsg = "specified link does "
-						"not belong to comtree";
-				reply.mode = CtlPkt::NEG_REPLY;
-				return false;
-			}
-			if (plnk != 0 && !ctt->isRtrLink(ctx,plnk)) {
-				reply.errMsg = "specified link does "
-						"not connect to a router";
-				reply.mode = CtlPkt::NEG_REPLY;
-				return false;
-			}
-			ctt->setPlink(ctx,plnk);
-		}
-		return true;
-	} 
-	reply.errMsg = "modify comtree: invalid comtree";
-	reply.mode = CtlPkt::NEG_REPLY;
-	return false;
 }
 
 bool RouterCore::addComtreeLink(CtlPkt& cp, CtlPkt& reply) {
@@ -2139,554 +1940,6 @@ bool RouterCore::getRouteSet(CtlPkt& cp, CtlPkt& reply) {
 	return true;
 }
 
-/** Handle a join comtree request.
- *  This requires sending request packet to comtree controller 
- *  asking for a path from the client's access router to the comtree 
- *  and allocating link bandwidth along that path.
- *  @param p is the packet number of the request packet
- *  @param cp is the control packet structure for p (already unpacked)
- *  sending an error reply is considered a success; the operation
- *  fails if it cannot allocate required packets, or if no path
- *  can be found between the client's access router and the comtree.
- */
-void RouterCore::handleClientJoinComtree(pktx px, CtlPkt& cp, CtlPkt& reply) {
-	Packet& p = ps->getPacket(px);	
-	comt_t comt = cp.comtree;
-	int cliAdr = p.srcAdr;
-	int lnk = lt->lookup(cliAdr);
-        if (ctt->validComtree(comt)) {
-		int ctx = ctt->getComtIndex(comt);
-		//if the comtree is locked, add request to the list
-		if (ctt->isLocked(ctx)) {
-			ctt->addRequest(ctx,px);
-			return;
-		} else{
-			RateSpec rs = cp.rspec1;	
-			RateSpec uRates = ctt->getUpperBoundRates(ctx);
-			if (!uRates.isSet()) {
-				ctt->addRequest(ctx,px);
-				ctt->setLock(ctx,1);
-				//send request to CC to get path
-				CtlPkt cpp(CtlPkt::COMTREE_PATH,CtlPkt::REQUEST,0);
-				cpp.comtree = comt;
-				cpp.adr1 = cliAdr;
-				sendCpReq(cpp,ccAdr);
-                        	return;
-			}	
-			if (!rs.isSet())	
-				rs = uRates;
-			if (rs.leq(uRates)) {
-				//setup link
-                        	if (addComtreeLink(comt,lnk,reply))
-                        		//allocate bandwidth
-					if (modComtreeLink(comt,lnk,rs,reply)) {
-						//send ok to CC
-						CtlPkt cpn(CtlPkt::COMTREE_NEW_LEAF,CtlPkt::REQUEST,0);
-						cpn.comtree = comt;
-						cpn.adr1 = cliAdr;
-						cpn.adr2 = myAdr;
-						cpn.link = lnk;
-						cpn.rspec1 = reply.rspec1;
-						cpn.index1 = px;
-						sendCpReq(cpn,ccAdr);
-						return;
-					}
-						
-			} else {
-				reply.errMsg =  "exceed upper bound access link rate";
-				reply.mode = CtlPkt::NEG_REPLY;
-			}	
-			//send reply to client
-			returnToSender(px,reply);
-			return;
-		}	
-        } else {
-		//add new comtree to this router
-		ctt->addEntry(comt);
-		int ctx = ctt->getComtIndex(comt);
-		ctt->addRequest(ctx,px);	
-		ctt->setLock(ctx,1);
-		//send request to CC to get path
-		CtlPkt cpp(CtlPkt::COMTREE_PATH,CtlPkt::REQUEST,0);
-		cpp.comtree = cp.comtree;
-		cpp.adr1 = cliAdr;
-		sendCpReq(cpp,ccAdr);
-		return;
-	}	
-}
-
-/** Handle a comtree path reply control packet 
- *  @param p is the packet number of the original request 
- *  packet in pending map
- *  @param cp is the control packet structure for comtree 
- *  path reply packet (already unpacked)
- *  @return
- *  sending an error reply is considered a success
- */
-void RouterCore::handleComtPath(pktx px, CtlPkt& cpr) {
-	Packet& p = ps->getPacket(px);
-	CtlPkt cp(p);	
-	comt_t comt = cp.comtree;
-	int ctx = ctt->getComtIndex(comt);
-	fAdr_t cliAdr = cp.adr1;
-	int lnk = lt->lookup(cliAdr);
-	//get link number and rspec of leaf node
-	vector<pktx>& pktNums = ctt->getPktNums(ctx);
-	if (pktNums.size() == 0)
-		return;
-	//the first pending request in the list
-	vector<pktx>::iterator pb;
-	pb = pktNums.begin();
-	pktx pxb = *pb;
-	Packet& pc = ps->getPacket(pxb);
-	CtlPkt cpc(pc.payload(), pc.length - Packet::OVERHEAD);
-	cpc.unpack();
-	// Prepare pos reply packet for use where appropriate
-        CtlPkt reply(cpc.type,CtlPkt::POS_REPLY,cpc.seqNum);
-	if (!ctt->validComtree(comt)) {
-		//send neg reply
-		reply.errMsg = "comtree not defined at this router\n";
-        	returnToSender(pxb,reply);	
-		return;
-	}
-	//need to propogate the add_branch request
-	if (cpr.ivec.size()!=0) {
-		int pLnk = cpr.ivec[0];	
-		RateSpec uRates = cpr.rspec2;
-		//set upper bound rates
-		ctt->setUpperBoundRates(ctx,uRates);
-		RateSpec rs = cpc.rspec1;
-		if (!rs.isSet())
-                	rs = uRates;
-		if (rs.leq(uRates)) {
-			while (true) {
-				//reserve leaf link
-				if (!addComtreeLink(comt,lnk,reply)) break;
-                                if (!modComtreeLink(comt,lnk,rs,reply)) break;
-				//reserve parent link
-				if (!addComtreeLink(comt,pLnk,reply)) break; 
-				if (!modComtreeLink(comt,pLnk,rs,reply)) break;
-				if (!modComtree(comt,pLnk,reply)) break;
-				//propogate to parent node
-				fAdr_t dstAdr = lt->getPeerAdr(pLnk);
-				CtlPkt cpa(CtlPkt::COMTREE_ADD_BRANCH,CtlPkt::REQUEST,0);
-				cpa.comtree = comt;
-				cpa.ivec = cpr.ivec;
-				cpa.index1 = 1;
-				cpa.rspec1 = cpr.rspec1;
-				cpa.rspec2 = cpr.rspec2;
-				cpa.adr1 = myAdr;
-				sendCpReq(cpa,dstAdr);
-				return;
-			}	
-			//drop ComtreeLink
-			int cLnk = ctt->getComtLink(comt,lnk);
-			if (cLnk !=0)
-				dropComtreeLink(ctx,lnk,cLnk);
-		} else {
-                        reply.errMsg =  "exceed upper bound access link rate";
-                        reply.mode = CtlPkt::NEG_REPLY;
-                }
-		//send neg reply to client
-		returnToSender(pxb,reply);	
-	} else {
-		//reply for the leaf comtree_path request
-		RateSpec uRates = cpr.rspec2;
-		ctt->setUpperBoundRates(ctx,uRates);
-		pktNums.erase(pb);
-		RateSpec rs = cpc.rspec1;
-		if (!rs.isSet())
-			rs = uRates;
-		if (rs.leq(uRates)) {
-			//setup link
-			if (addComtreeLink(comt,lnk,reply))
-				//allocate bandwidth
-				if (modComtreeLink(comt,lnk,rs,reply)) {
-					//send ok to cc
-					CtlPkt cpn(CtlPkt::COMTREE_NEW_LEAF,CtlPkt::REQUEST,0);
-					cpn.comtree = comt;
-					cpn.adr1 = cliAdr;
-					cpn.adr2 = myAdr;
-					cpn.link = lnk;
-					cpn.rspec1 = reply.rspec1;	
-					cpn.index1 = pxb;
-					sendCpReq(cpn,ccAdr);
-					return;
-				}
-						
-		} else {
-			reply.errMsg =  "exceed upper bound access link rate";
-			reply.mode = CtlPkt::NEG_REPLY;
-		}
-		returnToSender(pxb,reply);
-		ctt->setLock(ctx,0);
-		if (pktNums.size() != 0) {
-			//reply to all pending request
-			handleAllPending(pktNums, cpr);
-			ctt->cleanPktNums(ctx);
-		}
-	}	
-}
-        
-/** Handle a comtree_add_branch control packet
- *  setup links and propogate request to parent router
- *  @param p is the packet number of the request packet
- *  @param cp is the control packet structure for p (already unpacked)
- *  @return
- *  sending an error reply is considered a success
- */
-void RouterCore::handleComtAddBranch(pktx px, CtlPkt& cp, CtlPkt& reply) {
-	Packet& p = ps->getPacket(px);	
-	comt_t comt = cp.comtree;
-	int lnk = p.inLink;
-	RateSpec rs = cp.rspec1;
-	RateSpec uRates = cp.rspec2;
-        if (ctt->validComtree(comt)) {
-		int ctx = ctt->getComtIndex(comt);
-		if (ctt->isLocked(ctx)) {
-			ctt->addRequest(ctx,px);
-			return;
-		} else {
-			//reach the node in the comtree, reserve bandwidth and send pos reply
-			int cLnk = ctt->getComtLink(comt,lnk);
-			if(ctt->isLink(ctx,cLnk)) {
-				if (reply.adr1 == 0)
-                                	reply.adr1 = myAdr;
-				returnToSender(px,reply);
-				return;
-			}
-			if (addComtreeLink(comt,lnk,reply))
-				if (modComtreeLink(comt,lnk,rs,reply)) {
-					//send pos reply
-					if (reply.adr1 == 0)	
-						reply.adr1 = myAdr;
-					returnToSender(px,reply);
-					return;
-				}	
-			//else drop comtree link
-			cLnk = ctt->getComtLink(comt,lnk);
-			if (cLnk !=0)
-				dropComtreeLink(ctx,lnk,cLnk);
-		}
-        } else {
-                //add new comtree
-                ctt->addEntry(comt);
-		int ctx = ctt->getComtIndex(comt);
-                ctt->setLock(ctx,1);
-		ctt->setUpperBoundRates(ctx,uRates);
-		vector<int>& ivec = cp.ivec;
-		int index = cp.index1;
-		int pLnk = 0;
-		if (index < ivec.size()) 
-			pLnk = ivec[index];
-		while (pLnk != 0) {
-			//reserve child link
-			if (!addComtreeLink(comt,lnk,reply)) break;
-			if (!modComtreeLink(comt,lnk,rs,reply)) break; 
-			//reserve parent link
-			if (!addComtreeLink(comt,pLnk,reply)) break;
-			if (!modComtreeLink(comt,pLnk,rs,reply)) break;
-			if (!modComtree(comt,pLnk,reply)) break; 
-			//propogate request to parent
-			fAdr_t dstAdr = lt->getPeerAdr(pLnk);
-			cp.index1++;
-			sendCpReq(cp,dstAdr);
-			ctt->addRequest(ctx,px);
-			return;
-						
-		}
-		//else dropComtree
-		dropComtree(comt);
-        }
-        //send neg reply
-        returnToSender(px,reply);
-        return;
-}
-/** Handle a request by a client to leave a comtree.
- *  this requires informing comtree controller (parent router if neccessary) 
- *  for consistency
- *  @param p is the packet number of the request packet
- *  @param cp is the control packet structure for p (already unpacked)
- *  @return true if the operation is completed successfully;
- *  sending an error reply is considered a success
- */
-void RouterCore::handleClientLeaveComtree(pktx px, CtlPkt& cp, CtlPkt& reply) {
-	Packet& p = ps->getPacket(px);	
-	comt_t comt = cp.comtree;
-	int ctx = ctt->getComtIndex(comt);	
-	int cliAdr = p.srcAdr;
-	if (ctx == 0) {
-                returnToSender(px,reply);
-		return;
-	}
-	int lnk = lt->lookup(cliAdr);
-	//drop child link	
-        int cLnk = ctt->getComtLink(comt,lnk);
-	if (cLnk !=0) {
-        	dropComtreeLink(ctx,lnk,cLnk);
-		CtlPkt cpp(CtlPkt::COMTREE_PRUNE,CtlPkt::REQUEST,0);
-		cpp.comtree = comt;
-		cpp.adr1 = cliAdr;
-		sendCpReq(cpp,ccAdr);
-		ctt->addRequest(ctx,px);
-		ctt->setLock(ctx,1);
-	} else
-		returnToSender(px,reply);
-}
-
-/** Handle a comtree prune control packet
- *  drop child link and to see if neccessary to propate prune request
- *  @param p is the packet number of the request packet
- *  @param cp is the control packet structure for p (already unpacked)
- *  @return true if the operation is completed successfully;
- *  sending an error reply is considered a success
- */
-void RouterCore::handleComtPrune(pktx px, CtlPkt& cp, CtlPkt& reply) {
-	Packet& p = ps->getPacket(px);
-	comt_t comt = cp.comtree;
-	int ctx = ctt->getComtIndex(comt);
-	if (ctx == 0) {
-		returnToSender(px,reply);
-		return;
-	}
-	//drop child link
-	int cLnk = ctt->getComtLink(comt,p.inLink);	
-	if (cLnk !=0) {
-		dropComtreeLink(ctx,p.inLink,cLnk);
-		//check if this router need to be pruned
-		int lnkCnt = ctt->getLinkCount(ctx);
-		int pLnk = ctt->getPlink(ctx);
-		if (lnkCnt <= 1 && !ctt->inCore(ctx) && pLnk != 0 && !ctt->isLocked(ctx)) {
-			//inform CC
-			CtlPkt cpp(CtlPkt::COMTREE_PRUNE,CtlPkt::REQUEST,0);
-			cpp.comtree = comt;
-			cpp.adr1 = myAdr;
-			sendCpReq(cpp,ccAdr);
-			ctt->addRequest(ctx,px);
-			ctt->setLock(ctx,1);
-			vector<pktx> pktNums = ctt->getPktNums(ctx);
-		} else {
-			returnToSender(px,reply);	
-		}
-	} else {
-		returnToSender(px,reply);
-	}
-}
-
-/** Handle a add_branch_confirm request
- */
-void RouterCore::handleAddBranchConfirm(pktx px, CtlPkt& cp, CtlPkt& reply) {
-	comt_t comt = cp.comtree;
-	int ctx = ctt->getComtIndex(comt);
-	if (ctx == 0)
-        	return;
-	if (!ctt->isLocked(ctx))
-		returnToSender(px,reply);
-	else
-		ctt->addRequest(ctx,px);	
-}
-
-/** Handle a comtree_add_branch reply packet
- *  send comtree new leaf control packet to comtree controller
- *  if this router is the leaf router, unlock the comtree and 
- *  process all the pending request in the pending list
- *  @param p is the packet number of the original request packet
- *  in pending map
- *  @param cp is the control packet structure for p (already unpacked)
- *  @return true if the operation is completed successfully;
- *  sending an error reply is considered a success
- */
-void RouterCore::handleAddBranchReply(pktx px, CtlPkt& cpr) {
-	Packet& pr= ps->getPacket(px);
-	CtlPkt cp(pr); 
-	comt_t comt = cp.comtree;
-	int ctx = ctt->getComtIndex(comt);
-	if (ctx == 0)
-                return;
-	vector<pktx>& pktNums = ctt->getPktNums(ctx);
-	if (pktNums.size() == 0)
-		return;
-	vector<pktx>::iterator pb;
-	pb = pktNums.begin();
-	pktx begin = *pb;
-	pktNums.erase(pb);
-	Packet& po= ps->getPacket(begin);
-	CtlPkt cpo(po.payload(), po.length - Packet::OVERHEAD);
-	cpo.unpack();
-	CtlPkt reply(cpo.type,CtlPkt::POS_REPLY,cpo.seqNum);
-	//if this is the leaf node, send ok to cc
-	if (cp.index1 == 1) {
-		fAdr_t cliAdr = po.srcAdr;
-		int lnk = lt->lookup(cliAdr);
-		CtlPkt cpn(CtlPkt::COMTREE_NEW_LEAF,CtlPkt::REQUEST,0);
-		cpn.comtree= cp.comtree;
-		cpn.ivec = cp.ivec;
-		cpn.adr1 = cliAdr;
-		cpn.adr2 = cpr.adr1;
-		cpn.link = lnk;
-		RateSpec rs = cpo.rspec1;
-                if (!rs.isSet()) {
-			RateSpec uRates = ctt->getUpperBoundRates(ctx);
-                        rs = uRates;
-                }
-		cpn.rspec1 = rs;
-		cpn.index1 = begin;
-		sendCpReq(cpn,ccAdr);
-		return;
-	} else {
-		//propogate the reply
-		fAdr_t dest = po.srcAdr;	
-		reply.adr1 = cpr.adr1;
-		returnToSender(begin,reply);
-		CtlPkt cpc(CtlPkt::ADD_BRANCH_CONFIRM,CtlPkt::REQUEST,0);
-		cpc.comtree = comt;
-		sendCpReq(cpc,dest);
-	}
-}
-
-/** Handle a add_branch_confirm reply
- */
-void RouterCore::handleConfirmReply(pktx px, CtlPkt& cpr) {
-	Packet& pr= ps->getPacket(px);
-	CtlPkt cp(pr);
-	comt_t comt = cp.comtree;
-	int ctx = ctt->getComtIndex(comt);
-	if (ctx == 0)
-                return;
-	ctt->setLock(ctx,0);	
-	vector<pktx>& pktNums = ctt->getPktNums(ctx);
-	if (pktNums.size() != 0) {
-		//reply to all pending request
-		handleAllPending(pktNums,cpr);
-		ctt->cleanPktNums(ctx);
-	}
-}
-
-/** Process all the pending request in the list
- *  send comtree new leaf control packet to comtree controller
- *  if this router is the leaf router, unlock the comtree and 
- *  process all the pending request in the pending list
- *  @param pktNums is a vector of packet number indicating the pending requests
- *  @param cpr is a control packet reply 
- *  sending an error reply is considered a success
- */
-void RouterCore::handleAllPending(vector<pktx>& pktNums, CtlPkt& cpr) {
-	vector<pktx>::iterator pn;
-        for (pn = pktNums.begin(); pn != pktNums.end(); pn++) {
-        	pktx px = *pn;
-		Packet& p = ps->getPacket(px);
-		CtlPkt cp(p.payload(), p.length - Packet::OVERHEAD);
-		cp.unpack();		
-		// Prepare pos reply packet for use where appropriate
-        	CtlPkt reply(cp.type,CtlPkt::POS_REPLY,cp.seqNum);	
-		//if pos send ok to cc
-		if (cp.type == CtlPkt::CLIENT_JOIN_COMTREE) {
-			//deal with leaf request
-			handleClientJoinComtree(px,cp,reply);
-		}
-		else if (cp.type == CtlPkt::COMTREE_ADD_BRANCH) { 
-			//the address of the node that are already in the comtree
-			reply.adr1 = cpr.adr1;
-			handleComtAddBranch(px,cp,reply);
-		} else if (cp.type == CtlPkt::CLIENT_LEAVE_COMTREE ||
-			cp.type == CtlPkt::COMTREE_PRUNE
-			|| cp.type == CtlPkt::ADD_BRANCH_CONFIRM) {
-			returnToSender(px,reply);
-		}	
-	}
-}
-
-/** Handle a contree_prune reply 
- *  could be a reply from CC or parent router
- *  @param pktNums is a vector of packet number indicating the pending requests
- *  @param cpr is a control packet reply
- */
-void RouterCore::handleComtPruneReply(pktx px, CtlPkt& cpr){
-	Packet& copy = ps->getPacket(px);
-	CtlPkt cp(copy.payload(), copy.length - Packet::OVERHEAD);
-	cp.unpack();
-	fAdr_t dstAdr = copy.dstAdr;
-	int ctx = ctt->getComtIndex(cp.comtree);
-	if (ctx == 0)
-		return;
-	//get reply from the parent router
-	if (dstAdr != ccAdr) {
-		vector<pktx> pktNums = ctt->getPktNums(ctx);
-		int lnkCnt = ctt->getLinkCount(ctx);
-		if (lnkCnt <= 1)
-			dropComtree(cp.comtree);
-		if (pktNums.size() != 0) {
-			//some pending request cause of prune
-			handleAllPending(pktNums,cpr);
-		}
-	}
-	//get reply from ccAdr for pruning router request
-	if(dstAdr == ccAdr && cp.adr1 == myAdr) {
-			int pLnk = ctt->getPlink(ctx);
-			fAdr_t parAdr = lt->getPeerAdr(pLnk);
-			//propagate prune request to its parent
-			if (pLnk != 0) {
-				CtlPkt cpp(CtlPkt::COMTREE_PRUNE,CtlPkt::REQUEST,0);
-				cpp.comtree = cp.comtree;
-				cpp.adr1 = myAdr;
-				sendCpReq(cpp,parAdr);
-			}
-	}
-	//get reply from CC for pruning client
-	if(dstAdr == ccAdr && cp.adr1 != myAdr) {
-		int lnkCnt = ctt->getLinkCount(ctx);
-		int pLnk = ctt->getPlink(ctx);
-		//check if this router need to be pruned
-		if (lnkCnt <= 1 && !ctt->inCore(ctx) && pLnk != 0) {
-			//inform cc
-			CtlPkt cpp1(CtlPkt::COMTREE_PRUNE,CtlPkt::REQUEST,0);
-			cpp1.comtree = cp.comtree;
-			cpp1.adr1 = myAdr;
-			sendCpReq(cpp1,ccAdr);
-		}
-		else {
-			vector<pktx>& pktNums = ctt->getPktNums(ctx);
-			ctt->setLock(ctx,0);
-			if (pktNums.size() != 0) {
-				handleAllPending(pktNums,cpr);	
-				ctt->cleanPktNums(ctx);
-			}
-		}
-	}
-}
-
-/* Handle a new_leaf reply
- * send a reply to the client, process the pending request
- * in the pending list
- *  @param pktNums is a vector of packet number indicating the pending requests
- *  @param cpr is a control packet reply
- */
-void RouterCore::handleComtNewLeafReply(pktx px, CtlPkt& cpr) {
-	Packet& copy = ps->getPacket(px);
-	CtlPkt cp(copy.payload(), copy.length - Packet::OVERHEAD);
-	cp.unpack();
-	pktx pxo = cp.index1;
-	Packet& po = ps->getPacket(pxo);
-	CtlPkt cp1(po);
-	CtlPkt reply1(cp1.type,CtlPkt::POS_REPLY,cp1.seqNum);
-	returnToSender(pxo,reply1);
-	if (cp.ivec.size() != 0) {
-		comt_t comt = cp.comtree;
-		int ctx = ctt->getComtIndex(comt);
-		if (ctx == 0)
-			return;
-		ctt->setLock(ctx,0);	
-		vector<pktx>& pktNums = ctt->getPktNums(ctx);
-		if (pktNums.size() != 0) {
-			//reply to all pending request
-			handleAllPending(pktNums,cpr);
-			ctt->cleanPktNums(ctx);
-		}
-	}
-}
-
-
-
 /** Handle an add filter control packet.
  *  Adds the specified interface and prepares a reply packet.
  *  @param cp is the control packet structure (already unpacked)
@@ -2876,6 +2129,7 @@ bool RouterCore::sendCpReq(CtlPkt& cp, fAdr_t dest) {
 	p.comtree = Forest::NET_SIG_COMT;
 	p.srcAdr = myAdr; p.dstAdr = dest;
 	p.inLink = 0;
+
 	sendControl(px,seqNum++,0);
 	return true;
 }
@@ -2943,28 +2197,28 @@ void RouterCore::resendControl() {
 		// make copy of packet and send the copy
 		pp->second.timestamp = now;
 		pp->second.nSent++;
-                pktx cx = ps->fullCopy(px);
-                if (cx == 0) {
-                        cerr << "RouterCore::resendControl: no packets left in "
-                                "packet store\n";
-                        break;
-                }
-                int lnk = pp->second.lnk; comt_t comt = p.comtree;
-                if (booting) {
-                        pktLog->log(cx,lnk,true,now); iop->send(cx,lnk);
-                } else if (lnk != 0) {
-                        int ctx; int clnk; int qid;
-                        if ((ctx = ctt->getComtIndex(comt)) == 0 ||
-                            (clnk = ctt->getComtLink(comt,lnk)) == 0 ||
-                            (qid = ctt->getLinkQ(clnk)) == 0 ||
-                            (!qm->enq(cx,qid,now)))
-                                ps->free(cx);
-                } else {
-                        forward(cx,ctt->getComtIndex(comt));
-                }
-        }
-        // remove expired entries from pending list
-        for (uint64_t pid : dropList) pending->erase(pid);
+		pktx cx = ps->fullCopy(px);
+		if (cx == 0) {
+			cerr << "RouterCore::resendControl: no packets left in "
+				"packet store\n";
+			break;
+		}
+		int lnk = pp->second.lnk; comt_t comt = p.comtree;
+		if (booting) {
+			pktLog->log(cx,lnk,true,now); iop->send(cx,lnk);
+		} else if (lnk != 0) {
+			int ctx; int clnk; int qid;
+			if ((ctx = ctt->getComtIndex(comt)) == 0 ||
+			    (clnk = ctt->getComtLink(comt,lnk)) == 0 ||
+	                    (qid = ctt->getLinkQ(clnk)) == 0 ||
+	                    (!qm->enq(cx,qid,now)))
+				ps->free(cx);
+		} else {
+			forward(cx,ctt->getComtIndex(comt));
+		}
+	}
+	// remove expired entries from pending list
+	for (uint64_t pid : dropList) pending->erase(pid);
 }
 
 /** Handle incoming replies to control packets.
@@ -2974,10 +2228,11 @@ void RouterCore::resendControl() {
  *  Currently, the only action on a reply is to print an error message
  *  to the log if we receive a negative reply.
  *  @param rx is the packet index of the reply packet
- */	
+ */
 void RouterCore::handleControlReply(pktx rx) {
 	Packet& reply = ps->getPacket(rx);
 	uint64_t pid;
+
 	CtlPkt cpr;
 	if (reply.type == Forest::CONNECT || reply.type == Forest::DISCONNECT ||
 	    reply.type == Forest::SUB_UNSUB) {
@@ -2991,13 +2246,14 @@ void RouterCore::handleControlReply(pktx rx) {
 		     << reply.toString(s); 
 		ps->free(rx); return;
 	}
+
 	map<uint64_t,ControlInfo>::iterator pp = pending->find(pid);
 	if (pp == pending->end()) {
 		// this is a reply to a request we never sent, or
 		// possibly, a reply to a request we gave up on
 		string s;
 		cerr << "RouterCore::handleControlReply: unexpected reply "
-		     << reply.toString(s);
+		     << reply.toString(s); 
 		ps->free(rx); return;
 	}
 	// handle signalling packets
@@ -3019,16 +2275,6 @@ void RouterCore::handleControlReply(pktx rx) {
 			}
 			iop->closeBootSock();
 			booting = false;
-		} else if (cpr.type == CtlPkt::COMTREE_PATH) {
-			handleComtPath(pp->second.px,cpr);	
-		} else if (cpr.type == CtlPkt::COMTREE_ADD_BRANCH) {
-			handleAddBranchReply(pp->second.px,cpr);
-		} else if (cpr.type == CtlPkt::ADD_BRANCH_CONFIRM) {
-			handleConfirmReply(pp->second.px,cpr);	
-		} else if (cpr.type == CtlPkt::COMTREE_NEW_LEAF) {
-		        handleComtNewLeafReply(pp->second.px,cpr);		
-		} else if (cpr.type == CtlPkt::COMTREE_PRUNE) {
-			handleComtPruneReply(pp->second.px,cpr);	
 		}
 	}
 
@@ -3036,8 +2282,7 @@ void RouterCore::handleControlReply(pktx rx) {
 	ps->free(pp->second.px); ps->free(rx); pending->erase(pp);
 }
 
-
-/**
+/** Send packet back to sender.
  *  Update the length, flip the addresses and pack the buffer.
  *  @param px is the packet number
  *  @param cp is a control packet to be packed

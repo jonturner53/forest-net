@@ -405,7 +405,6 @@ void Avatar::run(uint32_t finishTime) {
 	now = nextTime = Misc::getTime();
 	uint32_t comtSwitchTime = now+1;
 	comt = 0;
-	joinleave = 0;
 
 	bool waiting4switch = false;
 	while (finishTime == 0 || now <= finishTime) {
@@ -469,7 +468,7 @@ void Avatar::run(uint32_t finishTime) {
 					startComtSwitch(newComt,now);
 					waiting4switch = true;
 				}
-				comtSwitchTime = now + randint(1,3)*5000000;
+				comtSwitchTime = now + randint(1,3)*100000;
 			}
 		}
 
@@ -480,7 +479,6 @@ void Avatar::run(uint32_t finishTime) {
 		if (delay < ((uint32_t) 1) << 31) usleep(delay);
 		else nextTime = now + 1000*UPDATE_PERIOD;
 	}
-	cerr<<"count"<<joinleave<<endl;
 	disconnect(); 		// send final disconnect packet
 }
 
@@ -540,7 +538,6 @@ bool Avatar::completeComtSwitch(pktx px, uint32_t now) {
 		cp.unpack();
 		if (cp.type == CtlPkt::CLIENT_LEAVE_COMTREE) {
 			if (cp.mode == CtlPkt::POS_REPLY) {
-				joinleave++;
 				comt = nextComt;
 				send2comtCtl(CtlPkt::CLIENT_JOIN_COMTREE);
 				switchState = JOINING;
