@@ -83,7 +83,6 @@ private:
 	uint64_t timestamp;		///< time when we last sent a request
 	};
 	map<uint64_t,ControlInfo> *pending; ///< map of pending requests
-	map<comt_t,pktx> *pending1; ///< map of pending requests
 	int	nIfaces;		///< max number of interfaces
 	int	nLnks;			///< max number of links
 	int	nComts;			///< max number of comtrees

@@ -142,7 +142,6 @@ RouterCore::RouterCore(bool booting1, const RouterInfo& config)
 
 	seqNum = 1;
 	pending = new map<uint64_t,ControlInfo>();
-	pending1 = new map<comt_t,pktx>();
 }
 
 RouterCore::~RouterCore() {

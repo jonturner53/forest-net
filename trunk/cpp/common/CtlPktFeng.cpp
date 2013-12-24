@@ -695,6 +695,7 @@ int CtlPkt::pack() {
 			packPair(LINK,link);
 			packPair(INDEX1,index1);
 			packRspec(RSPEC1,rspec1);
+			//not necessarily be set
 			if (rspec2.isSet()) packRspec(RSPEC2,rspec2);
 			packWord(INTVEC);
 			int len = ivec.size();
@@ -714,7 +715,7 @@ int CtlPkt::pack() {
 			// next router in the path. Also contains an
 			// rspec to be used for the links on the path,
 			// and a second RSPEC that represents the default
-			// for new elaf nodes.
+			// for new leaf nodes.
 			if (index1 == -1 || comtree == 0 || !rspec1.isSet()) 
 				return 0;
 			packPair(COMTREE,comtree);
@@ -762,7 +763,6 @@ int CtlPkt::pack() {
 			if (adr1 == 0 || comtree == 0) return 0;
 			packPair(COMTREE,comtree);
 			packPair(ADR1,adr1);
-			if (adr2 != 0) packPair(ADR2,adr2);
 		}
 		break;
 
