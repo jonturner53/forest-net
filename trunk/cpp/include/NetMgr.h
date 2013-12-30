@@ -23,6 +23,7 @@
 #include "NetBuffer.h"
 #include "Logger.h"
 #include "AdminTable.h"
+#include "DBConnector.h"
 #include <map>
 
 namespace forest {
@@ -71,6 +72,8 @@ int maxRecord;          ///< largest record number in admin file
 
 fstream adminFile;		///< stream for reading/updating admin data
 pthread_mutex_t adminFileLock; ///< so only one thread can update at a time
+
+DBConnector *dbConn; //DB Connector
 
 static int const RECORD_SIZE = 256; ///< size of an admin file record
 
