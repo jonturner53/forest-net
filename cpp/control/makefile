@@ -8,13 +8,13 @@ LIBS := ${FLIB} ${AROOT}/lib/lib-ds.a ${AROOT}/lib/lib-util.a
 BIN := ~/bin
 WARN := -Wall -Wno-c++11-extensions
 #CXXFLAGS := ${WARN} ${ARCH} ${INCLUDES} -O2 -std=c++11 -stdlib=libc++
-CXXFLAGS := ${WARN} ${ARCH} ${INCLUDES} -O2 
+CXXFLAGS := ${WARN} ${ARCH} ${INCLUDES} -O2 -std=c++0x
 JAVAC := javac
 IDIR := ${FROOT}/include
 
 HFILES = ${IDIR}/NetInfo.h ${IDIR}/ComtInfo.h ${IDIR}/CpHandler.h
-OFILES = NetInfo.o ComtInfo.o CpHandler.o Substrate.o ClientTable.o AdminTable.o
-XFILES = NetMgr ClientMgr ComtCtl BuildRtables PhotoServer #threadExample Console 
+OFILES = NetInfo.o ComtInfo.o CpHandler.o Substrate.o ClientTable.o AdminTable.o DBConnector.o
+XFILES = NetMgr ClientMgr ComtCtl BuildRtables AvatarServer PhotoServer #threadExample Console 
 
 ${OFILES} : ${HFILES}
 
@@ -28,7 +28,7 @@ ${FLIB} : ${OFILES}
 	ar -ru ${FLIB} ${OFILES}
 
 NetMgr : NetMgr.o ${LIBS}
-	${CXX} ${CXXFLAGS} $< ${LIBS} -lpthread -o $@
+	${CXX} ${CXXFLAGS} $< ${LIBS} -lpthread -lmysqlcppconn -o $@
 
 foo : foo.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -lpthread -o $@
@@ -46,6 +46,9 @@ ComtCtl : ComtCtl.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -lpthread -o $@
 
 PhotoServer : PhotoServer.o ${LIBS}
+	${CXX} ${CXXFLAGS} $< ${LIBS} -lpthread -o $@	
+
+AvatarServer : AvatarServer.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -lpthread -o $@	
 	
 BuildRtables : BuildRtables.o ${LIBS}
