@@ -22,9 +22,13 @@
 #include "Substrate.h"
 #include "NetBuffer.h"
 #include "Logger.h"
-#include "AdminTable.h"
-#include "DBConnector.h"
 #include <map>
+
+#ifdef DB_MODE
+	#include "DBConnector.h"
+#else
+	#include "AdminTable.h"
+#endif
 
 namespace forest {
 
@@ -45,7 +49,10 @@ int	nmRtr;			///< node number of net manager's router
 
 Logger *logger;			///< error message logger
 PacketStoreTs *ps;		///< pointer to packet store
-AdminTable *admTbl;    		///< data about administrators
+
+#ifndef DB_MODE
+	AdminTable *admTbl;    		///< data about administrators
+#endif
 
 NetInfo *net;			///< global view of net topology
 ComtInfo *comtrees;		///< pre-configured comtrees
@@ -67,13 +74,16 @@ struct clientInfo {
 };
 prefixInfo prefixes[1000];
 
-char *dummyRecord;      ///< dummy record for padding admin file
-int maxRecord;          ///< largest record number in admin file
+#ifdef DB_MODE
+	DBConnector *dbConn; //DB Connector
+#else
+	char *dummyRecord;      ///< dummy record for padding admin file
+	int maxRecord;          ///< largest record number in admin file
 
-fstream adminFile;		///< stream for reading/updating admin data
-pthread_mutex_t adminFileLock; ///< so only one thread can update at a time
+	fstream adminFile;		///< stream for reading/updating admin data
+	pthread_mutex_t adminFileLock; ///< so only one thread can update at a time
+#endif
 
-DBConnector *dbConn; //DB Connector
 
 static int const RECORD_SIZE = 256; ///< size of an admin file record
 

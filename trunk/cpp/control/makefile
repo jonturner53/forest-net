@@ -7,13 +7,25 @@ FLIB := ${FROOT}/lib/lib-forest.a
 LIBS := ${FLIB} ${AROOT}/lib/lib-ds.a ${AROOT}/lib/lib-util.a
 BIN := ~/bin
 WARN := -Wall -Wno-c++11-extensions
+
 #CXXFLAGS := ${WARN} ${ARCH} ${INCLUDES} -O2 -std=c++11 -stdlib=libc++
-CXXFLAGS := ${WARN} ${ARCH} ${INCLUDES} -O2 -std=c++0x
+ifeq (${DB},1)
+	LDFLAG = -pthread -lmysqlcppconn
+	CXXFLAGS := ${WARN} ${ARCH} ${INCLUDES} -O2 -std=c++0x -DDB_MODE
+else
+	LDFLAG = -pthread
+	CXXFLAGS := ${WARN} ${ARCH} ${INCLUDES} -O2 -std=c++0x
+endif
 JAVAC := javac
 IDIR := ${FROOT}/include
 
+
 HFILES = ${IDIR}/NetInfo.h ${IDIR}/ComtInfo.h ${IDIR}/CpHandler.h
-OFILES = NetInfo.o ComtInfo.o CpHandler.o Substrate.o ClientTable.o AdminTable.o DBConnector.o
+ifeq (${DB},1)
+	OFILES = NetInfo.o ComtInfo.o CpHandler.o Substrate.o ClientTable.o DBConnector.o
+else
+	OFILES = NetInfo.o ComtInfo.o CpHandler.o Substrate.o ClientTable.o AdminTable.o
+endif
 XFILES = NetMgr ClientMgr ComtCtl BuildRtables AvatarServer PhotoServer #threadExample Console 
 
 ${OFILES} : ${HFILES}
@@ -28,7 +40,7 @@ ${FLIB} : ${OFILES}
 	ar -ru ${FLIB} ${OFILES}
 
 NetMgr : NetMgr.o ${LIBS}
-	${CXX} ${CXXFLAGS} $< ${LIBS} -lpthread -lmysqlcppconn -o $@
+	${CXX} ${CXXFLAGS} $< ${LIBS} ${LDFLAG} -o $@
 
 foo : foo.o ${LIBS}
 	${CXX} ${CXXFLAGS} $< ${LIBS} -lpthread -o $@

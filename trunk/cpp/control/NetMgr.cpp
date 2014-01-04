@@ -9,7 +9,6 @@
 #include "NetMgr.h"
 #include "CpHandler.h"
 
-#define DB 1 //DB on 
 
 using namespace forest;
 
@@ -55,13 +54,14 @@ bool init(const char *topoFile) {
 	int maxComtree = 10000;
 	net = new NetInfo(maxNode, maxLink, maxRtr, maxCtl);
 	comtrees = new ComtInfo(maxComtree,*net);
-	admTbl = new AdminTable(100);
 
-	dbConn = new DBConnector(); //DB connector
+#ifndef DB_MODE
+	admTbl = new AdminTable(100);
 
 	dummyRecord = new char[RECORD_SIZE];
 	for (char *p = dummyRecord; p < dummyRecord+RECORD_SIZE; p++) *p = ' ';
 	dummyRecord[0] = '-'; dummyRecord[RECORD_SIZE-1] = '\n';
+#endif
 
 	ifstream fs; fs.open(topoFile);
 	if (fs.fail() || !net->read(fs) || !comtrees->read(fs)) {
@@ -121,6 +121,9 @@ bool init(const char *topoFile) {
 		return false;
 	}
 
+#ifdef DB_MODE
+	dbConn = new DBConnector(); //DB connector
+#else
 	maxRecord = 0;
 	// read adminData file
 	adminFile.open("adminData");
@@ -145,6 +148,7 @@ bool init(const char *topoFile) {
 			    "on client data file",2);
 		return false;
 	}
+#endif
 
 	return true;
 }
@@ -322,29 +326,29 @@ bool login(NetBuffer& buf, string& adminName, string& reply) {
 	    buf.readAlphas(s1) && s1 == "password" &&
 	      buf.verify(':') && buf.readWord(pwd) && buf.nextLine() &&
 	    buf.readLine(s2) && s2 == "over") {
-		
-		if (DB) { //DB
-			if (dbConn->isAdmin(adminName, pwd)) {
-				return true;
-			} else {
-				reply = "login failed: try again\n";
-				return false;
-			}
-		} else { //file
-			int adx =admTbl->getAdmin(adminName);
-			// locks adx
-			if (adx == 0) {
-				reply = "login failed: try again\n";
-				return false;
-			} else if (admTbl->checkPassword(adx,pwd)) {
-				admTbl->releaseAdmin(adx);
-				return true;
-			} else {
-				admTbl->releaseAdmin(adx);
-				reply = "login failed: try again\n";
-				return false;
-			}
+
+#ifdef DB_MODE
+		if (dbConn->isAdmin(adminName, pwd)) {
+			return true;
+		} else {
+			reply = "login failed: try again\n";
+			return false;
 		}
+#else
+		int adx =admTbl->getAdmin(adminName);
+		// locks adx
+		if (adx == 0) {
+			reply = "login failed: try again\n";
+			return false;
+		} else if (admTbl->checkPassword(adx,pwd)) {
+			admTbl->releaseAdmin(adx);
+			return true;
+		} else {
+			admTbl->releaseAdmin(adx);
+			reply = "login failed: try again\n";
+			return false;
+		}
+#endif
 	} else {
 		reply = "misformatted login request\n";
 		return false;
@@ -368,31 +372,31 @@ bool newAccount(NetBuffer& buf, string& adminName, string& reply) {
 	      buf.verify(':') && buf.readWord(pwd) && buf.nextLine() &&
 	    buf.readLine(s2) && s2 == "over") {
 		
-		if (DB) { //DB
-			if (dbConn->addAdmin(newName, pwd)) {
-				return true;
-			} else {
-				reply = "unable to add admin\n";
-				return false;
-			}
-		} else { //file 
-			int adx =admTbl->getAdmin(newName);
-			// locks adx
-			if (adx != 0) {
-				admTbl->releaseAdmin(adx);
-				reply = "name not available, select another\n";
-				return false;
-			}
-			adx = admTbl->addAdmin(newName,pwd);
-			if (adx != 0) {
-				writeAdminRecord(adx);
-				admTbl->releaseAdmin(adx);
-				return true;
-			} else {
-				reply = "unable to add admin\n";
-				return false;
-			}
+#ifdef DB_MODE
+	if (dbConn->addAdmin(newName, pwd)) {
+		return true;
+	} else {
+		reply = "unable to add admin\n";
+		return false;
+	}
+#else
+	int adx =admTbl->getAdmin(newName);
+	// locks adx
+	if (adx != 0) {
+		admTbl->releaseAdmin(adx);
+		reply = "name not available, select another\n";
+		return false;
+	}
+	adx = admTbl->addAdmin(newName,pwd);
+	if (adx != 0) {
+		writeAdminRecord(adx);
+		admTbl->releaseAdmin(adx);
+		return true;
+	} else {
+		reply = "unable to add admin\n";
+		return false;
 		}
+#endif
 	} else {
 		reply = "misformatted new admin request\n";
 		return false;
@@ -414,21 +418,21 @@ void getProfile(NetBuffer& buf, string& adminName, string& reply) {
 		reply = "misformatted get profile request"; return;
 	}
 
-	if (DB) { //DB
-		DBConnector::adminProfile *profile = new DBConnector::adminProfile;
-		if (dbConn->getAdminProfile(targetName, profile)) {
-			reply  = "realName: \"" + profile->realName + "\"\n";
-			reply += "email: " + profile->email + "\n";
-			delete profile;
-		} else {
-			reply = "unable to retrieve the admin profile\n";
-		}
-	} else { //file
-		int tadx = admTbl->getAdmin(targetName);
-		reply  = "realName: \"" + admTbl->getRealName(tadx) + "\"\n";
-		reply += "email: " + admTbl->getEmail(tadx) + "\n";
-		admTbl->releaseAdmin(tadx);
+#ifdef DB_MODE
+	DBConnector::adminProfile *profile = new DBConnector::adminProfile;
+	if (dbConn->getAdminProfile(targetName, profile)) {
+		reply  = "realName: \"" + profile->realName + "\"\n";
+		reply += "email: " + profile->email + "\n";
+		delete profile;
+	} else {
+		reply = "unable to retrieve the admin profile\n";
 	}
+#else
+	int tadx = admTbl->getAdmin(targetName);
+	reply  = "realName: \"" + admTbl->getRealName(tadx) + "\"\n";
+	reply += "email: " + admTbl->getEmail(tadx) + "\n";
+	admTbl->releaseAdmin(tadx);
+#endif
 }
 
 /** Handle an update profile request.
@@ -466,22 +470,22 @@ void updateProfile(NetBuffer& buf, string& adminName, string& reply) {
 		}
 	}
 
-	if (DB) { //DB
-		DBConnector::adminProfile *profile = new DBConnector::adminProfile;
-		if (realName.length() > 0 && email.length() > 0) {
-			profile->realName = realName;
-			profile->email = email;
-		}
-		if (!dbConn->updateAdminProfile(targetName, profile))
-			reply = "unable to update admin profile\n";
-		delete profile;
-	} else { //file
-		int tadx = admTbl->getAdmin(targetName);
-		if (realName.length() > 0) admTbl->setRealName(tadx,realName);
-		if (email.length() > 0) admTbl->setEmail(tadx,email);
-		writeAdminRecord(tadx);
-		admTbl->releaseAdmin(tadx);
+#ifdef DB_MODE
+	DBConnector::adminProfile *profile = new DBConnector::adminProfile;
+	if (realName.length() > 0 && email.length() > 0) {
+		profile->realName = realName;
+		profile->email = email;
 	}
+	if (!dbConn->updateAdminProfile(targetName, profile))
+		reply = "unable to update admin profile\n";
+	delete profile;
+#else
+	int tadx = admTbl->getAdmin(targetName);
+	if (realName.length() > 0) admTbl->setRealName(tadx,realName);
+	if (email.length() > 0) admTbl->setEmail(tadx,email);
+	writeAdminRecord(tadx);
+	admTbl->releaseAdmin(tadx);
+#endif
 	return;
 }
 
@@ -502,15 +506,15 @@ void changePassword(NetBuffer& buf, string& adminName, string& reply) {
 		reply = "misformatted change password request\n"; return;
 	}
 
-	if (DB) { //DB
-		if (!dbConn->setPassword(targetName, pwd))
-			reply = "unable to change admin password\n";
-	} else { //file
-		int tadx = admTbl->getAdmin(targetName);
-		admTbl->setPassword(tadx,pwd);
-		writeAdminRecord(tadx);
-		admTbl->releaseAdmin(tadx);
-	}
+#ifdef DB_MODE
+	if (!dbConn->setPassword(targetName, pwd))
+		reply = "unable to change admin password\n";
+#else
+	int tadx = admTbl->getAdmin(targetName);
+	admTbl->setPassword(tadx,pwd);
+	writeAdminRecord(tadx);
+	admTbl->releaseAdmin(tadx);
+#endif
 
 	return;
 }
@@ -1429,6 +1433,7 @@ bool readPrefixInfo(char filename[]) {
  *  The calling thread is assumed to hold a lock on the client.
  *  @param adx is a non-negative integer
  */
+#ifndef DB_MODE
 void writeAdminRecord(int adx) {
 	if (adx < 0 || adx >= admTbl->getMaxAdmins()) return;
 
@@ -1470,6 +1475,7 @@ void writeAdminRecord(int adx) {
 	pthread_mutex_unlock(&adminFileLock);
 	return;
 }
+#endif
 
 /** Check for next packet from the remote console.
  
