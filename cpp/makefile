@@ -8,7 +8,7 @@ FLIB = ${FROOT}/lib/lib-forest.a
 LIBS = ${FLIB} ${AROOT}/lib/lib-ds.a ${AROOT}/lib/lib-util.a
 BIN = ~/bin
 WARN = -Wall -Wno-c++11-extensions
-CXXFLAGS = ${WARN} ${ARCH} ${INCLUDES} -O2 -std=c++11
+CXXFLAGS = ${WARN} ${ARCH} ${INCLUDES} -O2 -std=c++0x
 JAVAC = javac
 
 all:
@@ -20,7 +20,7 @@ all:
 				CXXFLAGS='${CXXFLAGS}' all
 	make -C control         AROOT='${AROOT}' FROOT='${FROOT}' \
 				ARCH='${ARCH}' BIN='${BIN}' WARN='${WARN}' \
-				CXXFLAGS='${CXXFLAGS}' all
+				all
 	make -C vworld1         AROOT='${AROOT}' FROOT='${FROOT}' \
 				ARCH='${ARCH}' BIN='${BIN}' WARN='${WARN}' \
 				CXXFLAGS='${CXXFLAGS}' all
