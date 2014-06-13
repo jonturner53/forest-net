@@ -29,13 +29,14 @@ namespace forest {
  *				in the reply packet; this allows the requestor
  *				to match repies with earlier requests
  *
- *  The remainder of a control packet payload consists of (attribute,value)
- *  pairs. Each attribute is identified by a 32 bit code and the size
- *  and type of the values is determined by the attribute code. Currently,
- *  most attributes are 32 bit integers. Some are RateSpecs.
+ *  The remainder of a control packet payload consists of
+ *  (attribute,length,value) tuples. Each attribute is identified by a 16
+ *  bit code and the 16 bit length specifies the number of bytes in the value.
+ *  Currently, most attributes are 32 bit integers. Some are RateSpecs
+ *  and some are ASCII text strings.
  *  The control packet object contains fields for each of the possible
- *  attribute values and these fields can be directly read or written.
- *  Pack and unpack methods are provided to packet these fields into
+ *  attributes and these fields can be directly read or written.
+ *  Pack and unpack methods are provided to pack these fields into
  *  a payload of a packet buffer, or unpack attribute values from a
  *  packet buffer.
  */
@@ -45,11 +46,7 @@ public:
 	enum CpType {
 		UNDEF_CPTYPE = 0,
 
-		CLIENT_ADD_COMTREE = 10, CLIENT_DROP_COMTREE = 11,
-		CLIENT_GET_COMTREE = 12, CLIENT_MOD_COMTREE = 13,
-		CLIENT_JOIN_COMTREE = 14, CLIENT_LEAVE_COMTREE = 15,
-		CLIENT_RESIZE_COMTREE = 16,
-		CLIENT_GET_LEAF_RATE = 17, CLIENT_MOD_LEAF_RATE = 18,
+		JOIN_COMTREE = 10, LEAVE_COMTREE = 11,
 
 		CLIENT_NET_SIG_SEP = 29,
 
@@ -86,8 +83,8 @@ public:
 		BOOT_ROUTER = 120, BOOT_COMPLETE = 121, BOOT_ABORT = 122,
 		BOOT_LEAF = 123,
 
-		COMTREE_PATH = 130, COMTREE_NEW_LEAF = 131, 
-		COMTREE_ADD_BRANCH = 132, COMTREE_PRUNE = 133
+		COMTREE_PATH = 130,
+		ADD_BRANCH = 131, CONFIRM = 132, PRUNE = 132
 	};
 
 	// Control packet attribute types
@@ -145,6 +142,7 @@ public:
 
 	string&	avPair2string(CpAttr, string&); 
 	string&	toString(string&); 
+	string	toString(); 
 
 	CpType	type;			///< control packet type 
 	CpMode	mode;			///< request/return type
