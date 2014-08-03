@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 ARCH := -m$(shell getconf LONG_BIT)
-FROOT = $(shell pwd)/../
+FROOT = ../
 AROOT = ${FROOT}/../../algolib-jst
 INCLUDES := -I ${FROOT}/include -I ${AROOT}/include
 FLIB := ${FROOT}/lib/lib-forest.a
