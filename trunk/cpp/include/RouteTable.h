@@ -11,13 +11,12 @@
 
 #include <set>
 #include "Forest.h"
-#include "IdMap.h"
+#include "Util.h"
+#include "Hash.h"
+#include "HashMap.h"
 #include "ComtreeTable.h"
 
 namespace forest {
-
-
-typedef set<int>::iterator RteLink; 
 
 /** Maintains a set of routes. A unicast route is a triple
  *  (comtree, address, comtreeLink) where comtree is the comtree number
@@ -31,67 +30,67 @@ typedef set<int>::iterator RteLink;
  *  the multicast address.
  *
  *  The data for a route is accessed using its "route index",
- *  which can be obtained using the getRteIndex() method.
+ *  which can be obtained using the getRtx() method.
  */
 class RouteTable {
 public:
-		RouteTable(int,fAdr_t,ComtreeTable*);
+		RouteTable(int, fAdr_t, ComtreeTable*);
 		~RouteTable();
 
 	// predicates
-	bool	validRteIndex(int) const;
+	bool	validRtx(int) const;
 	bool	isLink(int,int) const;
 	bool	noLinks(int) const;
 
 	// iteration methods
-	int	firstRteIndex() const;
-	int	nextRteIndex(int) const;
+	int	firstRtx() const;
+	int	nextRtx(int) const;
+	int	firstComtLink(int) const;
+	int	nextComtLink(int, int) const;
 
 	// access methods
-	int	getRteIndex(comt_t, fAdr_t) const;
+	int	getRtx(comt_t, fAdr_t) const;
 	comt_t	getComtree(int) const;
 	fAdr_t	getAddress(int) const;	
-	int 	getLink(int) const; 		
-	set<int>& getSubLinks(int) const;
+	int 	getLinkCount(int) const; 		
 
 	// modifiers
-	int	addEntry(comt_t,fAdr_t,int);
-	void	removeEntry(int);
-	void	purgeRoutes(comt_t);
 	bool	addLink(int,int);
 	void	removeLink(int,int);	
+	int	addRoute(comt_t,fAdr_t,int);
+	void	removeRoute(int);
+	void	purge(comt_t, int);
 	void	setLink(int,int);
 
 	// input/output
 	bool 	read(istream&);
-	string& toString(string&) const;
-	string&	entry2string(int, string&) const; 
+	string	toString() const;
+	string	entry2string(int) const; 
 private:
 	int	maxRtx;			///< max number of table entries
 	int	myAdr;			///< address of this router
+	ComtreeTable *ctt;		///< pointer to comtree table
 
-	struct RouteEntry {		///< routing table entry
-	comt_t	ct;			///< comtree number
-	fAdr_t	adr;			///< destination address
-	int 	lnk;			///< comtree link for unicast routes
-	set<int> *links;		///< comtree links for multicast routes
-	};
-	RouteEntry *tbl;		///< table of routes
-	IdMap	*rteMap;		///< map (comtree,adr) pair to index
+	typedef HashSet<int32_t,Hash::s32> Vset;
 
-	ComtreeTable *ctt;	
+	/// map (comtree,adr) pair to list of cLnks
+	HashMap<uint64_t,Vset,Hash::u64> *rteMap;
+
+	// map (comtree,link) to list of rtx values (routes that use link)
+	HashMap<uint64_t,Vset,Hash::u64> *clMap;
 
 	// helper functions
-	uint64_t key(comt_t, fAdr_t) const;  ///< key for use with rteMap
-	bool 	readEntry(istream&);	
+	uint64_t rmKey(comt_t, fAdr_t) const;  ///< key for rteMap
+	uint64_t cmKey(comt_t, int32_t) const;  ///< key for clMap
+	bool 	readRoute(istream&);	
 };
 
 /** Verify that a route index is valid.
  *  @param rtx is an index into the routing table
  *  @return true if rtx corresponds to a valid route, else false
  */
-inline bool RouteTable::validRteIndex(int rtx) const {
-	return rteMap->validId(rtx);
+inline bool RouteTable::validRtx(int rtx) const {
+	return rteMap->valid(rtx);
 }
 
 /** Determine if a comtree link is in a multicast route.
@@ -102,15 +101,16 @@ inline bool RouteTable::validRteIndex(int rtx) const {
  *  Assumes rtx is a valid index that refers to a multicast route
  */
 inline bool RouteTable::isLink(int rtx, int cLnk) const {
-	set<int>& lset = *tbl[rtx].links;
-	return lset.find(cLnk) != lset.end();
+	Vset& lset = rteMap->getValue(rtx);
+	return lset.contains(cLnk);
 }
 
 /** Determine if a multicast route has no links.
  *  @return true if the route has no links, else false
  */
 inline bool RouteTable::noLinks(int rtx) const {
-	return tbl[rtx].links->size() == 0;
+	Vset& lset = rteMap->getValue(rtx);
+	return lset.empty();
 }
 
 /** Get the first route index.
@@ -118,8 +118,8 @@ inline bool RouteTable::noLinks(int rtx) const {
  *  The order of routes is arbitrary.
  *  @return the first route index, or 0 if there are none
  */
-inline int RouteTable::firstRteIndex() const {
-	return rteMap->firstId();
+inline int RouteTable::firstRtx() const {
+	return rteMap->first();
 }
 
 /** Get the next route index following a given route index.
@@ -128,8 +128,29 @@ inline int RouteTable::firstRteIndex() const {
  *  @param rtx is a route index
  *  @return the next route index following rtx, or 0 if there is none
  */
-inline int RouteTable::nextRteIndex(int rtx) const {
-	return rteMap->nextId(rtx);
+inline int RouteTable::nextRtx(int rtx) const {
+	return rteMap->next(rtx);
+}
+
+/** Get the first comtree link for a given route.
+ *  This method is used to iterate through all the links in the route.
+ *  The order of comtree links is arbitrary.
+ *  @return the first route index, or 0 if there are none
+ */
+inline int RouteTable::firstComtLink(int rtx) const {
+	return rteMap->getValue(rtx).first();
+}
+
+/** Get the next comtree link following a given comtree link.
+ *  This method is used to iterate through all the links in a route.
+ *  The order of comtree links is arbitrary.
+ *  @param rtx is a route index
+ *  @param cLnk is a comtree link number
+ *  @return the next comtree link number for the given route following cLnk,
+ *  or 0 if there is no next comtree link
+ */
+inline int RouteTable::nextComtLink(int rtx, int cLnk) const {
+	return rteMap->getValue(rtx).next(cLnk);
 }
 
 /** Get the route index for a given comtree and destination address.
@@ -137,8 +158,8 @@ inline int RouteTable::nextRteIndex(int rtx) const {
  *  @param adr is a forest address
  *  @return the associated comtree index or 0 if there is none
  */
-inline int RouteTable::getRteIndex(comt_t comt, fAdr_t adr) const {
-        return rteMap->getId(key(comt,adr));
+inline int RouteTable::getRtx(comt_t comt, fAdr_t adr) const {
+        return rteMap->find(rmKey(comt,adr));
 }   
 
 /** Get the comtree number for a given route.
@@ -146,7 +167,8 @@ inline int RouteTable::getRteIndex(comt_t comt, fAdr_t adr) const {
  *  @return the comtree that the route was defined for
  */
 inline comt_t RouteTable::getComtree(int rtx) const {
-	return tbl[rtx].ct;
+	uint64_t kee = rteMap->getKey(rtx);
+	return (comt_t) (kee >> 32);
 }
 
 /** Get the destination address for a given route.
@@ -154,39 +176,17 @@ inline comt_t RouteTable::getComtree(int rtx) const {
  *  @return the address that the route was defined for
  */
 inline fAdr_t RouteTable::getAddress(int rtx) const {
-	return tbl[rtx].adr;
+	uint64_t kee = rteMap->getKey(rtx);
+	return (fAdr_t) (kee & 0xffffffff);
 }
 
-/** Get the comtree link number for a given unicast route.
+/** Get the number of links used by a route.
  *  @param rtx is a route index
- *  @return the comtree link number for the outgoing link
+ *  @return the number of outgoing links used by this route;
+ *  for unicast routes, this should always be 1.
  */
-inline int RouteTable::getLink(int rtx) const {
-	if (Forest::mcastAdr(tbl[rtx].adr)) return 0;
-	return tbl[rtx].lnk;
-}
-
-/** Get a reference to the set of subscriber links for a given multicast route.
- *  This method is provided to allow client programs to efficiently
- *  iterate through all the subscriber links in the route.
- *  It must not be used to modify the set of subscriber links.
- *  @param rtx is a route index
- *  @return a reference to a set of integers, where each integer in the
- *  set is a comtree link number
- */
-inline set<int>& RouteTable::getSubLinks(int rtx) const {
-	return *(tbl[rtx].links);
-}
-
-/** Set the link for a unicast route.
- *  @param rtx is the route number
- *  @param cLnk is the comtree link number for the new outgoing link
- */
-inline void RouteTable::setLink(int rtx, int cLnk) {
-	if (!validRteIndex(rtx) || !ctt->validComtLink(cLnk) ||
-	    Forest::mcastAdr(tbl[rtx].adr))
-		return;
-	tbl[rtx].lnk = cLnk;
+inline int RouteTable::getLinkCount(int rtx) const {
+	return rteMap->getValue(rtx).size();
 }
 
 /** Add a subscriber link to a multicast route.
@@ -195,11 +195,17 @@ inline void RouteTable::setLink(int rtx, int cLnk) {
  *  @return true on success, false on failure
  */
 inline bool RouteTable::addLink(int rtx, int cLnk) {
-	if (!validRteIndex(rtx) || !ctt->validComtLink(cLnk) ||
-	    !Forest::mcastAdr(tbl[rtx].adr))
+	if (!validRtx(rtx) || !Forest::mcastAdr(getAddress(rtx)))
 		return false;
-	tbl[rtx].links->insert(cLnk);
-	ctt->registerRte(cLnk,rtx);
+	Vset& lset = rteMap->getValue(rtx);
+	lset.insert(cLnk);
+	uint64_t kee = cmKey(getComtree(rtx),cLnk);
+	int x = clMap->find(kee);
+	if (x == 0) {
+		Vset new_routes;
+		x = clMap->put(kee,new_routes);
+	}
+	clMap->getValue(x).insert(rtx);
 	return true;
 }
 
@@ -209,28 +215,65 @@ inline bool RouteTable::addLink(int rtx, int cLnk) {
  *  @return true on success, false on failure
  */
 inline void RouteTable::removeLink(int rtx, int cLnk) {
-	if (!validRteIndex(rtx) || !ctt->validComtLink(cLnk) ||
-	    !Forest::mcastAdr(tbl[rtx].adr)) {
+	if (!validRtx(rtx) || !Forest::mcastAdr(getAddress(rtx)))
 		return;
-	}
-	tbl[rtx].links->erase(cLnk);
-	ctt->deregisterRte(cLnk,rtx);
-	if (tbl[rtx].links->size() == 0) // no subscribers lefr
-		removeEntry(rtx);
+	Vset& lset = rteMap->getValue(rtx);
+	lset.remove(cLnk);
+	uint64_t kee = cmKey(getComtree(rtx),cLnk);
+	Vset& routes = clMap->get(kee);
+	routes.remove(rtx);
+	if (lset.size() == 0) // no subscribers left
+		rteMap->remove(rteMap->getKey(rtx));
+	if (routes.size() == 0) // no routes mapped to cLnk
+		clMap->remove(kee);
 }
 
-/** Compute a key for a specified (comtree,address) pair.
+/** Set the link for a unicast route.
+ *  @param rtx is the route number
+ *  @param cLnk is the comtree link number for the new outgoing link
+ */
+inline void RouteTable::setLink(int rtx, int cLnk) {
+	if (!validRtx(rtx) || Forest::mcastAdr(getAddress(rtx)))
+		return;
+	// assume link set is empty or has a single member
+	Vset& lset = rteMap->getValue(rtx);
+	if (lset.size() != 0) {
+		int old_cLnk = lset.first();
+		uint64_t kee = cmKey(getComtree(rtx),old_cLnk);
+		Vset& routes = clMap->get(kee);
+		routes.remove(rtx);
+		if (routes.size() == 0) clMap->remove(kee);
+		lset.remove(old_cLnk);
+	}
+	uint64_t kee = cmKey(getComtree(rtx),cLnk);
+	int x = clMap->find(kee);
+	if (x == 0) {
+		Vset new_routes;
+		x = clMap->put(kee,new_routes);
+	}
+	clMap->getValue(x).insert(rtx);
+	lset.insert(cLnk);
+}
+
+/** Compute a key for use in the route map.
  *  @param comt is a comtree number
- *  @param adr is an address
+ *  @param adr is a forest address
  *  @return a 64 bit integer suitable for use as a lookup key
  */
-inline uint64_t RouteTable::key(comt_t comt, fAdr_t adr) const {
-	if (!Forest::mcastAdr(adr)) {
-		int zip = Forest::zipCode(adr);
-		if (zip != Forest::zipCode(myAdr))
-			adr = Forest::forestAdr(zip,0);
-	}
+inline uint64_t RouteTable::rmKey(comt_t comt, int32_t adr) const {
+	// zero out local address parts for uncast addresses to non-local zip
+	bool local = ((adr & 0xffff0000) ^ (myAdr & 0xffff0000)) == 0;
+	if (!Forest::mcastAdr(adr) && !local)  adr &= 0xffff0000;
 	return (uint64_t(comt) << 32) | (uint64_t(adr) & 0xffffffff);
+}
+
+/** Compute a key for use in the comtree link map.
+ *  @param comt is a comtree number
+ *  @param cLnk is a comtree link number
+ *  @return a 64 bit integer suitable for use as a lookup key
+ */
+inline uint64_t RouteTable::cmKey(comt_t comt, int32_t cLnk) const {
+	return (uint64_t(comt) << 32) | (uint64_t(cLnk) & 0xffffffff);
 }
 
 } // ends namespace

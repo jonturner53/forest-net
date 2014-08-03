@@ -11,12 +11,29 @@
 
 #include "Forest.h"
 #include "RateSpec.h"
-#include "UiSetPair.h"
+#include "ListPair.h"
+
+using namespace grafalgo;
 
 namespace forest {
 
 class IfaceTable {
 public:
+	///< iface table entry
+	class Entry {
+	public:
+	ipa_t	ipa;			///< IP address of interface
+	ipp_t	port;			///< port number of interface
+	int	sock;			///< socket number of interface
+	RateSpec rates;			///< total rates for interface
+	RateSpec availRates;		///< available rates for interface
+
+	string	toString() const;
+	friend	ostream& operator<<(ostream& out, const Entry& a) {
+                return out << a.toString();
+        }
+	};
+
 		IfaceTable(int);
 		~IfaceTable();
 
@@ -28,10 +45,7 @@ public:
 	int	nextIface(int) const;
 
 	// access methods 
-	ipa_t	getIpAdr(int) const;	
-	ipp_t	getPort(int) const;	
-	RateSpec& getRates(int) const;
-	RateSpec& getAvailRates(int) const;
+	Entry&	getEntry(int);
 	int	getDefaultIface() const;
 	int	getFreeIface() const;
 
@@ -39,25 +53,17 @@ public:
 	bool	addEntry(int,ipa_t,ipp_t,RateSpec&);
 	void	removeEntry(int);
 	void	setDefaultIface(int);
-	void	setPort(int,ipp_t);
 
 	// io routines
 	bool	read(istream&);
-	string&	toString(string&) const;
+	string	toString() const;
 
-	string& entry2string(int, string&) const;
+	string entry2string(int) const;
 private:
 	int	maxIf;			///< largest interface number
 	int	defaultIf;		///< default interface
-	struct IfaceInfo {		///< information describing an iface
-	ipa_t	ipa;			///< IP address of interface
-	ipp_t	port;			///< port number of interface
-	int	sock;			///< socket number of interface
-	RateSpec rates;			///< total rates for interface
-	RateSpec availRates;		///< available rates for interface
-	};
-	IfaceInfo *ift;			///< ift[i]=data for interface i
-	UiSetPair *ifaces;		///< in-use and available iface numbers
+	Entry *ift;			///< ift[i]=data for interface i
+	ListPair *ifaces;		///< in-use and available iface numbers
 
 	// helper methods
 	int	readEntry(istream&);		
@@ -114,34 +120,17 @@ inline int IfaceTable::getFreeIface() const {
 	return ifaces->firstOut();
 }
 
-/** Get the IP address associated with a given interface.
- *  @param iface is the interface number
- *  @return the associated IP address
+/** Get a table entry.
+ *  @param iface is a valid interface number
+ *  @return a reference to the interface table entry
  */
-inline ipa_t IfaceTable::getIpAdr(int iface) const { return ift[iface].ipa; }	
-
-/** Get the port number associated with a given interface.
- *  @param iface is the interface number
- *  @return the associated port number
- */
-inline ipp_t IfaceTable::getPort(int iface) const { return ift[iface].port; }	
-
-/** Get the maximum rates allowed for this interface.
- *  @param i is the interface number
- *  @return the a reference to the rate spec for the interface; currently
- *  interface rates are symmetric and upstream and downstream fields
- *  must be set to identical values.
- */
-inline RateSpec& IfaceTable::getRates(int i) const { return ift[i].rates; }
-
-/** Get the available rates allowed for this interface.
- *  @param i is the interface number
- *  @return the a reference to the available rate spec for the interface;
- *  currently rates are symmetric and upstream and downstream fields
- *  must be set to identical values.
- */
-inline RateSpec& IfaceTable::getAvailRates(int i) const {
-	return ift[i].availRates;
+inline IfaceTable::Entry& IfaceTable::getEntry(int iface) {
+	if (!valid(iface)) {
+		string s = "IfaceTable::Entry::getEntry:: invalid interface "
+			   + to_string(iface) + "\n";
+                throw IllegalArgumentException(s);
+	}
+	return ift[iface];
 }
 
 /** Set the default interface.
@@ -149,14 +138,6 @@ inline RateSpec& IfaceTable::getAvailRates(int i) const {
  */
 inline void IfaceTable::setDefaultIface(int iface) {
 	if (valid(iface)) defaultIf = iface;
-}
-
-/** Set the port number of this interface.
- *  @param iface is the number of a valid existing interface
- *  @param port is the port number to be assigned to the interface
- */
-inline void IfaceTable::setPort(int iface, ipp_t port) {
-	if (valid(iface)) ift[iface].port = port;
 }
 
 } // ends namespace

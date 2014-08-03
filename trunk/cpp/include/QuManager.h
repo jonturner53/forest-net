@@ -9,12 +9,29 @@
 #ifndef QUMANAGER_H
 #define QUMANAGER_H
 
+#include <chrono>
+#include <thread>
+#include <mutex>
+
 #include "Forest.h"
-#include "UiListSet.h"
-#include "Heap.h"
-#include "HeapSet.h"
+/** Output operator for high resolution time point.
+ *  Needed by Dheap to print heap contents.
+ */
+inline ostream& operator<<(ostream& out,
+	const chrono::high_resolution_clock::time_point& t) {
+        return out << t.time_since_epoch().count();
+}
+
+#include "ListSet.h"
+#include "Dheap.h"
+#include "DheapSet.h"
 #include "PacketStore.h"
 #include "StatsModule.h"
+
+using namespace chrono;
+using std::thread;
+using std::mutex;
+using std::unique_lock;
 
 namespace forest {
 
@@ -46,7 +63,7 @@ public:
 
 	// enq and deq packets
 	bool	enq(int, int, uint64_t);
-	int	deq(int&, uint64_t);	
+	int	deq(int&, uint64_t);
 	
 private:
 	int	nL;			///< number of links
@@ -55,11 +72,12 @@ private:
 	int	maxppl;			///< max # of packets per link
 	int	qCnt;			///< number of allocated queues
 
-
-	UiListSet *queues;		///< collection of lists of packets
+	ListSet *queues;		///< collection of lists of packets
 	int	free;			///< first queue in the free list
-	Heap	*active;		///< active queues, ordered by due time
-	Heap	*vactive;		///< virtually active queues
+	Dheap<uint64_t> *active;	///< active queues, ordered by due time
+	Dheap<uint64_t> *vactive;	///< virtually active queues
+
+	mutex	mtx;			///< to make all operations atomic
 
 	struct LinkInfo {		///< information on links
 	uint32_t nsPerByte;		///< ns of delay per data byte
@@ -79,22 +97,20 @@ private:
 	};
 	QuInfo	 *quInfo;		///< quInfo[q] is information for q
 
-	HeapSet *hset;			///< set of heaps for pkt scheduler
+	DheapSet<uint64_t> *hset;	///< set of heaps for pkt scheduler
 
 	PacketStore *ps;		///< pointer to packet store object
 	StatsModule *sm;		///< pointer to statistics module
-	
-    #ifdef PROFILING // MAH for profiling
-    Timer *enq_timer;
-    Timer *deq_timer;
-    #endif
 };
 
+
 inline bool QuManager::validQ(int qid) const {
+	unique_lock lck(mtx);
 	return 1 <= qid && qid <= nQ && quInfo[qid].pktLim >= 0;
 }
 
 inline bool QuManager::setLinkRates(int lnk, RateSpec& rs) {
+	unique_lock lck(mtx);
 	if (lnk < 1 || lnk > nL) return false;
 	int br = max(rs.bitRateDown,1); 
 	int pr = max(rs.pktRateDown,1); 
@@ -105,6 +121,7 @@ inline bool QuManager::setLinkRates(int lnk, RateSpec& rs) {
 }
 
 inline bool QuManager::setQRates(int qid, RateSpec& rs) {
+	unique_lock lck(mtx);
 	if (!validQ(qid)) return false;
 	int br = min(rs.bitRateDown,8000000); 
 	int pr = min(rs.pktRateDown,1000000000); 
@@ -114,6 +131,7 @@ inline bool QuManager::setQRates(int qid, RateSpec& rs) {
 }
 
 inline bool QuManager::setQLimits(int qid, int np, int nb) {
+	unique_lock lck(mtx);
 	if (!validQ(qid)) return false;
 	np = max(0,np); nb = max(0,nb);
 	quInfo[qid].pktLim = np;

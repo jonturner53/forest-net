@@ -11,7 +11,8 @@
 
 #include "stdinc.h"
 #include "Util.h"
-#include "Misc.h"
+
+using namespace grafalgo;
 
 namespace forest {
 
@@ -34,7 +35,7 @@ class Np4d {
 public:
 	// ip address utilities
 	static ipa_t ipAddress(const char*); 		
-	static string& ip2string(ipa_t, string&);		
+	static string ip2string(ipa_t);		
 	static bool readIpAdr(istream&, ipa_t&); 
 	static ipa_t getIpAdr(const char*);
 	static ipa_t myIpAddress();

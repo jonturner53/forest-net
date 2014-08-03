@@ -27,8 +27,9 @@
 
 #include "stdinc.h"
 #include "Util.h"
-#include "Misc.h"
 #include "Np4d.h"
+
+using namespace grafalgo;
 
 namespace forest {
 
@@ -77,6 +78,8 @@ public:
 	
 		CONNECT=11,		///< connect to a link
 		DISCONNECT=12,		///< disconnect a link
+
+		UNKNOWN_DEST=13,	///< error indication
 	
 		// internal control packet types
 		NET_SIG=100,		///< network signalling packet
@@ -116,9 +119,11 @@ public:
 	// constants related to packet formats 
 	static const uint8_t FOREST_VERSION = 1;///< version of forest protocol
 	static const int HDR_LENG = 20;		///< header length in bytes
+	static const int MAX_PLENG = 1450;	///< max packet length in bytes
 	static const int OVERHEAD = 24;		///< total overhead
-	static const flgs_t RTE_REQ = 0x01;	///< route request flag
-	static const flgs_t ACK_FLAG = 0x02;	///< acknowledgment flag
+	static const flgs_t RTE_REQ = 0x01;	///< route request
+	static const flgs_t ACK_FLAG = 0x02;	///< acknowledgment
+	static const flgs_t NACK_FLAG = 0x02;	///< negative acknowledgment
 
 	// well-known ports
 	static const ipp_t NM_PORT = 30120; 	///< port # used by netMgr
@@ -136,8 +141,8 @@ public:
 	static const uint32_t BUF_SIZ = 1600;	///< size of a packet buffer
 
 	// comtrees used for control
-	static const comt_t CONNECT_COMT = 1;	///< used for connect packets
-	static const comt_t CLIENT_SIG_COMT = 2; ///< for comtree signaling
+	static const comt_t NABOR_COMT = 1;	///< dummy comtree for neighbors
+	static const comt_t CLIENT_SIG_COMT = 2; ///< for client signaling
 	static const comt_t NET_SIG_COMT = 100;  ///< for internal signaling
 
 	// methods for manipulating addresses 
@@ -147,13 +152,14 @@ public:
 	static int localAdr(fAdr_t);
 	static fAdr_t forestAdr(int,int);
 	static fAdr_t forestAdr(const char*);
-	static string& fAdr2string(fAdr_t, string&);
+	static string fAdr2string(fAdr_t);
 	static bool readForestAdr(istream&, fAdr_t&);
 
 	// miscellaneous 
 	static int truPktLeng(int);
-	static string& nodeType2string(ntyp_t, string&);
+	static string nodeType2string(ntyp_t);
 	static ntyp_t getNodeType(string&);
+	static bool isSigComt(comt_t);
 };
 
 typedef uint32_t buffer_t[Forest::BUF_SIZ/sizeof(uint32_t)];
@@ -220,16 +226,14 @@ inline fAdr_t Forest::forestAdr(const char *fas) {
 
 /** Create a string representation of a forest address.
  *  
- *  @param fAdr is the forest address which is to be appended to the end of s
- *  @param s is the string to be extended
- *  @return a reference to the modified string
+ *  @param fAdr is a forest address
+ *  @return the string representation of fAdr
  */
-inline string& Forest::fAdr2string(fAdr_t fAdr, string& s) {
-	char fas[16];
-	if (mcastAdr(fAdr)) sprintf(fas, "%d", fAdr);
-	else sprintf(fas, "%d.%d", zipCode(fAdr), localAdr(fAdr));
-	s = fas;
-	return s;
+inline string Forest::fAdr2string(fAdr_t fAdr) {
+	stringstream ss;
+	if (mcastAdr(fAdr)) ss << fAdr;
+	else ss << zipCode(fAdr) << "." << localAdr(fAdr);
+	return ss.str();
 }
 
 /** Compute link packet length for a given forest packet length.
@@ -240,10 +244,12 @@ inline string& Forest::fAdr2string(fAdr_t fAdr, string& s) {
  */
 inline int Forest::truPktLeng(int x) { return 70+x; }
 
+/** Determine if comtree is a signalling comtree or not.
+ *  @param comt is a comtree number
+ *  @return true if comt is one of the comtrees used for signalling
+ */
+inline static bool isSigComt(comt_t comt) { return comt > 0 && comt < 1000; }
 
-#include "cycle.h"
-typedef ticks cycle_t;
-inline cycle_t cycCnt() { return getticks(); }
 
 } // ends namespace
 

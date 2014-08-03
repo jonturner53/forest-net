@@ -10,12 +10,12 @@
 #define PACKETLOG_H
 
 #include "Forest.h"
-#include "Misc.h"
+#include "Util.h"
 #include "PacketStore.h"
 #include "Packet.h"
 #include "CtlPkt.h"
 #include "PacketFilter.h"
-#include "UiSetPair.h"
+#include "ListPair.h"
 
 namespace forest {
 
@@ -72,7 +72,7 @@ private:
 	int	lastEvent;		///< newest event in evec
 
 	PacketFilter *fvec;		///< table of filters
-	UiSetPair *filters;		///< in-use/free filter indexes
+	ListPair *filters;		///< in-use/free filter indexes
 
 	PacketStore *ps;
 };

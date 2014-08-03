@@ -37,8 +37,8 @@ public:
 
 	/** input/output */
 	bool	read(istream&);
-	string&	toString(string&) const;
-	static string& pktTyp2string(Forest::ptyp_t, string&);
+	string	toString() const;
+	static string pktTyp2string(Forest::ptyp_t);
 	static bool string2pktTyp(string&, Forest::ptyp_t&);
 
 	// packet fields - note: all public
@@ -50,8 +50,10 @@ public:
 	fAdr_t	srcAdr;			///< source address
 	fAdr_t	dstAdr;			///< destination address
 	int	inLink;			///< link on which packet arrived
+	int	outLink;		///< outgoing link for packet
 	ipa_t	tunIp;			///< peer IP addr from substrate header
 	ipp_t	tunPort;		///< peer port # from substrate header
+	int64_t	rcvSeqNum;		///< used by router to identify packets
 	int	bufferLen;		///< number of valid bytes in buffer
 	buffer_t* buffer;		///< pointer to packet buffer
 
