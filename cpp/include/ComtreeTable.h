@@ -416,6 +416,7 @@ inline RateSpec& ComtreeTable::getRates(int ctx, int cLnk) const {
 inline const Dlist& getComtList(int lnk) const {
 	return comtList[lnk];
 }
+*/
 
 /** Get the first comtree link number for a given comtree.
  *  @param ctx is a comtree index
