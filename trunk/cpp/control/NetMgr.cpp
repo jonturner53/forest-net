@@ -9,7 +9,6 @@
 #include "NetMgr.h"
 #include "CpHandler.h"
 
-
 using namespace forest;
 
 /** usage:
@@ -54,14 +53,11 @@ bool init(const char *topoFile) {
 	int maxComtree = 10000;
 	net = new NetInfo(maxNode, maxLink, maxRtr, maxCtl);
 	comtrees = new ComtInfo(maxComtree,*net);
-
-#ifndef DB_MODE
 	admTbl = new AdminTable(100);
 
 	dummyRecord = new char[RECORD_SIZE];
 	for (char *p = dummyRecord; p < dummyRecord+RECORD_SIZE; p++) *p = ' ';
 	dummyRecord[0] = '-'; dummyRecord[RECORD_SIZE-1] = '\n';
-#endif
 
 	ifstream fs; fs.open(topoFile);
 	if (fs.fail() || !net->read(fs) || !comtrees->read(fs)) {
@@ -121,9 +117,6 @@ bool init(const char *topoFile) {
 		return false;
 	}
 
-#ifdef DB_MODE
-	dbConn = new DBConnector(); //DB connector
-#else
 	maxRecord = 0;
 	// read adminData file
 	adminFile.open("adminData");
@@ -148,7 +141,6 @@ bool init(const char *topoFile) {
 			    "on client data file",2);
 		return false;
 	}
-#endif
 
 	return true;
 }
@@ -295,8 +287,8 @@ cerr << "cmd=" << cmd << endl;
 			getFilterSet(buf,reply,cph);
 		} else if (cmd == "getLoggedPackets") {
 			getLoggedPackets(buf,reply,cph);
-		} else if (cmd == "enablePacketLog") {
-			enablePacketLog(buf,reply,cph);
+		} else if (cmd == "enableLocalLog") {
+			enableLocalLog(buf,reply,cph);
 		} else {
 			reply = "unrecognized input\n";
 		}
@@ -326,15 +318,6 @@ bool login(NetBuffer& buf, string& adminName, string& reply) {
 	    buf.readAlphas(s1) && s1 == "password" &&
 	      buf.verify(':') && buf.readWord(pwd) && buf.nextLine() &&
 	    buf.readLine(s2) && s2 == "over") {
-
-#ifdef DB_MODE
-		if (dbConn->isAdmin(adminName, pwd)) {
-			return true;
-		} else {
-			reply = "login failed: try again\n";
-			return false;
-		}
-#else
 		int adx =admTbl->getAdmin(adminName);
 		// locks adx
 		if (adx == 0) {
@@ -348,7 +331,6 @@ bool login(NetBuffer& buf, string& adminName, string& reply) {
 			reply = "login failed: try again\n";
 			return false;
 		}
-#endif
 	} else {
 		reply = "misformatted login request\n";
 		return false;
@@ -364,39 +346,28 @@ bool login(NetBuffer& buf, string& adminName, string& reply) {
  *  returned if the operation does not succeed.
  *  @return true on success, else false
  */
-//TODO: remove adminName as parameter
 bool newAccount(NetBuffer& buf, string& adminName, string& reply) {
 	string newName, pwd, s1, s2;
 	if (buf.verify(':') && buf.readName(newName) && buf.nextLine() &&
 	    buf.readAlphas(s1) && s1 == "password" &&
 	      buf.verify(':') && buf.readWord(pwd) && buf.nextLine() &&
 	    buf.readLine(s2) && s2 == "over") {
-		
-#ifdef DB_MODE
-	if (dbConn->addAdmin(newName, pwd)) {
-		return true;
-	} else {
-		reply = "unable to add admin\n";
-		return false;
-	}
-#else
-	int adx =admTbl->getAdmin(newName);
-	// locks adx
-	if (adx != 0) {
-		admTbl->releaseAdmin(adx);
-		reply = "name not available, select another\n";
-		return false;
-	}
-	adx = admTbl->addAdmin(newName,pwd);
-	if (adx != 0) {
-		writeAdminRecord(adx);
-		admTbl->releaseAdmin(adx);
-		return true;
-	} else {
-		reply = "unable to add admin\n";
-		return false;
+		int adx =admTbl->getAdmin(newName);
+		// locks adx
+		if (adx != 0) {
+			admTbl->releaseAdmin(adx);
+			reply = "name not available, select another\n";
+			return false;
 		}
-#endif
+		adx = admTbl->addAdmin(newName,pwd);
+		if (adx != 0) {
+			writeAdminRecord(adx);
+			admTbl->releaseAdmin(adx);
+			return true;
+		} else {
+			reply = "unable to add admin\n";
+			return false;
+		}
 	} else {
 		reply = "misformatted new admin request\n";
 		return false;
@@ -410,29 +381,16 @@ bool newAccount(NetBuffer& buf, string& adminName, string& reply) {
  *  @param reply is a reference to a string in which an error message may be
  *  returned if the operation does not succeed.
  */
-//TODO: remove adminName as parameter
 void getProfile(NetBuffer& buf, string& adminName, string& reply) {
 	string s, targetName;
 	if (!buf.verify(':') || !buf.readName(targetName) ||
 	    !buf.nextLine() || !buf.readLine(s) || s != "over") {
 		reply = "misformatted get profile request"; return;
 	}
-
-#ifdef DB_MODE
-	DBConnector::adminProfile *profile = new DBConnector::adminProfile;
-	if (dbConn->getAdminProfile(targetName, profile)) {
-		reply  = "realName: \"" + profile->realName + "\"\n";
-		reply += "email: " + profile->email + "\n";
-		delete profile;
-	} else {
-		reply = "unable to retrieve the admin profile\n";
-	}
-#else
 	int tadx = admTbl->getAdmin(targetName);
 	reply  = "realName: \"" + admTbl->getRealName(tadx) + "\"\n";
 	reply += "email: " + admTbl->getEmail(tadx) + "\n";
 	admTbl->releaseAdmin(tadx);
-#endif
 }
 
 /** Handle an update profile request.
@@ -444,7 +402,6 @@ void getProfile(NetBuffer& buf, string& adminName, string& reply) {
  *  @param reply is a reference to a string in which an error message may be
  *  returned if the operation does not succeed.
  */
-//TODO: remove adminName as parameter
 void updateProfile(NetBuffer& buf, string& adminName, string& reply) {
 	string s, targetName;
 	if (!buf.verify(':') || !buf.readName(targetName) ||
@@ -469,23 +426,11 @@ void updateProfile(NetBuffer& buf, string& adminName, string& reply) {
 			return;
 		}
 	}
-
-#ifdef DB_MODE
-	DBConnector::adminProfile *profile = new DBConnector::adminProfile;
-	if (realName.length() > 0 && email.length() > 0) {
-		profile->realName = realName;
-		profile->email = email;
-	}
-	if (!dbConn->updateAdminProfile(targetName, profile))
-		reply = "unable to update admin profile\n";
-	delete profile;
-#else
 	int tadx = admTbl->getAdmin(targetName);
 	if (realName.length() > 0) admTbl->setRealName(tadx,realName);
 	if (email.length() > 0) admTbl->setEmail(tadx,email);
 	writeAdminRecord(tadx);
 	admTbl->releaseAdmin(tadx);
-#endif
 	return;
 }
 
@@ -498,24 +443,16 @@ void updateProfile(NetBuffer& buf, string& adminName, string& reply) {
  *  @param reply is a reference to a string in which an error message may be
  *  returned if the operation does not succeed.
  */
-//TODO: remove adminName as parameter
 void changePassword(NetBuffer& buf, string& adminName, string& reply) {
 	string targetName, pwd;
 	if (!buf.verify(':') || !buf.readName(targetName) ||
 	    !buf.readWord(pwd) || !buf.nextLine()) {
 		reply = "misformatted change password request\n"; return;
 	}
-
-#ifdef DB_MODE
-	if (!dbConn->setPassword(targetName, pwd))
-		reply = "unable to change admin password\n";
-#else
 	int tadx = admTbl->getAdmin(targetName);
 	admTbl->setPassword(tadx,pwd);
 	writeAdminRecord(tadx);
 	admTbl->releaseAdmin(tadx);
-#endif
-
 	return;
 }
 
@@ -670,25 +607,25 @@ void getLoggedPackets(NetBuffer& buf, string& reply, CpHandler& cph){
 	reply.append("\n");
 }
 
-/** Enable packet log in remote router
+/** Enable local log in router
  *  Reads router name from the socket.
  *  @param buf is a reference to a NetBuffer object for the socket
  *  @param reply is a reference to a string to be returned to console
  *  @param cph is a reference to this thread's control packet hander
  */
-void enablePacketLog(NetBuffer& buf, string& reply, CpHandler& cph){
-	string rtrName; int rtr = -1; bool on = false; bool local = false;
+void enableLocalLog(NetBuffer& buf, string& reply, CpHandler& cph){
+	string rtrName; int rtr; bool on;
 	if (!buf.verify(':') || !buf.readName(rtrName) ||
 			((rtr = net->getNodeNum(rtrName)) == 0) ||
-			!buf.readBit(on) || !buf.readBit(local)){
+			!buf.readBit(on)){
 		reply.assign("invalid request\n"); return;
 	}
 	fAdr_t radr = net->getNodeAdr(rtr);
 	pktx repx; CtlPkt repCp;
 	repCp.reset();
-	repx = cph.enablePacketLog(radr, on, local, repCp);
+	repx = cph.enableLocalLog(radr, on, repCp);
 	if (repx == 0 || repCp.mode != CtlPkt::POS_REPLY) {
-		reply.assign("could not enable packet log \n"); return;
+		reply.assign("could not get logged packets \n"); return;
 	}
 }
 
@@ -1226,6 +1163,10 @@ cerr << "got boot request from " << Forest::fAdr2string(rtrAdr,s) << endl;
 		}
 	}
 
+Add code for special case of neighbor comtree.
+Include all links.
+Drop comtree 1 from topoFiles
+
 	// add/configure comtrees
 	for (int ctx = comtrees->firstComtree(); ctx != 0;
 		 ctx = comtrees->nextComtree(ctx)) {
@@ -1248,6 +1189,8 @@ cerr << "got boot request from " << Forest::fAdr2string(rtrAdr,s) << endl;
 	}
 
 	// finally, send positive reply
+// may want to switch back to having a separate START packet,
+// to eliminate long delay between Boot request and reply
 	repCp.reset(CtlPkt::BOOT_ROUTER,CtlPkt::POS_REPLY,cp.seqNum);
 	cph.sendReply(repCp,0);
 	net->setStatus(rtr,NetInfo::UP);
@@ -1433,7 +1376,6 @@ bool readPrefixInfo(char filename[]) {
  *  The calling thread is assumed to hold a lock on the client.
  *  @param adx is a non-negative integer
  */
-#ifndef DB_MODE
 void writeAdminRecord(int adx) {
 	if (adx < 0 || adx >= admTbl->getMaxAdmins()) return;
 
@@ -1475,7 +1417,6 @@ void writeAdminRecord(int adx) {
 	pthread_mutex_unlock(&adminFileLock);
 	return;
 }
-#endif
 
 /** Check for next packet from the remote console.
  

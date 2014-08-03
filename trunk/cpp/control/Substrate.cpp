@@ -108,6 +108,8 @@ bool Substrate::run(int finTimeSec) {
 		}
 
 		// now handle outgoing packets from the thread pool
+// can we avoid iteration? Simplest way to do this is to have threads
+// share the outgoing queue, and include thread number with packet number.
 		for (int t = threads->firstIn(); t!=0; t = threads->nextIn(t)) {
 			if (!pool[t].qp.out.empty()) {
 				outbound(pool[t].qp.out.deq(),t);
@@ -116,6 +118,8 @@ bool Substrate::run(int finTimeSec) {
 		}
 
 		// check for expired timeouts
+// a heap based on timestamp would be better, although
+// this is ok for the common case of a few worker threads
 		for (int t = threads->firstIn(); t != 0;
 			 t = threads->nextIn(t)) {
 			if (pool[t].seqNum != 0 && pool[t].ts < now) {
@@ -206,6 +210,10 @@ void Substrate::outbound(pktx px, int t) {
 		outReqMap->addPair(seqNum,t);
 		pool[t].seqNum = seqNum;
 		cp.seqNum = seqNum++;
+// consider using timestamp to repeat outgoing requests,
+// so worker thread does not need to
+// requires heap to keep track of pending requests
+// will need to make Dheap auto-expandable
 	}
 	cp.pack();
 	p.payErrUpdate();
