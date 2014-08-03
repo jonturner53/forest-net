@@ -9,12 +9,19 @@
 #ifndef PACKETSTORE_H
 #define PACKETSTORE_H
 
+#include <thread>
+#include <mutex>
+#include <chrono>
+
+using std::mutex;
+using std::unique_lock;
+using std::thread;
+
 #include "Forest.h"
-#include "UiList.h"
+#include "List.h"
 #include "Packet.h"
 
 namespace forest {
-
 
 typedef int pktx;
 
@@ -32,8 +39,6 @@ public:
 
 	// getters 
         Packet& getPacket(pktx) const;
-        //buffer_t& getBuffer(pktx) const;      
-        //uint32_t* getPayload(pktx) const;    
 
 	// setters 
         //void setPacket(pktx, const Packet&);
@@ -50,14 +55,16 @@ private:
         int     n;                      ///< number of packets in use
         int     m;                      ///< number of buffers in use
 
+	mutex	mtx;			///< lock on packet store
+
         Packet	*pkt;             	///< hkt[i] = packet with index i
         int     *pb;                    ///< pb[i] = index of packet i's buffer
 
         buffer_t *buff;                 ///< array of packet buffers
         int     *ref;                   ///< array of ref counts for buffers
 
-        UiList    *freePkts;              ///< list of free packets
-        UiList    *freeBufs;              ///< list of free buffers
+        List    *freePkts;              ///< list of free packets
+        List    *freeBufs;              ///< list of free buffers
 };
 
 /** Get reference to packet header.
@@ -67,23 +74,6 @@ private:
 inline Packet& PacketStore::getPacket(pktx px) const {
 	return pkt[px];
 }
-
-/** Get reference to packet buffer.
- *  @param px is a packet index
- *  @return a reference to the buffer for packet p
-inline buffer_t& PacketStore::getBuffer(pktx px) const {
-	return *(pkt[px].buffer); //buff[pb[px]];
-}
- */
-
-/** Get pointer to start of a packet payload.
- *  @param px is a packet index
- *  @return a pointer to first word of the payload for p
-inline uint32_t* PacketStore::getPayload(pktx px) const {
-	return pkt[px].payload();
-	//return &buff[pb[px]][Forest::HDR_LENG/sizeof(uint32_t)];
-}
- */
 
 /** Set the fields in a packet.
  *  @param px is the packet whose header is to be updated

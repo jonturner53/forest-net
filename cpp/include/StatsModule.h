@@ -39,7 +39,7 @@ public:
 
 	// input/output 
 	bool read(istream&);
-	string& toString(string&) const;
+	string toString() const;
 private:
 	int	maxStats;		// max number of recorded statistics
 	int	maxLnk;			// largest link number
@@ -98,7 +98,7 @@ private:
 
 	// helper functions
 	bool	readStat(istream&);	 
-	string&	stat2string(int, string&) const;
+	string	stat2string(int) const;
 };
 
 inline int StatsModule::iPktCnt(int lnk) const {

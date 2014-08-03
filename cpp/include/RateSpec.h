@@ -114,7 +114,7 @@ public:
 	};
 
 	bool read(istream&);
-	string& toString(string& s) const;
+	string toString() const;
 };
 
 } // ends namespace

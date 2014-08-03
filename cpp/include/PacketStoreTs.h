@@ -10,7 +10,7 @@
 #define PACKETSTORETS_H
 
 #include "Forest.h"
-#include "UiList.h"
+#include "List.h"
 #include "Packet.h"
 
 namespace forest {
@@ -59,7 +59,7 @@ private:
         Packet *pkt;             	///< pkt[i] = packet i
         buffer_t *buff;                 ///< buff[i] = buffer for packet i
 
-        UiList    *freePkts;            ///< list of free packets/buffers
+        List    *freePkts;            ///< list of free packets/buffers
 
 	pthread_mutex_t lock;		///< used during allocate/free
 };

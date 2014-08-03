@@ -1,7 +1,7 @@
 /** @file CtlPkt.h
  *
  *  @author Jon Turner
- *  @date 2011
+ *  @date 2014
  *  This is open source software licensed under the Apache 2.0 license.
  *  See http://www.apache.org/licenses/LICENSE-2.0 for details.
  */
@@ -14,6 +14,8 @@
 #include "RateSpec.h"
 #include <vector>
 
+using namespace std;
+
 namespace forest {
 
 /** This class provides a mechanism for handling forest signalling packets.
@@ -21,24 +23,22 @@ namespace forest {
  *  first word of the forest head. The payload identifies the specific
  *  type of packet. Every control packet includes the following three fields.
  *
- *  control packet type		identifies the specific type of packet
+ *  control packet type		identifies the specific type of packet (16 bits)
  *  mode 			specifies that this is a request packet,
- *				a positive reply, or a negative reply
+ *				a positive reply, or a negative reply (16 bits)
  *  sequence number		this field is set by the originator of any
  *				request packet, and the same value is returned
  *				in the reply packet; this allows the requestor
- *				to match repies with earlier requests
+ *				to match repies with earlier requests (64 bits)
  *
  *  The remainder of a control packet payload consists of
  *  (attribute,length,value) tuples. Each attribute is identified by a 16
  *  bit code and the 16 bit length specifies the number of bytes in the value.
- *  Currently, most attributes are 32 bit integers. Some are RateSpecs
- *  and some are ASCII text strings.
- *  The control packet object contains fields for each of the possible
- *  attributes and these fields can be directly read or written.
- *  Pack and unpack methods are provided to pack these fields into
- *  a payload of a packet buffer, or unpack attribute values from a
- *  packet buffer.
+ *  Each control packet type has a fixed format, that is, the number of
+ *  attributes is fixed, and the types are fixed (with a fixed order).
+ *
+ *  Methods are provided to conveniently create control packets to
+ *  be sent, or to "unpack" received control packets.
  */
 class CtlPkt {
 public:
@@ -84,33 +84,20 @@ public:
 		BOOT_LEAF = 123,
 
 		COMTREE_PATH = 130,
-		ADD_BRANCH = 131, CONFIRM = 132, PRUNE = 132
+		ADD_BRANCH = 131, CONFIRM = 132, ABORT = 133,
+		PRUNE = 134, ADD_NODE = 135, DROP_NODE = 136
 	};
 
 	// Control packet attribute types
 	enum CpAttr {
 		UNDEF_ATTR = 0,
-		ADR1 = 1, ADR2 = 2, ADR3 = 3,
-		IP1 = 5, IP2 = 6,
-		PORT1 = 9, PORT2 = 10,
-		RSPEC1 = 13, RSPEC2 = 14,
-		NONCE = 17,
-		CORE_FLAG = 20,
-		IFACE = 21,
-		LINK = 22,
-		NODE_TYPE = 23,
-		COMTREE = 50,
-		COMTREE_OWNER = 51,
-		INDEX1 = 60, INDEX2 = 61,
-		COUNT = 70,
-		QUEUE = 71,
-		ZIPCODE = 72,
-		ERRMSG = 100,
-		STRING = 101,
-		RAWBUF = 102,
-		INTVEC = 103
+		s16 = 1, u16=2,
+		s32 = 3, u32=4,
+		s64 = 5, u64=6,
+		rateSpec = 7,
+		attrString = 8,
+		intVec = 9
 	};
-	static const int MAX_STRING = 200;
 
 	/** Control packet modes */
 	enum CpMode {
@@ -120,61 +107,572 @@ public:
 	// constructors/destructor
 		CtlPkt();
 		CtlPkt(const Packet&);
-		CtlPkt(uint32_t*,int);
-		CtlPkt(CpType,CpMode,uint64_t);
-		CtlPkt(CpType,CpMode,uint64_t,uint32_t*);
 		~CtlPkt();
 
 	// resetting control packet
 	void	reset();
 	void	reset(const Packet&);
-	void	reset(uint32_t*, int);
-	void	reset(CpType,CpMode,uint64_t);
-	void	reset(CpType,CpMode,uint64_t,uint32_t*);
 
-	int	pack();	
-	bool	unpack();	
+	void	put(int16_t);
+	void	put(uint16_t);
+	void	put(int32_t);
+	void	put(uint32_t);
+	void	put(int64_t);
+	void	put(uint64_t);
+	void	put(Forest::ntyp_t);
+	void	put(const RateSpec&);
+	void	put(const string&);
+	void	put(const vector<int32_t>&);
 
-	static string& cpType2string(CpType,string&);
-	static string& cpMode2string(CpMode,string&);
+	int	availSpace();
+
+	bool	get(int16_t&);
+	bool	get(uint16_t&);
+	bool	get(int32_t&);
+	bool	get(uint32_t&);
+	bool	get(int64_t&);
+	bool	get(uint64_t&);
+	bool	get(Forest::ntyp_t&);
+	bool	get(RateSpec&);
+	bool	get(string&);
+	bool	get(vector<int32_t>&);
+
+	void	fmtBase();
+	bool	xtrBase();
+	void	updateSeqNum();
+
+	void	fmtError(const string&, int64_t=0);
+	bool	xtrError(string&);
+			
+	void	fmtAddIface(int, ipa_t, RateSpec, int64_t);
+	bool	xtrAddIface(int&, ipa_t&, RateSpec&);
+	void	fmtAddIfaceReply(ipa_t, ipp_t, int64_t=0);
+	bool	xtrAddIfaceReply(ipa_t&, ipp_t&);
+
+	void	fmtDropIface(int, int64_t);
+	bool	xtrDropIface(int&);
+	void	fmtDropIfaceReply(int64_t=0);
+	bool	xtrDropIfaceReply();
+
+	void	fmtModIface(int, RateSpec, int64_t);
+	bool	xtrModIface(int&, RateSpec&);
+	void	fmtModIfaceReply(int64_t=0);
+	bool	xtrModIfaceReply();
+
+	void	fmtGetIface(int, int64_t);
+	bool	xtrGetIface(int&);
+	void	fmtGetIfaceReply(int, ipa_t, ipp_t, RateSpec,
+				RateSpec,	int64_t=0);
+	bool	xtrGetIfaceReply(int&, ipa_t&, ipp_t&, RateSpec&,
+				RateSpec&);
+
+	void	fmtGetIfaceSet(int, int, int64_t);
+	bool	xtrGetIfaceSet(int&, int&);
+	void	fmtGetIfaceSetReply(int, int, string, int64_t=0);
+	bool	xtrGetIfaceSetReply(int&, int&, string&);
+
+	void	fmtAddLink(Forest::ntyp_t, int, int, ipa_t, ipp_t,
+				fAdr_t,	uint64_t, int64_t);
+	bool	xtrAddLink(Forest::ntyp_t&, int&, int&, ipa_t&, ipp_t&,
+				fAdr_t&,	uint64_t&);
+	void	fmtAddLinkReply(int, fAdr_t, int64_t=0);
+	bool	xtrAddLinkReply(int&, fAdr_t&);
+
+	void	fmtDropLink(int, fAdr_t, int64_t);
+	bool	xtrDropLink(int&, fAdr_t&);
+	void	fmtDropLinkReply(int64_t=0);
+	bool	xtrDropLinkReply();
+
+	void	fmtModLink(int, RateSpec, int64_t);
+	bool	xtrModLink(int&, RateSpec&);
+	void	fmtModLinkReply(int64_t=0);
+	bool	xtrModLinkReply();
+
+	void	fmtGetLink(int, int64_t);
+	bool	xtrGetLink(int&);
+	void	fmtGetLinkReply(int, int, Forest::ntyp_t, ipa_t, ipp_t,
+			fAdr_t, RateSpec&, RateSpec&, int64_t=0);
+	bool	xtrGetLinkReply(int&, int&, Forest::ntyp_t&, ipa_t&, ipp_t&,
+			fAdr_t&, RateSpec&, RateSpec&);
+
+	void	fmtGetLinkSet(int, int, int64_t);
+	bool	xtrGetLinkSet(int&, int&);
+	void	fmtGetLinkSetReply(int, int, string, int64_t=0);
+	bool	xtrGetLinkSetReply(int&, int&, string&);
+
+	void	fmtAddComtree(comt_t, int64_t);
+	bool	xtrAddComtree(comt_t&);
+	void	fmtAddComtreeReply(int64_t=0);
+	bool	xtrAddComtreeReply();
+
+	void	fmtDropComtree(comt_t, int64_t);
+	bool	xtrDropComtree(comt_t&);
+	void	fmtDropComtreeReply(RateSpec, int64_t=0);
+	bool	xtrDropComtreeReply(RateSpec&);
+
+	void	fmtModComtree(comt_t, int, int, int64_t);
+	bool	xtrModComtree(comt_t&, int&, int&);
+	void	fmtModComtreeReply(int64_t=0);
+	bool	xtrModComtreeReply();
+
+	void	fmtGetComtree(comt_t, int64_t);
+	bool	xtrGetComtree(comt_t&);
+	void	fmtGetComtreeReply(comt_t, int, int, int, int64_t=0);
+	bool	xtrGetComtreeReply(comt_t&, int&, int&, int&);
+
+	void	fmtGetComtreeSet(comt_t, int, int64_t);
+	bool	xtrGetComtreeSet(comt_t&, int&);
+	void	fmtGetComtreeSetReply(int, comt_t, string, int64_t=0);
+	bool	xtrGetComtreeSetReply(int&, comt_t&, string&);
+
+	void	fmtAddComtreeLink(comt_t, int, int, ipa_t, ipp_t,
+				fAdr_t,	int64_t);
+	bool	xtrAddComtreeLink(comt_t&, int&, int&, ipa_t&, ipp_t&,
+				fAdr_t&);
+	void	fmtAddComtreeLinkReply(int, RateSpec, int64_t=0);
+	bool	xtrAddComtreeLinkReply(int&, RateSpec&);
+
+	void	fmtDropComtreeLink(comt_t, int, ipa_t, ipp_t, fAdr_t, int64_t);
+	bool	xtrDropComtreeLink(comt_t&, int&, ipa_t&, ipp_t&, fAdr_t&);
+	void	fmtDropComtreeLinkReply(RateSpec, int64_t=0);
+	bool	xtrDropComtreeLinkReply(RateSpec&);
+
+	void	fmtModComtreeLink(comt_t, int, RateSpec, int64_t);
+	bool	xtrModComtreeLink(comt_t&, int&, RateSpec&);
+	void	fmtModComtreeLinkReply(RateSpec&, int64_t=0);
+	bool	xtrModComtreeLinkReply(RateSpec&);
+
+	void	fmtGetComtreeLink(comt_t, int, int64_t);
+	bool	xtrGetComtreeLink(comt_t&, int&);
+	void	fmtGetComtreeLinkReply(comt_t, int, RateSpec, int,
+				fAdr_t,	int64_t=0);
+	bool	xtrGetComtreeLinkReply(comt_t&, int&, RateSpec&, int&,
+				fAdr_t&);
+
+	void	fmtAddRoute(comt_t, fAdr_t, int, int64_t);
+	bool	xtrAddRoute(comt_t&, fAdr_t&, int&);
+	void	fmtAddRouteReply(int64_t=0);
+	bool	xtrAddRouteReply();
+
+	void	fmtDropRoute(comt_t, fAdr_t, int64_t);
+	bool	xtrDropRoute(comt_t&, fAdr_t&);
+	void	fmtDropRouteReply(int64_t=0);
+	bool	xtrDropRouteReply();
+
+	void	fmtModRoute(comt_t, fAdr_t, int, int64_t);
+	bool	xtrModRoute(comt_t&, fAdr_t&, int&);
+	void	fmtModRouteReply(int64_t=0);
+	bool	xtrModRouteReply();
+
+	void	fmtGetRoute(comt_t, fAdr_t, int64_t);
+	bool	xtrGetRoute(comt_t&, fAdr_t&);
+	void	fmtGetRouteReply(comt_t, fAdr_t, int, int64_t=0);
+	bool	xtrGetRouteReply(comt_t&, fAdr_t&, int&);
+
+	void	fmtGetRouteSet(int, int, int64_t);
+	bool	xtrGetRouteSet(int&, int&);
+	void	fmtGetRouteSetReply(int, int, string, int64_t=0);
+	bool	xtrGetRouteSetReply(int&, int&, string&);
+
+	void	fmtAddRouteLink(comt_t, fAdr_t, int, int64_t);
+	bool	xtrAddRouteLink(comt_t&, fAdr_t&, int&);
+	void	fmtAddRouteLinkReply(int64_t=0);
+	bool	xtrAddRouteLinkReply();
+
+	void	fmtDropRouteLink(comt_t, fAdr_t, int, int64_t);
+	bool	xtrDropRouteLink(comt_t&, fAdr_t&, int&);
+	void	fmtDropRouteLinkReply(int64_t=0);
+	bool	xtrDropRouteLinkReply();
+
+	void	fmtAddFilter(int64_t);
+	bool	xtrAddFilter();
+	void	fmtAddFilterReply(int, int64_t=0);
+	bool	xtrAddFilterReply(int&);
+
+	void	fmtDropFilter(int, int64_t);
+	bool	xtrDropFilter(int&);
+	void	fmtDropFilterReply(int64_t=0);
+	bool	xtrDropFilterReply();
+
+	void	fmtModFilter(int, string, int64_t);
+	bool	xtrModFilter(int&, string&);
+	void	fmtModFilterReply(int64_t=0);
+	bool	xtrModFilterReply();
+
+	void	fmtGetFilter(int, int64_t);
+	bool	xtrGetFilter(int&);
+	void	fmtGetFilterReply(string, int64_t=0);
+	bool	xtrGetFilterReply(string&);
+
+	void	fmtGetFilterSet(int, int, int64_t);
+	bool	xtrGetFilterSet(int&, int&);
+	void	fmtGetFilterSetReply(int, int, string, int64_t=0);
+	bool	xtrGetFilterSetReply(int&, int&, string&);
+
+	void	fmtGetLoggedPackets(int64_t);
+	bool	xtrGetLoggedPackets();
+	void	fmtGetLoggedPacketsReply(int, string, int64_t=0);
+	bool	xtrGetLoggedPacketsReply(int&, string&);
+
+	void	fmtEnablePacketLog(int, int, int64_t);
+	bool	xtrEnablePacketLog(int&, int&);
+	void	fmtEnablePacketLogReply(int64_t=0);
+	bool	xtrEnablePacketLogReply();
+
+	void	fmtNewSession(ipa_t, RateSpec, int64_t);
+	bool	xtrNewSession(ipa_t&, RateSpec&);
+	void	fmtNewSessionReply(fAdr_t, fAdr_t, ipa_t, ipp_t,
+				uint64_t,	int64_t=0);
+	bool	xtrNewSessionReply(fAdr_t&, fAdr_t&, ipa_t&, ipp_t&,
+				uint64_t&);
+
+	void	fmtCancelSession(fAdr_t, fAdr_t, int64_t);
+	bool	xtrCancelSession(fAdr_t&, fAdr_t&);
+	void	fmtCancelSessionReply(int64_t=0);
+	bool	xtrCancelSessionReply();
+
+	void	fmtClientConnect(fAdr_t, fAdr_t, int64_t);
+	bool	xtrClientConnect(fAdr_t&, fAdr_t&);
+	void	fmtClientConnectReply(int64_t=0);
+	bool	xtrClientConnectReply();
+
+	void	fmtClientDisconnect(fAdr_t, fAdr_t, int64_t);
+	bool	xtrClientDisconnect(fAdr_t&, fAdr_t&);
+	void	fmtClientDisconnectReply(int64_t=0);
+	bool	xtrClientDisconnectReply();
+
+	void	fmtConfigLeaf(fAdr_t, fAdr_t, ipa_t, ipp_t,
+			uint64_t, int64_t);
+	bool	xtrConfigLeaf(fAdr_t&, fAdr_t&, ipa_t&, ipp_t&, uint64_t&);
+	void	fmtConfigLeafReply(int64_t=0);
+	bool	xtrConfigLeafReply();
+
+	void	fmtSetLeafRange(fAdr_t, fAdr_t, int64_t);
+	bool	xtrSetLeafRange(fAdr_t&, fAdr_t&);
+	void	fmtSetLeafRangeReply(int64_t=0);
+	bool	xtrSetLeafRangeReply();
+
+	void	fmtBootRouter(int64_t);
+	bool	xtrBootRouter();
+	void	fmtBootRouterReply(int64_t=0);
+	bool	xtrBootRouterReply();
+
+	void	fmtBootLeaf(int64_t);
+	bool	xtrBootLeaf();
+	void	fmtBootLeafReply(int64_t=0);
+	bool	xtrBootLeafReply();
+
+	void	fmtBootComplete(int64_t);
+	bool	xtrBootComplete();
+	void	fmtBootCompleteReply(int64_t=0);
+	bool	xtrBootCompleteReply();
+
+	void	fmtBootAbort(int64_t);
+	bool	xtrBootAbort();
+	void	fmtBootAbortReply(int64_t=0);
+	bool	xtrBootAbortReply();
+
+	static string cpType2string(CpType);
+	static string cpMode2string(CpMode);
 	static bool string2cpType(string&, CpType&);
 	static bool string2cpMode(string&, CpMode&);
 
-	string&	avPair2string(CpAttr, string&); 
-	string&	toString(string&); 
+	string	avPair2string(CpAttr); 
 	string	toString(); 
 
 	CpType	type;			///< control packet type 
 	CpMode	mode;			///< request/return type
 	int64_t seqNum;			///< sequence number
 
-	fAdr_t	adr1, adr2, adr3;	///< forest address fields
-	ipa_t	ip1, ip2;		///< ip address fields
-	ipp_t	port1, port2;		///< ip port number fields
-	RateSpec rspec1, rspec2;	///< rate specs
-	uint64_t nonce;			///< nonce used when connecting links
-	int8_t	coreFlag;		///< comtree core flag
-	int	iface;			///< interface number
-	int	link;			///< link number
-	Forest::ntyp_t nodeType;	///< type of a node
-	comt_t	comtree;		///< comtree number
-	fAdr_t	comtreeOwner;		///< comtree owner
-	int	index1, index2;		///< table indexes
-	int	count;			///< count field
-	int	queue;			///< queue number
-	int	zipCode;		///< zip code
-
-	uint32_t* payload;		///< pointer to start of packet payload
+	char*	payload;		///< pointer to start of packet payload
 	int	paylen;			///< payload length in bytes
-
-	string	errMsg;			///< buffer for error messages
-	string	stringData;		///< buffer for string data
-	vector<int> ivec;		///< vector of integers
-
 private:
+	char*	next;			///< pointer to next byte in payload
 };
 
-} // ends namespace
+/** Format the base fields of the control packet.
+ *  Packs the type, mode and sequence number into the payload region
+ *  of the associated packet object.
+ */
+inline void CtlPkt::fmtBase() {
+	next = payload;
+	*((int16_t*) next)=htons((int16_t) type);	next+=sizeof(int16_t);
+	*((int16_t*) next)=htons((int16_t) mode);	next+=sizeof(int16_t);
+	*((int32_t*) next)=htonl((int32_t) ((seqNum >> 32) & 0xffffffff));
+							next+=sizeof(int32_t);
+	*((int32_t*) next)=htonl((int32_t) (seqNum & 0xffffffff));
+							next+=sizeof(int32_t);
+	paylen = next - payload;
+}
 
+/** Extract the base fields of the control packet.
+ *  Extracts the type, mode and sequence number into the payload region
+ *  of the associated packet object.
+ */
+inline bool CtlPkt::xtrBase() {
+	next = payload;
+	type = (CpType) ntohs(*((int16_t*) next)); next += sizeof(int16_t);
+        mode = (CpMode) ntohs(*((int16_t*) next)); next += sizeof(int16_t);
+        seqNum = ntohl(*((uint32_t*) next)); next += sizeof(uint32_t);
+        seqNum <<= 32;
+        seqNum  |= ntohl(*((uint32_t*) next)); next += sizeof(uint32_t);
+	return (paylen >= next - payload);
+}
+
+/** Update the sequence number field of a control packet.
+ */
+inline void CtlPkt::updateSeqNum() {
+	char* p = payload + 2*sizeof(int16_t);
+	*((int32_t*) p) = htonl((int32_t) ((seqNum >> 32) & 0xffffffff));
+	p += sizeof(int32_t);
+	*((int32_t*) ) = htonl((int32_t) (seqNum & 0xffffffff));
+}
+
+/** Add an (attribute, length, value) tuple to the packet.
+ *  @param x is a value to be added to the packet.
+ */
+inline void CtlPkt::put(int16_t x) {
+	*((int16_t*) next)=htons(s16); 			next+=sizeof(int16_t);
+	*((int16_t*) next)=htons((int16_t) sizeof(x));	next+=sizeof(int16_t);
+	*((int16_t*) next)=htons(x); 			next+=sizeof(x);
+}
+
+/** Add an (attribute, length, value) tuple to the packet.
+ *  @param x is a value to be added to the packet.
+ */
+inline void CtlPkt::put(uint16_t x) {
+	*((int16_t*) next)=htons(u16); 			next+=sizeof(int16_t);
+	*((int16_t*) next)=htons((int16_t) sizeof(x));	next+=sizeof(int16_t);
+	*((uint16_t*) next)=htons(x); 			next+=sizeof(x);
+}
+
+/** Add an (attribute, length, value) tuple to the packet.
+ *  @param x is a value to be added to the packet.
+ */
+inline void CtlPkt::put(int32_t x) {
+	*((int16_t*) next)=htons(s32); 			next+=sizeof(int16_t);
+	*((int16_t*) next)=htons((int16_t) sizeof(x));	next+=sizeof(int16_t);
+	*((int32_t*) next)=htonl(x); 			next+=sizeof(x);
+}
+
+/** Add an (attribute, length, value) tuple to the packet.
+ *  @param x is a value to be added to the packet.
+ */
+inline void CtlPkt::put(uint32_t x) {
+	*((int16_t*) next)=htons(u32); 			next+=sizeof(int16_t);
+	*((int16_t*) next)=htons((int16_t) sizeof(x));	next+=sizeof(int16_t);
+	*((uint32_t*) next)=htonl(x); 			next+=sizeof(x);
+}
+
+/** Add an (attribute, length, value) tuple to the packet.
+ *  @param x is a value to be added to the packet.
+ */
+inline void CtlPkt::put(int64_t x) {
+	*((int16_t*) next)=htons(s64); 			next+=sizeof(int16_t);
+	*((int16_t*) next)=htons((int16_t) sizeof(x));	next+=sizeof(int16_t);
+	*((int32_t*) next)=htonl((int32_t) ((x >> 32) & 0xffffffff));
+							next+=sizeof(int32_t);
+	*((int32_t*) next)=htonl((int32_t) (x & 0xffffffff));
+							next+=sizeof(int32_t);
+}
+
+/** Add an (attribute, length, value) tuple to the packet.
+ *  @param x is a value to be added to the packet.
+ */
+inline void CtlPkt::put(uint64_t x) {
+	*((int16_t*) next)=htons(u64); 			next+=sizeof(int16_t);
+	*((int16_t*) next)=htons((int16_t) sizeof(x));	next+=sizeof(int16_t);
+	*((int32_t*) next)=htonl((uint32_t) ((x >> 32) & 0xffffffff));
+							next+=sizeof(int32_t);
+	*((int32_t*) next)=htonl((uint32_t) (x & 0xffffffff));
+							next+=sizeof(int32_t);
+}
+
+/** Add an (attribute, length, value) tuple to the packet.
+ *  @param x is a value to be added to the packet.
+ */
+inline void CtlPkt::put(Forest::ntyp_t x) {
+	*((int16_t*) next)=htons(u64); 			next+=sizeof(int16_t);
+	*((int16_t*) next)=htons((int16_t) sizeof(int16_t));
+							next+=sizeof(int16_t);
+	*((int16_t*) next)=htons((int16_t) x); 		next+=sizeof(int16_t);
+}
+
+/** Add an (attribute, length, value) tuple to the packet.
+ *  @param rs is a value to be added to the packet.
+ */
+inline void CtlPkt::put(const RateSpec& rs) {
+	*((int16_t*) next)=htons(rateSpec);		next+=sizeof(int16_t);
+	*((int16_t*) next)=htons((int16_t) sizeof(rs));	next+=sizeof(int16_t);
+	*((int32_t*) next)=htonl(rs.bitRateUp);		next+=sizeof(uint32_t);
+	*((int32_t*) next)=htonl(rs.bitRateDown);	next+=sizeof(uint32_t);
+	*((int32_t*) next)=htonl(rs.pktRateUp);		next+=sizeof(uint32_t);
+	*((int32_t*) next)=htonl(rs.pktRateDown);	next+=sizeof(uint32_t);
+}
+
+/** Add an (attribute, length, value) tuple to the packet.
+ *  @param s is a value to be added to the packet.
+ */
+inline void CtlPkt::put(const string& s) {
+	*((int16_t*) next) = htons(attrString);	next+=sizeof(int16_t);
+	*((int16_t*) next) = htons((int16_t) s.length()); next+=sizeof(int16_t);
+	std::copy(s.c_str(),s.c_str()+s.length(),next);	next+=s.length();
+}
+
+/** Add an (attribute, length, value) tuple to the packet.
+ *  @param v is a value to be added to the packet.
+ */
+inline void CtlPkt::put(const vector<int32_t>& v) {
+	*((int16_t*) next) = htons(intVec);		next+=sizeof(int16_t);
+	*((int16_t*) next) = htons((int16_t) v.size()*sizeof(int32_t));
+							next+=sizeof(int16_t);
+	std::copy(v.begin(),v.end(),(int32_t*) next);
+						next+=v.size()*sizeof(int32_t);
+}
+
+/** Determine how much space is available for the next attribute.
+ *  @return the number of bytes that can be used by the next attribute
+ *  to be packed (after accounting for the associated overhead fields).
+ */
+inline int CtlPkt::availSpace() {
+	return (payload + (Forest::MAX_PLENG-Forest::OVERHEAD))
+		- (next + 2*sizeof(int16_t));
+}
+
+
+/** Get an (attribute, length, value) tuple from the packet.
+ *  @param x used to return the retrieved value
+ */
+inline bool CtlPkt::get(int16_t& x) {
+	if (ntohs(*((int16_t*) next)) != s16) return false;
+	next += sizeof(int16_t);
+	if (ntohs(*((int16_t*) next)) != sizeof(x)) return false;
+	next += sizeof(int16_t);
+	x = ntohs(*((int16_t*) next));
+	next += sizeof(x);
+	return true;
+}
+
+/** Get an (attribute, length, value) tuple from the packet.
+ *  @param x used to return the retrieved value
+ */
+inline bool CtlPkt::get(uint16_t& x) {
+	if (ntohs(*((int16_t*) next)) != u16) return false;
+	next += sizeof(int16_t);
+	if (ntohs(*((int16_t*) next)) != sizeof(x)) return false;
+	next += sizeof(int16_t);
+	x = ntohs(*((uint16_t*) next));
+	next += sizeof(x);
+	return true;
+}
+
+/** Get an (attribute, length, value) tuple from the packet.
+ *  @param x used to return the retrieved value
+ */
+inline bool CtlPkt::get(int32_t& x) {
+	if (ntohs(*((int16_t*) next)) != s32) return false;
+	next += sizeof(int16_t);
+	if (ntohs(*((int16_t*) next)) != sizeof(x)) return false;
+	next += sizeof(int16_t);
+	x = ntohl(*((int32_t*) next));
+	next += sizeof(x);
+	return true;
+}
+
+/** Get an (attribute, length, value) tuple from the packet.
+ *  @param x used to return the retrieved value
+ */
+inline bool CtlPkt::get(uint32_t& x) {
+	if (ntohs(*((int16_t*) next)) != u32) return false;
+	next += sizeof(int16_t);
+	if (ntohs(*((int16_t*) next)) != sizeof(x)) return false;
+	next += sizeof(int16_t);
+	x = ntohl(*((uint32_t*) next));
+	next += sizeof(x);
+	return true;
+}
+
+/** Get an (attribute, length, value) tuple from the packet.
+ *  @param x used to return the retrieved value
+ */
+inline bool CtlPkt::get(int64_t& x) {
+	if (ntohs(*((int16_t*) next)) != s64) return false;
+	next += sizeof(int16_t);
+	if (ntohs(*((int16_t*) next)) != sizeof(x)) return false;
+	next += sizeof(int16_t);
+	x = ntohl(*((int64_t*) next));
+	next += sizeof(x);
+	return true;
+}
+
+/** Get an (attribute, length, value) tuple from the packet.
+ *  @param x used to return the retrieved value
+ */
+inline bool CtlPkt::get(uint64_t& x) {
+	if (ntohs(*((int16_t*) next)) != u64) return false;
+	next += sizeof(int16_t);
+	if (ntohs(*((int16_t*) next)) != sizeof(x)) return false;
+	next += sizeof(int16_t);
+	x = ntohl(*((uint64_t*) next));
+	next += sizeof(x);
+	return true;
+}
+
+/** Get an (attribute, length, value) tuple from the packet.
+ *  @param x used to return the retrieved value
+ */
+inline bool CtlPkt::get(Forest::ntyp_t& x) {
+	if (ntohs(*((int16_t*) next)) != u32) return false;
+	next += sizeof(int16_t);
+	if (ntohs(*((int16_t*) next)) != sizeof(int16_t)) return false;
+	next += sizeof(int16_t);
+	x = (Forest::ntyp_t) ntohs(*((uint16_t*) next));
+	next += sizeof(int16_t);
+	return true;
+}
+
+/** Get an (attribute, length, value) tuple from the packet.
+ *  @param rs used to return the retrieved value
+ */
+inline bool CtlPkt::get(RateSpec& rs) {
+	if (ntohs(*((int16_t*) next)) != rateSpec) return false;
+	next += sizeof(int16_t);
+	if (ntohs(*((int16_t*) next)) != sizeof(rs)) return false;
+	next += sizeof(int16_t);
+	rs.bitRateUp   = ntohl(*((int64_t*) next)); next += sizeof(uint32_t);
+	rs.bitRateDown = ntohl(*((int64_t*) next)); next += sizeof(uint32_t);
+	rs.pktRateUp   = ntohl(*((int64_t*) next)); next += sizeof(uint32_t);
+	rs.pktRateDown = ntohl(*((int64_t*) next)); next += sizeof(uint32_t);
+	return true;
+}
+
+/** Get an (attribute, length, value) tuple from the packet.
+ *  @param s used to return the retrieved value
+ */
+inline bool CtlPkt::get(string& s) {
+	if (ntohs(*((int16_t*) next)) != attrString) return false;
+	next += sizeof(int16_t);
+	int len = ntohs(*((int16_t*) next));
+	next += sizeof(int16_t);
+	std::copy(next, next+len, s.begin());
+	next += len;
+	return true;
+}
+
+/** Get an (attribute, length, value) tuple from the packet.
+ *  @param v is used to return the retrieved value
+ */
+inline bool CtlPkt::get(vector<int32_t>& v) {
+	if (ntohs(*((int16_t*) next)) != attrString) return false;
+	next += sizeof(int16_t);
+	int len = ntohs(*((int16_t*) next))/sizeof(int32_t);
+	next += sizeof(int16_t);
+	int32_t* vv = (int32_t*) next;
+	std::copy(vv, vv+len, v.begin());
+	next += len * sizeof(int32_t);
+	return true;
+}
+
+} // ends namespace
 
 #endif

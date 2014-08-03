@@ -144,10 +144,10 @@ public:
 
 	// io routines
 	bool read(istream&);
-	string& link2string(int,string&) const;
-	string& linkProps2string(int,string&) const;
-	string& linkState2string(int,string&) const;
-	string& toString(string&) const;
+	string	link2string(int) const;
+	string	linkProps2string(int) const;
+	string	linkState2string(int) const;
+	string	toString() const;
 
 	// locking methods for mutually exclusive access
 	void	lock();
