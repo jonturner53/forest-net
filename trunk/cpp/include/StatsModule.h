@@ -3,8 +3,13 @@
 #ifndef STATSMODULE_H
 #define STATSMODULE_H
 
+#include <thread>
+#include <mutex>
 #include "Forest.h"
 #include "ComtreeTable.h"
+
+using std::thread;
+using std::mutex;
 
 namespace forest {
 
@@ -15,15 +20,15 @@ public:
 		~StatsModule();
 
 	// access statistics
-	int	iPktCnt(int) const;
-	int	oPktCnt(int) const;
-	int	discCnt(int) const;
-	int	qDiscCnt(int) const;
-	int	iByteCnt(int) const;
-	int	oByteCnt(int) const;
-	int	getQlen(int) const;
-	int	getQbytes(int) const;
-	int	getLinkQlen(int) const;
+	int	iPktCnt(int);
+	int	oPktCnt(int);
+	int	discCnt(int);
+	int	qDiscCnt(int);
+	int	iByteCnt(int);
+	int	oByteCnt(int);
+	int	getQlen(int);
+	int	getQbytes(int);
+	int	getLinkQlen(int);
 
 	// update statistics counts
 	void	clearLnkStats(int);
@@ -39,12 +44,14 @@ public:
 
 	// input/output 
 	bool read(istream&);
-	string toString() const;
+	string toString();
 private:
 	int	maxStats;		// max number of recorded statistics
 	int	maxLnk;			// largest link number
 	int	maxQ;			// largest queue number
 	int	n;			// number of statistics to record
+
+	mutex	mtx;			// makes all operations atomic
 
 	enum cntrTyp {
 	inPkt, outPkt, inByt, outByt,  	// input/output counts
@@ -101,47 +108,56 @@ private:
 	string	stat2string(int) const;
 };
 
-inline int StatsModule::iPktCnt(int lnk) const {
+inline int StatsModule::iPktCnt(int lnk) {
+	unique_lock<mutex> lck(mtx);
 	return (lnk == 0 ? totInPkt :
 		(lnk == -1 ? rtrInPkt :
 		 (lnk == -2 ? leafInPkt : lnkCnts[lnk].inPkt)));
 }
 
-inline int StatsModule::oPktCnt(int lnk) const {
+inline int StatsModule::oPktCnt(int lnk) {
+	unique_lock<mutex> lck(mtx);
 	return (lnk == 0 ? totOutPkt :
 		(lnk == -1 ? rtrOutPkt :
 		 (lnk == -2 ? leafOutPkt : lnkCnts[lnk].outPkt)));
 }
 
-inline int StatsModule::iByteCnt(int lnk) const {
+inline int StatsModule::iByteCnt(int lnk) {
+	unique_lock<mutex> lck(mtx);
 	return (lnk == 0 ? totInByte :
 		(lnk == -1 ? rtrInByte :
 		 (lnk == -2 ? leafInByte : lnkCnts[lnk].inByte)));
 }
 
-inline int StatsModule::oByteCnt(int lnk) const {
+inline int StatsModule::oByteCnt(int lnk) {
+	unique_lock<mutex> lck(mtx);
 	return (lnk == 0 ? totOutByte :
 		(lnk == -1 ? rtrOutByte :
 		 (lnk == -2 ? leafOutByte : lnkCnts[lnk].outByte)));
 }
 
-inline int StatsModule::discCnt(int lnk) const {
+inline int StatsModule::discCnt(int lnk) {
+	unique_lock<mutex> lck(mtx);
 	return lnkCnts[lnk].discards;
 }
 
-inline int StatsModule::qDiscCnt(int qid) const {
+inline int StatsModule::qDiscCnt(int qid) {
+	unique_lock<mutex> lck(mtx);
 	return qCnts[qid].discards;
 }
 
-inline int StatsModule::getQlen(int qid) const {
+inline int StatsModule::getQlen(int qid) {
+	unique_lock<mutex> lck(mtx);
 	return qCnts[qid].pktLen;
 }
 
-inline int StatsModule::getQbytes(int qid) const {
+inline int StatsModule::getQbytes(int qid) {
+	unique_lock<mutex> lck(mtx);
 	return qCnts[qid].bytLen;
 }
 
-inline int StatsModule::getLinkQlen(int lnk) const {
+inline int StatsModule::getLinkQlen(int lnk) {
+	unique_lock<mutex> lck(mtx);
 	return lnkCnts[lnk].numPkt;
 }
 
