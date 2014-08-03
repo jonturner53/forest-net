@@ -20,7 +20,7 @@ PacketStore::PacketStore(int N1, int M1) : N(N1), M(M1) {
 	pkt = new Packet[N+1]; pb = new int[N+1];
 	buff = new buffer_t[M+1];
 	ref = new int[M+1];
-	freePkts = new UiList(N); freeBufs = new UiList(M);
+	freePkts = new List(N); freeBufs = new List(M);
 
 	int i;
 	for (i = 1; i <= N; i++) { freePkts->addLast(i); pb[i] = 0; }
@@ -37,13 +37,17 @@ PacketStore::~PacketStore() {
  *  @return the packet number or 0, if no more packets available
  */
 pktx PacketStore::alloc() {
-	if (freePkts->empty() || freeBufs->empty()) return 0;
+	unique_lock<mutex> lck(mtx);
+
+	if (freePkts->empty() || freeBufs->empty()) {
+		lck.unlock(); return 0;
+	}
 	n++; m++;
 	pktx px = freePkts->get(1); freePkts->removeFirst();
 	int b = freeBufs->get(1); freeBufs->removeFirst();
-	//pb[px] = b;
 	ref[b] = 1;
 	pkt[px].buffer = &buff[b];
+	lck.unlock();
 	return px;
 }
 
@@ -52,10 +56,14 @@ pktx PacketStore::alloc() {
  *  @param px is the packet number of the packet to be released
  */
 void PacketStore::free(pktx px) {
-	if (px < 1 || px > N || freePkts->member(px)) return;
+	unique_lock<mutex> lck(mtx);
+	if (px < 1 || px > N || freePkts->member(px)) {
+		lck.unlock(); return;
+	}
 	int b = pkt[px].buffer - buff;
 	freePkts->addFirst(px); n--;
 	if ((--ref[b]) == 0) { freeBufs->addFirst(b); m--; }
+	lck.unlock();
 }
 
 /** Make a "clone" of an existing packet.
@@ -65,11 +73,15 @@ void PacketStore::free(pktx px) {
  *  @return the index of the new packet or 0 on failure
  */
 pktx PacketStore::clone(pktx px) {
-	if (freePkts->empty()) return 0;
+	unique_lock<mutex> lck(mtx);
+	if (freePkts->empty()) {
+		lck.unlock(); return 0;
+	}
 	n++;
 	pktx px1 = freePkts->get(1); freePkts->removeFirst();
 	pkt[px1] = pkt[px];
 	int b = pkt[px].buffer - buff; ref[b]++;
+	lck.unlock();
 	return px1;
 }
 
@@ -78,13 +90,15 @@ pktx PacketStore::clone(pktx px) {
  *  @return the index of the new packet.
  */
 pktx PacketStore::fullCopy(pktx px) {
+	unique_lock<mutex> lck(mtx);
 	int px1 = alloc();
-	if (px1 == 0) return 0;
+	if (px1 == 0) {
+		lck.unlock(); return 0;
+	}
+	lck.unlock();
 	Packet& p = getPacket(px); Packet& p1 = getPacket(px1);
-	buffer_t* tmp = p1.buffer; p1 = p; p1.buffer = tmp;
 	int len = (p.length+3)/4;
-        buffer_t& buf = *p.buffer; buffer_t& buf1 = *p1.buffer;
-        for (int i = 0; i < len; i++) buf1[i] = buf[i];
+	std::copy(p.buffer, p.buffer+len, p1.buffer);
 	return px1;
 }
 

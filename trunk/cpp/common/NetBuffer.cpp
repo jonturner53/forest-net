@@ -362,7 +362,7 @@ int NetBuffer::readBlock(char *xbuf, int siz) {
 		if (p == wp && !refill()) break;
 		xbuf[i++] = *p; advance(p);
 	}
-	xbuf[i] = EOS; rp = p;
+	xbuf[i] = '\0'; rp = p;
 	return i;
 }
 

@@ -22,14 +22,13 @@ ipa_t Np4d::ipAddress(const char *ips) {
 
 /** Create a string representation of an IP address.
  *  @param ipa is the IP address in host byte order
- *  @param s is a string in which the result is returned
- *  @return a reference to the modified string
+ *  @return the string representing ipa
  */
-string& Np4d::ip2string(ipa_t ipa, string& s) {
+string Np4d::ip2string(ipa_t ipa) {
 	// ugly code thanks to inet_ntoa's dreadful interface
 	struct in_addr ipa_struct;
 	ipa_struct.s_addr = htonl(ipa);
-	s = inet_ntoa(ipa_struct);
+	string s = inet_ntoa(ipa_struct);
 	return s;
 }
 
@@ -39,14 +38,15 @@ string& Np4d::ip2string(ipa_t ipa, string& s) {
  *  The address is returned in host byte order.
  */
 bool Np4d::readIpAdr(istream& in, ipa_t& ipa) {
-	char adr[4];
+	int adr[4];
 	
-	if (!Misc::readNum(in,adr[0]) || !Util::verify(in,'.') ||
-	    !Misc::readNum(in,adr[1]) || !Util::verify(in,'.') ||
-	    !Misc::readNum(in,adr[2]) || !Util::verify(in,'.') || 
-	    !Misc::readNum(in,adr[3]))
+	if (!Util::readInt(in,adr[0]) || !Util::verify(in,'.') ||
+	    !Util::readInt(in,adr[1]) || !Util::verify(in,'.') ||
+	    !Util::readInt(in,adr[2]) || !Util::verify(in,'.') || 
+	    !Util::readInt(in,adr[3]))
 		return false;
-	ipa = ntohl(*((ipa_t*) &adr[0]));
+	ipa = ((adr[0] & 0xff) << 24) | ((adr[1] & 0xff) << 16) |
+	      ((adr[2] & 0xff) <<  8) | (adr[3] & 0xff);
 	return true;
 }
 
@@ -312,7 +312,7 @@ bool Np4d::recvInt(int sock, uint32_t& val) {
 	uint32_t temp;
 	int nbytes = recv(sock, (void *) &temp, sizeof(uint32_t), 0);
 	if (nbytes != sizeof(uint32_t)) 
-		fatal("Np4d::recvInt: can't receive integer");
+		Util::fatal("Np4d::recvInt: can't receive integer");
 	val = ntohl(temp);
 	return true;
 }
@@ -327,7 +327,7 @@ bool Np4d::recvIntBlock(int sock, uint32_t& val) {
 		if(rem == 0) break;
 	}
 	if (nbytes != sizeof(uint32_t)) 
-		fatal("Np4d::recvInt: can't receive integer");
+		Util::fatal("Np4d::recvInt: can't receive integer");
 	val = *((uint32_t*) temp);
 	val = ntohl(val);
 	return true;
@@ -344,7 +344,7 @@ bool Np4d::sendInt(int sock, uint32_t val) {
 	val = htonl(val);
 	int nbytes = send(sock, (void *) &val, sizeof(uint32_t), 0);
 	if (nbytes != sizeof(uint32_t))
-		fatal("Np4d::sendInt: can't send integer");
+		Util::fatal("Np4d::sendInt: can't send integer");
 	return true;
 }
 
@@ -352,7 +352,7 @@ bool Np4d::sendIntBlock(int sock, uint32_t val) {
 	val = htonl(val);
 	int nbytes = send(sock, (void *) &val, sizeof(uint32_t), 0);
 	if (nbytes != sizeof(uint32_t))
-		fatal("Np4d::sendInt: can't send integer");
+		Util::fatal("Np4d::sendInt: can't send integer");
 	return true;
 }
 /** Receive a vector of 32 bit integers on a stream socket.
@@ -371,7 +371,7 @@ bool Np4d::recvIntVec(int sock, uint32_t vec[], int length) {
 	uint32_t buf[length];
 	int nbytes = recv(sock,(void *) buf, vecSiz, 0);
 	if (nbytes != vecSiz)
-		fatal("Np4d::recvIntVec: can't receive vector");
+		Util::fatal("Np4d::recvIntVec: can't receive vector");
 	for (int i = 0; i < length; i++) vec[i] = ntohl(buf[i]);
 	return true;
 }
@@ -390,7 +390,7 @@ bool Np4d::sendIntVec(int sock, uint32_t vec[], int length) {
 	for (int i = 0; i < length; i++) buf[i] = htonl(vec[i]);
 	int nbytes = send(sock, (void *) buf, vecSiz, 0);
 	if (nbytes != (int) vecSiz) 
-		fatal("Np4d::sendIntVec: can't send vector");
+		Util::fatal("Np4d::sendIntVec: can't send vector");
 	return true;
 }
 
@@ -421,7 +421,7 @@ int Np4d::recvBuf(int sock, char* buf, int buflen) {
 	length = ntohl(length);
 	if (dataAvail(sock) < ((int) (length + sizeof(uint32_t)))) return -1;
 	nbytes = recv(sock,(void *) &length, sizeof(uint32_t), 0);
-	length = min(ntohl(length), buflen);
+	length = min<int>(ntohl(length), buflen);
 	nbytes = recv(sock,(void *) buf, length, 0);
 	return nbytes;
 }
@@ -437,7 +437,7 @@ int Np4d::recvBufBlock(int sock, char* buf, int buflen) {
 	}
 	uint32_t length = *((uint32_t *) lenBuf);
 	length = ntohl(length);
-	length = min(length, buflen);
+	length = min<int>(length, buflen);
 	rem = length;
 	while(true) {
 		nbytes = recv(sock,(void *) &buf[length-rem], length, 0);
@@ -454,11 +454,11 @@ int Np4d::sendBuf(int sock, char* buf, int buflen) {
 	buflen = htonl(buflen);
 	int nbytes = send(sock, (void *) &buflen, sizeof(uint32_t), 0);
 	if (nbytes != sizeof(uint32_t))
-		fatal("Np4d::sendBuf: can't send buffer");
+		Util::fatal("Np4d::sendBuf: can't send buffer");
 	buflen = ntohl(buflen);
 	nbytes = send(sock, (void *) buf, buflen, 0);
 	if (nbytes != buflen)
-		fatal("Np4d::sendBuf: can't send buffer");
+		Util::fatal("Np4d::sendBuf: can't send buffer");
 	return buflen;
 }
 
@@ -466,10 +466,10 @@ int Np4d::sendBufBlock(int sock, char* buf, int buflen) {
 	int length = htonl(buflen);
 	int nbytes = send(sock, (void *) &length, sizeof(uint32_t), 0);
 	if (nbytes != sizeof(uint32_t))
-		fatal("Np4d::sendBuf: can't send buffer");
+		Util::fatal("Np4d::sendBuf: can't send buffer");
 	nbytes = send(sock, (void *) buf, buflen, 0);
 	if (nbytes != buflen)
-		fatal("Np4d::sendBuf: can't send buffer");
+		Util::fatal("Np4d::sendBuf: can't send buffer");
 	return buflen;
 }
 
