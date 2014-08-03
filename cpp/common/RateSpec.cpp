@@ -17,23 +17,22 @@ namespace forest {
  *  @return c or 0, on end-of-file
  */
 bool RateSpec::read(istream& in) {
-	return	Misc::verify(in,'(') && Misc::readNum(in,bitRateUp) &&
-		Misc::verify(in,',') && Misc::readNum(in,bitRateDown) &&
-		Misc::verify(in,',') && Misc::readNum(in,pktRateUp) &&
-		Misc::verify(in,',') && Misc::readNum(in,pktRateDown) &&
-		Misc::verify(in,')');
+	return	Util::verify(in,'(') && Util::readNum(in,bitRateUp) &&
+		Util::verify(in,',') && Util::readNum(in,bitRateDown) &&
+		Util::verify(in,',') && Util::readNum(in,pktRateUp) &&
+		Util::verify(in,',') && Util::readNum(in,pktRateDown) &&
+		Util::verify(in,')');
 }
 
 /** Create a string representation of the rate spec.
  *  @param s is a reference to a string in which result is returned
  *  @param return a reference to s
  */
-string& RateSpec::toString(string& s) const {
+string RateSpec::toString() const {
 	stringstream ss;
 	ss << "(" << this->bitRateUp << "," << this->bitRateDown
 	   << "," << this->pktRateUp << "," << this->pktRateDown << ")";
-	s = ss.str();
-	return s;
+	return ss.str();
 }
 
 } // ends namespace

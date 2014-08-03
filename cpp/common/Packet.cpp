@@ -11,7 +11,6 @@
 
 namespace forest {
 
-
 Packet::Packet() {
 	version = 1; buffer = 0;
 }
@@ -87,10 +86,10 @@ bool Packet::read(istream& in) {
 	int flgs, comt; string ptypString;
 
 	Util::skipBlank(in);
-	if (!Util::readNum(in,length) ||
+	if (!Util::readInt(in,length) ||
 	    !Util::readWord(in,ptypString) ||
-	    !Util::readNum(in,flgs) ||
-	    !Util::readNum(in,comt) ||
+	    !Util::readInt(in,flgs) ||
+	    !Util::readInt(in,comt) ||
 	    !Forest::readForestAdr(in,srcAdr) ||
 	    !Forest::readForestAdr(in,dstAdr))
 		return false;
@@ -103,20 +102,21 @@ bool Packet::read(istream& in) {
         else if (ptypString == "rteRep")     type = Forest::RTE_REPLY;
         else if (ptypString == "client_sig") type = Forest::CLIENT_SIG;
         else if (ptypString == "net_sig")    type = Forest::NET_SIG;
-        else fatal("Packet::getPacket: invalid packet type");
+        else Util::fatal("Packet::getPacket: invalid packet type");
 
 	if (buffer == 0) return true;
 	buffer_t& b = *buffer;
 	pack(); int32_t x;
 	for (int i = 0; i < min(8,(length-HDRLEN)/4); i++) {
-		if (Util::readNum(in,x)) b[(HDRLEN/4)+i] = htonl(x);
+		if (Util::readInt(in,x)) b[(HDRLEN/4)+i] = htonl(x);
 		else b[(HDRLEN/4)+i] = 0;
 	}
 	hdrErrUpdate(); payErrUpdate();
 	return true;
 }
 
-string& Packet::pktTyp2string(Forest::ptyp_t type, string& s) {
+string Packet::pktTyp2string(Forest::ptyp_t type) {
+	string s;
         if (type == Forest::CLIENT_DATA)     s = "data      ";
         else if (type == Forest::SUB_UNSUB)  s = "sub_unsub ";
         else if (type == Forest::CLIENT_SIG) s = "client_sig";
@@ -147,10 +147,9 @@ bool Packet::string2pktTyp(string& s, Forest::ptyp_t& type) {
 
 /** Create a string representing packet contents.
  *  @param b is a reference to a buffer containing the packet
- *  @param s is a reference to a string in which result is returned
- *  @return a reference to s
+ *  @return the string
  */
-string& Packet::toString(string& s) const {
+string Packet::toString() const {
 	stringstream ss;
         ss << "len=" << setw(3) << length;
         ss << " typ=";
@@ -167,11 +166,11 @@ string& Packet::toString(string& s) const {
         else                         ss << "--------- ";
         ss << " flags=" << int(flags);
         ss << " comt=" << setw(3) << comtree;
-        ss << " sadr=" << Forest::fAdr2string(srcAdr,s);
-        ss << " dadr=" << Forest::fAdr2string(dstAdr,s);
+        ss << " sadr=" << Forest::fAdr2string(srcAdr);
+        ss << " dadr=" << Forest::fAdr2string(dstAdr);
 
 	if (buffer == 0) {
-		ss << endl; s = ss.str(); return s;
+		ss << endl; return ss.str();
 	}
 	buffer_t& b = *buffer;
 	int32_t x;
@@ -182,10 +181,9 @@ string& Packet::toString(string& s) const {
         ss << endl;
 	if (type == Forest::CLIENT_SIG || type == Forest::NET_SIG) {
 		CtlPkt cp(*this);
-		ss << cp.toString(s);
+		ss << cp.toString();
 	}
-	s = ss.str();
-	return s;
+	return ss.str();
 }
 
 } // ends namespace

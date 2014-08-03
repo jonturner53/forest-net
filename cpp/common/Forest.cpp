@@ -10,7 +10,6 @@
 
 namespace forest {
 
-
 /** Read a forest address.
  *  @param in is an open input stream
  *  @param fa is a reference to a forest address in which result is returned;
@@ -23,9 +22,9 @@ namespace forest {
 bool Forest::readForestAdr(istream& in, fAdr_t& fa) {
 	int b1, b2;
 	
-	if (!Util::readNum(in,b1)) return false;
+	if (!Util::readInt(in,b1)) return false;
 	if (b1 < 0) { fa = b1; return true; }
-	if (!Util::verify(in,'.') || !Util::readNum(in,b2))
+	if (!Util::verify(in,'.') || !Util::readInt(in,b2))
 		return false;
 	if (b1 == 0 && b2 != 0) return false;
 	if (b1 > 0xffff || b2 > 0xffff) return false;
@@ -33,7 +32,8 @@ bool Forest::readForestAdr(istream& in, fAdr_t& fa) {
 	return true;
 }
 
-string& Forest::nodeType2string(ntyp_t nt, string& s) {
+string Forest::nodeType2string(ntyp_t nt) {
+	string s;
 	if (nt == CLIENT) s = "client";
 	else if (nt == SERVER) s = "server";
 	else if (nt == ROUTER) s = "router";

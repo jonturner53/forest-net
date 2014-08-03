@@ -17,7 +17,7 @@ PacketStoreTs::PacketStoreTs(int N1) : N(N1) {
 	n = 0;
 	pkt = new Packet[N+1]; 
 	buff = new buffer_t[N+1]; 
-	freePkts = new UiList(N); 
+	freePkts = new List(N); 
 
 	for (int i = 1; i <= N; i++) {
 		pkt[i].buffer = &buff[i];
