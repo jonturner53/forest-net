@@ -189,9 +189,9 @@ cerr << x << endl;
         if (!p.hdrErrCheck()) { ps->free(px); return 0; }
 	lnk = lt->lookup(sIpAdr, sPort);
 	if (lnk == 0 && p.type == Forest::CONNECT
-		     && p.length == Forest::OVERHEAD+8) {
-		uint64_t nonce = ntohl(p.payload()[0]); nonce <<= 32;
-		nonce |= ntohl(p.payload()[1]);
+		     && p.length == Forest::OVERHEAD+2*sizeof(uint64_t)) {
+		uint64_t nonce = ntohl(p.payload()[2]); nonce <<= 32;
+		nonce |= ntohl(p.payload()[3]);
 		lnk = lt->lookup(nonce); // check for "startup" entry
 	}
         if (lnk == 0 || cIf != lt->getIface(lnk)) {
