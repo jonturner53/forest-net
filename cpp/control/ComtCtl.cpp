@@ -697,7 +697,8 @@ bool handleComtNewLeaf(pktx px, CtlPkt& cp, CpHandler& cph) {
 			if (radr == branchRtrAdr &&
 			    comtrees->isComtRtr(ctx,radr)) {
 				top = i-1; break;
-			}
+			} else if (i == len-1) {
+				top = i; topRtr ...
 			topRtr = r;
 			r = net->getPeer(r,lnk);
 			radr = net->getNodeAdr(r);
