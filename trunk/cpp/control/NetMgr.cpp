@@ -7,7 +7,6 @@
  */
 
 #include "NetMgr.h"
-#include "CpHandler.h"
 
 using namespace forest;
 
@@ -26,26 +25,57 @@ int main(int argc, char *argv[]) {
 	if (argc != 4 ||
 	     sscanf(argv[3],"%d", &finTime) != 1)
 		fatal("usage: NetMgr topoFile prefixFile finTime");
-	if (!init(argv[1])) {
+	if (!NetMgr::init(argv[1]), argv[2], finTime) {
 		fatal("NetMgr: initialization failure");
 	}
-	if (!readPrefixInfo(argv[2]))
-		fatal("can't read prefix address info");
-	sub->run(finTime);
+	NetMgr::run();
 	exit(0);
 }
 
 namespace forest {
 
 /** Initialization of NetMgr.
+ *  @param topoFile is the name of the topology file
+ *  @param pfxFile is the name of the prefix file
+ *  @param finTime is the number of seconds to run (if zero, run forever)
  *  @return true on success, false on failure
  */
-bool init(const char *topoFile) {
-	Misc::getTimeNs(); // initialize time reference
+bool NetMgr::init(const char *topoFile, const char *pfxFile, int finTime) {
 	int nPkts = 10000;
-	ps = new PacketStoreTs(nPkts+1);
-
+	ps = new PacketStore(nPkts+1);
 	logger = new Logger();
+
+	if (!readPrefixInfo(pfxFile)) return false;
+
+	// setup table of network administrators
+	admTbl = new AdminTable(100);
+
+	dummyRecord = new char[RECORD_SIZE];
+	for (char *p = dummyRecord; p < dummyRecord+RECORD_SIZE; p++) *p = ' ';
+	dummyRecord[0] = '-'; dummyRecord[RECORD_SIZE-1] = '\n';
+
+	maxRecord = 0;
+	// read adminData file
+	adminFile.open("adminData");
+	if (!adminFile.good() || !admTbl->read(adminFile)) {
+		logger->log("NetMgr::init: could not read adminData "
+			    "file",2);
+		return false;
+	}
+	adminFile.clear();
+	// if size of file is not equal to count*RECORD_SIZE
+	// re-write the file using padded records
+	int n = admTbl->getMaxAdx();
+	adminFile.seekp(0,ios_base::end);
+	long len = adminFile.tellp();
+	if (len != (n+1)*RECORD_SIZE) {
+		for (int adx = 0; adx <= n; adx++) writeAdminRecord(adx);
+	}
+	if (pthread_mutex_init(&adminFileLock,NULL) != 0) {
+		logger->log("NetMgr::init: could not initialize lock "
+			    "on client data file",2);
+		return false;
+	}
 
 	// read NetInfo data structure from file
 	int maxNode = 100000; int maxLink = 10000;
@@ -53,11 +83,6 @@ bool init(const char *topoFile) {
 	int maxComtree = 10000;
 	net = new NetInfo(maxNode, maxLink, maxRtr, maxCtl);
 	comtrees = new ComtInfo(maxComtree,*net);
-	admTbl = new AdminTable(100);
-
-	dummyRecord = new char[RECORD_SIZE];
-	for (char *p = dummyRecord; p < dummyRecord+RECORD_SIZE; p++) *p = ' ';
-	dummyRecord[0] = '-'; dummyRecord[RECORD_SIZE-1] = '\n';
 
 	ifstream fs; fs.open(topoFile);
 	if (fs.fail() || !net->read(fs) || !comtrees->read(fs)) {
@@ -102,72 +127,67 @@ bool init(const char *topoFile) {
 		}
 	}
 
-	ipp_t rtrPort = 0; // until router boots
-	uint64_t nonce = 0; // likewise
-	sub = new Substrate(myAdr,myIp,rtrAdr,rtrIp,rtrPort,nonce,500,
-			handler, Forest::NM_PORT, Forest::NM_PORT, ps, logger);
-	if (!sub->init()) {
-		logger->log("init: can't initialize substrate",2);
-		return false;
-	}
-	sub->setRtrReady(false);
-
 	if (myAdr == 0 || cliMgrAdr == 0) {
 		cerr << "could not find netMgr or cliMgr in topology file\n";
 		return false;
 	}
 
-	maxRecord = 0;
-	// read adminData file
-	adminFile.open("adminData");
-	if (!adminFile.good() || !admTbl->read(adminFile)) {
-		logger->log("NetMgr::init: could not read adminData "
-			    "file",2);
+	ipp_t rtrPort = 0; // until router boots
+	uint64_t nonce = 0; // likewise
+
+	// create per-thread NetMgr objects and resize share output queue
+	tpool = new NetMgr[numThreads+1];;
+	NetMgr::outq.resize(2*numThreads);
+
+	// create and intitialize Substrate
+	sub = new Substrate(numThreads, tpool, ps, logger);
+	if (!sub->init(myAdr, myIp, rtrAdr, rtrIp, rtrPort, nonce,
+		       Forest::NM_PORT, Forest::NM_PORT), int finTime) {
+		logger->log("init: can't initialize substrate",2);
 		return false;
 	}
-	adminFile.clear();
-
-
-	// if size of file is not equal to count*RECORD_SIZE
-	// re-write the file using padded records
-	int n = admTbl->getMaxAdx();
-	adminFile.seekp(0,ios_base::end);
-	long len = adminFile.tellp();
-	if (len != (n+1)*RECORD_SIZE) {
-		for (int adx = 0; adx <= n; adx++) writeAdminRecord(adx);
-	}
-	if (pthread_mutex_init(&adminFileLock,NULL) != 0) {
-		logger->log("NetMgr::init: could not initialize lock "
-			    "on client data file",2);
-		return false;
-	}
+	sub->setRtrReady(false);
 
 	return true;
 }
 
+/** Cleanup various data structures. */
 void cleanup() {
 	delete ps; delete net; delete comtrees; delete sub;
 }
 
-/** Main handler for thread.
+/** Start all the NetMgr threads, then start the Substrate and
+ *  wait for it to finish.
+ */
+void NetMgr::runAll() {
+	// start NetMgr threads (uses Controller::start)
+	for (int i = 1; i <= numThreads; i++) {
+		tpool[i].thred = thread(Controller::start, &tpool[i], i, 100);
+	}
+	// start substrate and wait for it to finish
+	Substrate::start(sub);
+	sub->join();
+
+	// and done
+	cleanup();
+}
+
+/** Worker thread.
  *  This method is run as a separate thread and does not terminate
- *  until the process does. It communicates with the main thread
- *  through a pair of queues, passing packet numbers back and forth
- *  across the thread boundary. When a packet number is passed to
+ *  until the process does. It communicates with a Substrate thread
+ *  through a pair of queues, passing packet indexes back and forth
+ *  across the thread boundary. The queues are implemented in the Controller
+ *  class, which is a superclass of NetMgr. Note that there is a separate
+ *  input queue for each thread, but a shared output queue.
+ *  Whenever a packet index is passed through its queue to
  *  a handler, the handler "owns" the corresponding packet and can
  *  read/write it without locking. The handler is required free any
  *  packets that it no longer needs to the packet store.
  *  When the handler has completed the requested operation, it sends
  *  a 0 value back to the main thread, signalling that it is available
  *  to handle another task.
- *  @param qp is a pair of queues; on is the input queue to the
- *  handler, the other is its output queue
  */
-void* handler(void *qp) {
-	Queue& inq = ((Substrate::QueuePair *) qp)->in;
-	Queue& outq = ((Substrate::QueuePair *) qp)->out;
-	CpHandler cph(&inq, &outq, myAdr, logger, ps);
-
+void* NetMgr::run() {
 	while (true) {
 		pktx px = inq.deq();
 		bool success = false;
@@ -178,49 +198,110 @@ void* handler(void *qp) {
 			success = handleConsole(sock, cph);
 		} else {
 			Packet& p = ps->getPacket(px);
-			CtlPkt cp(p.payload(),p.length-Forest::OVERHEAD);
-			cp.unpack();
+			CtlPkt cp(p);
 			switch (cp.type) {
 			case CtlPkt::CLIENT_CONNECT:
 			case CtlPkt::CLIENT_DISCONNECT:
-				success = handleConDisc(px,cp,cph);
+				success = handleConDisc(px,cp);
 				break;
 			case CtlPkt::NEW_SESSION:
-				success = handleNewSession(px,cp,cph);
+				success = handleNewSession(px,cp);
 				break;
 			case CtlPkt::CANCEL_SESSION:
-				success = handleCancelSession(px,cp,cph);
+				success = handleCancelSession(px,cp);
 				break;
 			case CtlPkt::BOOT_LEAF:
 				cph.setTunnel(p.tunIp,p.tunPort);
 				// allow just one node to boot at a time
 				net->lock();
-				success = handleBootLeaf(px,cp,cph);
+				success = handleBootLeaf(px,cp);
 				net->unlock();
-				cph.setTunnel(0,0);
 				break;
 			case CtlPkt::BOOT_ROUTER:
 				cph.setTunnel(p.tunIp,p.tunPort);
 				// allow just one node to boot at a time
 				net->lock();
-				success = handleBootRouter(px,cp,cph);
+				success = handleBootRouter(px,cp);
 				net->unlock();
-				cph.setTunnel(0,0);
 				break;
 			default:
-				cph.errReply(px,cp,"invalid control packet "
-						   "type for NetMgr");
+				errReply(px,cp, "invalid control packet "
+						"type for NetMgr");
 				break;
 			}
 		}
 		if (!success) {
-			string s;
-			cerr << "handler: operation failed\n"
-			     << ps->getPacket(px).toString(s);
+			cerr << "NetMgr::run: operation failed\n"
+			     << ps->getPacket(px).toString();
 		}
 		ps->free(px); // release px now that we're done
-		outq.enq(0); // signal completion to main thread
+		outq.enq(0,myThx); // signal completion to main thread
 	}
+}
+
+/** Send a request packet and return for the reply.
+ *  @param px is the packet number of the packet to be sent
+ *  @param len is the length of the packet's payload
+ *  @param dest is the destinatin address it is to be sent to
+ *  @param opx is an optional argument that defaults to 0; when used,
+ *  it is the packet number of the original request that started the
+ *  operation being processed
+ *  @param s is an optional string to be included in an error reply, that
+ *  should be sent to the host that made the original request, if we do not
+ *  get a positive reply; no error reply is sent when opx == 0
+ *  @param return the packet index of the reply, if it is a positive reply;
+ *  otherwise return 0 after freeing the packet
+ */
+pktx NetMgr::sendRequest(pktx px, int len, fAdr_t dest, pktx opx, string& s) {
+	Packet& p = ps->getPacket(px);
+	p.length = Forest::OVERHEAD + len;
+	p.type = Forest::Net_SIG; p.flags = 0;
+	p.dstAdr = dest; p.srcAdr = myAdr;
+	p.pack(); p.hdrErrUpdate(); p.payErrUpdate();
+
+	outq.enq(px,thx);	// send request through substrate
+	pktx rx = inq.deq();	// and get reply back
+
+	CtlPkt cr(ps->getPacket(rx));
+	if (cr.mode == CtlPkt::POS_REPLY) return rx;
+
+	if (opx != 0) {
+		CtlPkt cop(ps->getPacket(opx));
+		if (cr.mode == CtlPkt::NO_REPLY) {
+			errReply(opx,cop,s + " (no response from target)");
+		} else {
+			string s1; cr.xtrError(s1);
+			errReply(opx,cop,s + " (" + s1 + ")");
+		}
+	}
+	ps->free(rx);
+	return 0;
+}
+
+/** Send a reply packet back through the substrate.
+ *  @param px is the index of the packet to be sent
+ *  @param len is the length of the packet's payload
+ *  @param dest is the destination address for the packet
+ */
+void NetMgr::sendReply(pktx px, int len, fAdr_t dest) {
+	Packet& p = ps->getPacket(px);
+	p.length = Forest::OVERHEAD + len;
+	p.type = Forest::Net_SIG; p.flags = 0;
+	p.dstAdr = dest; p.srcAdr = myAdr;
+	p.pack(); p.hdrErrUpdate(); p.payErrUpdate();
+	outq.enq(px,thx);
+}
+
+/** Format and send an error reply packet.
+ *  @param px is the packet number of the packet being replied to
+ *  @param cp is the control packet unpacked from px
+ *  @param s is a string to be included in the reply packet
+ */
+void NetMgr::errReply(pktx px, CtlPkt& cp, string& s) {
+	pktx ex = ps->fullCopy(px); Packet& e = ps->getPacket(ex);
+	CtlPkt ce(e);
+	ce.fmtError("operation failed [" + s + "]", cp.seqNum);
+	sendReply(ex, ce, ps->getPacket(px).srcAdr);
 }
 
 /** Handle a connection from a remote console.
@@ -232,6 +313,7 @@ void* handler(void *qp) {
  *  by a normal close; return false if an error occurs
  */
 bool handleConsole(int sock, CpHandler& cph) {
+/* omit for now
 	NetBuffer buf(sock,1024);
 	string cmd, reply, adminName;
 	bool loggedIn;
@@ -272,23 +354,23 @@ cerr << "cmd=" << cmd << endl;
 		} else if (cmd == "getComtreeTable") {
 			getComtreeTable(buf,reply, cph);
 		} else if (cmd == "getIfaceTable") {
-			getIfaceTable(buf,reply,cph);
+			getIfaceTable(buf,reply);
 		} else if (cmd == "getRouteTable") {
-			getRouteTable(buf,reply,cph);
+			getRouteTable(buf,reply);
 		} else if (cmd == "addFilter") {
-			addFilter(buf,reply,cph);
+			addFilter(buf,reply);
 		} else if (cmd == "modFilter") {
-			modFilter(buf,reply,cph);
+			modFilter(buf,reply);
 		} else if (cmd == "dropFilter") {
-			dropFilter(buf,reply,cph);
+			dropFilter(buf,reply);
 		} else if (cmd == "getFilter") {
-			getFilter(buf,reply,cph);
+			getFilter(buf,reply);
 		} else if (cmd == "getFilterSet") {
-			getFilterSet(buf,reply,cph);
+			getFilterSet(buf,reply);
 		} else if (cmd == "getLoggedPackets") {
-			getLoggedPackets(buf,reply,cph);
+			getLoggedPackets(buf,reply);
 		} else if (cmd == "enableLocalLog") {
-			enableLocalLog(buf,reply,cph);
+			enableLocalLog(buf,reply);
 		} else {
 			reply = "unrecognized input\n";
 		}
@@ -298,473 +380,480 @@ cerr << "sending reply: " << reply;
 	}
 	return true;
 cerr << "terminating" << endl;
+*/
 }
 
 
+// omit console code for now
 
-
-/** Handle a login request.
- *  Reads from the socket to identify admin and obtain password
- *  @param buf is a NetBuffer associated with the stream socket to an admin
- *  @param adminName is a reference to a string in which the name of the
- *  admin is returned
- *  @param reply is a reference to a string in which an error message may be
- *  returned if the operation does not succeed.
- *  @return true on success, else false
- */
-bool login(NetBuffer& buf, string& adminName, string& reply) {
-	string pwd, s1, s2;
-	if (buf.verify(':') && buf.readName(adminName) && buf.nextLine() &&
-	    buf.readAlphas(s1) && s1 == "password" &&
-	      buf.verify(':') && buf.readWord(pwd) && buf.nextLine() &&
-	    buf.readLine(s2) && s2 == "over") {
-		int adx =admTbl->getAdmin(adminName);
-		// locks adx
-		if (adx == 0) {
-			reply = "login failed: try again\n";
-			return false;
-		} else if (admTbl->checkPassword(adx,pwd)) {
-			admTbl->releaseAdmin(adx);
-			return true;
-		} else {
-			admTbl->releaseAdmin(adx);
-			reply = "login failed: try again\n";
-			return false;
-		}
-	} else {
-		reply = "misformatted login request\n";
-		return false;
-	}
-}
-
-/** Handle a new account request.
- *  Reads from the socket to identify admin and obtain password
- *  @param buf is a NetBuffer associated with the stream socket to an admin
- *  @param adminName is a reference to a string in which the name of the
- *  admin is returned
- *  @param reply is a reference to a string in which an error message may be
- *  returned if the operation does not succeed.
- *  @return true on success, else false
- */
-bool newAccount(NetBuffer& buf, string& adminName, string& reply) {
-	string newName, pwd, s1, s2;
-	if (buf.verify(':') && buf.readName(newName) && buf.nextLine() &&
-	    buf.readAlphas(s1) && s1 == "password" &&
-	      buf.verify(':') && buf.readWord(pwd) && buf.nextLine() &&
-	    buf.readLine(s2) && s2 == "over") {
-		int adx =admTbl->getAdmin(newName);
-		// locks adx
-		if (adx != 0) {
-			admTbl->releaseAdmin(adx);
-			reply = "name not available, select another\n";
-			return false;
-		}
-		adx = admTbl->addAdmin(newName,pwd);
-		if (adx != 0) {
-			writeAdminRecord(adx);
-			admTbl->releaseAdmin(adx);
-			return true;
-		} else {
-			reply = "unable to add admin\n";
-			return false;
-		}
-	} else {
-		reply = "misformatted new admin request\n";
-		return false;
-	}
-}
-
-/** Handle a get profile request.
- *  Reads from the socket to identify the target admin.
- *  @param buf is a NetBuffer associated with the stream socket to an admin
- *  @param adminName is the name of the currently logged-in admin
- *  @param reply is a reference to a string in which an error message may be
- *  returned if the operation does not succeed.
- */
-void getProfile(NetBuffer& buf, string& adminName, string& reply) {
-	string s, targetName;
-	if (!buf.verify(':') || !buf.readName(targetName) ||
-	    !buf.nextLine() || !buf.readLine(s) || s != "over") {
-		reply = "misformatted get profile request"; return;
-	}
-	int tadx = admTbl->getAdmin(targetName);
-	reply  = "realName: \"" + admTbl->getRealName(tadx) + "\"\n";
-	reply += "email: " + admTbl->getEmail(tadx) + "\n";
-	admTbl->releaseAdmin(tadx);
-}
-
-/** Handle an update profile request.
- *  Reads from the socket to identify the target admin. This operation
- *  requires either that the target admin is the currently logged-in
- *  admin, or that the logged-in admin has administrative privileges.
- *  @param buf is a NetBuffer associated with the stream socket to an admin
- *  @param adminName is the name of the currently logged-in admin
- *  @param reply is a reference to a string in which an error message may be
- *  returned if the operation does not succeed.
- */
-void updateProfile(NetBuffer& buf, string& adminName, string& reply) {
-	string s, targetName;
-	if (!buf.verify(':') || !buf.readName(targetName) ||
-	    !buf.nextLine()) {
-		reply = "misformatted updateProfile request\n"; return;
-	}
-	// read profile information from admin
-	string item; RateSpec rates;
-	string realName, email; 
-	while (buf.readAlphas(item)) {
-		if (item == "realName" && buf.verify(':') &&
-		    buf.readString(realName) && buf.nextLine()) {
-			// that's all for now
-		} else if (item == "email" && buf.verify(':') &&
-		    buf.readWord(email) && buf.nextLine()) {
-			// that's all for now
-		} else if (item == "over" && buf.nextLine()) {
-			break;
-		} else {
-			reply = "misformatted update profile request (" +
-				item + ")\n";
-			return;
-		}
-	}
-	int tadx = admTbl->getAdmin(targetName);
-	if (realName.length() > 0) admTbl->setRealName(tadx,realName);
-	if (email.length() > 0) admTbl->setEmail(tadx,email);
-	writeAdminRecord(tadx);
-	admTbl->releaseAdmin(tadx);
-	return;
-}
-
-/** Handle a change password request.
- *  Reads from the socket to identify the target admin. This operation
- *  requires either that the target admin is the currently logged-in
- *  admin, or that the logged-in admin has administrative privileges.
- *  @param buf is a NetBuffer associated with the stream socket to an admin
- *  @param adminName is the name of the currently logged-in admin
- *  @param reply is a reference to a string in which an error message may be
- *  returned if the operation does not succeed.
- */
-void changePassword(NetBuffer& buf, string& adminName, string& reply) {
-	string targetName, pwd;
-	if (!buf.verify(':') || !buf.readName(targetName) ||
-	    !buf.readWord(pwd) || !buf.nextLine()) {
-		reply = "misformatted change password request\n"; return;
-	}
-	int tadx = admTbl->getAdmin(targetName);
-	admTbl->setPassword(tadx,pwd);
-	writeAdminRecord(tadx);
-	admTbl->releaseAdmin(tadx);
-	return;
-}
-
-/** Allocate log filter in router and return filter index to Console.
- *  Reads router name from the socket.
- *  @param buf is a reference to a NetBuffer object for the socket
- *  @param reply is a reference to a string to be returned to console
- *  @param cph is a reference to this thread's control packet hander
- */
-void addFilter(NetBuffer& buf, string& reply, CpHandler& cph) {
-	string rtrName; int rtr;
-	if (!buf.verify(':') || !buf.readName(rtrName) ||
-	    (rtr = net->getNodeNum(rtrName)) == 0) {
-		reply.assign("invalid request\n"); return;
-	}
-	fAdr_t radr = net->getNodeAdr(rtr);
-	pktx repx; CtlPkt repCp;
-	repCp.reset();
-	repx = cph.addFilter(radr, repCp);
-	if (repx == 0 || repCp.mode != CtlPkt::POS_REPLY) {
-		reply.assign("could not add log filter\n"); return;
-	}
-	stringstream ss; ss << repCp.index1;
-	reply.append(ss.str());
-	//string index = to_string(repCp.index1);
-	//reply.append(index);
-	reply.append("\n");
-}
-
-/** Modify log filter in router.
- *  Reads router name and filter index from the socket.
- *  @param buf is a reference to a NetBuffer object for the socket
- *  @param reply is a reference to a string to be returned to console
- *  @param cph is a reference to this thread's control packet hander
- */
-void modFilter(NetBuffer& buf, string& reply, CpHandler& cph){
-	string rtrName; int rtr, fx = -1;
-	string filterString;
-	if (!buf.verify(':') || !buf.readName(rtrName) ||
-			((rtr = net->getNodeNum(rtrName)) == 0) || 
-			!buf.readInt(fx) || (fx < 0) ||
-			!buf.nextLine() || !buf.readLine(filterString)){
-		reply.assign("invalid request\n"); return;
-	}
-	fAdr_t radr = net->getNodeAdr(rtr);
-	pktx repx; CtlPkt repCp;
-	repCp.reset();
-	repx = cph.modFilter(radr, fx, filterString, repCp);
-	if (repx == 0 || repCp.mode != CtlPkt::POS_REPLY) {
-		reply.assign("could not modify log filter\n"); return;
-	}
-}
-
-/** Drop log filter from router.
- *  Reads router name and filter index from the socket.
- *  @param buf is a reference to a NetBuffer object for the socket
- *  @param reply is a reference to a string to be returned to console
- *  @param cph is a reference to this thread's control packet hander
- */
-void dropFilter(NetBuffer& buf, string& reply, CpHandler& cph){
-	string rtrName; int rtr, fx = -1;
-	if (!buf.verify(':') || !buf.readName(rtrName) ||
-			((rtr = net->getNodeNum(rtrName)) == 0) ||
-			!buf.readInt(fx) || (fx < 0)){
-		reply.assign("invalid request\n"); return;
-	}
-	fAdr_t radr = net->getNodeAdr(rtr);
-	pktx repx; CtlPkt repCp;
-	repCp.reset();
-	repx = cph.dropFilter(radr, fx, repCp);
-	if (repx == 0 || repCp.mode != CtlPkt::POS_REPLY) {
-		reply.assign("could not drop log filter\n"); return;
-	}
-}
-
-/** Get log filter from router and return to Console.
- *  Reads router name and filter index from the socket.
- *  Log filter is returned as a string line.
- *  @param buf is a reference to a NetBuffer object for the socket
- *  @param reply is a reference to a string to be returned to console
- *  @param cph is a reference to this thread's control packet hander
- */
-void getFilter(NetBuffer& buf, string& reply, CpHandler& cph){
-	string rtrName; int rtr, fx = -1;
-	if (!buf.verify(':') || !buf.readName(rtrName) ||
-			((rtr = net->getNodeNum(rtrName)) == 0) ||
-			!buf.readInt(fx) || (fx < 0)){
-		reply.assign("invalid request\n"); return;
-	}
-	fAdr_t radr = net->getNodeAdr(rtr);
-	pktx repx; CtlPkt repCp;
-	repCp.reset();
-	repx = cph.getFilter(radr, fx, repCp);
-	if (repx == 0 || repCp.mode != CtlPkt::POS_REPLY) {
-		reply.assign("could not get log filter\n"); return;
-	}
-	reply.append(repCp.stringData);
-	reply.append("\n");
-}
-
-/** Get log filter set from router and return to Console.
- *  Reads router name from the socket.
- *	Log filter sets are returned as a text string which each entry on 
- *  a seprate line.
- *  @param buf is a reference to a NetBuffer object for the socket
- *  @param reply is a reference to a string to be returned to console
- *  @param cph is a reference to this thread's control packet hander
- */
-void getFilterSet(NetBuffer& buf, string& reply, CpHandler& cph){
-	string rtrName; int rtr;
-	if (!buf.verify(':') || !buf.readName(rtrName) ||
-			((rtr = net->getNodeNum(rtrName)) == 0)){
-		reply.assign("invalid request\n"); return;
-	}
-	fAdr_t radr = net->getNodeAdr(rtr);
-	pktx repx; CtlPkt repCp;
-	int fx = 0;
-	while(true){
-		repCp.reset();
-		repx = cph.getFilterSet(radr, fx, 10, repCp);
-		if (repx == 0 || repCp.mode != CtlPkt::POS_REPLY) {
-			reply.assign("could not get filter set \n"); return;
-		}
-		reply.append(repCp.stringData);
-		if(repCp.index2 == 0) return;
-		fx = repCp.index2;
-	}
-}
-
-/** Get logged packets from router and return to Console.
- *  Reads router name from the socket.
- *	Logged packets are returned as a text string which each entry on a
- *  separate line.
- *  @param buf is a reference to a NetBuffer object for the socket
- *  @param reply is a reference to a string to be returned to console
- *  @param cph is a reference to this thread's control packet hander
- */
-void getLoggedPackets(NetBuffer& buf, string& reply, CpHandler& cph){
-	string rtrName; int rtr;
-	if (!buf.verify(':') || !buf.readName(rtrName) ||
-			((rtr = net->getNodeNum(rtrName)) == 0)){
-		reply.assign("invalid request\n"); return;
-	}
-	fAdr_t radr = net->getNodeAdr(rtr);
-	pktx repx; CtlPkt repCp;
-	repCp.reset();
-	repx = cph.getLoggedPackets(radr, repCp);
-	if (repx == 0 || repCp.mode != CtlPkt::POS_REPLY) {
-		reply.assign("could not get logged packets \n"); return;
-	}
-	reply.append(repCp.stringData);
-	reply.append("\n");
-}
-
-/** Enable local log in router
- *  Reads router name from the socket.
- *  @param buf is a reference to a NetBuffer object for the socket
- *  @param reply is a reference to a string to be returned to console
- *  @param cph is a reference to this thread's control packet hander
- */
-void enableLocalLog(NetBuffer& buf, string& reply, CpHandler& cph){
-	string rtrName; int rtr; bool on;
-	if (!buf.verify(':') || !buf.readName(rtrName) ||
-			((rtr = net->getNodeNum(rtrName)) == 0) ||
-			!buf.readBit(on)){
-		reply.assign("invalid request\n"); return;
-	}
-	fAdr_t radr = net->getNodeAdr(rtr);
-	pktx repx; CtlPkt repCp;
-	repCp.reset();
-	repx = cph.enableLocalLog(radr, on, repCp);
-	if (repx == 0 || repCp.mode != CtlPkt::POS_REPLY) {
-		reply.assign("could not get logged packets \n"); return;
-	}
-}
-
-/** Get link table from router and return to Console.
- *  Table is returned as a text string which each entry on a separate line.
- *  @param buf is a reference to a NetBuffer object for the socket
- *  @param reply is a reference to a string to be returned to console
- *  @param cph is a reference to this thread's control packet hander
- */
-void getLinkTable(NetBuffer& buf, string& reply, CpHandler& cph) {
-	string rtrName; int rtr;
-	if (!buf.verify(':') || !buf.readName(rtrName) ||
-	    (rtr = net->getNodeNum(rtrName)) == 0) {
-		reply.assign("invalid request\n"); return;
-	}
-	fAdr_t radr = net->getNodeAdr(rtr);
-	int lnk = 0;
-	pktx repx; CtlPkt repCp;
-	while (true) {
-		repCp.reset();
-		repx = cph.getLinkSet(radr, lnk, 10, repCp);
-		if (repx == 0 || repCp.mode != CtlPkt::POS_REPLY) {
-			reply.assign("could not read link table\n"); return;
-		}
-		reply.append(repCp.stringData);
-		if (repCp.index2 == 0) return;
-		lnk = repCp.index2;
-	}
-}
-
-/** Get comtree table from router and return to Console.
- *  Table is returned as a text string which each entry on a separate line.
- *  @param buf is a reference to a NetBuffer object for the socket
- *  @param reply is a reference to a string to be returned to console
- *  @param cph is a reference to this thread's control packet hander
- */
-void getComtreeTable(NetBuffer& buf, string& reply, CpHandler& cph) {
-	string rtrName; int rtr;
-	if (!buf.verify(':') || !buf.readName(rtrName) ||
-	    (rtr = net->getNodeNum(rtrName)) == 0) {
-		reply.assign("invalid request\n"); return;
-	}
-	fAdr_t radr = net->getNodeAdr(rtr);
-	int lnk = 0;
-	pktx repx; CtlPkt repCp;
-	while (true) {
-		repCp.reset();
-		repx = cph.getComtreeSet(radr, lnk, 10, repCp);
-		if (repx == 0 || repCp.mode != CtlPkt::POS_REPLY) {
-			reply.assign("could not read comtree table\n"); return;
-		}
-		reply.append(repCp.stringData);
-		if (repCp.index2 == 0) return;
-		lnk = repCp.index2;
-	}
-}
-
-/** Get iface table from router and return to Console.
- *  Table is returned as a text string which each entry on a separate line.
- *  @param buf is a reference to a NetBuffer object for the socket
- *  @param reply is a reference to a string to be returned to console
- *  @param cph is a reference to this thread's control packet hander
- */
-void getIfaceTable(NetBuffer& buf, string& reply, CpHandler& cph) {
-	string rtrName; int rtr;
-	if (!buf.verify(':') || !buf.readName(rtrName) ||
-	    (rtr = net->getNodeNum(rtrName)) == 0) {
-		reply.assign("invalid request\n"); return;
-	}
-	fAdr_t radr = net->getNodeAdr(rtr);
-	int lnk = 0;
-	pktx repx; CtlPkt repCp;
-	while (true) {
-		repCp.reset();
-		repx = cph.getIfaceSet(radr, lnk, 10, repCp);
-		if (repx == 0 || repCp.mode != CtlPkt::POS_REPLY) {
-			reply.assign("could not read iface table\n"); return;
-		}
-		reply.append(repCp.stringData);
-		if (repCp.index2 == 0) return;
-		lnk = repCp.index2;
-	}
-}
-
-/** Get route table from router and return to Console.
- *  Table is returned as a text string which each entry on a separate line.
- *  @param buf is a reference to a NetBuffer object for the socket
- *  @param reply is a reference to a string to be returned to console
- *  @param cph is a reference to this thread's control packet hander
- */
-void getRouteTable(NetBuffer& buf, string& reply, CpHandler& cph) {
-	string rtrName; int rtr;
-	if (!buf.verify(':') || !buf.readName(rtrName) ||
-	    (rtr = net->getNodeNum(rtrName)) == 0) {
-		reply.assign("invalid request\n"); return;
-	}
-	fAdr_t radr = net->getNodeAdr(rtr);
-	int lnk = 0;
-	pktx repx; CtlPkt repCp;
-	while (true) {
-		repCp.reset();
-		repx = cph.getRouteSet(radr, lnk, 10, repCp);
-		if (repx == 0 || repCp.mode != CtlPkt::POS_REPLY) {
-			reply.assign("could not read route table\n"); return;
-		}
-		reply.append(repCp.stringData);
-		if (repCp.index2 == 0) return;
-		lnk = repCp.index2;
-	}
-}
+// /** Handle a login request.
+//  *  Reads from the socket to identify admin and obtain password
+//  *  @param buf is a NetBuffer associated with the stream socket to an admin
+//  *  @param adminName is a reference to a string in which the name of the
+//  *  admin is returned
+//  *  @param reply is a reference to a string in which an error message may be
+//  *  returned if the operation does not succeed.
+//  *  @return true on success, else false
+//  */
+// bool login(NetBuffer& buf, string& adminName, string& reply) {
+// 	string pwd, s1, s2;
+// 	if (buf.verify(':') && buf.readName(adminName) && buf.nextLine() &&
+// 	    buf.readAlphas(s1) && s1 == "password" &&
+// 	      buf.verify(':') && buf.readWord(pwd) && buf.nextLine() &&
+// 	    buf.readLine(s2) && s2 == "over") {
+// 		int adx =admTbl->getAdmin(adminName);
+// 		// locks adx
+// 		if (adx == 0) {
+// 			reply = "login failed: try again\n";
+// 			return false;
+// 		} else if (admTbl->checkPassword(adx,pwd)) {
+// 			admTbl->releaseAdmin(adx);
+// 			return true;
+// 		} else {
+// 			admTbl->releaseAdmin(adx);
+// 			reply = "login failed: try again\n";
+// 			return false;
+// 		}
+// 	} else {
+// 		reply = "misformatted login request\n";
+// 		return false;
+// 	}
+// }
+// 
+// /** Handle a new account request.
+//  *  Reads from the socket to identify admin and obtain password
+//  *  @param buf is a NetBuffer associated with the stream socket to an admin
+//  *  @param adminName is a reference to a string in which the name of the
+//  *  admin is returned
+//  *  @param reply is a reference to a string in which an error message may be
+//  *  returned if the operation does not succeed.
+//  *  @return true on success, else false
+//  */
+// bool newAccount(NetBuffer& buf, string& adminName, string& reply) {
+// 	string newName, pwd, s1, s2;
+// 	if (buf.verify(':') && buf.readName(newName) && buf.nextLine() &&
+// 	    buf.readAlphas(s1) && s1 == "password" &&
+// 	      buf.verify(':') && buf.readWord(pwd) && buf.nextLine() &&
+// 	    buf.readLine(s2) && s2 == "over") {
+// 		int adx =admTbl->getAdmin(newName);
+// 		// locks adx
+// 		if (adx != 0) {
+// 			admTbl->releaseAdmin(adx);
+// 			reply = "name not available, select another\n";
+// 			return false;
+// 		}
+// 		adx = admTbl->addAdmin(newName,pwd);
+// 		if (adx != 0) {
+// 			writeAdminRecord(adx);
+// 			admTbl->releaseAdmin(adx);
+// 			return true;
+// 		} else {
+// 			reply = "unable to add admin\n";
+// 			return false;
+// 		}
+// 	} else {
+// 		reply = "misformatted new admin request\n";
+// 		return false;
+// 	}
+// }
+// 
+// /** Handle a get profile request.
+//  *  Reads from the socket to identify the target admin.
+//  *  @param buf is a NetBuffer associated with the stream socket to an admin
+//  *  @param adminName is the name of the currently logged-in admin
+//  *  @param reply is a reference to a string in which an error message may be
+//  *  returned if the operation does not succeed.
+//  */
+// void getProfile(NetBuffer& buf, string& adminName, string& reply) {
+// 	string s, targetName;
+// 	if (!buf.verify(':') || !buf.readName(targetName) ||
+// 	    !buf.nextLine() || !buf.readLine(s) || s != "over") {
+// 		reply = "misformatted get profile request"; return;
+// 	}
+// 	int tadx = admTbl->getAdmin(targetName);
+// 	reply  = "realName: \"" + admTbl->getRealName(tadx) + "\"\n";
+// 	reply += "email: " + admTbl->getEmail(tadx) + "\n";
+// 	admTbl->releaseAdmin(tadx);
+// }
+// 
+// /** Handle an update profile request.
+//  *  Reads from the socket to identify the target admin. This operation
+//  *  requires either that the target admin is the currently logged-in
+//  *  admin, or that the logged-in admin has administrative privileges.
+//  *  @param buf is a NetBuffer associated with the stream socket to an admin
+//  *  @param adminName is the name of the currently logged-in admin
+//  *  @param reply is a reference to a string in which an error message may be
+//  *  returned if the operation does not succeed.
+//  */
+// void updateProfile(NetBuffer& buf, string& adminName, string& reply) {
+// 	string s, targetName;
+// 	if (!buf.verify(':') || !buf.readName(targetName) ||
+// 	    !buf.nextLine()) {
+// 		reply = "misformatted updateProfile request\n"; return;
+// 	}
+// 	// read profile information from admin
+// 	string item; RateSpec rates;
+// 	string realName, email; 
+// 	while (buf.readAlphas(item)) {
+// 		if (item == "realName" && buf.verify(':') &&
+// 		    buf.readString(realName) && buf.nextLine()) {
+// 			// that's all for now
+// 		} else if (item == "email" && buf.verify(':') &&
+// 		    buf.readWord(email) && buf.nextLine()) {
+// 			// that's all for now
+// 		} else if (item == "over" && buf.nextLine()) {
+// 			break;
+// 		} else {
+// 			reply = "misformatted update profile request (" +
+// 				item + ")\n";
+// 			return;
+// 		}
+// 	}
+// 	int tadx = admTbl->getAdmin(targetName);
+// 	if (realName.length() > 0) admTbl->setRealName(tadx,realName);
+// 	if (email.length() > 0) admTbl->setEmail(tadx,email);
+// 	writeAdminRecord(tadx);
+// 	admTbl->releaseAdmin(tadx);
+// 	return;
+// }
+// 
+// /** Handle a change password request.
+//  *  Reads from the socket to identify the target admin. This operation
+//  *  requires either that the target admin is the currently logged-in
+//  *  admin, or that the logged-in admin has administrative privileges.
+//  *  @param buf is a NetBuffer associated with the stream socket to an admin
+//  *  @param adminName is the name of the currently logged-in admin
+//  *  @param reply is a reference to a string in which an error message may be
+//  *  returned if the operation does not succeed.
+//  */
+// void changePassword(NetBuffer& buf, string& adminName, string& reply) {
+// 	string targetName, pwd;
+// 	if (!buf.verify(':') || !buf.readName(targetName) ||
+// 	    !buf.readWord(pwd) || !buf.nextLine()) {
+// 		reply = "misformatted change password request\n"; return;
+// 	}
+// 	int tadx = admTbl->getAdmin(targetName);
+// 	admTbl->setPassword(tadx,pwd);
+// 	writeAdminRecord(tadx);
+// 	admTbl->releaseAdmin(tadx);
+// 	return;
+// }
+// 
+// /** Allocate log filter in router and return filter index to Console.
+//  *  Reads router name from the socket.
+//  *  @param buf is a reference to a NetBuffer object for the socket
+//  *  @param reply is a reference to a string to be returned to console
+//  *  @param cph is a reference to this thread's control packet hander
+//  */
+// void addFilter(NetBuffer& buf, string& reply, CpHandler& cph) {
+// 	string rtrName; int rtr;
+// 	if (!buf.verify(':') || !buf.readName(rtrName) ||
+// 	    (rtr = net->getNodeNum(rtrName)) == 0) {
+// 		reply.assign("invalid request\n"); return;
+// 	}
+// 	fAdr_t radr = net->getNodeAdr(rtr);
+// 	pktx repx; CtlPkt repCp;
+// 	repCp.reset();
+// 	repx = cph.addFilter(radr, repCp);
+// 	if (repx == 0 || repCp.mode != CtlPkt::POS_REPLY) {
+// 		reply.assign("could not add log filter\n"); return;
+// 	}
+// 	stringstream ss; ss << repCp.index1;
+// 	reply.append(ss.str());
+// 	//string index = to_string(repCp.index1);
+// 	//reply.append(index);
+// 	reply.append("\n");
+// }
+// 
+// /** Modify log filter in router.
+//  *  Reads router name and filter index from the socket.
+//  *  @param buf is a reference to a NetBuffer object for the socket
+//  *  @param reply is a reference to a string to be returned to console
+//  *  @param cph is a reference to this thread's control packet hander
+//  */
+// void modFilter(NetBuffer& buf, string& reply, CpHandler& cph){
+// 	string rtrName; int rtr, fx = -1;
+// 	string filterString;
+// 	if (!buf.verify(':') || !buf.readName(rtrName) ||
+// 			((rtr = net->getNodeNum(rtrName)) == 0) || 
+// 			!buf.readInt(fx) || (fx < 0) ||
+// 			!buf.nextLine() || !buf.readLine(filterString)){
+// 		reply.assign("invalid request\n"); return;
+// 	}
+// 	fAdr_t radr = net->getNodeAdr(rtr);
+// 	pktx repx; CtlPkt repCp;
+// 	repCp.reset();
+// 	repx = cph.modFilter(radr, fx, filterString, repCp);
+// 	if (repx == 0 || repCp.mode != CtlPkt::POS_REPLY) {
+// 		reply.assign("could not modify log filter\n"); return;
+// 	}
+// }
+// 
+// /** Drop log filter from router.
+//  *  Reads router name and filter index from the socket.
+//  *  @param buf is a reference to a NetBuffer object for the socket
+//  *  @param reply is a reference to a string to be returned to console
+//  *  @param cph is a reference to this thread's control packet hander
+//  */
+// void dropFilter(NetBuffer& buf, string& reply, CpHandler& cph){
+// 	string rtrName; int rtr, fx = -1;
+// 	if (!buf.verify(':') || !buf.readName(rtrName) ||
+// 			((rtr = net->getNodeNum(rtrName)) == 0) ||
+// 			!buf.readInt(fx) || (fx < 0)){
+// 		reply.assign("invalid request\n"); return;
+// 	}
+// 	fAdr_t radr = net->getNodeAdr(rtr);
+// 	pktx repx; CtlPkt repCp;
+// 	repCp.reset();
+// 	repx = cph.dropFilter(radr, fx, repCp);
+// 	if (repx == 0 || repCp.mode != CtlPkt::POS_REPLY) {
+// 		reply.assign("could not drop log filter\n"); return;
+// 	}
+// }
+// 
+// /** Get log filter from router and return to Console.
+//  *  Reads router name and filter index from the socket.
+//  *  Log filter is returned as a string line.
+//  *  @param buf is a reference to a NetBuffer object for the socket
+//  *  @param reply is a reference to a string to be returned to console
+//  *  @param cph is a reference to this thread's control packet hander
+//  */
+// void getFilter(NetBuffer& buf, string& reply, CpHandler& cph){
+// 	string rtrName; int rtr, fx = -1;
+// 	if (!buf.verify(':') || !buf.readName(rtrName) ||
+// 			((rtr = net->getNodeNum(rtrName)) == 0) ||
+// 			!buf.readInt(fx) || (fx < 0)){
+// 		reply.assign("invalid request\n"); return;
+// 	}
+// 	fAdr_t radr = net->getNodeAdr(rtr);
+// 	pktx repx; CtlPkt repCp;
+// 	repCp.reset();
+// 	repx = cph.getFilter(radr, fx, repCp);
+// 	if (repx == 0 || repCp.mode != CtlPkt::POS_REPLY) {
+// 		reply.assign("could not get log filter\n"); return;
+// 	}
+// 	reply.append(repCp.stringData);
+// 	reply.append("\n");
+// }
+// 
+// /** Get log filter set from router and return to Console.
+//  *  Reads router name from the socket.
+//  *	Log filter sets are returned as a text string which each entry on 
+//  *  a seprate line.
+//  *  @param buf is a reference to a NetBuffer object for the socket
+//  *  @param reply is a reference to a string to be returned to console
+//  *  @param cph is a reference to this thread's control packet hander
+//  */
+// void getFilterSet(NetBuffer& buf, string& reply, CpHandler& cph){
+// 	string rtrName; int rtr;
+// 	if (!buf.verify(':') || !buf.readName(rtrName) ||
+// 			((rtr = net->getNodeNum(rtrName)) == 0)){
+// 		reply.assign("invalid request\n"); return;
+// 	}
+// 	fAdr_t radr = net->getNodeAdr(rtr);
+// 	pktx repx; CtlPkt repCp;
+// 	int fx = 0;
+// 	while(true){
+// 		repCp.reset();
+// 		repx = cph.getFilterSet(radr, fx, 10, repCp);
+// 		if (repx == 0 || repCp.mode != CtlPkt::POS_REPLY) {
+// 			reply.assign("could not get filter set \n"); return;
+// 		}
+// 		reply.append(repCp.stringData);
+// 		if(repCp.index2 == 0) return;
+// 		fx = repCp.index2;
+// 	}
+// }
+// 
+// /** Get logged packets from router and return to Console.
+//  *  Reads router name from the socket.
+//  *	Logged packets are returned as a text string which each entry on a
+//  *  separate line.
+//  *  @param buf is a reference to a NetBuffer object for the socket
+//  *  @param reply is a reference to a string to be returned to console
+//  *  @param cph is a reference to this thread's control packet hander
+//  */
+// void getLoggedPackets(NetBuffer& buf, string& reply, CpHandler& cph){
+// 	string rtrName; int rtr;
+// 	if (!buf.verify(':') || !buf.readName(rtrName) ||
+// 			((rtr = net->getNodeNum(rtrName)) == 0)){
+// 		reply.assign("invalid request\n"); return;
+// 	}
+// 	fAdr_t radr = net->getNodeAdr(rtr);
+// 	pktx repx; CtlPkt repCp;
+// 	repCp.reset();
+// 	repx = cph.getLoggedPackets(radr, repCp);
+// 	if (repx == 0 || repCp.mode != CtlPkt::POS_REPLY) {
+// 		reply.assign("could not get logged packets \n"); return;
+// 	}
+// 	reply.append(repCp.stringData);
+// 	reply.append("\n");
+// }
+// 
+// /** Enable local log in router
+//  *  Reads router name from the socket.
+//  *  @param buf is a reference to a NetBuffer object for the socket
+//  *  @param reply is a reference to a string to be returned to console
+//  *  @param cph is a reference to this thread's control packet hander
+//  */
+// void enableLocalLog(NetBuffer& buf, string& reply, CpHandler& cph){
+// 	string rtrName; int rtr; bool on;
+// 	if (!buf.verify(':') || !buf.readName(rtrName) ||
+// 			((rtr = net->getNodeNum(rtrName)) == 0) ||
+// 			!buf.readBit(on)){
+// 		reply.assign("invalid request\n"); return;
+// 	}
+// 	fAdr_t radr = net->getNodeAdr(rtr);
+// 	pktx repx; CtlPkt repCp;
+// 	repCp.reset();
+// 	repx = cph.enableLocalLog(radr, on, repCp);
+// 	if (repx == 0 || repCp.mode != CtlPkt::POS_REPLY) {
+// 		reply.assign("could not get logged packets \n"); return;
+// 	}
+// }
+// 
+// /** Get link table from router and return to Console.
+//  *  Table is returned as a text string which each entry on a separate line.
+//  *  @param buf is a reference to a NetBuffer object for the socket
+//  *  @param reply is a reference to a string to be returned to console
+//  *  @param cph is a reference to this thread's control packet hander
+//  */
+// void getLinkTable(NetBuffer& buf, string& reply, CpHandler& cph) {
+// 	string rtrName; int rtr;
+// 	if (!buf.verify(':') || !buf.readName(rtrName) ||
+// 	    (rtr = net->getNodeNum(rtrName)) == 0) {
+// 		reply.assign("invalid request\n"); return;
+// 	}
+// 	fAdr_t radr = net->getNodeAdr(rtr);
+// 	int lnk = 0;
+// 	pktx repx; CtlPkt repCp;
+// 	while (true) {
+// 		repCp.reset();
+// 		repx = cph.getLinkSet(radr, lnk, 10, repCp);
+// 		if (repx == 0 || repCp.mode != CtlPkt::POS_REPLY) {
+// 			reply.assign("could not read link table\n"); return;
+// 		}
+// 		reply.append(repCp.stringData);
+// 		if (repCp.index2 == 0) return;
+// 		lnk = repCp.index2;
+// 	}
+// }
+// 
+// /** Get comtree table from router and return to Console.
+//  *  Table is returned as a text string which each entry on a separate line.
+//  *  @param buf is a reference to a NetBuffer object for the socket
+//  *  @param reply is a reference to a string to be returned to console
+//  *  @param cph is a reference to this thread's control packet hander
+//  */
+// void getComtreeTable(NetBuffer& buf, string& reply, CpHandler& cph) {
+// 	string rtrName; int rtr;
+// 	if (!buf.verify(':') || !buf.readName(rtrName) ||
+// 	    (rtr = net->getNodeNum(rtrName)) == 0) {
+// 		reply.assign("invalid request\n"); return;
+// 	}
+// 	fAdr_t radr = net->getNodeAdr(rtr);
+// 	int lnk = 0;
+// 	pktx repx; CtlPkt repCp;
+// 	while (true) {
+// 		repCp.reset();
+// 		repx = cph.getComtreeSet(radr, lnk, 10, repCp);
+// 		if (repx == 0 || repCp.mode != CtlPkt::POS_REPLY) {
+// 			reply.assign("could not read comtree table\n"); return;
+// 		}
+// 		reply.append(repCp.stringData);
+// 		if (repCp.index2 == 0) return;
+// 		lnk = repCp.index2;
+// 	}
+// }
+// 
+// /** Get iface table from router and return to Console.
+//  *  Table is returned as a text string which each entry on a separate line.
+//  *  @param buf is a reference to a NetBuffer object for the socket
+//  *  @param reply is a reference to a string to be returned to console
+//  *  @param cph is a reference to this thread's control packet hander
+//  */
+// void getIfaceTable(NetBuffer& buf, string& reply, CpHandler& cph) {
+// 	string rtrName; int rtr;
+// 	if (!buf.verify(':') || !buf.readName(rtrName) ||
+// 	    (rtr = net->getNodeNum(rtrName)) == 0) {
+// 		reply.assign("invalid request\n"); return;
+// 	}
+// 	fAdr_t radr = net->getNodeAdr(rtr);
+// 	int lnk = 0;
+// 	pktx repx; CtlPkt repCp;
+// 	while (true) {
+// 		repCp.reset();
+// 		repx = cph.getIfaceSet(radr, lnk, 10, repCp);
+// 		if (repx == 0 || repCp.mode != CtlPkt::POS_REPLY) {
+// 			reply.assign("could not read iface table\n"); return;
+// 		}
+// 		reply.append(repCp.stringData);
+// 		if (repCp.index2 == 0) return;
+// 		lnk = repCp.index2;
+// 	}
+// }
+// 
+// /** Get route table from router and return to Console.
+//  *  Table is returned as a text string which each entry on a separate line.
+//  *  @param buf is a reference to a NetBuffer object for the socket
+//  *  @param reply is a reference to a string to be returned to console
+//  *  @param cph is a reference to this thread's control packet hander
+//  */
+// void getRouteTable(NetBuffer& buf, string& reply, CpHandler& cph) {
+// 	string rtrName; int rtr;
+// 	if (!buf.verify(':') || !buf.readName(rtrName) ||
+// 	    (rtr = net->getNodeNum(rtrName)) == 0) {
+// 		reply.assign("invalid request\n"); return;
+// 	}
+// 	fAdr_t radr = net->getNodeAdr(rtr);
+// 	int lnk = 0;
+// 	pktx repx; CtlPkt repCp;
+// 	while (true) {
+// 		repCp.reset();
+// 		repx = cph.getRouteSet(radr, lnk, 10, repCp);
+// 		if (repx == 0 || repCp.mode != CtlPkt::POS_REPLY) {
+// 			reply.assign("could not read route table\n"); return;
+// 		}
+// 		reply.append(repCp.stringData);
+// 		if (repCp.index2 == 0) return;
+// 		lnk = repCp.index2;
+// 	}
+// }
 
 /** Handle a connection/disconnection notification from a router.
  *  The request is acknowledged and then forwarded to the
  *  client manager.
  *  @param px is the packet number of the request packet
  *  @param cp is the control packet structure for p (already unpacked)
- *  @param cph is the control packet handler for this thread
  *  @return true if the operation was completed successfully,
  *  otherwise false; an error reply is considered a successful
  *  completion; the operation can fail if it cannot allocate
  *  packets, or if the client manager never acknowledges the
  *  notification.
  */
-bool handleConDisc(pktx px, CtlPkt& cp, CpHandler& cph) {
+bool handleConDisc(pktx px, CtlPkt& cp) {
 	Packet& p = ps->getPacket(px);
+	fAdr_t clientAdr, rtrAdr;
+	if (cp.type == CLIENT_CONNECT) {
+		cp.xtrClientConnect(clientAdr, rtrAdr);
+	} else {
+		cp.xtrClientDisconnect(clientAdr, rtrAdr);
+	}
 
 	// send positive reply back to router
-	CtlPkt repCp(cp.type, CtlPkt::POS_REPLY, cp.seqNum); 
-	cph.sendReply(repCp,p.srcAdr);
+	pktx qx = ps->fullCopy(px); CtlPkt cq(ps->getPacket(qx));
+	cq.fmtReply();
+	sendReply(qx, cq.paylen, p.srcAdr);
 
 	// now, send notification to client manager
-	pktx reply;
+	qx = ps->alloc(); cq.reset(ps->getPacket(qx));
 	if (cp.type == CtlPkt::CLIENT_CONNECT)
-		reply = cph.clientConnect(cliMgrAdr,cp.adr1,p.srcAdr,repCp);
+		cq.fmtClientConnect(clientAdr, rtrAdr);
 	else
-		reply = cph.clientDisconnect(cliMgrAdr,cp.adr1,p.srcAdr,repCp);
-	if (reply == 0) return false;
-	ps->free(reply);
-	return true;
+		cq.fmtClientDisconnect(clientAdr, rtrAdr);
+	pktx rx = sendRequest(qx, cq.paylen, dest, 0, "");
+	if (rx != 0) { ps->free(rx); return true; }
+	return false;
 }
 
 /** Handle a new session request.
@@ -776,19 +865,20 @@ bool handleConDisc(pktx px, CtlPkt& cp, CpHandler& cph) {
  *  to be sent back to the original requestor.
  *  @param px is the packet number of the request packet
  *  @param cp is the control packet structure for p (already unpacked)
- *  @param cph is the control packet handler for this thread
  *  @return true if the operation is completed successfully, else false
  */
-bool handleNewSession(pktx px, CtlPkt& cp, CpHandler& cph) {
+bool handleNewSession(pktx px, CtlPkt& cp) {
 	Packet& p = ps->getPacket(px);
+	ipa_t clientIp; RateSpec clientRates;
+	cp.xtrNewSession(clientIp, clientRates);
+
 	// determine which router to use
 	fAdr_t rtrAdr;
-	if (!findCliRtr(cp.ip1,rtrAdr)) {
-		cph.errReply(px,cp,"No router assigned to client's IP");
+	if (!findCliRtr(clientIp, rtrAdr)) {
+		errReply(px, cp, "No router assigned to client's IP");
 		return true;
 	}
 	int rtr = net->getNodeNum(rtrAdr);
-	RateSpec clientRates = cp.rspec1;
 
 	// find first iface for this router - refine this later
 	int iface = 1;
@@ -801,12 +891,12 @@ bool handleNewSession(pktx px, CtlPkt& cp, CpHandler& cph) {
 	if (clientAdr == 0) return false;
 
 	// send positive reply back to sender
-	CtlPkt repCp(CtlPkt::NEW_SESSION,CtlPkt::POS_REPLY,cp.seqNum);
-        repCp.adr1 = clientAdr; repCp.adr2 = rtrAdr; repCp.adr3 = comtCtlAdr;
-	repCp.ip1 = net->getIfIpAdr(rtr,iface);
-	repCp.port1 = net->getIfPort(rtr,iface);
-	repCp.nonce = nonce;
-	cph.sendReply(repCp,p.srcAdr);
+	pktx qx = ps->alloc(); CtlPkt cq(ps->getPacket(qx));
+	cq.fmtNewSessionReply(clientAdr, rtrAdr, comtCtlAdr, 
+			      net->getIfIpAdr(rtr,iface),
+			      net->getIfPort(rtr,iface), nonce);
+	send(qx, cq.paylen, p.srcAdr);
+
 	return true;
 }
 
@@ -820,101 +910,105 @@ bool handleNewSession(pktx px, CtlPkt& cp, CpHandler& cph) {
  *  @param rtr is the node number of the access router for the new leaf
  *  @param iface is the interface of the access router where leaf connects
  *  @param nonce is the nonce that the leaf will use to connect
- *  @param cph is a reference to the control packet handler for the
- *  thread handling this operation
  *  @param useTunnel is an optional parameter that defaults to false;
  *  when it is true, it specifies that control packets should be
  *  addressed to the tunnel (ip,port) configured in the cph;
  *  @return the forest address of the new leaf on success, else 0
  */
 fAdr_t setupLeaf(int leaf, pktx px, CtlPkt& cp, int rtr, int iface,
-		 uint64_t nonce, CpHandler& cph, bool useTunnel) {
-
+		 uint64_t nonce, bool useTunnel) {
 	Forest::ntyp_t leafType; int leafLink; fAdr_t leafAdr; RateSpec rates;
+	ipa_t leafIp;
+	Packet& p = ps->getPacket(px);
 
 	// first add the link at the router
-	fAdr_t rtrAdr = net->getNodeAdr(rtr);
-	fAdr_t dest = (useTunnel ? 0 : rtrAdr);
-	pktx reply; CtlPkt repCp;
 	if (leaf == 0) { // dynamic client
-		leafType = Forest::CLIENT; leafLink = 0;
-		leafAdr = 0; rates = cp.rspec1;
-		reply = cph.addLink(dest,leafType,iface,nonce,repCp);
-		if (!processReply(px,cp,reply,repCp,cph,
-				  "could not add link to leaf"))
-			return 0;
-		leafLink = repCp.link; leafAdr = repCp.adr1;
+		leafType = Forest::CLIENT; leafLink = leafIp = leafAdr = 0;
 	} else { // static leaf with specified parameters
 		leafType = net->getNodeType(leaf);
 		int lnk = net->firstLinkAt(leaf);
 		leafLink = net->getLLnum(lnk,rtr);
 		leafAdr = net->getNodeAdr(leaf);
 		rates = net->getLinkRates(lnk);
-		ipa_t leafIp = net->getLeafIpAdr(leaf);
-		reply = cph.addLink(dest,leafType,iface,leafLink,
-				    leafIp,0,leafAdr,nonce,repCp);
-		if (!processReply(px,cp,reply,repCp,cph,
-				  "could not add link to leaf"))
-			return 0;
+		leafIp = net->getLeafIpAdr(leaf);
 	}
+	fAdr_t rtrAdr = net->getNodeAdr(rtr);
+	fAdr_t dest = (useTunnel ? 0 : rtrAdr); // TODO - check this
+	pktx qx = ps->alloc(); CtlPkt cq(ps->getPacket(qx));
+	cq.fmtAddLink(leafType, iface, leafLink, leafIp, 0, leafAdr, nonce);
+	pktx rx = sendRequest(qx, cq.paylen, dest, px,
+				"could not add link to leaf");
+	if (rx == 0) return 0;
+	CtlPkt cr(ps->getPacket(rx));
+	cr.xtrAddLinkReply(leafLink, leafAdr)
+	ps->free(rx);
 
 	// next set the link rate
-	reply = cph.modLink(dest,leafLink,rates,repCp);
-	if (!processReply(px,cp,reply,repCp,cph,"could not set link rates"))
-		return 0;
+	qx = ps->alloc(); cq.reset(ps->getPacket(qx));
+	cq.fmtModLink(leafLink,rates);
+	rx = sendRequest(qx, cq.paylen, dest, px, "could not set link rates");
+	if (rx == 0) return 0;
+	ps->free(rx);
 
 	// now add the new leaf to the leaf connection comtree
-	reply = cph.addComtreeLink(dest,Forest::CONNECT_COMT,
-				   leafLink,-1,repCp);
-	if (!processReply(px,cp,reply,repCp,cph,"could not add leaf to "
-			  "connection comtree"))
-		return 0;
+	qx = ps->alloc(); cq.reset(ps->getPacket(qx));
+	cq.fmtAddComtreeLink(Forest::CONNECT_COMT,leafLink,0);
+	rx = sendRequest(qx, cq.paylen, dest, px,
+			 "could not add leaf to connection comtree");
+	if (rx == 0) return 0;
+	ps->free(rx);
 
 	// now modify comtree link rate
 	int ctx = comtrees->getComtIndex(Forest::CONNECT_COMT);
 	rates = comtrees->getDefLeafRates(ctx);
 	comtrees->releaseComtree(ctx);
-	reply = cph.modComtreeLink(dest,Forest::CONNECT_COMT,leafLink,
-				   rates,repCp);
-	if (!processReply(px,cp,reply,repCp,cph,"could not set rate on "
-			  "connection comtree"))
-		return 0;
+	qx = ps->alloc(); cq.reset(ps->getPacket(qx));
+	cq.fmtModComtreeLink(Forest::CONNECT_COMT,leafLink,rates);
+	rx = sendRequest(qx, cq.paylen, dest, px,
+			 "could not set rate on connection comtree");
+	if (rx == 0) return 0;
+	ps->free(rx);
 
-	// now add the new leaf to the client signaling comtree
-	reply = cph.addComtreeLink(dest,Forest::CLIENT_SIG_COMT,
-				   leafLink,-1,repCp);
-	if (!processReply(px,cp,reply,repCp,cph,"could not add leaf to client "
-			 "signalling comtree"))
-		return 0;
+	// now add the new leaf to the client signalling comtree
+	qx = ps->alloc(); cq.reset(ps->getPacket(qx));
+	cq.fmtAddComtreeLink(Forest::CLIENT_SIG_COMTREE,leafLink,0);
+	rx = sendRequest(qx, cq.paylen, dest, px,
+			 "could not add leaf to client signalling comtree");
+	if (rx == 0) return 0;
+	ps->free(rx);
 
-	// and modify its comtree link rate
-	ctx = comtrees->getComtIndex(Forest::CLIENT_SIG_COMT);
+	// now modify its comtree link rate
+	int ctx = comtrees->getComtIndex(Forest::CLIENT_SIG_COMTREE);
 	rates = comtrees->getDefLeafRates(ctx);
 	comtrees->releaseComtree(ctx);
-	reply = cph.modComtreeLink(dest,Forest::CLIENT_SIG_COMT,leafLink,
-				   rates,repCp);
-	if (!processReply(px,cp,reply,repCp,cph,"could not set rate on client "
-			  "signaling comtree"))
-		return 0;
-
+	qx = ps->alloc(); cq.reset(ps->getPacket(qx));
+	cq.fmtModComtreeLink(Forest::CLIENT_SIG_COMTREE,leafLink,rates);
+	rx = sendRequest(qx, cq.paylen, dest, px,
+			 "could not set rate on client signalling comtree");
+	if (rx == 0) return 0;
+	ps->free(rx);
+	
 	if (leafType == Forest::CLIENT) return leafAdr;
 
 	// for controllers, also add to the network signaling comtree
-	reply = cph.addComtreeLink(dest,Forest::NET_SIG_COMT,
-				   leafLink,-1,repCp);
-	if (!processReply(px,cp,reply,repCp,cph,"could not add leaf to network "
-			 "signalling comtree"))
-		return 0;
+	qx = ps->alloc(); cq.reset(ps->getPacket(qx));
+	cq.fmtAddComtreeLink(Forest::NET_SIG_COMTREE,leafLink,0);
+	rx = sendRequest(qx, cq.paylen, dest, px,
+			 "could not add leaf to client signalling comtree");
+	if (rx == 0) return 0;
+	ps->free(rx);
 
-	// and modify comtree link rate
-	ctx = comtrees->getComtIndex(Forest::NET_SIG_COMT);
+	// and modify its comtree link rate
+	int ctx = comtrees->getComtIndex(Forest::NET_SIG_COMTREE);
 	rates = comtrees->getDefLeafRates(ctx);
 	comtrees->releaseComtree(ctx);
-	reply = cph.modComtreeLink(dest,Forest::NET_SIG_COMT,leafLink,
-				   rates,repCp);
-	if (!processReply(px,cp,reply,repCp,cph,"could not set rate on network "
-			  "signaling comtree"))
-		return 0;
+	qx = ps->alloc(); cq.reset(ps->getPacket(qx));
+	cq.fmtModComtreeLink(Forest::NET_SIG_COMTREE,leafLink,rates);
+	rx = sendRequest(qx, cq.paylen, dest, px,
+			 "could not set rate on client signalling comtree");
+	if (rx == 0) return 0;
+	ps->free(rx);
+
 	return leafAdr;
 }
 
@@ -926,31 +1020,34 @@ fAdr_t setupLeaf(int leaf, pktx px, CtlPkt& cp, int rtr, int iface,
  */
 bool handleCancelSession(pktx px, CtlPkt& cp, CpHandler& cph) {
 	Packet& p = ps->getPacket(px);
-	fAdr_t clientAdr = cp.adr1;
-	fAdr_t rtrAdr = cp.adr2;
+	fAdr_t clientAdr, rtrAdr;
+	cp.xtrCancelSession(clientAdr, rtrAdr);
 
 	// verify that clientAdr is in range for router
 	int rtr = net->getNodeNum(rtrAdr);
 	if (rtr == 0) {
-		cph.errReply(px,cp,"no router with specified address");
-		return 0;
+		errReply(px,cp,"no router with specified address");
+		return false;
 	}
 	pair<fAdr_t,fAdr_t> range;
 	net->getLeafRange(rtr, range);
 	if (clientAdr < range.first || clientAdr > range.second) {
-		cph.errReply(px,cp,"client address not in router's range");
+		errReply(px,cp,"client address not in router's range");
 		return false;
 	}
 
-	pktx reply; CtlPkt repCp;
-	reply = cph.dropLink(rtrAdr,0,clientAdr,repCp);
-	if (!processReply(px,cp,reply,repCp,cph,"could not drop link "
-			  "at router"))
-		return false;
+	// drop the client's access link
+	pktx qx = ps->alloc(); CtlPkt cq(ps->getPacket(qx));
+	cq.fmtDropLink(0,clientAdr);
+	rx = sendRequest(qx, cq.paylen, dest, px, "could not drop link");
+	if (rx == 0) return 0;
+	ps->free(rx);
 
 	// send positive reply back to sender
-	repCp.reset(CtlPkt::CANCEL_SESSION,CtlPkt::POS_REPLY,cp.seqNum);
-	cph.sendReply(repCp,p.srcAdr);
+	qx = ps->fullCopy(px); cq.reset(ps->getPacket(qx));
+	cq.fmtReply();
+	sendReply(qx, cq.paylen, cq.srcAdr);
+
 	return true;
 }
 
@@ -962,10 +1059,8 @@ bool handleCancelSession(pktx px, CtlPkt& cp, CpHandler& cph) {
  *  as well as a nonce to be used when it connects.
  *  @param px is the index of the incoming boot request packet
  *  @param cp is the control packet (already unpacked)
- *  @param cph is a reference to the control packet handler
- *  used to send packets out
  */
-bool handleBootLeaf(pktx px, CtlPkt& cp, CpHandler& cph) {
+bool handleBootLeaf(pktx px, CtlPkt& cp) {
 	Packet& p = ps->getPacket(px);
 
 	// first, find leaf in NetInfo object
@@ -974,14 +1069,15 @@ bool handleBootLeaf(pktx px, CtlPkt& cp, CpHandler& cph) {
 		if (net->getLeafIpAdr(leaf) == p.tunIp) break;
 	}
 	if (leaf == 0) {
-		cph.errReply(px,cp,"unknown leaf address");
+		errReply(px,cp,"unknown leaf address");
 		return false;
 	}
 
 	if (net->getStatus(leaf) == NetInfo::UP) {
 		// final reply lost or delayed, resend and quit
-		CtlPkt repCp(CtlPkt::BOOT_LEAF,CtlPkt::POS_REPLY,cp.seqNum);
-		cph.sendReply(repCp,0);
+		pktx qx = ps->fullCopy(px); CtlPkt cq(ps->getPacket(qx);
+		cq.fmtReply();
+		sendReply(qx, cq.paylen, 0);
 		return true;
 	}
 
@@ -992,7 +1088,7 @@ bool handleBootLeaf(pktx px, CtlPkt& cp, CpHandler& cph) {
 	net->setStatus(leaf,NetInfo::BOOTING);
 
 	if (net->getStatus(rtr) != NetInfo::UP) {
-		cph.errReply(px,cp,"access router is not yet up");
+		errReply(px,cp,"access router is not yet up");
 		net->setStatus(leaf,NetInfo::DOWN);
 		return false;
 	}
@@ -1003,27 +1099,28 @@ bool handleBootLeaf(pktx px, CtlPkt& cp, CpHandler& cph) {
 	uint64_t nonce = generateNonce();
 
 	// add link at router and configure rates/comtrees
-	CtlPkt repCp;
-	if (setupLeaf(leaf,px,cp,rtr,iface,nonce,cph) == 0) {
+	if (setupLeaf(leaf,px,cp,rtr,iface,nonce) == 0) {
 		net->setStatus(leaf,NetInfo::DOWN);
 		return false;
 	}
 
 	// Send configuration parameters to leaf
-	// 0 destination address tells cph/substrate to send using
- 	// cph's tunnel parameters; this sends it to leaf
-	int reply = cph.configLeaf(0,net->getNodeAdr(leaf),rtrAdr,
-				   net->getIfIpAdr(rtr,iface),
-		   		   net->getIfPort(rtr,iface), nonce, repCp);
-	if (!processReply(px,cp,reply,repCp,cph,"could not configure "
-			  "leaf node")) {
+	pktx qx = ps->fullCopy(px); CtlPkt cq(ps->getPacket(qx));
+	cq.fmtConfigLeaf(net->getNodeAdr(leaf),rtrAdr,
+			   net->getIfIpAdr(rtr,iface),
+		   	   net->getIfPort(rtr,iface), nonce);
+	pktx rx = sendRequest(qx,cq.paylen,0,px,  // 0 dest sends direct
+				"could not configure leaf node");
+	if (rx == 0) {
 		net->setStatus(leaf,NetInfo::DOWN);
 		return false;
 	}
+	ps->free(rx);
 
 	// finally, send positive ack
-	repCp.reset(CtlPkt::BOOT_LEAF,CtlPkt::POS_REPLY,cp.seqNum);
-	cph.sendReply(repCp,0); // 0 sends it directly back to leaf
+	qx = ps->fullCopy(px); cq.reset(ps->getPacket(qx));
+	cq.fmtReply();
+	sendReply(qx, cq.paylen, 0); // 0 sends it directly back to leaf
 	net->setStatus(leaf,NetInfo::UP);
 
 	logger->log("completed leaf boot request",0,p);
@@ -1034,7 +1131,9 @@ bool handleBootLeaf(pktx px, CtlPkt& cp, CpHandler& cph) {
 uint64_t generateNonce() {
 	uint64_t nonce;
 	do {
-		nonce = Misc::currentTime(); // in seconds since epoch
+		high_resolution_clock::time_point tp;
+		tp = high_resolution_clock::time_point::now();
+		nonce = tp.time_since_epoch().count;
 		nonce *= random();
 	} while (nonce == 0);
 	return nonce;
@@ -1052,29 +1151,26 @@ uint64_t generateNonce() {
  *  @param reply is the packet index for a reply to some outgoing
  *  control packet that was sent by this handler
  *  @param repCp is a reference to the control packet for reply
- *  @param cph is a reference to this handler's control packet handler
  *  @param msg is an error message to be sent back to the original
  *  sender of px, if reply=0 or the associated control packet indicates
  *  a failure
  *  @return true if the reply is not zero and the control packet for
  *  reply indicates that the requested operation succeeded
- */
-bool processReply(pktx px, CtlPkt& cp, pktx reply, CtlPkt& repCp,
-		  CpHandler& cph, const string& msg) {
-	if (reply == 0) {
-		cph.errReply(px,cp,msg + " (no response from target)");
-		ps->free(reply);
+bool processReply(pktx px, CtlPkt& cp, pktx rx, CtlPkt& cr, const string& msg) {
+	if (cr.mode == CtlPkt::NO_REPLY) {
+		errReply(px,cp,msg + " (no response from target)");
+		ps->free(rx);
 		return false;
 	}
-	if (repCp.mode != CtlPkt::POS_REPLY) {
-		string s;
-		cph.errReply(px,cp,msg + " (" + repCp.toString(s) + ")");
-		ps->free(reply);
+	if (cr.mode != CtlPkt::POS_REPLY) {
+		errReply(px,cp,msg + " (" + cr.toString() + ")");
+		ps->free(rx);
 		return false;
 	}
-	ps->free(reply);
+	ps->free(rx);
 	return true;
 }
+ */
 
 /** Handle a boot request from a router.
  *  This requires sending a series of control packets to the router
@@ -1098,38 +1194,35 @@ bool handleBootRouter(pktx px, CtlPkt& cp, CpHandler& cph) {
 
 	// find rtr index based on source address
 	ipa_t rtrAdr = p.srcAdr;
-string s;
-cerr << "got boot request from " << Forest::fAdr2string(rtrAdr,s) << endl;
 	int rtr;
 	for (rtr = net->firstRouter(); rtr != 0; rtr = net->nextRouter(rtr)) {
 		if (net->getNodeAdr(rtr) == rtrAdr) break;
 	}
 	if (rtr == 0) {
-		cph.errReply(px,cp,"boot request from unknown router "
-				   "rejected\n");
+		errReply(px,cp,"boot request from unknown router rejected\n");
 		logger->log("handleBootRequest: received boot request from "
 			   "unknown router\n",2,p);
 		return true;
 	}
 
-	if (net->getStatus(rtr) == NetInfo::UP) {
-		// final reply lost or delayed, resend and quit
-		CtlPkt repCp(CtlPkt::BOOT_ROUTER,CtlPkt::POS_REPLY,cp.seqNum);
-		cph.sendReply(repCp,0);
-		return true;
-	}
+	// reply immediately - just means "message received, standby"
+	pktx qx = ps->fullCopy(px); CtlPkt cq(ps->getPacket(qx));
+	cq.fmtReply();
+	sendReply(qx, cq.paylen, 0);
 
 	net->setStatus(rtr,NetInfo::BOOTING);
 
 	// configure leaf address range
-	CtlPkt repCp;
+	qx = ps->fullCopy(px); cq.reset(ps->getPacket(qx));
 	pair<fAdr_t,fAdr_t> leafRange; net->getLeafRange(rtr,leafRange);
-	int reply = cph.setLeafRange(0,leafRange.first,leafRange.second,repCp);
-	if (!processReply(px,cp,reply,repCp,cph,
-			  "could not configure leaf range")) {
+	cq.fmtSetLeafRange(leafRange.first, leafRange.second);
+	pktx rx = sendRequest(qx, cq.paylen, 0, px
+				"could not configure leaf range");
+	if (rx == 0) {
 		net->setStatus(rtr,NetInfo::DOWN);
 		return false;
 	}
+	ps->free(rx);
 
 	// add/configure interfaces
 	// for each interface in table, do an add iface
@@ -1137,18 +1230,24 @@ cerr << "got boot request from " << Forest::fAdr2string(rtrAdr,s) << endl;
 	int nmIface = net->getIface(nmLnk,nmRtr);
 	for (int i = 1; i <= net->getNumIf(rtr); i++) {
 		if (!net->validIf(rtr,i)) continue;
-		int reply = cph.addIface(0,i,net->getIfIpAdr(rtr,i),
-				         net->getIfRates(rtr,i),repCp);
-		if (!processReply(px,cp,reply,repCp,cph,
-				  "could not add interface at router")) {
+		qx = ps->fullCopy(px); cq.reset (ps->getPacket(qx));
+		cq.fmtAddIface(i,net->getIfIpAdr(rtr,i),net->getIfRates(rtr,i));
+		rx = sendRequest(qx, cq.paylen, 0, px, 
+				 "could not add interface at router");
+		if (rx == 0) {
 			net->setStatus(rtr,NetInfo::DOWN);
 			return false;
 		}
-		net->setIfPort(rtr,i,repCp.port1);
+		ipa_t ifaceIp; ipp_t ifacePort;
+		CtlPkt cr(ps->getPacket(rx));
+		cr.xtrAddIfaceReply(ifaceIp,ifacePort);
+		ps->free(rx);
+
+		net->setIfPort(rtr,i,ifacePort);
 		// if this is the network manager's router, configure port
 		// in substrate
 		if (rtr == nmRtr && i == nmIface) {
-			sub->setRtrPort(repCp.port1);
+			sub->setRtrPort(ifacePort);
 		}
 	}
 
@@ -1157,7 +1256,7 @@ cerr << "got boot request from " << Forest::fAdr2string(rtrAdr,s) << endl;
 		 lnk = net->nextLinkAt(rtr,lnk)) {
 		int peer = net->getPeer(rtr,lnk);
 		if (net->getNodeType(peer) != Forest::ROUTER) continue;
-		if (!setupEndpoint(lnk,rtr,px,cp,cph,true)) {
+		if (!setupEndpoint(lnk,rtr,px,cp,true)) {
 			net->setStatus(rtr,NetInfo::DOWN);
 			return false;
 		}
@@ -1172,7 +1271,7 @@ Drop comtree 1 from topoFiles
 		 ctx = comtrees->nextComtree(ctx)) {
 		fAdr_t rtrAdr = net->getNodeAdr(rtr);
 		if (!comtrees->isComtNode(ctx,rtrAdr)) continue;
-		if (!setupComtree(ctx,rtr,px,cp,cph,true)) {
+		if (!setupComtree(ctx,rtr,px,cp,true)) {
 			comtrees->releaseComtree(ctx);
 			net->setStatus(rtr,NetInfo::DOWN);
 			return false;
@@ -1183,20 +1282,24 @@ Drop comtree 1 from topoFiles
 	if (rtr == nmRtr) {
 		uint64_t nonce = generateNonce();
 		sub->setNonce(nonce);
-		if (setupLeaf(netMgr,px,cp,rtr,nmIface,nonce,cph,true) == 0) {
+		if (setupLeaf(netMgr,px,cp,rtr,nmIface,nonce,true) == 0) {
 			fatal("cannot configure NetMgr's access link");
 		}
 	}
 
-	// finally, send positive reply
-// may want to switch back to having a separate START packet,
-// to eliminate long delay between Boot request and reply
-	repCp.reset(CtlPkt::BOOT_ROUTER,CtlPkt::POS_REPLY,cp.seqNum);
-	cph.sendReply(repCp,0);
+	// finally, send boot complete packet
+	qx = ps->fullCopy(px); cq.reset(ps->getPacket(qx));
+	cq.fmtBootComplete();
+	rx = sendRequest(qx, cq.paylen, 0, 0, "");
+	if (rx == 0) {
+		logger->log("failed during boot complete step",0,p);
+		return false;
+	}
+	ps->free(rx);
+
+	// and finalize status
 	net->setStatus(rtr,NetInfo::UP);
-
 	if (rtr == nmRtr) sub->setRtrReady(true);
-
 	logger->log("completed boot request",0,p);
 	return true;
 }
@@ -1208,14 +1311,12 @@ Drop comtree 1 from topoFiles
  *  @param rtr is the number of the router that is to be configured
  *  @param px is the packet that triggered this operation
  *  @param cp is the control packet from px
- *  @param cph is the handler for this thread
  *  @param useTunnel is an optional parameter that defaults to false;
  *  when it is true, it specifies that control packets should be
- *  addressed to the tunnel (ip,port) configured in the cph;
+ *  addressed to the packet's tunnel (ip,port) 
  *  @return true if the configuration is successful, else false
  */
-bool setupEndpoint(int lnk, int rtr, pktx px, CtlPkt& cp, CpHandler& cph,
-		   bool useTunnel) {
+bool setupEndpoint(int lnk, int rtr, pktx px, CtlPkt& cp, bool useTunnel) {
 	int llnk = net->getLLnum(lnk,rtr);
 	int iface = net->getIface(llnk,rtr);
 	fAdr_t rtrAdr = net->getNodeAdr(rtr);
@@ -1235,20 +1336,26 @@ bool setupEndpoint(int lnk, int rtr, pktx px, CtlPkt& cp, CpHandler& cph,
 		peerPort = net->getIfPort(peer,i);
 		nonce = net->getNonce(lnk);
 	}
-	CtlPkt repCp;
+	// Add link endpoint at router
+	pktx qx = ps->fullCopy(px); CtlPkt cq(ps->getPacket(px));
+	cq.fmtAddLink(Forest::ROUTER, iface, llnk,
+		      peerIp, peerPort, peerAdr, nonce);
 	fAdr_t dest = (useTunnel ? 0 : rtrAdr);
-	int reply = cph.addLink(dest,Forest::ROUTER,iface,llnk,peerIp,
-				peerPort,peerAdr,nonce,repCp);
-	if (!processReply(px,cp,reply,repCp,cph,"could not add link at router"))
-		return false;
+	pktx rx = sendRequest(qx, cq.paylen, dest, px,
+				"could not add link at router");
+	if (rx == 0) return false;
+	ps->free(rx);
 
-	// now, send modify link message, to set data rates
+	// And set the link rate
+	qx = ps->fullCopy(px); cq.reset(ps->getPacket(px));
 	RateSpec rs = net->getLinkRates(lnk);
 	if (rtr == net->getLeft(lnk)) rs.flip();
-	reply = cph.modLink(dest,llnk,rs,repCp);
-	if (!processReply(px,cp,reply,repCp,cph,
-			  "could not set link rates at router"))
-		return false;
+	cq.fmtModLink(llnk, rs);
+	pktx rx = sendRequest(qx, cq.paylen, dest, px,
+				"could not set link rates at router");
+	if (rx == 0) return false;
+	ps->free(rx);
+
 	return true;
 }
 
@@ -1267,12 +1374,13 @@ bool setupComtree(int ctx, int rtr, pktx px, CtlPkt& cp, CpHandler& cph,
 	comt_t comt = comtrees->getComtree(ctx);
 
 	// first step is to add comtree at router
-	CtlPkt repCp;
+	pktx qx = ps->fullCopy(px); CtlPkt cq(ps->getPacket(px));
+	cq.fmtAddComtree(comt);
 	fAdr_t dest = (useTunnel ? 0 : rtrAdr);
-	int reply = cph.addComtree(dest,comt,repCp);
-	if (!processReply(px,cp,reply,repCp,cph,
-			  "could not add comtree at router"))
-		return false;
+	pktx rx = sendRequest(qx, cq.paylen, dest, px,
+				"could not add comtree at router");
+	if (rx == 0) return false;
+	ps->free(rx);
 
 	// next, add links to the comtree and set their data rates
 	int plnk = comtrees->getPlink(ctx,rtrAdr);
@@ -1289,11 +1397,12 @@ bool setupComtree(int ctx, int rtr, pktx px, CtlPkt& cp, CpHandler& cph,
 		bool peerCoreFlag = comtrees->isCoreNode(ctx,peerAdr);
 
 		// first, add comtree link
-		reply = cph.addComtreeLink(dest,comt,llnk,
-					   peerCoreFlag,repCp);
-		if (!processReply(px,cp,reply,repCp,cph,
-				  "could not add comtree link at router"))
-			return false;
+		pktx qx = ps->fullCopy(px); CtlPkt cq(ps->getPacket(px));
+		cq.fmtAddComtreeLink(comt,llnk,peerCoreFlag);
+		pktx rx = sendRequest(qx, cq.paylen, dest, px,
+					"could not add comtree link at router");
+		if (rx == 0) return false;
+		ps->free(rx);
 
 		// now, set link rates
 		RateSpec rs;
@@ -1303,17 +1412,20 @@ bool setupComtree(int ctx, int rtr, pktx px, CtlPkt& cp, CpHandler& cph,
 		} else {
 			rs = comtrees->getLinkRates(ctx,peerAdr);
 		}
-		reply = cph.modComtreeLink(dest,comt,llnk,rs,repCp);
-		if (!processReply(px,cp,reply,repCp,cph,
-				  "could not set comtree link rates at router"))
-			return false;
+		qx = ps->fullCopy(px); cq.reset(ps->getPacket(px));
+		cq.fmtModComtreeLink(comt,llnk,rs);
+		pktx rx = sendRequest(qx, cq.paylen, dest, px, "could not "
+					"set comtree link rates at router");
+		if (rx == 0) return false;
+		ps->free(rx);
 	}
 	// finally, we need to modify overall comtree attributes
-	reply = cph.modComtree(dest,comt,net->getLLnum(plnk,rtr),
-				comtrees->isCoreNode(ctx,rtrAdr),repCp);
-	if (!processReply(px,cp,reply,repCp,cph,
-			  "could not set comtree parameters"))
-		return false;
+	qx = ps->fullCopy(px); cq.reset(ps->getPacket(px));
+	cq.fmtModComtree(comt,llnk,peerCoreFlag);
+	pktx rx = sendRequest(qx, cq.paylen, dest, px,
+				"could not set comtree parameters at router");
+	if (rx == 0) return false;
+	ps->free(rx);
 	return true;
 }
 	
@@ -1417,48 +1529,5 @@ void writeAdminRecord(int adx) {
 	pthread_mutex_unlock(&adminFileLock);
 	return;
 }
-
-/** Check for next packet from the remote console.
- 
-Expect to ditch this
-
- *  @return a packet number with a formatted control packet on success,
- *  0 on failure
-int recvFromCons() { 
-	if (connSock < 0) {
-		connSock = Np4d::accept4d(extSock);
-		if (connSock < 0) return 0;
-		if (!Np4d::nonblock(connSock))
-			fatal("can't make connection socket nonblocking");
-	}
-
-	int px = ps->alloc();
-	if (px == 0) return 0;
-	Packet& p = ps->getPacket(px);
-	
-	int nbytes = Np4d::recvBuf(connSock, (char *) p.buffer,Forest::BUF_SIZ);
-	if (nbytes == -1) { ps->free(px); return 0; }
-	if (nbytes < Forest::HDR_LENG)
-		fatal(" recvFromCons: misformatted packet from console");
-	p.unpack();
-	if (p.version != 1 || p.length != nbytes ||
-	    (p.type != Forest::CLIENT_SIG && p.type != Forest::NET_SIG))
-		fatal(" recvFromCons: misformatted packet from console");
-        return px;
-}
- */
-
-/** Write a packet to the socket for the user interface.
- *  @param px is the packet to be sent to the CLI
-void sendToCons(pktx px) {
-	if (connSock >= 0) {
-		Packet& p = ps->getPacket(px);
-		p.pack();
-		Np4d::sendBuf(connSock, (char *) p.buffer, p.length);
-	}
-	ps->free(px);
-}
- */
-
 
 } // ends namespace
