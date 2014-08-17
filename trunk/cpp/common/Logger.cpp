@@ -13,8 +13,6 @@ namespace forest {
 
 Logger::Logger() {
 	level = 1;
-	if (pthread_mutex_init(&myLock,NULL) != 0)
-		fatal("Logger::Logger: could not initialize lock\n");
 	tag[0] = "informational";
 	tag[1] = "warning";
 	tag[2] = "exceptional event";
@@ -22,9 +20,8 @@ Logger::Logger() {
 }
 
 void Logger::setLevel(int lev) {
-	pthread_mutex_lock(&myLock);
+	unique_lock<mutex> lck(myMtx);
 	level = min(3,max(0,lev));
-	pthread_mutex_unlock(&myLock);
 }
 
 /** Log message to standard output, based on severity.
@@ -34,28 +31,23 @@ void Logger::setLevel(int lev) {
   *  printed with the error message (optional argument)
   */
 void Logger::logit(const string& s, int severity) {
-	pthread_mutex_lock(&myLock);
+	unique_lock<mutex> lck(myMtx);
 	cerr << "Logger: " << s << " (" << tag[severity] << ")\n";
-	if (severity > 3) fatal("terminating");
-	pthread_mutex_unlock(&myLock);
+	if (severity > 3) Util::fatal("terminating");
 }
 
 void Logger::logit(const string& s, int severity, Packet& p) {
-	pthread_mutex_lock(&myLock);
+	unique_lock<mutex> lck(myMtx);
 	cerr << "Logger: " << s << " (" << tag[severity] << ")\n";
-	string s1;
-	cerr << p.toString(s1) << endl;
-	if (severity > 3) fatal("terminating");
-	pthread_mutex_unlock(&myLock);
+	cerr << p.toString() << endl;
+	if (severity > 3) Util::fatal("terminating");
 }
 
 void Logger::logit(const string& s, int severity, CtlPkt& cp) {
-	pthread_mutex_lock(&myLock);
+	unique_lock<mutex> lck(myMtx);
 	cerr << "Logger: " << s << " (" << tag[severity] << ")\n";
-	string s1;
-	cerr << cp.toString(s1) << endl;
-	if (severity > 3) fatal("terminating");
-	pthread_mutex_lock(&myLock);
+	cerr << cp.toString() << endl;
+	if (severity > 3) Util::fatal("terminating");
 }
 
 } // ends namespace
