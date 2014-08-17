@@ -16,7 +16,7 @@ PacketLog::PacketLog(PacketStore *ps1) : ps(ps1) {
 	evec = new EventStruct[MAX_EVENTS];
 	eventCount = firstEvent = lastEvent = 0;
 	fvec = new PacketFilter[MAX_FILTERS+1];
-	filters = new UiSetPair(MAX_FILTERS);
+	filters = new ListPair(MAX_FILTERS);
 
 	firstEvent = lastEvent = eventCount = 0;
 	dumpTime = 0;
@@ -41,8 +41,8 @@ PacketLog::~PacketLog() { delete [] evec; delete [] fvec; delete filters; }
  *  recorded as part of the gap record.
  *  If no filters are defined, we log every packet.
  */
-void PacketLog::log(pktx px, int lnk, bool sendFlag, uint64_t now) {
-	if (!logOn) return;
+void PacketLog::loggit(pktx px, int lnk, bool sendFlag, uint64_t now) {
+	unique_lock<recursive_mutex> lck(mtx);
 	if (firstFilter() != 0) {
 		for (fltx f = firstFilter(); f != 0; f = nextFilter(f)) {
 			if (match(f,px,lnk,sendFlag)) break;
@@ -91,12 +91,13 @@ void PacketLog::log(pktx px, int lnk, bool sendFlag, uint64_t now) {
  *  @param out is an open output stream
  */
 void PacketLog::write(ostream& out) {
+	unique_lock<recursive_mutex> lck(mtx);
 	stringstream ss;
 	while (eventCount > 0) {
 		int px = evec[firstEvent].px;
 		if (numOut <= OUT_LIMIT) {
 			string s;
-			out << Misc::nstime2string(evec[firstEvent].time,s);
+			out << nstime2string(evec[firstEvent].time);
 			if (px == 0) {
 				out << " missing " << evec[firstEvent].link
 				    << " packets " << endl;
@@ -111,7 +112,7 @@ void PacketLog::write(ostream& out) {
 						out << " recv ";
 					out << "link " << setw(2)
 					    << evec[firstEvent].link;
-					out << " " << p.toString(s);
+					out << " " << p.toString();
 					numOut++;
 					if (p.type == Forest::CLIENT_DATA)
 						numDataOut++;
@@ -128,6 +129,7 @@ void PacketLog::write(ostream& out) {
 /** Purge all logged packets.
  */
 void PacketLog::purge() {
+	unique_lock<recursive_mutex> lck(mtx);
 	while (eventCount > 0) {
 		ps->free(evec[firstEvent].px);
 		eventCount--;
@@ -141,9 +143,10 @@ void PacketLog::purge() {
  *  @param maxLen is the maximum number of characters to return
  *  @param s is a reference to a string in which result is returned
  *  @return the number of log events in the returned string.
- *  Events that are copied to buf are removed from the log.
+ *  Events that are copied to s are removed from the log.
  */
 int PacketLog::extract(int maxLen, string& s) {
+	unique_lock<recursive_mutex> lck(mtx);
 	if (firstFilter() == 0) { return 0; }
 	logLocal = false;
 	stringstream ss;
@@ -151,8 +154,7 @@ int PacketLog::extract(int maxLen, string& s) {
 	while (eventCount > 0) {
 		ss.str("");
 		int px = evec[firstEvent].px;
-		string s1;
-		ss << Misc::nstime2string(evec[firstEvent].time,s1);
+		ss << nstime2string(evec[firstEvent].time);
 		if (px == 0) {
 			ss << " missing " << evec[firstEvent].link
 			   << " packets " << endl;
@@ -160,7 +162,7 @@ int PacketLog::extract(int maxLen, string& s) {
 			if (evec[firstEvent].sendFlag)	ss << " send ";
 			else				ss << " recv ";
 			ss << "link " << setw(2) << evec[firstEvent].link;
-			ss << " " << ps->getPacket(px).toString(s1);
+			ss << " " << ps->getPacket(px).toString();
 		}
 		if (s.length() + ss.str().length() > maxLen) break;
 		s += ss.str();
@@ -177,6 +179,7 @@ int PacketLog::extract(int maxLen, string& s) {
  *  @return the filter number of the new filter or 0, if could not add
  */
 int PacketLog::addFilter() {
+	unique_lock<recursive_mutex> lck(mtx);
 	fltx f = filters->firstOut();
 	if (f == 0) return 0;
 	filters->swap(f); disable(f);
@@ -185,6 +188,7 @@ int PacketLog::addFilter() {
 
 /** Remves a filter from the table.  */
 void PacketLog::dropFilter(fltx f) {
+	unique_lock<recursive_mutex> lck(mtx);
 	if (!filters->isIn(f)) return;
 	disable(f); filters->swap(f);
 }

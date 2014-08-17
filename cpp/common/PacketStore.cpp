@@ -39,15 +39,12 @@ PacketStore::~PacketStore() {
 pktx PacketStore::alloc() {
 	unique_lock<mutex> lck(mtx);
 
-	if (freePkts->empty() || freeBufs->empty()) {
-		lck.unlock(); return 0;
-	}
+	if (freePkts->empty() || freeBufs->empty()) return 0;
 	n++; m++;
 	pktx px = freePkts->get(1); freePkts->removeFirst();
 	int b = freeBufs->get(1); freeBufs->removeFirst();
 	ref[b] = 1;
 	pkt[px].buffer = &buff[b];
-	lck.unlock();
 	return px;
 }
 
@@ -57,13 +54,10 @@ pktx PacketStore::alloc() {
  */
 void PacketStore::free(pktx px) {
 	unique_lock<mutex> lck(mtx);
-	if (px < 1 || px > N || freePkts->member(px)) {
-		lck.unlock(); return;
-	}
+	if (px < 1 || px > N || freePkts->member(px)) return;
 	int b = pkt[px].buffer - buff;
 	freePkts->addFirst(px); n--;
 	if ((--ref[b]) == 0) { freeBufs->addFirst(b); m--; }
-	lck.unlock();
 }
 
 /** Make a "clone" of an existing packet.
@@ -74,14 +68,12 @@ void PacketStore::free(pktx px) {
  */
 pktx PacketStore::clone(pktx px) {
 	unique_lock<mutex> lck(mtx);
-	if (freePkts->empty()) {
-		lck.unlock(); return 0;
-	}
+	if (freePkts->empty()) return 0;
 	n++;
 	pktx px1 = freePkts->get(1); freePkts->removeFirst();
+	lck.unlock();
 	pkt[px1] = pkt[px];
 	int b = pkt[px].buffer - buff; ref[b]++;
-	lck.unlock();
 	return px1;
 }
 
@@ -92,13 +84,12 @@ pktx PacketStore::clone(pktx px) {
 pktx PacketStore::fullCopy(pktx px) {
 	unique_lock<mutex> lck(mtx);
 	int px1 = alloc();
-	if (px1 == 0) {
-		lck.unlock(); return 0;
-	}
 	lck.unlock();
+	if (px1 == 0) return 0;
 	Packet& p = getPacket(px); Packet& p1 = getPacket(px1);
+	pkt[px1] = pkt[px];
 	int len = (p.length+3)/4;
-	std::copy(p.buffer, p.buffer+len, p1.buffer);
+	std::copy(&((*p.buffer)[0]), &((*p.buffer)[0])+len, &((*p1.buffer)[0]));
 	return px1;
 }
 

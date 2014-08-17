@@ -162,7 +162,7 @@ bool Np4d::bind4d(int sock, ipa_t ipa, ipp_t ipp) {
 	sockaddr_in sa;
 	initSockAdr(ipa,ipp,&sa);
 
-	int x = bind(sock,(struct sockaddr *) &sa, sizeof(sa));
+	int x = ::bind(sock,(struct sockaddr *) &sa, sizeof(sa));
 
 	return (x == 0);
 }

@@ -17,10 +17,10 @@ namespace forest {
  *  @return c or 0, on end-of-file
  */
 bool RateSpec::read(istream& in) {
-	return	Util::verify(in,'(') && Util::readNum(in,bitRateUp) &&
-		Util::verify(in,',') && Util::readNum(in,bitRateDown) &&
-		Util::verify(in,',') && Util::readNum(in,pktRateUp) &&
-		Util::verify(in,',') && Util::readNum(in,pktRateDown) &&
+	return	Util::verify(in,'(') && Util::readInt(in,bitRateUp) &&
+		Util::verify(in,',') && Util::readInt(in,bitRateDown) &&
+		Util::verify(in,',') && Util::readInt(in,pktRateUp) &&
+		Util::verify(in,',') && Util::readInt(in,pktRateDown) &&
 		Util::verify(in,')');
 }
 

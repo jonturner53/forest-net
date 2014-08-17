@@ -23,10 +23,10 @@ string& PacketFilter::toString(string& s) const {
 	ss << (on ? '1' : '0' ) << " " << lnk << " "
 	   << (in ? '1' : '0') << (out ? '1' : '0') << " ";
 	ss << comt << " ";
-	ss << Forest::fAdr2string(srcAdr,s) << " ";
-	ss << Forest::fAdr2string(dstAdr,s) << " ";
-	ss << Packet::pktTyp2string(type,s);
-	ss << CtlPkt::cpType2string(cpType,s);
+	ss << Forest::fAdr2string(srcAdr) << " ";
+	ss << Forest::fAdr2string(dstAdr) << " ";
+	ss << Packet::pktTyp2string(type);
+	ss << CtlPkt::cpType2string(cpType);
 	s = ss.str();
 	return s;
 }

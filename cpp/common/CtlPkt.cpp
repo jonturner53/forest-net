@@ -316,7 +316,9 @@ bool CtlPkt::xtrGetIfaceSetReply(int& count, int& nexti, string& s) {
  *  @param nonce is the nonce used by the peer when connecting
  *  @param snum is the sequence number for the control packet
  */
-void CtlPkt::fmtAddLink(Forest::ntyp_t nodeType, int iface, int lnk, ipa_t peerIp, ipp_t peerPort, fAdr_t peerAdr, uint64_t nonce, int64_t snum) {
+void CtlPkt::fmtAddLink(Forest::ntyp_t nodeType, int iface, int lnk,
+			ipa_t peerIp, ipp_t peerPort, fAdr_t peerAdr,
+			uint64_t nonce, int64_t snum) {
 	type = ADD_LINK; mode = REQUEST; seqNum = snum;
 	fmtBase();
 	put(nodeType); put(iface); put(lnk); put(peerIp); put(peerPort);
