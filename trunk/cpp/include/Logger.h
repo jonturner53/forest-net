@@ -9,12 +9,15 @@
 #ifndef LOGGER_H
 #define LOGGER_H
 
-#include <pthread.h>
+#include <thread>
+#include <mutex>
 #include "Packet.h"
 #include "CtlPkt.h"
 
 namespace forest {
 
+using std::thread;
+using std::mutex;
 
 /** This is a very simple logger class to control the
  *  logging of error messages.
@@ -44,10 +47,10 @@ public:
 
 private:
 	int level;		///< severity level: 0 thru 3
-	pthread_mutex_t myLock;	///< to make all method calls thread-safe
+	mutex myMtx;		///< to make all method calls thread-safe
 
 	/** text description of severity levels used in error messages */
-	char* tag[4];
+	string tag[4];
 
 	// helper method
 	void logit(const string& s, int severity);
@@ -56,6 +59,5 @@ private:
 };
 
 } // ends namespace
-
 
 #endif

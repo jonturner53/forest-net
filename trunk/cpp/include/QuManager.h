@@ -56,6 +56,8 @@ public:
 	int	allocQ(int);	
 	void	freeQ(int);
 
+	int	getLnk(int);
+
 	// set queue rates and length limits
 	bool	setLinkRates(int,RateSpec&);
 	bool	setQRates(int,RateSpec&);
@@ -108,6 +110,8 @@ inline bool QuManager::validQ(int qid) const {
 	unique_lock lck(mtx);
 	return 1 <= qid && qid <= nQ && quInfo[qid].pktLim >= 0;
 }
+
+inline int QuManager::getLink(int qid) const { return quInfo[qid].lnk; }
 
 inline bool QuManager::setLinkRates(int lnk, RateSpec& rs) {
 	unique_lock lck(mtx);

@@ -25,6 +25,7 @@
 #include "QuManager.h"
 #include "StatsModule.h"
 #include "PacketLog.h"
+#include "Repeater.h"
 
 #include "Router.h"
 
@@ -53,13 +54,25 @@ private:
 
 	Router	*rtr;			///< pointer to main router object
 
-	// resendMap used to retransmit subscription packets and
-	// connection/disconnection requests, as needed
-	HashMap<uint64_t,pktx,Hash::u64>
-		*resendMap;		///< maps seqNum->pktx
-	Dheap<uint64_t> *resendTimes;	///< resendMap indexes, by resend time
+	IfaceTable *ift;		///< table defining interfaces
+	LinkTable *lt;			///< table defining links
+	ComtreeTable *ctt;		///< table of comtrees
+	RouteTable  *rt;		///< table of routes
+	PacketStore *ps;		///< packet buffers and headers
+	StatsModule *sm;		///< class for recording statistics
+	PacketLog *pktLog;		///< log for recording sample of packets
+	QuManager *qm;			///< queues and link schedulers
+
+	Repeater *rptr;			///< used for connect/subunsub packets
 
 	bool	send();
+	void	forward(pktx, int);
+	void	multisend(pktx, int, int);
+	void	sendRteReply(pktx, int);
+	void	handleRteReply(pktx, int);
+	void	subUnsub(pktx, int);
+	void	handleConnDisc(pktx);
+	void	returnAck(pktx int, bool);
 };
 
 

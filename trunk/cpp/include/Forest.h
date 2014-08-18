@@ -36,6 +36,7 @@ namespace forest {
 typedef int32_t fAdr_t;			///< denotes a forest address
 typedef uint32_t comt_t;		///< denotes a comtree
 typedef uint8_t flgs_t;			///< flags field from packet header
+typedef int pktx;			///< packet index
 
 
 /** Miscellaneous utility functions.
@@ -248,8 +249,7 @@ inline int Forest::truPktLeng(int x) { return 70+x; }
  *  @param comt is a comtree number
  *  @return true if comt is one of the comtrees used for signalling
  */
-inline static bool isSigComt(comt_t comt) { return comt > 0 && comt < 1000; }
-
+inline bool Forest::isSigComt(comt_t comt) { return comt > 0 && comt < 1000; }
 
 } // ends namespace
 

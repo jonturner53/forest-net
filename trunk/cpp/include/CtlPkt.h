@@ -101,7 +101,8 @@ public:
 
 	/** Control packet modes */
 	enum CpMode {
-		UNDEF_MODE = 0, REQUEST = 1, POS_REPLY = 2, NEG_REPLY = 3
+		UNDEF_MODE = 0, REQUEST = 1, POS_REPLY = 2, NEG_REPLY = 3,
+		NO_REPLY = 4
 	};
 
 	// constructors/destructor
@@ -141,233 +142,234 @@ public:
 	bool	xtrBase();
 	void	updateSeqNum();
 
+	void	fmtReply();
 	void	fmtError(const string&, int64_t=0);
 	bool	xtrError(string&);
 			
-	void	fmtAddIface(int, ipa_t, RateSpec, int64_t);
+	void	fmtAddIface(int, ipa_t, RateSpec, int64_t=0);
 	bool	xtrAddIface(int&, ipa_t&, RateSpec&);
 	void	fmtAddIfaceReply(ipa_t, ipp_t, int64_t=0);
 	bool	xtrAddIfaceReply(ipa_t&, ipp_t&);
 
-	void	fmtDropIface(int, int64_t);
+	void	fmtDropIface(int, int64_t=0);
 	bool	xtrDropIface(int&);
 	void	fmtDropIfaceReply(int64_t=0);
 	bool	xtrDropIfaceReply();
 
-	void	fmtModIface(int, RateSpec, int64_t);
+	void	fmtModIface(int, RateSpec, int64_t=0);
 	bool	xtrModIface(int&, RateSpec&);
 	void	fmtModIfaceReply(int64_t=0);
 	bool	xtrModIfaceReply();
 
-	void	fmtGetIface(int, int64_t);
+	void	fmtGetIface(int, int64_t=0);
 	bool	xtrGetIface(int&);
 	void	fmtGetIfaceReply(int, ipa_t, ipp_t, RateSpec,
 				RateSpec,	int64_t=0);
 	bool	xtrGetIfaceReply(int&, ipa_t&, ipp_t&, RateSpec&,
 				RateSpec&);
 
-	void	fmtGetIfaceSet(int, int, int64_t);
+	void	fmtGetIfaceSet(int, int, int64_t=0);
 	bool	xtrGetIfaceSet(int&, int&);
 	void	fmtGetIfaceSetReply(int, int, string, int64_t=0);
 	bool	xtrGetIfaceSetReply(int&, int&, string&);
 
 	void	fmtAddLink(Forest::ntyp_t, int, int, ipa_t, ipp_t,
-				fAdr_t,	uint64_t, int64_t);
+				fAdr_t,	uint64_t, int64_t=0);
 	bool	xtrAddLink(Forest::ntyp_t&, int&, int&, ipa_t&, ipp_t&,
 				fAdr_t&,	uint64_t&);
 	void	fmtAddLinkReply(int, fAdr_t, int64_t=0);
 	bool	xtrAddLinkReply(int&, fAdr_t&);
 
-	void	fmtDropLink(int, fAdr_t, int64_t);
+	void	fmtDropLink(int, fAdr_t, int64_t=0);
 	bool	xtrDropLink(int&, fAdr_t&);
 	void	fmtDropLinkReply(int64_t=0);
 	bool	xtrDropLinkReply();
 
-	void	fmtModLink(int, RateSpec, int64_t);
+	void	fmtModLink(int, RateSpec, int64_t=0);
 	bool	xtrModLink(int&, RateSpec&);
 	void	fmtModLinkReply(int64_t=0);
 	bool	xtrModLinkReply();
 
-	void	fmtGetLink(int, int64_t);
+	void	fmtGetLink(int, int64_t=0);
 	bool	xtrGetLink(int&);
 	void	fmtGetLinkReply(int, int, Forest::ntyp_t, ipa_t, ipp_t,
 			fAdr_t, RateSpec&, RateSpec&, int64_t=0);
 	bool	xtrGetLinkReply(int&, int&, Forest::ntyp_t&, ipa_t&, ipp_t&,
 			fAdr_t&, RateSpec&, RateSpec&);
 
-	void	fmtGetLinkSet(int, int, int64_t);
+	void	fmtGetLinkSet(int, int, int64_t=0);
 	bool	xtrGetLinkSet(int&, int&);
 	void	fmtGetLinkSetReply(int, int, string, int64_t=0);
 	bool	xtrGetLinkSetReply(int&, int&, string&);
 
-	void	fmtAddComtree(comt_t, int64_t);
+	void	fmtAddComtree(comt_t, int64_t=0);
 	bool	xtrAddComtree(comt_t&);
 	void	fmtAddComtreeReply(int64_t=0);
 	bool	xtrAddComtreeReply();
 
-	void	fmtDropComtree(comt_t, int64_t);
+	void	fmtDropComtree(comt_t, int64_t=0);
 	bool	xtrDropComtree(comt_t&);
 	void	fmtDropComtreeReply(RateSpec, int64_t=0);
 	bool	xtrDropComtreeReply(RateSpec&);
 
-	void	fmtModComtree(comt_t, int, int, int64_t);
+	void	fmtModComtree(comt_t, int, int, int64_t=0);
 	bool	xtrModComtree(comt_t&, int&, int&);
 	void	fmtModComtreeReply(int64_t=0);
 	bool	xtrModComtreeReply();
 
-	void	fmtGetComtree(comt_t, int64_t);
+	void	fmtGetComtree(comt_t, int64_t=0);
 	bool	xtrGetComtree(comt_t&);
 	void	fmtGetComtreeReply(comt_t, int, int, int, int64_t=0);
 	bool	xtrGetComtreeReply(comt_t&, int&, int&, int&);
 
-	void	fmtGetComtreeSet(comt_t, int, int64_t);
+	void	fmtGetComtreeSet(comt_t, int, int64_t=0);
 	bool	xtrGetComtreeSet(comt_t&, int&);
 	void	fmtGetComtreeSetReply(int, comt_t, string, int64_t=0);
 	bool	xtrGetComtreeSetReply(int&, comt_t&, string&);
 
 	void	fmtAddComtreeLink(comt_t, int, int, ipa_t, ipp_t,
-				fAdr_t,	int64_t);
+				fAdr_t,	int64_t=0);
 	bool	xtrAddComtreeLink(comt_t&, int&, int&, ipa_t&, ipp_t&,
 				fAdr_t&);
 	void	fmtAddComtreeLinkReply(int, RateSpec, int64_t=0);
 	bool	xtrAddComtreeLinkReply(int&, RateSpec&);
 
-	void	fmtDropComtreeLink(comt_t, int, ipa_t, ipp_t, fAdr_t, int64_t);
+	void	fmtDropComtreeLink(comt_t, int, ipa_t, ipp_t, fAdr_t, int64_t=0);
 	bool	xtrDropComtreeLink(comt_t&, int&, ipa_t&, ipp_t&, fAdr_t&);
 	void	fmtDropComtreeLinkReply(RateSpec, int64_t=0);
 	bool	xtrDropComtreeLinkReply(RateSpec&);
 
-	void	fmtModComtreeLink(comt_t, int, RateSpec, int64_t);
+	void	fmtModComtreeLink(comt_t, int, RateSpec, int64_t=0);
 	bool	xtrModComtreeLink(comt_t&, int&, RateSpec&);
 	void	fmtModComtreeLinkReply(RateSpec&, int64_t=0);
 	bool	xtrModComtreeLinkReply(RateSpec&);
 
-	void	fmtGetComtreeLink(comt_t, int, int64_t);
+	void	fmtGetComtreeLink(comt_t, int, int64_t=0);
 	bool	xtrGetComtreeLink(comt_t&, int&);
 	void	fmtGetComtreeLinkReply(comt_t, int, RateSpec, int,
 				fAdr_t,	int64_t=0);
 	bool	xtrGetComtreeLinkReply(comt_t&, int&, RateSpec&, int&,
 				fAdr_t&);
 
-	void	fmtAddRoute(comt_t, fAdr_t, int, int64_t);
+	void	fmtAddRoute(comt_t, fAdr_t, int, int64_t=0);
 	bool	xtrAddRoute(comt_t&, fAdr_t&, int&);
 	void	fmtAddRouteReply(int64_t=0);
 	bool	xtrAddRouteReply();
 
-	void	fmtDropRoute(comt_t, fAdr_t, int64_t);
+	void	fmtDropRoute(comt_t, fAdr_t, int64_t=0);
 	bool	xtrDropRoute(comt_t&, fAdr_t&);
 	void	fmtDropRouteReply(int64_t=0);
 	bool	xtrDropRouteReply();
 
-	void	fmtModRoute(comt_t, fAdr_t, int, int64_t);
+	void	fmtModRoute(comt_t, fAdr_t, int, int64_t=0);
 	bool	xtrModRoute(comt_t&, fAdr_t&, int&);
 	void	fmtModRouteReply(int64_t=0);
 	bool	xtrModRouteReply();
 
-	void	fmtGetRoute(comt_t, fAdr_t, int64_t);
+	void	fmtGetRoute(comt_t, fAdr_t, int64_t=0);
 	bool	xtrGetRoute(comt_t&, fAdr_t&);
 	void	fmtGetRouteReply(comt_t, fAdr_t, int, int64_t=0);
 	bool	xtrGetRouteReply(comt_t&, fAdr_t&, int&);
 
-	void	fmtGetRouteSet(int, int, int64_t);
+	void	fmtGetRouteSet(int, int, int64_t=0);
 	bool	xtrGetRouteSet(int&, int&);
 	void	fmtGetRouteSetReply(int, int, string, int64_t=0);
 	bool	xtrGetRouteSetReply(int&, int&, string&);
 
-	void	fmtAddRouteLink(comt_t, fAdr_t, int, int64_t);
+	void	fmtAddRouteLink(comt_t, fAdr_t, int, int64_t=0);
 	bool	xtrAddRouteLink(comt_t&, fAdr_t&, int&);
 	void	fmtAddRouteLinkReply(int64_t=0);
 	bool	xtrAddRouteLinkReply();
 
-	void	fmtDropRouteLink(comt_t, fAdr_t, int, int64_t);
+	void	fmtDropRouteLink(comt_t, fAdr_t, int, int64_t=0);
 	bool	xtrDropRouteLink(comt_t&, fAdr_t&, int&);
 	void	fmtDropRouteLinkReply(int64_t=0);
 	bool	xtrDropRouteLinkReply();
 
-	void	fmtAddFilter(int64_t);
+	void	fmtAddFilter(int64_t=0);
 	bool	xtrAddFilter();
 	void	fmtAddFilterReply(int, int64_t=0);
 	bool	xtrAddFilterReply(int&);
 
-	void	fmtDropFilter(int, int64_t);
+	void	fmtDropFilter(int, int64_t=0);
 	bool	xtrDropFilter(int&);
 	void	fmtDropFilterReply(int64_t=0);
 	bool	xtrDropFilterReply();
 
-	void	fmtModFilter(int, string, int64_t);
+	void	fmtModFilter(int, string, int64_t=0);
 	bool	xtrModFilter(int&, string&);
 	void	fmtModFilterReply(int64_t=0);
 	bool	xtrModFilterReply();
 
-	void	fmtGetFilter(int, int64_t);
+	void	fmtGetFilter(int, int64_t=0);
 	bool	xtrGetFilter(int&);
 	void	fmtGetFilterReply(string, int64_t=0);
 	bool	xtrGetFilterReply(string&);
 
-	void	fmtGetFilterSet(int, int, int64_t);
+	void	fmtGetFilterSet(int, int, int64_t=0);
 	bool	xtrGetFilterSet(int&, int&);
 	void	fmtGetFilterSetReply(int, int, string, int64_t=0);
 	bool	xtrGetFilterSetReply(int&, int&, string&);
 
-	void	fmtGetLoggedPackets(int64_t);
+	void	fmtGetLoggedPackets(int64_t=0);
 	bool	xtrGetLoggedPackets();
 	void	fmtGetLoggedPacketsReply(int, string, int64_t=0);
 	bool	xtrGetLoggedPacketsReply(int&, string&);
 
-	void	fmtEnablePacketLog(int, int, int64_t);
+	void	fmtEnablePacketLog(int, int, int64_t=0);
 	bool	xtrEnablePacketLog(int&, int&);
 	void	fmtEnablePacketLogReply(int64_t=0);
 	bool	xtrEnablePacketLogReply();
 
-	void	fmtNewSession(ipa_t, RateSpec, int64_t);
+	void	fmtNewSession(ipa_t, RateSpec, int64_t=0);
 	bool	xtrNewSession(ipa_t&, RateSpec&);
 	void	fmtNewSessionReply(fAdr_t, fAdr_t, ipa_t, ipp_t,
-				uint64_t,	int64_t=0);
+					uint64_t, int64_t=0);
 	bool	xtrNewSessionReply(fAdr_t&, fAdr_t&, ipa_t&, ipp_t&,
 				uint64_t&);
 
-	void	fmtCancelSession(fAdr_t, fAdr_t, int64_t);
+	void	fmtCancelSession(fAdr_t, fAdr_t, int64_t=0);
 	bool	xtrCancelSession(fAdr_t&, fAdr_t&);
 	void	fmtCancelSessionReply(int64_t=0);
 	bool	xtrCancelSessionReply();
 
-	void	fmtClientConnect(fAdr_t, fAdr_t, int64_t);
+	void	fmtClientConnect(fAdr_t, fAdr_t, int64_t=0);
 	bool	xtrClientConnect(fAdr_t&, fAdr_t&);
 	void	fmtClientConnectReply(int64_t=0);
 	bool	xtrClientConnectReply();
 
-	void	fmtClientDisconnect(fAdr_t, fAdr_t, int64_t);
+	void	fmtClientDisconnect(fAdr_t, fAdr_t, int64_t=0);
 	bool	xtrClientDisconnect(fAdr_t&, fAdr_t&);
 	void	fmtClientDisconnectReply(int64_t=0);
 	bool	xtrClientDisconnectReply();
 
 	void	fmtConfigLeaf(fAdr_t, fAdr_t, ipa_t, ipp_t,
-			uint64_t, int64_t);
+			uint64_t, int64_t=0);
 	bool	xtrConfigLeaf(fAdr_t&, fAdr_t&, ipa_t&, ipp_t&, uint64_t&);
 	void	fmtConfigLeafReply(int64_t=0);
 	bool	xtrConfigLeafReply();
 
-	void	fmtSetLeafRange(fAdr_t, fAdr_t, int64_t);
+	void	fmtSetLeafRange(fAdr_t, fAdr_t, int64_t=0);
 	bool	xtrSetLeafRange(fAdr_t&, fAdr_t&);
 	void	fmtSetLeafRangeReply(int64_t=0);
 	bool	xtrSetLeafRangeReply();
 
-	void	fmtBootRouter(int64_t);
+	void	fmtBootRouter(int64_t=0);
 	bool	xtrBootRouter();
 	void	fmtBootRouterReply(int64_t=0);
 	bool	xtrBootRouterReply();
 
-	void	fmtBootLeaf(int64_t);
+	void	fmtBootLeaf(int64_t=0);
 	bool	xtrBootLeaf();
 	void	fmtBootLeafReply(int64_t=0);
 	bool	xtrBootLeafReply();
 
-	void	fmtBootComplete(int64_t);
+	void	fmtBootComplete(int64_t=0);
 	bool	xtrBootComplete();
 	void	fmtBootCompleteReply(int64_t=0);
 	bool	xtrBootCompleteReply();
 
-	void	fmtBootAbort(int64_t);
+	void	fmtBootAbort(int64_t=0);
 	bool	xtrBootAbort();
 	void	fmtBootAbortReply(int64_t=0);
 	bool	xtrBootAbortReply();
@@ -425,7 +427,7 @@ inline void CtlPkt::updateSeqNum() {
 	char* p = payload + 2*sizeof(int16_t);
 	*((int32_t*) p) = htonl((int32_t) ((seqNum >> 32) & 0xffffffff));
 	p += sizeof(int32_t);
-	*((int32_t*) ) = htonl((int32_t) (seqNum & 0xffffffff));
+	*((int32_t*) p) = htonl((int32_t) (seqNum & 0xffffffff));
 }
 
 /** Add an (attribute, length, value) tuple to the packet.

@@ -9,12 +9,18 @@
 #ifndef CLIENTTABLE_H
 #define CLIENTTABLE_H
 
-#include <map>
+#include <mutex>
+#include <condition_variable>
 #include "Forest.h"
 #include "RateSpec.h"
-#include "UiClist.h"
-#include "UiSetPair.h"
-#include "IdMap.h"
+#include "ClistSet.h"
+#include "ListPair.h"
+#include "Hash.h"
+#include "HashSet.h"
+#include "HashMap.h"
+
+using std::mutex;
+using std::condition_variable;
 
 namespace forest {
 
@@ -42,10 +48,10 @@ public:
 	bool	isLocked(int) const;
 	int	getAdmin(const string&);		
 	void	releaseAdmin(int);
-	const string& getPassword(int) const;
-	const string& getAdminName(int) const;
-	const string& getRealName(int) const;
-	const string& getEmail(int) const;
+	string	getPassword(int) const;
+	string	getAdminName(int) const;
+	string	getRealName(int) const;
+	string	getEmail(int) const;
 	bool	checkPassword(int,string&) const;
 
 	int	getNumAdmins() const;		
@@ -64,8 +70,8 @@ public:
 	// input/output of table contents 
 	bool 	readEntry(istream&, int=0);
 	bool 	read(istream&);
-	string&	toString(string&);
-	string&	admin2string(int, string&) const;
+	string	toString();
+	string	admin2string(int);
 	void 	write(ostream&);
 
 	// locking/unlocking the internal maps
@@ -82,18 +88,24 @@ private:
 	string	realName;		///< real world name
 	string	email;			///< email address
 	bool	busyBit;		///< set for a busy entry
-	pthread_cond_t busyCond;	///< used to wait for a busy entry
+	condition_variable busyCond;	///< used to wait for a busy entry
+	string	toString() const {
+		return aname + ", " + pwd + ", \"" + realName + "\", "
+			+ email + "\n";
+	}
+	friend	ostream& operator<<(ostream& out, const Admin& ad) {
+		return out << ad.toString();
+	}
 	};
-
-	Admin *avec;			///< vector of admin structs
 
 	static const int RECORD_SIZE = 128; ///< # of bytes per record
 	fstream	adminFile;		///< file stream for admin file
 
-	UiSetPair *admins;		///< active and free admin indexes
-        map<string, int> *nameMap;	///< maps admin name to admin index
+	Admin	*avec;		///< vector of table entries
+        HashSet<string, Hash::string>
+		*nameMap;	///< maps admin name to index in avec
 
-	pthread_mutex_t mapLock;	///< must hold during add/remove ops
+	mutex mapLock;			///< must hold during add/remove ops
 					///< and while locking admin
 
 	/** helper functions */
@@ -102,11 +114,11 @@ private:
 };
 
 inline bool AdminTable::validAdmin(int adx) const {
-	return admins->isIn(adx);
+	return nameMap->valid(adx);
 }
 
 inline int AdminTable::getNumAdmins() const {
-	return admins->getNumIn();
+	return nameMap->size();
 }
 
 inline int AdminTable::getMaxAdmins() const { return maxAdm; }
@@ -122,7 +134,7 @@ inline bool AdminTable::isLocked(int adx) const {
  *  @param adx is a valid admin index
  *  @return a const reference to the password string.
  */
-inline const string& AdminTable::getPassword(int adx) const {
+inline string AdminTable::getPassword(int adx) const {
 	return avec[adx].pwd;
 }
 
@@ -130,7 +142,7 @@ inline const string& AdminTable::getPassword(int adx) const {
  *  @param adx is a valid admin index
  *  @return a const reference to the admin name string
  */
-inline const string& AdminTable::getAdminName(int adx) const {
+inline string AdminTable::getAdminName(int adx) const {
 	return avec[adx].aname;
 }
 
@@ -147,7 +159,7 @@ inline bool AdminTable::checkPassword(int adx, string& pwd) const {
  *  @param adx is a valid admin index
  *  @return a const reference to the admin's realName string
  */
-inline const string& AdminTable::getRealName(int adx) const {
+inline string AdminTable::getRealName(int adx) const {
 	return avec[adx].realName;
 }
 
@@ -155,7 +167,7 @@ inline const string& AdminTable::getRealName(int adx) const {
  *  @param adx is a valid admin index
  *  @return a const reference to the admin's email string
  */
-inline const string& AdminTable::getEmail(int adx) const {
+inline string AdminTable::getEmail(int adx) const {
 	return avec[adx].email;
 }
 
@@ -197,11 +209,15 @@ inline void AdminTable::setEmail(int adx, const string& email) {
  *  methods provided for that purpose. Use extreme caution when using
  *  this method directly.
  */
-inline void AdminTable::lockMap() { pthread_mutex_lock(&mapLock); }
+inline void AdminTable::lockMap() { mapLock.lock(); }
 
 /** Unlock the admin table.
  */
-inline void AdminTable::unlockMap() { pthread_mutex_unlock(&mapLock); }
+inline void AdminTable::unlockMap() { mapLock.unlock(); }
+
+inline string AdminTable::admin2string(int adx) {
+	return avec[adx].toString();
+}
 
 } // ends namespace
 
