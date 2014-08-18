@@ -20,15 +20,15 @@ using namespace forest;
  *  If zero, the NetMgr runs forever.
  */
 int main(int argc, char *argv[]) {
-	uint32_t finTime;
+	uint32_t finTime = 0;
 
 	if (argc != 4 ||
 	     sscanf(argv[3],"%d", &finTime) != 1)
-		fatal("usage: NetMgr topoFile prefixFile finTime");
-	if (!NetMgr::init(argv[1]), argv[2], finTime) {
-		fatal("NetMgr: initialization failure");
+		Util::fatal("usage: NetMgr topoFile prefixFile finTime");
+	if (!NetMgr::init(argv[1], argv[2], finTime)) {
+		Util::fatal("NetMgr: initialization failure");
 	}
-	NetMgr::run();
+	NetMgr::runAll();
 	exit(0);
 }
 
@@ -71,17 +71,11 @@ bool NetMgr::init(const char *topoFile, const char *pfxFile, int finTime) {
 	if (len != (n+1)*RECORD_SIZE) {
 		for (int adx = 0; adx <= n; adx++) writeAdminRecord(adx);
 	}
-	if (pthread_mutex_init(&adminFileLock,NULL) != 0) {
-		logger->log("NetMgr::init: could not initialize lock "
-			    "on client data file",2);
-		return false;
-	}
 
 	// read NetInfo data structure from file
-	int maxNode = 100000; int maxLink = 10000;
-	int maxRtr = 5000; int maxCtl = 200;
+	int maxNode = 100000; int maxLink = 10000; int maxRtr = 5000; 
 	int maxComtree = 10000;
-	net = new NetInfo(maxNode, maxLink, maxRtr, maxCtl);
+	net = new NetInfo(maxNode, maxLink, maxRtr);
 	comtrees = new ComtInfo(maxComtree,*net);
 
 	ifstream fs; fs.open(topoFile);
@@ -105,8 +99,7 @@ bool NetMgr::init(const char *topoFile, const char *pfxFile, int finTime) {
 	for (int c = net->firstController(); c != 0;
 		 c = net->nextController(c)) {
 		net->setStatus(c,NetInfo::DOWN);
-		string s;
-		if (net->getNodeName(c,s) == "netMgr") {
+		if (net->getNodeName(c) == "netMgr") {
 			myIp = net->getLeafIpAdr(c);
 			myAdr = net->getNodeAdr(c);
 			int lnk = net->firstLinkAt(c);
@@ -120,9 +113,9 @@ bool NetMgr::init(const char *topoFile, const char *pfxFile, int finTime) {
 			netMgr = c; nmRtr = rtr;
 			rtrIp = net->getIfIpAdr(rtr,iface);
 			rtrAdr = net->getNodeAdr(rtr);
-		} else if (net->getNodeName(c,s) == "cliMgr") {
+		} else if (net->getNodeName(c) == "cliMgr") {
 			cliMgrAdr = net->getNodeAdr(c);
-		} else if (net->getNodeName(c,s) == "comtCtl") {
+		} else if (net->getNodeName(c) == "comtCtl") {
 			comtCtlAdr = net->getNodeAdr(c);
 		}
 	}
@@ -136,13 +129,13 @@ bool NetMgr::init(const char *topoFile, const char *pfxFile, int finTime) {
 	uint64_t nonce = 0; // likewise
 
 	// create per-thread NetMgr objects and resize share output queue
-	tpool = new NetMgr[numThreads+1];;
+	tpool = new NetMgr[numThreads+1];
 	NetMgr::outq.resize(2*numThreads);
 
 	// create and intitialize Substrate
 	sub = new Substrate(numThreads, tpool, ps, logger);
 	if (!sub->init(myAdr, myIp, rtrAdr, rtrIp, rtrPort, nonce,
-		       Forest::NM_PORT, Forest::NM_PORT), int finTime) {
+		       Forest::NM_PORT, Forest::NM_PORT, finTime)) {
 		logger->log("init: can't initialize substrate",2);
 		return false;
 	}
@@ -152,24 +145,24 @@ bool NetMgr::init(const char *topoFile, const char *pfxFile, int finTime) {
 }
 
 /** Cleanup various data structures. */
-void cleanup() {
+void NetMgr::cleanup() {
 	delete ps; delete net; delete comtrees; delete sub;
 }
 
 /** Start all the NetMgr threads, then start the Substrate and
  *  wait for it to finish.
  */
-void NetMgr::runAll() {
+bool NetMgr::runAll() {
 	// start NetMgr threads (uses Controller::start)
 	for (int i = 1; i <= numThreads; i++) {
 		tpool[i].thred = thread(Controller::start, &tpool[i], i, 100);
 	}
 	// start substrate and wait for it to finish
-	Substrate::start(sub);
-	sub->join();
+	sub->run();
 
 	// and done
 	cleanup();
+	return true;
 }
 
 /** Worker thread.
@@ -187,7 +180,7 @@ void NetMgr::runAll() {
  *  a 0 value back to the main thread, signalling that it is available
  *  to handle another task.
  */
-void* NetMgr::run() {
+bool NetMgr::run() {
 	while (true) {
 		pktx px = inq.deq();
 		bool success = false;
@@ -195,7 +188,7 @@ void* NetMgr::run() {
 			// in this case, p is really a negated socket number
 			// for a remote client
 			int sock = -px;
-			success = handleConsole(sock, cph);
+			success = handleConsole(sock);
 		} else {
 			Packet& p = ps->getPacket(px);
 			CtlPkt cp(p);
@@ -211,14 +204,12 @@ void* NetMgr::run() {
 				success = handleCancelSession(px,cp);
 				break;
 			case CtlPkt::BOOT_LEAF:
-				cph.setTunnel(p.tunIp,p.tunPort);
 				// allow just one node to boot at a time
 				net->lock();
 				success = handleBootLeaf(px,cp);
 				net->unlock();
 				break;
 			case CtlPkt::BOOT_ROUTER:
-				cph.setTunnel(p.tunIp,p.tunPort);
 				// allow just one node to boot at a time
 				net->lock();
 				success = handleBootRouter(px,cp);
@@ -235,31 +226,33 @@ void* NetMgr::run() {
 			     << ps->getPacket(px).toString();
 		}
 		ps->free(px); // release px now that we're done
-		outq.enq(0,myThx); // signal completion to main thread
+		outq.enq(pair<int,int>(0,myThx)); // signal completion to
+						  // substrate thread
 	}
+	return true;
 }
 
-/** Send a request packet and return for the reply.
+/** Send a request packet and return the reply.
  *  @param px is the packet number of the packet to be sent
  *  @param len is the length of the packet's payload
  *  @param dest is the destinatin address it is to be sent to
- *  @param opx is an optional argument that defaults to 0; when used,
- *  it is the packet number of the original request that started the
- *  operation being processed
+ *  @param opx is the packet number of the original request that started
+ *  the operation being processed, or zero
  *  @param s is an optional string to be included in an error reply, that
  *  should be sent to the host that made the original request, if we do not
  *  get a positive reply; no error reply is sent when opx == 0
  *  @param return the packet index of the reply, if it is a positive reply;
  *  otherwise return 0 after freeing the packet
  */
-pktx NetMgr::sendRequest(pktx px, int len, fAdr_t dest, pktx opx, string& s) {
+pktx NetMgr::sendRequest(pktx px, int len, fAdr_t dest,
+			 pktx opx, const string& s) {
 	Packet& p = ps->getPacket(px);
 	p.length = Forest::OVERHEAD + len;
-	p.type = Forest::Net_SIG; p.flags = 0;
+	p.type = Forest::NET_SIG; p.flags = 0;
 	p.dstAdr = dest; p.srcAdr = myAdr;
 	p.pack(); p.hdrErrUpdate(); p.payErrUpdate();
 
-	outq.enq(px,thx);	// send request through substrate
+	outq.enq(pair<int,int>(px,myThx)); // send request through substrate
 	pktx rx = inq.deq();	// and get reply back
 
 	CtlPkt cr(ps->getPacket(rx));
@@ -278,6 +271,18 @@ pktx NetMgr::sendRequest(pktx px, int len, fAdr_t dest, pktx opx, string& s) {
 	return 0;
 }
 
+/** Send a request packet and return the reply.
+ *  This version omits the last two arguments of the full version.
+ *  @param px is the packet number of the packet to be sent
+ *  @param len is the length of the packet's payload
+ *  @param dest is the destinatin address it is to be sent to
+ *  @param return the packet index of the reply, if it is a positive reply;
+ *  otherwise return 0 after freeing the packet
+ */
+pktx NetMgr::sendRequest(pktx px, int len, fAdr_t dest) {
+	return sendRequest(px,len,dest,0,"");
+}
+
 /** Send a reply packet back through the substrate.
  *  @param px is the index of the packet to be sent
  *  @param len is the length of the packet's payload
@@ -286,10 +291,10 @@ pktx NetMgr::sendRequest(pktx px, int len, fAdr_t dest, pktx opx, string& s) {
 void NetMgr::sendReply(pktx px, int len, fAdr_t dest) {
 	Packet& p = ps->getPacket(px);
 	p.length = Forest::OVERHEAD + len;
-	p.type = Forest::Net_SIG; p.flags = 0;
+	p.type = Forest::NET_SIG; p.flags = 0;
 	p.dstAdr = dest; p.srcAdr = myAdr;
 	p.pack(); p.hdrErrUpdate(); p.payErrUpdate();
-	outq.enq(px,thx);
+	outq.enq(pair<int,int>(px,myThx));
 }
 
 /** Format and send an error reply packet.
@@ -297,11 +302,11 @@ void NetMgr::sendReply(pktx px, int len, fAdr_t dest) {
  *  @param cp is the control packet unpacked from px
  *  @param s is a string to be included in the reply packet
  */
-void NetMgr::errReply(pktx px, CtlPkt& cp, string& s) {
+void NetMgr::errReply(pktx px, CtlPkt& cp, const string& s) {
 	pktx ex = ps->fullCopy(px); Packet& e = ps->getPacket(ex);
 	CtlPkt ce(e);
 	ce.fmtError("operation failed [" + s + "]", cp.seqNum);
-	sendReply(ex, ce, ps->getPacket(px).srcAdr);
+	sendReply(ex, ce.paylen, ps->getPacket(px).srcAdr);
 }
 
 /** Handle a connection from a remote console.
@@ -312,7 +317,7 @@ void NetMgr::errReply(pktx px, CtlPkt& cp, string& s) {
  *  @return true if the interaction proceeds normally, followed
  *  by a normal close; return false if an error occurs
  */
-bool handleConsole(int sock, CpHandler& cph) {
+bool NetMgr::handleConsole(int sock) {
 /* omit for now
 	NetBuffer buf(sock,1024);
 	string cmd, reply, adminName;
@@ -381,6 +386,7 @@ cerr << "sending reply: " << reply;
 	return true;
 cerr << "terminating" << endl;
 */
+	return true;
 }
 
 
@@ -831,10 +837,10 @@ cerr << "terminating" << endl;
  *  packets, or if the client manager never acknowledges the
  *  notification.
  */
-bool handleConDisc(pktx px, CtlPkt& cp) {
+bool NetMgr::handleConDisc(pktx px, CtlPkt& cp) {
 	Packet& p = ps->getPacket(px);
 	fAdr_t clientAdr, rtrAdr;
-	if (cp.type == CLIENT_CONNECT) {
+	if (cp.type == CtlPkt::CLIENT_CONNECT) {
 		cp.xtrClientConnect(clientAdr, rtrAdr);
 	} else {
 		cp.xtrClientDisconnect(clientAdr, rtrAdr);
@@ -851,7 +857,7 @@ bool handleConDisc(pktx px, CtlPkt& cp) {
 		cq.fmtClientConnect(clientAdr, rtrAdr);
 	else
 		cq.fmtClientDisconnect(clientAdr, rtrAdr);
-	pktx rx = sendRequest(qx, cq.paylen, dest, 0, "");
+	pktx rx = sendRequest(qx, cq.paylen, cliMgrAdr);
 	if (rx != 0) { ps->free(rx); return true; }
 	return false;
 }
@@ -867,7 +873,7 @@ bool handleConDisc(pktx px, CtlPkt& cp) {
  *  @param cp is the control packet structure for p (already unpacked)
  *  @return true if the operation is completed successfully, else false
  */
-bool handleNewSession(pktx px, CtlPkt& cp) {
+bool NetMgr::handleNewSession(pktx px, CtlPkt& cp) {
 	Packet& p = ps->getPacket(px);
 	ipa_t clientIp; RateSpec clientRates;
 	cp.xtrNewSession(clientIp, clientRates);
@@ -887,7 +893,7 @@ bool handleNewSession(pktx px, CtlPkt& cp) {
 	// generate nonce to be used by client in connect packet
 	uint64_t nonce = generateNonce();
 
-	fAdr_t clientAdr = setupLeaf(0,px,cp,rtr,iface,nonce,cph);
+	fAdr_t clientAdr = setupLeaf(0,px,cp,rtr,iface,nonce);
 	if (clientAdr == 0) return false;
 
 	// send positive reply back to sender
@@ -895,7 +901,7 @@ bool handleNewSession(pktx px, CtlPkt& cp) {
 	cq.fmtNewSessionReply(clientAdr, rtrAdr, comtCtlAdr, 
 			      net->getIfIpAdr(rtr,iface),
 			      net->getIfPort(rtr,iface), nonce);
-	send(qx, cq.paylen, p.srcAdr);
+	sendReply(qx, cq.paylen, p.srcAdr);
 
 	return true;
 }
@@ -915,11 +921,10 @@ bool handleNewSession(pktx px, CtlPkt& cp) {
  *  addressed to the tunnel (ip,port) configured in the cph;
  *  @return the forest address of the new leaf on success, else 0
  */
-fAdr_t setupLeaf(int leaf, pktx px, CtlPkt& cp, int rtr, int iface,
+fAdr_t NetMgr::setupLeaf(int leaf, pktx px, CtlPkt& cp, int rtr, int iface,
 		 uint64_t nonce, bool useTunnel) {
 	Forest::ntyp_t leafType; int leafLink; fAdr_t leafAdr; RateSpec rates;
 	ipa_t leafIp;
-	Packet& p = ps->getPacket(px);
 
 	// first add the link at the router
 	if (leaf == 0) { // dynamic client
@@ -940,7 +945,7 @@ fAdr_t setupLeaf(int leaf, pktx px, CtlPkt& cp, int rtr, int iface,
 				"could not add link to leaf");
 	if (rx == 0) return 0;
 	CtlPkt cr(ps->getPacket(rx));
-	cr.xtrAddLinkReply(leafLink, leafAdr)
+	cr.xtrAddLinkReply(leafLink, leafAdr);
 	ps->free(rx);
 
 	// next set the link rate
@@ -950,20 +955,20 @@ fAdr_t setupLeaf(int leaf, pktx px, CtlPkt& cp, int rtr, int iface,
 	if (rx == 0) return 0;
 	ps->free(rx);
 
-	// now add the new leaf to the leaf connection comtree
+	// now add the new leaf to the neighbor comtree
 	qx = ps->alloc(); cq.reset(ps->getPacket(qx));
-	cq.fmtAddComtreeLink(Forest::CONNECT_COMT,leafLink,0);
+	cq.fmtAddComtreeLink(Forest::NABOR_COMT,leafLink,0,0,0,0);
 	rx = sendRequest(qx, cq.paylen, dest, px,
 			 "could not add leaf to connection comtree");
 	if (rx == 0) return 0;
 	ps->free(rx);
 
 	// now modify comtree link rate
-	int ctx = comtrees->getComtIndex(Forest::CONNECT_COMT);
+	int ctx = comtrees->getComtIndex(Forest::NABOR_COMT);
 	rates = comtrees->getDefLeafRates(ctx);
 	comtrees->releaseComtree(ctx);
 	qx = ps->alloc(); cq.reset(ps->getPacket(qx));
-	cq.fmtModComtreeLink(Forest::CONNECT_COMT,leafLink,rates);
+	cq.fmtModComtreeLink(Forest::NABOR_COMT,leafLink,rates);
 	rx = sendRequest(qx, cq.paylen, dest, px,
 			 "could not set rate on connection comtree");
 	if (rx == 0) return 0;
@@ -971,18 +976,18 @@ fAdr_t setupLeaf(int leaf, pktx px, CtlPkt& cp, int rtr, int iface,
 
 	// now add the new leaf to the client signalling comtree
 	qx = ps->alloc(); cq.reset(ps->getPacket(qx));
-	cq.fmtAddComtreeLink(Forest::CLIENT_SIG_COMTREE,leafLink,0);
+	cq.fmtAddComtreeLink(Forest::CLIENT_SIG_COMT,leafLink,0,0,0,0);
 	rx = sendRequest(qx, cq.paylen, dest, px,
 			 "could not add leaf to client signalling comtree");
 	if (rx == 0) return 0;
 	ps->free(rx);
 
 	// now modify its comtree link rate
-	int ctx = comtrees->getComtIndex(Forest::CLIENT_SIG_COMTREE);
+	ctx = comtrees->getComtIndex(Forest::CLIENT_SIG_COMT);
 	rates = comtrees->getDefLeafRates(ctx);
 	comtrees->releaseComtree(ctx);
 	qx = ps->alloc(); cq.reset(ps->getPacket(qx));
-	cq.fmtModComtreeLink(Forest::CLIENT_SIG_COMTREE,leafLink,rates);
+	cq.fmtModComtreeLink(Forest::CLIENT_SIG_COMT,leafLink,rates);
 	rx = sendRequest(qx, cq.paylen, dest, px,
 			 "could not set rate on client signalling comtree");
 	if (rx == 0) return 0;
@@ -992,18 +997,18 @@ fAdr_t setupLeaf(int leaf, pktx px, CtlPkt& cp, int rtr, int iface,
 
 	// for controllers, also add to the network signaling comtree
 	qx = ps->alloc(); cq.reset(ps->getPacket(qx));
-	cq.fmtAddComtreeLink(Forest::NET_SIG_COMTREE,leafLink,0);
+	cq.fmtAddComtreeLink(Forest::NET_SIG_COMT,leafLink,0,0,0,0);
 	rx = sendRequest(qx, cq.paylen, dest, px,
 			 "could not add leaf to client signalling comtree");
 	if (rx == 0) return 0;
 	ps->free(rx);
 
 	// and modify its comtree link rate
-	int ctx = comtrees->getComtIndex(Forest::NET_SIG_COMTREE);
+	ctx = comtrees->getComtIndex(Forest::NET_SIG_COMT);
 	rates = comtrees->getDefLeafRates(ctx);
 	comtrees->releaseComtree(ctx);
 	qx = ps->alloc(); cq.reset(ps->getPacket(qx));
-	cq.fmtModComtreeLink(Forest::NET_SIG_COMTREE,leafLink,rates);
+	cq.fmtModComtreeLink(Forest::NET_SIG_COMT,leafLink,rates);
 	rx = sendRequest(qx, cq.paylen, dest, px,
 			 "could not set rate on client signalling comtree");
 	if (rx == 0) return 0;
@@ -1015,11 +1020,9 @@ fAdr_t setupLeaf(int leaf, pktx px, CtlPkt& cp, int rtr, int iface,
 /** Handle a cancel session request.
  *  @param px is the packet number of the request packet
  *  @param cp is the control packet structure for p (already unpacked)
- *  @param cph is the control packet handler for this thread
  *  @return true if the operation is completed successfully, else false
  */
-bool handleCancelSession(pktx px, CtlPkt& cp, CpHandler& cph) {
-	Packet& p = ps->getPacket(px);
+bool NetMgr::handleCancelSession(pktx px, CtlPkt& cp) {
 	fAdr_t clientAdr, rtrAdr;
 	cp.xtrCancelSession(clientAdr, rtrAdr);
 
@@ -1039,14 +1042,16 @@ bool handleCancelSession(pktx px, CtlPkt& cp, CpHandler& cph) {
 	// drop the client's access link
 	pktx qx = ps->alloc(); CtlPkt cq(ps->getPacket(qx));
 	cq.fmtDropLink(0,clientAdr);
-	rx = sendRequest(qx, cq.paylen, dest, px, "could not drop link");
+	int rx = sendRequest(qx, cq.paylen, rtrAdr, px, "could not drop link");
 	if (rx == 0) return 0;
 	ps->free(rx);
 
 	// send positive reply back to sender
-	qx = ps->fullCopy(px); cq.reset(ps->getPacket(qx));
+	qx = ps->fullCopy(px);
+	Packet& q = ps->getPacket(qx);
+	cq.reset(q);
 	cq.fmtReply();
-	sendReply(qx, cq.paylen, cq.srcAdr);
+	sendReply(qx, cq.paylen, q.srcAdr);
 
 	return true;
 }
@@ -1060,7 +1065,7 @@ bool handleCancelSession(pktx px, CtlPkt& cp, CpHandler& cph) {
  *  @param px is the index of the incoming boot request packet
  *  @param cp is the control packet (already unpacked)
  */
-bool handleBootLeaf(pktx px, CtlPkt& cp) {
+bool NetMgr::handleBootLeaf(pktx px, CtlPkt& cp) {
 	Packet& p = ps->getPacket(px);
 
 	// first, find leaf in NetInfo object
@@ -1075,7 +1080,7 @@ bool handleBootLeaf(pktx px, CtlPkt& cp) {
 
 	if (net->getStatus(leaf) == NetInfo::UP) {
 		// final reply lost or delayed, resend and quit
-		pktx qx = ps->fullCopy(px); CtlPkt cq(ps->getPacket(qx);
+		pktx qx = ps->fullCopy(px); CtlPkt cq(ps->getPacket(qx));
 		cq.fmtReply();
 		sendReply(qx, cq.paylen, 0);
 		return true;
@@ -1128,12 +1133,12 @@ bool handleBootLeaf(pktx px, CtlPkt& cp) {
 }
 
 /** Return a random nonce suitable for use when connecting a leaf.  */
-uint64_t generateNonce() {
+uint64_t NetMgr::generateNonce() {
 	uint64_t nonce;
 	do {
 		high_resolution_clock::time_point tp;
-		tp = high_resolution_clock::time_point::now();
-		nonce = tp.time_since_epoch().count;
+		tp = high_resolution_clock::now();
+		nonce = tp.time_since_epoch().count();
 		nonce *= random();
 	} while (nonce == 0);
 	return nonce;
@@ -1189,7 +1194,7 @@ bool processReply(pktx px, CtlPkt& cp, pktx rx, CtlPkt& cr, const string& msg) {
  *  router fails to respond to either of the control messages
  *  sent to it.
  */
-bool handleBootRouter(pktx px, CtlPkt& cp, CpHandler& cph) {
+bool NetMgr::handleBootRouter(pktx px, CtlPkt& cp) {
 	Packet& p = ps->getPacket(px);
 
 	// find rtr index based on source address
@@ -1216,7 +1221,7 @@ bool handleBootRouter(pktx px, CtlPkt& cp, CpHandler& cph) {
 	qx = ps->fullCopy(px); cq.reset(ps->getPacket(qx));
 	pair<fAdr_t,fAdr_t> leafRange; net->getLeafRange(rtr,leafRange);
 	cq.fmtSetLeafRange(leafRange.first, leafRange.second);
-	pktx rx = sendRequest(qx, cq.paylen, 0, px
+	pktx rx = sendRequest(qx, cq.paylen, 0, px,
 				"could not configure leaf range");
 	if (rx == 0) {
 		net->setStatus(rtr,NetInfo::DOWN);
@@ -1262,9 +1267,11 @@ bool handleBootRouter(pktx px, CtlPkt& cp, CpHandler& cph) {
 		}
 	}
 
+/*
 Add code for special case of neighbor comtree.
 Include all links.
 Drop comtree 1 from topoFiles
+*/
 
 	// add/configure comtrees
 	for (int ctx = comtrees->firstComtree(); ctx != 0;
@@ -1283,14 +1290,14 @@ Drop comtree 1 from topoFiles
 		uint64_t nonce = generateNonce();
 		sub->setNonce(nonce);
 		if (setupLeaf(netMgr,px,cp,rtr,nmIface,nonce,true) == 0) {
-			fatal("cannot configure NetMgr's access link");
+			Util::fatal("cannot configure NetMgr's access link");
 		}
 	}
 
 	// finally, send boot complete packet
 	qx = ps->fullCopy(px); cq.reset(ps->getPacket(qx));
 	cq.fmtBootComplete();
-	rx = sendRequest(qx, cq.paylen, 0, 0, "");
+	rx = sendRequest(qx, cq.paylen, 0);
 	if (rx == 0) {
 		logger->log("failed during boot complete step",0,p);
 		return false;
@@ -1316,7 +1323,7 @@ Drop comtree 1 from topoFiles
  *  addressed to the packet's tunnel (ip,port) 
  *  @return true if the configuration is successful, else false
  */
-bool setupEndpoint(int lnk, int rtr, pktx px, CtlPkt& cp, bool useTunnel) {
+bool NetMgr::setupEndpoint(int lnk, int rtr, pktx px, CtlPkt& cp, bool useTunnel) {
 	int llnk = net->getLLnum(lnk,rtr);
 	int iface = net->getIface(llnk,rtr);
 	fAdr_t rtrAdr = net->getNodeAdr(rtr);
@@ -1351,7 +1358,7 @@ bool setupEndpoint(int lnk, int rtr, pktx px, CtlPkt& cp, bool useTunnel) {
 	RateSpec rs = net->getLinkRates(lnk);
 	if (rtr == net->getLeft(lnk)) rs.flip();
 	cq.fmtModLink(llnk, rs);
-	pktx rx = sendRequest(qx, cq.paylen, dest, px,
+	rx = sendRequest(qx, cq.paylen, dest, px,
 				"could not set link rates at router");
 	if (rx == 0) return false;
 	ps->free(rx);
@@ -1364,10 +1371,9 @@ bool setupEndpoint(int lnk, int rtr, pktx px, CtlPkt& cp, bool useTunnel) {
  *  @param rtr is the number of the router
  *  @param px is the number of the packet that initiated the current operation
  *  @param cp is the control packet for px (already unpacked)
- *  @param cph is a reference to the control packet handler for this thread
  *  @return true on success, false on failure
  */
-bool setupComtree(int ctx, int rtr, pktx px, CtlPkt& cp, CpHandler& cph,
+bool NetMgr::setupComtree(int ctx, int rtr, pktx px, CtlPkt& cp,
 		  bool useTunnel) {
 	fAdr_t rtrAdr = net->getNodeAdr(rtr);
 	
@@ -1398,7 +1404,7 @@ bool setupComtree(int ctx, int rtr, pktx px, CtlPkt& cp, CpHandler& cph,
 
 		// first, add comtree link
 		pktx qx = ps->fullCopy(px); CtlPkt cq(ps->getPacket(px));
-		cq.fmtAddComtreeLink(comt,llnk,peerCoreFlag);
+		cq.fmtAddComtreeLink(comt,llnk,peerCoreFlag,0,0,0);
 		pktx rx = sendRequest(qx, cq.paylen, dest, px,
 					"could not add comtree link at router");
 		if (rx == 0) return false;
@@ -1414,15 +1420,16 @@ bool setupComtree(int ctx, int rtr, pktx px, CtlPkt& cp, CpHandler& cph,
 		}
 		qx = ps->fullCopy(px); cq.reset(ps->getPacket(px));
 		cq.fmtModComtreeLink(comt,llnk,rs);
-		pktx rx = sendRequest(qx, cq.paylen, dest, px, "could not "
+		rx = sendRequest(qx, cq.paylen, dest, px, "could not "
 					"set comtree link rates at router");
 		if (rx == 0) return false;
 		ps->free(rx);
 	}
 	// finally, we need to modify overall comtree attributes
 	qx = ps->fullCopy(px); cq.reset(ps->getPacket(px));
-	cq.fmtModComtree(comt,llnk,peerCoreFlag);
-	pktx rx = sendRequest(qx, cq.paylen, dest, px,
+	bool coreFlag = comtrees->isCoreNode(ctx,rtrAdr);
+	cq.fmtModComtree(comt,coreFlag,plnk);
+	rx = sendRequest(qx, cq.paylen, dest, px,
 				"could not set comtree parameters at router");
 	if (rx == 0) return false;
 	ps->free(rx);
@@ -1434,9 +1441,8 @@ bool setupComtree(int ctx, int rtr, pktx px, CtlPkt& cp, CpHandler& cph,
  *  @param rtrAdr is the address of the router associated with this IP prefix
  *  @return true if there was an IP prefix found, false otherwise
  */
-bool findCliRtr(ipa_t cliIp, fAdr_t& rtrAdr) {
-	string cip;
-	Np4d::ip2string(cliIp,cip);
+bool NetMgr::findCliRtr(ipa_t cliIp, fAdr_t& rtrAdr) {
+	string cip = Np4d::ip2string(cliIp);
 	for (unsigned int i = 0; i < (unsigned int) numPrefixes; ++i) {
 		string ip = prefixes[i].prefix;
 		unsigned int j = 0;
@@ -1451,7 +1457,7 @@ bool findCliRtr(ipa_t cliIp, fAdr_t& rtrAdr) {
 		}
 	}
 	// if no prefix for client address, select router at random
-	int i = randint(0,net->getNumRouters()-1);
+	int i = Util::randint(0,net->getNumRouters()-1);
 	for (int r = net->firstRouter(); r != 0; r = net->nextRouter(r)) {
 		if (i-- == 0) {
 			rtrAdr = net->getNodeAdr(r); return true;
@@ -1464,10 +1470,10 @@ bool findCliRtr(ipa_t cliIp, fAdr_t& rtrAdr) {
  *  @param filename is the name of the prefix file
  *  @return true on success, false otherwise
  */
-bool readPrefixInfo(char filename[]) {
+bool NetMgr::readPrefixInfo(const char *filename) {
 	ifstream ifs; ifs.open(filename);
 	if(ifs.fail()) return false;
-	Misc::skipBlank(ifs);
+	Util::skipBlank(ifs);
 	int i = 0;
 	while(!ifs.eof()) {
 		string pfix; fAdr_t rtrAdr;
@@ -1476,7 +1482,7 @@ bool readPrefixInfo(char filename[]) {
 			break;
 		prefixes[i].prefix = pfix;
 		prefixes[i].rtrAdr = rtrAdr;
-		Misc::skipBlank(ifs);
+		Util::skipBlank(ifs);
 		i++;
 	}
 	numPrefixes = i;
@@ -1488,10 +1494,10 @@ bool readPrefixInfo(char filename[]) {
  *  The calling thread is assumed to hold a lock on the client.
  *  @param adx is a non-negative integer
  */
-void writeAdminRecord(int adx) {
+void NetMgr::writeAdminRecord(int adx) {
 	if (adx < 0 || adx >= admTbl->getMaxAdmins()) return;
 
-	pthread_mutex_lock(&adminFileLock);
+	unique_lock<mutex> lck(adminFileLock);
 	if (maxRecord == 0) {
 		adminFile.seekp(0,ios_base::end);
 		maxRecord = adminFile.tellp()/RECORD_SIZE;
@@ -1508,8 +1514,7 @@ void writeAdminRecord(int adx) {
 	adminFile.seekp(adx*RECORD_SIZE);
 
 	if (admTbl->validAdmin(adx)) {
-		string s;
-		admTbl->admin2string(adx,s);
+		string s = admTbl->admin2string(adx);
 		s = "+ " + s;
 		if (s.length() > RECORD_SIZE) {
 			s.erase(RECORD_SIZE-1); s += "\n";
@@ -1526,7 +1531,6 @@ void writeAdminRecord(int adx) {
 	}
 	adminFile.flush();
 	maxRecord = max(adx,maxRecord);
-	pthread_mutex_unlock(&adminFileLock);
 	return;
 }
 

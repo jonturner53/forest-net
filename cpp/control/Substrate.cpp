@@ -10,10 +10,10 @@
 
 namespace forest {
 
-Substrate::Substrate(int threadCount1, Controller *ctlr1,
+Substrate::Substrate(int threadCount1, Controller *pool1,
 		     PacketStore *ps1, Logger *logger1) {
 	threadCount = threadCount1;
-	ctlr = ctlr1; ps = ps1; logger = logger1;
+	pool = pool1; ps = ps1; logger = logger1;
 
 	thredIdx = new ListPair(threadCount);
 	rptr = new Repeater(threadCount);
@@ -31,7 +31,7 @@ Substrate::~Substrate() {
 
 bool Substrate::init(fAdr_t myAdr1, ipa_t myIp1, fAdr_t rtrAdr1,
 		     ipa_t rtrIp1, ipp_t rtrPort1, uint64_t nonce1,
-		     int dgPort1, int listenPort1, int finTime1) {
+		     ipp_t dgPort1, ipp_t listenPort1, int finTime1) {
 	myAdr = myAdr1; myIp = myIp1;
 	rtrAdr = rtrAdr1; rtrIp = rtrIp1; rtrPort = rtrPort1;
 	nonce = nonce1; dgPort = dgPort1; listenPort = listenPort1;
@@ -79,7 +79,7 @@ bool Substrate::run() {
 			int thx = thredIdx->firstOut();
 			if (thx != 0) {
 				thredIdx->swap(thx);
-				pool[t].inq.enq(-connSock);
+				pool[thx].inq.enq(-connSock);
 			} else {
 				logger->log("Substrate: thread pool is "
 					   "exhausted",4);
@@ -92,18 +92,16 @@ bool Substrate::run() {
 		}
 
 		// and outgoing packets
-		if (!retQ.empty()) {
-			pair<int,int> pp = retQ.deq();
+		if (!Controller::outq.empty()) {
+			pair<int,int> pp = Controller::outq.deq();
 			outbound(pp.first,pp.second);
 			nothing2do = false;
 		}
 
 		if (nothing2do) {
 			// check for expired entries in repH & remove oldest
-			int ox = repH.expired(now);
-			if (ox != 0) {
-				ps->free(ox); didNothing = false;
-			}
+			int ox = repH->expired(now);
+			if (ox != 0) ps->free(ox);
 			nothing2do = false;
 		}
 		if (nothing2do && thredIdx->firstIn() == 0)
@@ -123,7 +121,8 @@ void Substrate::inbound(pktx px) {
 	}
 	CtlPkt cp(p);
 	if (cp.mode == CtlPkt::REQUEST) {
-		if ((pktx sx = repH->find(p.srcAdr,cp.seqNum)) != 0) {
+		pktx sx;
+		if ((sx = repH->find(p.srcAdr,cp.seqNum)) != 0) {
 			// repeat of a request we've already received
 			ps->free(px);
 			Packet& saved = ps->getPacket(sx);
@@ -137,7 +136,7 @@ void Substrate::inbound(pktx px) {
 		}
 		// new request, save a copy
 		pktx cx = ps->clone(px);
-		pktx ox = repH.saveReq(cx,p.srcAdr,cp.seqNum,now);
+		pktx ox = repH->saveReq(cx,p.srcAdr,cp.seqNum,now);
 		if (ox != 0) { // old entry was removed to make room
 			ps->free(ox);
 		}
@@ -146,7 +145,7 @@ void Substrate::inbound(pktx px) {
 		int thx = thredIdx->firstOut();
 		if (thx != 0) { // assign thread
 			thredIdx->swap(thx);
-			pool[thx].inQ.enq(px);
+			pool[thx].inq.enq(px);
 		} else {
 			logger->log("Substrate: thread pool is "
 				    "exhausted",4);
@@ -154,11 +153,11 @@ void Substrate::inbound(pktx px) {
 		return;
 	}
 	// reply; drop matching request
-	pair<int,int> pp = rptr.deleteMatch(p.srcAdr,cp.seqNum);
+	pair<int,int> pp = rptr->deleteMatch(cp.seqNum);
 	if (pp.first == 0) { // no matching request
 		ps->free(px); return;
 	}
-	ps->free(pp->first); // free saved copy of request
+	ps->free(pp.first); // free saved copy of request
 	// forward reply to the thread that sent the request
 	if (pp.second != 0) pool[pp.second].inq.enq(px);
 	return;
@@ -166,7 +165,7 @@ void Substrate::inbound(pktx px) {
 
 /** Handle an outbound packet from one of the worker threads.
  *  @param px is a packet index
- *  @param thx is the thread index (in the tread pool)
+ *  @param thx is the thread index (in the thread pool)
  */
 void Substrate::outbound(pktx px, int thx) {
 	if (px == 0) { // means worker thread completed task
@@ -180,7 +179,7 @@ void Substrate::outbound(pktx px, int thx) {
 		// save reply in repH, and free saved copy of request
 		pktx cx = ps->clone(px);
 		if (cx != 0) {
-			pktx sx = saveRep(cx, p.dstAdr, cp.seqNum);
+			pktx sx = repH->saveRep(cx, p.dstAdr, cp.seqNum);
 			if (sx != 0) ps->free(sx);
 		}
 		// and send reply
@@ -193,8 +192,7 @@ void Substrate::outbound(pktx px, int thx) {
 		return;
 	}
 	// assign sequence number to outgoing request, send it and save copy
-	cp.seqNum = seqNum++;
-	cp.pack(); p.payErrUpdate();
+	cp.seqNum = seqNum++; cp.updateSeqNum(); p.payErrUpdate();
 	sendToForest(px);
 	rptr->saveReq(cx, cp.seqNum, now, thx);
 }
@@ -239,9 +237,9 @@ void Substrate::sendToForest(pktx px) {
 cerr << "substrate sending to " << Np4d::ip2string(ip) << " " << port << endl;
 cerr << p.toString() << endl;
 */
-	if (port == 0) fatal("Substrate::sendToForest: zero port number");
+	if (port == 0) Util::fatal("Substrate::sendToForest: zero port number");
 	int rv = Np4d::sendto4d(dgSock,(void *) p.buffer, p.length,ip,port);
-	if (rv == -1) fatal("Substrate::sendToForest: failure in sendto");
+	if (rv == -1) Util::fatal("Substrate::sendToForest: failure in sendto");
 	ps->free(px);
 }
 
@@ -252,12 +250,12 @@ bool Substrate::connect() {
 	pktx px = ps->alloc();
 	Packet& p = ps->getPacket(px);
 
-	Forest::pack64(seqNum++, p.payload());
-	Forest::pack64(nonce, p.payload()+2);
+	Np4d::pack64(seqNum++, p.payload());
+	Np4d::pack64(nonce, p.payload()+2);
 
 	p.length = Forest::OVERHEAD + 2*sizeof(int64_t);
 	p.type = Forest::CONNECT; p.flags = 0;
-	p.comtree = Forest::CONNECT_COMT;
+	p.comtree = Forest::NABOR_COMT;
 	p.srcAdr = myAdr; p.dstAdr = rtrAdr;
 
 	nanoseconds temp;
@@ -296,7 +294,7 @@ bool Substrate::disconnect() {
 	p.payload()[0] = htonl((uint32_t) (nonce >> 32));
 	p.payload()[1] = htonl((uint32_t) (nonce & 0xffffffff));
 	p.length = Forest::OVERHEAD + 8; p.type = Forest::DISCONNECT;
-	p.flags = 0; p.comtree = Forest::CONNECT_COMT;
+	p.flags = 0; p.comtree = Forest::NABOR_COMT;
 	p.srcAdr = myAdr; p.dstAdr = rtrAdr;
 
 	nanoseconds temp;
