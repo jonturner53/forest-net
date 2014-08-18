@@ -20,31 +20,26 @@ namespace forest {
 ComtInfo::ComtInfo(int maxComtree1, NetInfo& net1)
 		 : maxComtree(maxComtree1), net(&net1) {
 	comtree = new ComtreeInfo[maxComtree+1];
-	comtreeMap = new IdMap(maxComtree);
+	comtreeMap = new HashSet<comt_t,Hash::u32>(maxComtree);
 }
 
 /** Destructor for ComtInfo class.
  *  Deallocates all dynamic storage
  */
 ComtInfo::~ComtInfo() {
-	for (int ctx = comtreeMap->firstId(); ctx != 0;
-		 ctx = comtreeMap->nextId(ctx)) {
+	for (int ctx = comtreeMap->first(); ctx != 0;
+		 ctx = comtreeMap->next(ctx)) {
 		delete comtree[ctx].coreSet;
 		delete comtree[ctx].leafMap;
 		delete comtree[ctx].rtrMap;
-		pthread_cond_destroy(&comtree[ctx].busyCond);
 	}
 	delete [] comtree; delete comtreeMap;
-	pthread_mutex_destroy(&mapLock);
 }
 
 /** Initialize locks and condition variables.  */
 bool ComtInfo::init() {
-        if (pthread_mutex_init(&mapLock,NULL) != 0) return false;
 	for (int ctx = 1; ctx <= maxComtree; ctx++) {
 		comtree[ctx].busyBit = false;
-		if (pthread_cond_init(&comtree[ctx].busyCond,NULL) != 0)
-			return false;
 	}
 	return true;
 }
@@ -56,19 +51,15 @@ bool ComtInfo::init() {
  *  is locked
  */
 int ComtInfo::getComtIndex(int comt) {
-	lockMap();
-	int ctx = comtreeMap->getId(comt);
-	if (ctx == 0) { unlockMap(); return 0; }
+	unique_lock<mutex> lck(mapLock);
+	int ctx = comtreeMap->find(comt);
+	if (ctx == 0) { return 0; }
 	while (comtree[ctx].busyBit) { // wait until comtree is not busy
-		pthread_cond_wait(&comtree[ctx].busyCond,&mapLock);
-		ctx = comtreeMap->getId(comt);
-		if (ctx == 0) {
-			pthread_cond_signal(&comtree[ctx].busyCond);
-			unlockMap(); return 0;
-		}
+		comtree[ctx].busyCond.wait(lck);
+		ctx = comtreeMap->find(comt);
+		if (ctx == 0) return 0;
 	}
 	comtree[ctx].busyBit = true; // set busyBit to lock comtree
-	unlockMap();
 	return ctx;
 }
 
@@ -77,10 +68,9 @@ int ComtInfo::getComtIndex(int comt) {
  *  @param ctx is the index of a locked comtree.
  */
 void ComtInfo::releaseComtree(int ctx) {
-	lockMap();
+	unique_lock<mutex> lck(mapLock);
 	comtree[ctx].busyBit = false;
-	pthread_cond_signal(&comtree[ctx].busyCond);
-	unlockMap();
+	comtree[ctx].busyCond.notify_one();
 }
 
 /** Get the first comtree in the list of valid comtrees and lock it.
@@ -88,19 +78,15 @@ void ComtInfo::releaseComtree(int ctx) {
  *  valid comtree; on return, the comtree is locked
  */
 int ComtInfo::firstComtree() {
-	lockMap();
-	int ctx = comtreeMap->firstId();
-	if (ctx == 0) { unlockMap(); return 0; }
+	unique_lock<mutex> lck(mapLock);
+	int ctx = comtreeMap->first();
+	if (ctx == 0) return 0;
 	while (comtree[ctx].busyBit) {
-		pthread_cond_wait(&comtree[ctx].busyCond,&mapLock);
-		ctx = comtreeMap->firstId();
-		if (ctx == 0) {
-			pthread_cond_signal(&comtree[ctx].busyCond);
-			unlockMap(); return 0;
-		}
+		comtree[ctx].busyCond.wait(lck);
+		ctx = comtreeMap->first();
+		if (ctx == 0) return 0;
 	}
 	comtree[ctx].busyBit = true;
-	unlockMap();
 	return ctx;
 }
 
@@ -111,29 +97,25 @@ int ComtInfo::firstComtree() {
  *  is released and the next comtree is locked.
  */
 int ComtInfo::nextComtree(int ctx) {
-	lockMap();
-	int nuCtx = comtreeMap->nextId(ctx);
+	unique_lock<mutex> lck(mapLock);
+	int nuCtx = comtreeMap->next(ctx);
 	if (nuCtx == 0) {
 		comtree[ctx].busyBit = false;
-		pthread_cond_signal(&comtree[ctx].busyCond);
-		unlockMap();
+		comtree[ctx].busyCond.notify_one();
 		return 0;
 	}
 	while (comtree[nuCtx].busyBit) {
-		pthread_cond_wait(&comtree[nuCtx].busyCond,&mapLock);
-		nuCtx = comtreeMap->nextId(ctx);
+		comtree[nuCtx].busyCond.wait(lck);
+		nuCtx = comtreeMap->next(ctx);
 		if (nuCtx == 0) {
 			comtree[ctx].busyBit = false;
-			pthread_cond_signal(&comtree[ctx].busyCond);
-			pthread_cond_signal(&comtree[nuCtx].busyCond);
-			unlockMap();
+			comtree[ctx].busyCond.notify_one();
 			return 0;
 		}
 	}
 	comtree[nuCtx].busyBit = true;
 	comtree[ctx].busyBit = false;
-	pthread_cond_signal(&comtree[ctx].busyCond);
-	unlockMap();
+	comtree[ctx].busyCond.notify_one();
 	return nuCtx;
 }
 
@@ -144,17 +126,16 @@ int ComtInfo::nextComtree(int ctx) {
  *  on return, the new comtree is locked
  */
 int ComtInfo::addComtree(int comt) {
-	lockMap();
-	int ctx = comtreeMap->addPair(comt);
-	if (ctx == 0) { unlockMap(); return 0; }
+	unique_lock<mutex> lck(mapLock);
+	int ctx = comtreeMap->insert(comt);
+	if (ctx == 0) return 0;
 	// since this is a newly allocated comtree, it cannot be
 	// locked by another thread
 	comtree[ctx].busyBit = true;
 	comtree[ctx].comtreeNum = comt;
-	comtree[ctx].coreSet = new set<fAdr_t>;
-	comtree[ctx].rtrMap = new map<fAdr_t,ComtRtrInfo>;
-	comtree[ctx].leafMap = new map<fAdr_t,ComtLeafInfo>;
-	unlockMap();
+	comtree[ctx].coreSet = new HashSet<fAdr_t,Hash::s32>;
+	comtree[ctx].rtrMap = new HashMap<fAdr_t,ComtRtrInfo,Hash::s32>;
+	comtree[ctx].leafMap = new HashMap<fAdr_t,ComtLeafInfo,Hash::s32>;
 	return ctx;
 }
 
@@ -166,17 +147,17 @@ int ComtInfo::addComtree(int comt) {
  *  @return true on success, false on failure
  */
 bool ComtInfo::removeComtree(int ctx) {
-	lockMap();
+	unique_lock<mutex> lck(mapLock);
 	if (!validComtIndex(ctx) || !comtree[ctx].busyBit) {
-		unlockMap(); return false;
+		return false;
 	}
-	comtreeMap->dropPair(comtree[ctx].comtreeNum);
+	comtreeMap->remove(comtree[ctx].comtreeNum);
 	comtree[ctx].comtreeNum = 0;
 	delete comtree[ctx].coreSet;
 	delete comtree[ctx].leafMap;
 	delete comtree[ctx].rtrMap;
 	comtree[ctx].busyBit = false;
-	unlockMap();
+	comtree[ctx].busyCond.notify_one();
 	return true;
 }
 
@@ -188,28 +169,22 @@ bool ComtInfo::removeComtree(int ctx) {
 bool ComtInfo::addNode(int ctx, fAdr_t fa) {
 	int nn = net->getNodeNum(fa);
 	if (nn != 0 && net->isRouter(nn)) {
-		map<fAdr_t,ComtRtrInfo>::iterator rp;
-	    	rp = comtree[ctx].rtrMap->find(fa);
-	    	if (rp != comtree[ctx].rtrMap->end()) return true;
-		pair<fAdr_t,ComtRtrInfo> newPair;
-		newPair.first = fa;
-		newPair.second.plnk = 0;
-		comtree[ctx].rtrMap->insert(newPair);
+	    	int x = comtree[ctx].rtrMap->find(fa);
+	    	if (x != 0) return true;
+		ComtRtrInfo cri;
+		comtree[ctx].rtrMap->put(fa,cri);
 		return true;
 	}
-	map<fAdr_t,ComtLeafInfo>::iterator lp;
-	lp = comtree[ctx].leafMap->find(fa);
-	if (lp != comtree[ctx].leafMap->end()) return true;
-	pair<fAdr_t,ComtLeafInfo> newPair;
-	newPair.first = fa;
-	newPair.second.plnkRates = comtree[ctx].leafDefRates;
+	int x = comtree[ctx].leafMap->find(fa);
+	if (x != 0) return true;
+	ComtLeafInfo cli; cli.plnkRates = comtree[ctx].leafDefRates;
 	if (nn != 0) {
 		int plnk = net->firstLinkAt(nn);
 		int parent = net->getPeer(nn,plnk);
-		newPair.second.parent = net->getNodeAdr(parent);
-		newPair.second.llnk = net->getLLnum(plnk,parent);
+		cli.parent = net->getNodeAdr(parent);
+		cli.llnk = net->getLLnum(plnk,parent);
 	}
-	comtree[ctx].leafMap->insert(newPair);
+	comtree[ctx].leafMap->put(fa,cli);
 	return true;
 }
 
@@ -221,29 +196,28 @@ bool ComtInfo::addNode(int ctx, fAdr_t fa) {
  *  @return true on success, false on failure
  */
 bool ComtInfo::removeNode(int ctx, fAdr_t fa) {
-	map<fAdr_t,ComtRtrInfo>::iterator np;
-	np = comtree[ctx].rtrMap->find(fa);
-	if (np != comtree[ctx].rtrMap->end()) {
-		int plnk = np->second.plnk;
-		if ((plnk == 0 && np->second.lnkCnt != 0) ||
-		    (plnk != 0 && np->second.lnkCnt != 1))
+	int x = comtree[ctx].rtrMap->find(fa);
+	if (x != 0) {
+		ComtRtrInfo& cri = comtree[ctx].rtrMap->getValue(x);
+		int plnk = cri.plnk;
+		if ((plnk == 0 && cri.lnkCnt != 0) ||
+		    (plnk != 0 && cri.lnkCnt != 1))
 			return false;
 		if (plnk != 0) {
 			int parent = net->getPeer(net->getNodeNum(fa),plnk);
-			map<fAdr_t,ComtRtrInfo>::iterator pp;
-			pp = comtree[ctx].rtrMap->find(net->getNodeAdr(parent));
-			pp->second.lnkCnt--;
+			int px = comtree[ctx].rtrMap->find(
+					net->getNodeAdr(parent));
+			comtree[ctx].rtrMap->getValue(px).lnkCnt--;
 		}
-		comtree[ctx].rtrMap->erase(np);
-		comtree[ctx].coreSet->erase(fa);
+		comtree[ctx].rtrMap->remove(fa);
+		comtree[ctx].coreSet->remove(fa);
 		return true;
 	}
-	map<fAdr_t,ComtLeafInfo>::iterator lp;
-	lp = comtree[ctx].leafMap->find(fa);
-	map<fAdr_t,ComtRtrInfo>::iterator pp;
-	pp = comtree[ctx].rtrMap->find(lp->second.parent);
-	pp->second.lnkCnt--;
-	comtree[ctx].leafMap->erase(lp);
+	int lx = comtree[ctx].leafMap->find(fa);
+	ComtLeafInfo& cli = comtree[ctx].leafMap->getValue(lx);
+	int rx = comtree[ctx].rtrMap->find(cli.parent);
+	comtree[ctx].rtrMap->getValue(rx).lnkCnt--;
+	comtree[ctx].leafMap->remove(fa);
 	return true;
 }
 
@@ -258,14 +232,14 @@ bool ComtInfo::removeNode(int ctx, fAdr_t fa) {
  */
 bool ComtInfo::adjustSubtreeRates(int ctx, fAdr_t rtrAdr, RateSpec& rs) {
 	int rtr = net->getNodeNum(rtrAdr);
-	map<fAdr_t,ComtRtrInfo>::iterator rp;
-	rp = comtree[ctx].rtrMap->find(rtrAdr);
+	int x = comtree[ctx].rtrMap->find(rtrAdr);
 	int count = 0;
 	while (true) {
-		rp->second.subtreeRates.add(rs);
-		if (rp->second.plnk == 0) return true;
-		rtr = net->getPeer(rtr,rp->second.plnk);
-		rp = comtree[ctx].rtrMap->find(net->getNodeAdr(rtr));
+		ComtRtrInfo& cri = comtree[ctx].rtrMap->getValue(x);
+		cri.subtreeRates.add(rs);
+		if (cri.plnk == 0) return true;
+		rtr = net->getPeer(rtr,cri.plnk);
+		x = comtree[ctx].rtrMap->find(net->getNodeAdr(rtr));
 		if (count++ > 50) {
 			cerr << "ComtInfo::adjustSubtreeRates: excessively "
 				"long path detected in comtree "
@@ -488,26 +462,26 @@ comt_t ComtInfo::readComtree(istream& in, string& errMsg) {
 		fAdr_t childAdr = net->getNodeAdr(child);
 		fAdr_t parentAdr = net->getNodeAdr(parent);
 		RateSpec rs = links[i].rs;
+		ComtreeInfo& c = comtree[ctx];
 
 		addNode(ctx,childAdr); addNode(ctx,parentAdr);
 		if (net->isLeaf(child)) {
-			map<fAdr_t,ComtLeafInfo>::iterator cp;
-			cp = comtree[ctx].leafMap->find(childAdr);
+			int x = c.leafMap->find(childAdr);
+			ComtLeafInfo& cli = c.leafMap->getValue(x);
 			if (rs.bitRateUp == -1) rs = leafRates;
-			cp->second.plnkRates = rs;
+			cli.plnkRates = rs;
 		} else {
-			map<fAdr_t,ComtRtrInfo>::iterator cp;
-			cp = comtree[ctx].rtrMap->find(childAdr);
-			cp->second.plnk = lnk; cp->second.lnkCnt++;
+			int x = comtree[ctx].rtrMap->find(childAdr);
+			ComtRtrInfo& cri = c.rtrMap->getValue(x);
+			cri.plnk = lnk; cri.lnkCnt++;
 			if (rs.bitRateUp == -1) rs = bbRates;
-			else cp->second.frozen = true;
-			cp->second.plnkRates = rs;
-			rs = cp->second.subtreeRates;
+			else cri.frozen = true;
+			cri.plnkRates = rs;
+			rs = cri.subtreeRates;
 		}
 		adjustSubtreeRates(ctx,parentAdr,rs);
-		map<fAdr_t,ComtRtrInfo>::iterator pp;
-		pp = comtree[ctx].rtrMap->find(parentAdr);
-		pp->second.lnkCnt++;
+		int x = c.rtrMap->find(parentAdr);
+		c.rtrMap->getValue(x).lnkCnt++;
 	}
 
 	return true;
@@ -617,20 +591,21 @@ bool ComtInfo::readLinkEndpoint(istream& in, string& name, int& num) {
 bool ComtInfo::check() {
 	bool status = true;
 	for (int ctx = firstComtree(); ctx != 0; ctx = nextComtree(ctx)) {
+		ComtreeInfo& c = comtree[ctx];
 		int comt = getComtree(ctx);
 		fAdr_t rootAdr = getRoot(ctx);
 		int root = net->getNodeNum(rootAdr);
 
 		// first check that every leaf in comtree has a parent
 		// that is a router in the comtree
-		map<fAdr_t,ComtLeafInfo>::iterator lp;
-		for (lp  = comtree[ctx].leafMap->begin();
-		     lp != comtree[ctx].leafMap->end(); lp++) {
-			if (!isComtRtr(ctx,getParent(ctx,lp->first))) {
-				int leaf = net->getNodeNum(lp->first);
+		for (int x = c.leafMap->first(); x!=0; x = c.leafMap->next(x)) {
+			fAdr_t leafAdr = c.leafMap->getKey(x);
+			if (!isComtRtr(ctx,getParent(ctx,leafAdr))) {
+				int leaf = net->getNodeNum(leafAdr);
 				string leafName;
-				if (leaf != 0) net->getNodeName(leaf,leafName);
-				else Forest::fAdr2string(leaf,leafName);
+				if (leaf != 0)
+					leafName = net->getNodeName(leaf);
+				else Forest::fAdr2string(leafAdr);
 				cerr << "ComtInfo::check: comtree " << comt 
 				     << " has leaf " << leafName << " whose "
 					"parent is not a router in comtree\n";
@@ -639,11 +614,9 @@ bool ComtInfo::check() {
 		}
 		// next, check that at most one router in comtree lacks a
 		// parent
-		map<fAdr_t,ComtRtrInfo>::iterator rp;
 		int cnt = 0;
-		for (rp  = comtree[ctx].rtrMap->begin();
-		     rp != comtree[ctx].rtrMap->end(); rp++) {
-			if (getParent(ctx,rp->first) == 0) cnt++;
+		for (int x = c.rtrMap->first(); x!=0; x = c.rtrMap->next(x)) {
+			if (getParent(ctx,c.rtrMap->getKey(x)) == 0) cnt++;
 		}
 		if (cnt != 1) {
 			cerr << "ComtInfo::check: comtree " << comt 
@@ -691,7 +664,7 @@ bool ComtInfo::check() {
 					string s;
 					cerr << "ComtInfo::check: comtree "
 					     << comt << " contains a core node "
-					     << net->getNodeName(v,s)
+					     << net->getNodeName(v)
 					     << " whose parent is not a "
 						"core node\n";
 					status = false;
@@ -713,7 +686,7 @@ bool ComtInfo::check() {
 			}
 			if (foundCycle) { status = false; break; }
 		}
-		if (nodeCount != comtree[ctx].rtrMap->size()) {
+		if (nodeCount != c.rtrMap->size()) {
 			cerr << "ComtInfo::check: comtree " << comt
 			     << " not connected\n";
 			status = false;
@@ -732,20 +705,17 @@ bool ComtInfo::checkLinkCounts(int ctx) {
 	int comt = getComtree(ctx);
 
 	// first count links from leaf nodes
-	map<fAdr_t,ComtLeafInfo>::iterator lp;
-	for (lp  = comtree[ctx].leafMap->begin();
-	     lp != comtree[ctx].leafMap->end(); lp++) {
-		fAdr_t padr = getParent(ctx,lp->first);
+	for (fAdr_t leafAdr = firstLeaf(ctx); leafAdr != 0;
+		    leafAdr = nextLeaf(ctx,leafAdr)) {
+		fAdr_t padr = getParent(ctx,leafAdr);
 		int parent = net->getNodeNum(padr);
 		lnkCounts[parent]++;
 	}
 	// next, count links to other routers
-	map<fAdr_t,ComtRtrInfo>::iterator rp;
-	for (rp  = comtree[ctx].rtrMap->begin();
-	     rp != comtree[ctx].rtrMap->end(); rp++) {
-		fAdr_t radr = rp->first;
-		int rtr = net->getNodeNum(radr);
-		fAdr_t padr = getParent(ctx,radr);
+	for (fAdr_t rtrAdr = firstRouter(ctx); rtrAdr != 0;
+		    rtrAdr = nextRouter(ctx,rtrAdr)) {
+		int rtr = net->getNodeNum(rtrAdr);
+		fAdr_t padr = getParent(ctx,rtrAdr);
 		if (padr == 0) continue;
 		int parent = net->getNodeNum(padr);
 		lnkCounts[parent]++;
@@ -753,17 +723,16 @@ bool ComtInfo::checkLinkCounts(int ctx) {
 	}
 
 	// now check stored link counts for routers
-	for (rp  = comtree[ctx].rtrMap->begin();
-	     rp != comtree[ctx].rtrMap->end(); rp++) {
-		fAdr_t radr = rp->first;
-		int rtr = net->getNodeNum(radr);
-		if (lnkCounts[rtr] != rp->second.lnkCnt) {
+	for (fAdr_t rtrAdr = firstRouter(ctx); rtrAdr != 0;
+		    rtrAdr = nextRouter(ctx,rtrAdr)) {
+		int rtr = net->getNodeNum(rtrAdr);
+		int lc = comtree[ctx].rtrMap->get(rtrAdr).lnkCnt;
+		if (lnkCounts[rtr] != lc) {
 			string s;
-			cerr << "router " << net->getNodeName(rtr,s)
+			cerr << "router " << net->getNodeName(rtr)
 			     << " has " << lnkCounts[rtr]
 			     << " links in comtree " << comt
-			     << ", but recorded lnkCnt is "
-			     << rp->second.lnkCnt;
+			     << ", but recorded lnkCnt is " << lc;
 			status = false;
 		}
 	}
@@ -783,44 +752,43 @@ bool ComtInfo::checkSubtreeRates(int ctx) {
 
 	// compute bottom-up from leaf nodes
 	// check for negative rates while we're at it
-	map<fAdr_t,ComtLeafInfo>::iterator lp;
-	for (lp  = comtree[ctx].leafMap->begin();
-	     lp != comtree[ctx].leafMap->end(); lp++) {
-		RateSpec& prates = lp->second.plnkRates;
+	for (int x = comtree[ctx].leafMap->first(); x != 0;
+		 x = comtree[ctx].leafMap->next(x)) {
+		fAdr_t leafAdr = comtree[ctx].leafMap->getKey(x);
+		ComtLeafInfo& cli = comtree[ctx].leafMap->getValue(x);
+		RateSpec& prates = cli.plnkRates;
 		if (prates.bitRateUp <= 0 || prates.bitRateDown <= 0 ||
 		    prates.pktRateUp <= 0 || prates.pktRateDown <= 0) {
-			string s1, s2;
 			int lnk = net->getLinkNum(
-				  	net->getNodeNum(lp->second.parent),
-					lp->second.llnk);
+				  	net->getNodeNum(cli.parent),
+					cli.llnk);
 			cerr << "detected non-positive comtree link rate for "
-			     << comt << " link " << net->link2string(lnk,s1)
-			     << " rateSpec=" << prates.toString(s2) << endl;
+			     << comt << " link " << net->link2string(lnk)
+			     << " rateSpec=" << prates.toString() << endl;
 			status = false;
 		}
-		fAdr_t radr = getParent(ctx,lp->first);
+		fAdr_t padr = getParent(ctx,leafAdr);
 		while (true) {
-			int rtr = net->getNodeNum(radr);
-			subtreeRates[rtr].add(prates);
-			if (rtr == root) break;
-			radr = getParent(ctx,radr);
+			int prtr = net->getNodeNum(padr);
+			subtreeRates[prtr].add(prates);
+			if (prtr == root) break;
+			padr = getParent(ctx,padr);
 		} 
 	}
 
 	// now check stored subtree rates
-	map<fAdr_t,ComtRtrInfo>::iterator rp;
-	for (rp  = comtree[ctx].rtrMap->begin();
-	     rp != comtree[ctx].rtrMap->end(); rp++) {
-		fAdr_t radr = rp->first;
+	for (int x = comtree[ctx].rtrMap->first(); x != 0;
+		 x = comtree[ctx].rtrMap->next(x)) {
+		fAdr_t radr = comtree[ctx].rtrMap->getKey(x);
+		RateSpec& rs = comtree[ctx].rtrMap->getValue(x).subtreeRates;
 		int rtr = net->getNodeNum(radr);
-		if (!subtreeRates[rtr].equals(rp->second.subtreeRates)) {
-			string s1, s2, s3;
-			cerr << "router " << net->getNodeName(rtr,s1)
+		if (!subtreeRates[rtr].equals(rs)) {
+			cerr << "router " << net->getNodeName(rtr)
 			     << " has subtree rate "
-			     << subtreeRates[rtr].toString(s2)
+			     << subtreeRates[rtr].toString()
 			     << " in comtree " << comt << ", but recorded"
 			     << " value is "
-			     << rp->second.subtreeRates.toString(s3) << endl;
+			     << rs.toString() << endl;
 			status = false;
 		}
 	}
@@ -834,18 +802,18 @@ bool ComtInfo::checkLinkRates(int ctx) {
 	int comt = getComtree(ctx);
 	fAdr_t rootAdr = getRoot(ctx);
 	
-	map<fAdr_t,ComtRtrInfo>::iterator rp;
-	rp = comtree[ctx].rtrMap->find(rootAdr);
-	RateSpec& rootRates = rp->second.subtreeRates;
+	int x = comtree[ctx].rtrMap->find(rootAdr);
+	RateSpec& rootRates = comtree[ctx].rtrMap->getValue(x).subtreeRates;
 
-	for (rp  = comtree[ctx].rtrMap->begin();
-	     rp != comtree[ctx].rtrMap->end(); rp++) {
-		if (rp->second.frozen) continue;
-		int lnk = rp->second.plnk;
+	for (int x = comtree[ctx].rtrMap->first(); x != 0;
+		 x = comtree[ctx].rtrMap->next(x)) {
+		ComtRtrInfo& cri = comtree[ctx].rtrMap->getValue(x);
+		if (cri.frozen) continue;
+		int lnk = cri.plnk;
 		if (lnk == 0) continue;
-		fAdr_t rtr = rp->first;
+		fAdr_t rtr = comtree[ctx].rtrMap->getKey(x);
 		RateSpec rs(0);
-		RateSpec& srates = rp->second.subtreeRates;
+		RateSpec& srates = cri.subtreeRates;
 		RateSpec trates = rootRates; trates.subtract(srates);
 		if (isCoreNode(ctx,rtr)) {
 			rs.set(	srates.bitRateUp,trates.bitRateUp,
@@ -856,13 +824,12 @@ bool ComtInfo::checkLinkRates(int ctx) {
 			    	srates.pktRateUp,
 			    	min(srates.pktRateDown,trates.pktRateUp));
 		}
-		if (!rs.equals(rp->second.plnkRates)) {
-			string s1, s2, s3;
+		if (!rs.equals(cri.plnkRates)) {
 			cerr << "detected inconsistent comtree link rates in "
-			     << comt << " link " << net->link2string(lnk,s1)
-			     << " computed rates: " << rs.toString(s2)
+			     << comt << " link " << net->link2string(lnk)
+			     << " computed rates: " << rs.toString()
 			     << " and stored rates: "
-			     << rp->second.plnkRates.toString(s3) << endl;
+			     << cri.plnkRates.toString() << endl;
 			status = false;
 		}
 	}
@@ -909,17 +876,17 @@ bool ComtInfo::setComtRates(int ctx) {
  */
 void ComtInfo::setAutoConfigRates(int ctx) {
 	fAdr_t root = getRoot(ctx);
-	map<fAdr_t,ComtRtrInfo>::iterator rp;
-	rp = comtree[ctx].rtrMap->find(root);
-	RateSpec& rootRates = rp->second.subtreeRates;
-	for (rp  = comtree[ctx].rtrMap->begin();
-	     rp != comtree[ctx].rtrMap->end(); rp++) {
-		if (rp->second.frozen) continue;
-		int lnk = rp->second.plnk;
+	int x = comtree[ctx].rtrMap->find(root);
+	RateSpec& rootRates = comtree[ctx].rtrMap->getValue(x).subtreeRates;
+	for (int x = comtree[ctx].rtrMap->first(); x != 0;
+		 x = comtree[ctx].rtrMap->next(x)) {
+		ComtRtrInfo& cri = comtree[ctx].rtrMap->getValue(x);
+		if (cri.frozen) continue;
+		int lnk = cri.plnk;
 		if (lnk == 0) continue;
-		fAdr_t rtr = rp->first;
-		RateSpec& rs = rp->second.plnkRates;
-		RateSpec& srates = rp->second.subtreeRates;
+		fAdr_t rtr = comtree[ctx].rtrMap->getKey(x);
+		RateSpec& rs = cri.plnkRates;
+		RateSpec& srates = cri.subtreeRates;
 		RateSpec trates = rootRates; trates.subtract(srates);
 		if (isCoreNode(ctx,rtr)) {
 			rs.set(	srates.bitRateUp,trates.bitRateUp,
@@ -943,25 +910,25 @@ void ComtInfo::setAutoConfigRates(int ctx) {
  */
 bool ComtInfo::checkComtRates(int ctx) {
 	// first check parent links at routers
-	map<fAdr_t,ComtRtrInfo>::iterator rp;
-	for (rp  = comtree[ctx].rtrMap->begin();
-	     rp != comtree[ctx].rtrMap->end(); rp++) {
-		fAdr_t rtr = rp->first; int lnk = rp->second.plnk;
-		if (lnk == 0) continue;
-		RateSpec rs = rp->second.plnkRates;
-		if (rtr != net->getLeft(lnk)) rs.flip();
-		RateSpec availRates = net->getAvailRates(lnk);
-		if (!rs.leq(availRates)) { return false; }
+	for (int x = comtree[ctx].rtrMap->first(); x != 0;
+		 x = comtree[ctx].rtrMap->next(x)) {
+		ComtRtrInfo& cri = comtree[ctx].rtrMap->getValue(x);
+		fAdr_t rtr = comtree[ctx].rtrMap->getKey(x);
+		if (cri.plnk == 0) continue;
+		RateSpec rs = cri.plnkRates;
+		if (rtr != net->getLeft(cri.plnk)) rs.flip();
+		RateSpec availRates = net->getAvailRates(cri.plnk);
+		if (!rs.leq(availRates)) return false;
 	}
 	// then check access links, for static leaf nodes
-	map<fAdr_t,ComtLeafInfo>::iterator lp;
-	for (lp  = comtree[ctx].leafMap->begin();
-	     lp != comtree[ctx].leafMap->end(); lp++) {
-		fAdr_t leafAdr = lp->first;
+	for (int x = comtree[ctx].leafMap->first(); x != 0;
+		 x = comtree[ctx].leafMap->next(x)) {
+		ComtLeafInfo& cli = comtree[ctx].leafMap->getValue(x);
+		fAdr_t leafAdr = comtree[ctx].leafMap->getKey(x);
 		int leaf = net->getNodeNum(leafAdr);
 		if (leaf == 0) continue;
 		int lnk = net->firstLinkAt(leaf);
-		RateSpec rs = lp->second.plnkRates;
+		RateSpec rs = cli.plnkRates;
 		if (leaf != net->getLeft(lnk)) rs.flip();
 		RateSpec availRates = net->getAvailRates(lnk);
 		if (!rs.leq(availRates)) { return false; }
@@ -977,24 +944,24 @@ bool ComtInfo::checkComtRates(int ctx) {
  *  @return true on success, else false
  */
 void ComtInfo::provision(int ctx) {
-	map<fAdr_t,ComtRtrInfo>::iterator rp;
-	for (rp  = comtree[ctx].rtrMap->begin();
-	     rp != comtree[ctx].rtrMap->end(); rp++) {
-		fAdr_t rtr = rp->first; int lnk = rp->second.plnk;
-		if (lnk == 0) continue;
-		RateSpec rs = rp->second.plnkRates;
-		if (rtr != net->getLeft(lnk)) rs.flip();
-		net->getAvailRates(lnk).subtract(rs);
+	for (int x = comtree[ctx].rtrMap->first(); x != 0;
+		 x = comtree[ctx].rtrMap->next(x)) {
+		ComtRtrInfo& cri = comtree[ctx].rtrMap->getValue(x);
+		fAdr_t rtr = comtree[ctx].rtrMap->getKey(x);
+		if (cri.plnk == 0) continue;
+		RateSpec rs = cri.plnkRates;
+		if (rtr != net->getLeft(cri.plnk)) rs.flip();
+		net->getAvailRates(cri.plnk).subtract(rs);
 	}
 	// provision statically configured leaf nodes
-	map<fAdr_t,ComtLeafInfo>::iterator lp;
-	for (lp  = comtree[ctx].leafMap->begin();
-	     lp != comtree[ctx].leafMap->end(); lp++) {
-		fAdr_t leafAdr = lp->first;
+	for (int x = comtree[ctx].leafMap->first(); x != 0;
+		 x = comtree[ctx].leafMap->next(x)) {
+		ComtLeafInfo& cli = comtree[ctx].leafMap->getValue(x);
+		fAdr_t leafAdr = comtree[ctx].leafMap->getKey(x);
 		int leaf = net->getNodeNum(leafAdr);
 		if (leaf == 0) continue;
 		int lnk = net->firstLinkAt(leaf);
-		RateSpec rs = lp->second.plnkRates;
+		RateSpec rs = cli.plnkRates;
 		if (leaf != net->getLeft(lnk)) rs.flip();
 		net->getAvailRates(lnk).subtract(rs);
 	}
@@ -1006,23 +973,23 @@ void ComtInfo::provision(int ctx) {
  *  @return true on success, else false
  */
 void ComtInfo::unprovision(int ctx) {
-	map<fAdr_t,ComtRtrInfo>::iterator rp;
-	for (rp  = comtree[ctx].rtrMap->begin();
-	     rp != comtree[ctx].rtrMap->end(); rp++) {
-		fAdr_t rtr = rp->first; int lnk = rp->second.plnk;
-		if (lnk == 0) continue;
-		RateSpec rs = rp->second.plnkRates;
-		if (rtr != net->getLeft(lnk)) rs.flip();
-		net->getAvailRates(lnk).add(rs);
+	for (int x = comtree[ctx].rtrMap->first(); x != 0;
+		 x = comtree[ctx].rtrMap->next(x)) {
+		ComtRtrInfo& cri = comtree[ctx].rtrMap->getValue(x);
+		fAdr_t rtr = comtree[ctx].rtrMap->getKey(x);
+		if (cri.plnk == 0) continue;
+		RateSpec rs = cri.plnkRates;
+		if (rtr != net->getLeft(cri.plnk)) rs.flip();
+		net->getAvailRates(cri.plnk).add(rs);
 	}
-	map<fAdr_t,ComtLeafInfo>::iterator lp;
-	for (lp  = comtree[ctx].leafMap->begin();
-	     lp != comtree[ctx].leafMap->end(); lp++) {
-		fAdr_t leafAdr = lp->first;
+	for (int x = comtree[ctx].leafMap->first(); x != 0;
+		 x = comtree[ctx].leafMap->next(x)) {
+		ComtLeafInfo& cli = comtree[ctx].leafMap->getValue(x);
+		fAdr_t leafAdr = comtree[ctx].leafMap->getKey(x);
 		int leaf = net->getNodeNum(leafAdr);
 		if (leaf == 0) continue;
 		int lnk = net->firstLinkAt(leaf);
-		RateSpec rs = lp->second.plnkRates;
+		RateSpec rs = cli.plnkRates;
 		if (leaf != net->getLeft(lnk)) rs.flip();
 		net->getAvailRates(lnk).add(rs);
 	}
@@ -1044,7 +1011,7 @@ void ComtInfo::unprovision(int ctx) {
  *  @return the router number of the "branchRouter" at which the
  *  path ends, or 0 if no path is found
  */
-int ComtInfo::findPath(int ctx, int src, RateSpec& rs, list<LinkMod>& path) {
+int ComtInfo::findPath(int ctx, int src, RateSpec& rs, Glist<LinkMod>& path) {
 	path.clear();
 	fAdr_t srcAdr = net->getNodeAdr(src);
 	if (isComtNode(ctx,srcAdr)) return src;
@@ -1052,10 +1019,10 @@ int ComtInfo::findPath(int ctx, int src, RateSpec& rs, list<LinkMod>& path) {
 	for (fAdr_t r = net->firstRouter(); r != 0; r = net->nextRouter(r)) {
 		n = max(r,n);
 	}
-	Heap h(n); int d[n+1];
+	Dheap<int> h(n); int d[n+1];
 	int plnk[n+1]; // note: reverse from direction in comtree
 	for (fAdr_t r = net->firstRouter(); r != 0; r = net->nextRouter(r)) {
-		plnk[r] = 0; d[r] = BIGINT;
+		plnk[r] = 0; d[r] = INT_MAX;
 	}
 	RateSpec availRates;
 	d[src] = 0;
@@ -1078,7 +1045,7 @@ int ComtInfo::findPath(int ctx, int src, RateSpec& rs, list<LinkMod>& path) {
 				for (int pl = plnk[u]; pl != 0; pl = plnk[u]) {
 					int v = net->getPeer(u,plnk[u]);
 					LinkMod lm(pl,v,rs);
-					path.push_front(lm);
+					path.addFirst(lm);
 					u = v;
 				}
 				return peer;
@@ -1131,10 +1098,10 @@ bool ComtInfo::findRootPath(int ctx, int src, RateSpec& rs, vector<int>& path) {
 	for (fAdr_t r = net->firstRouter(); r != 0; r = net->nextRouter(r)) {
 		n = max(r,n);
 	}
-	Heap h(n); int d[n+1];
+	Dheap<int> h(n); int d[n+1];
 	int plnk[n+1]; // note: reverse from direction in comtree
 	for (fAdr_t r = net->firstRouter(); r != 0; r = net->nextRouter(r)) {
-		plnk[r] = 0; d[r] = BIGINT;
+		plnk[r] = 0; d[r] = INT_MAX;
 	}
 	RateSpec availRates;
 	d[src] = 0;
@@ -1197,21 +1164,19 @@ bool ComtInfo::findRootPath(int ctx, int src, RateSpec& rs, vector<int>& path) {
  *  in the comtree; the links appear in "bottom-up" order
  *  leading from some router outside the comtree to a router in the comtree
  */
-void ComtInfo::addPath(int ctx, list<LinkMod>& path) {
-	if (path.begin() == path.end()) return;
-	list<LinkMod>::iterator pp;
-	for (pp = path.begin(); pp != path.end(); pp++) {
+void ComtInfo::addPath(int ctx, Glist<LinkMod>& path) {
+	for (int x = path.first(); x != 0; x = path.next(x)) {
 		// add lnk to the comtree in net
-		int child = pp->child; int lnk = pp->lnk;
-		RateSpec rs = pp->rs;
-		int parent = net->getPeer(child,lnk);
-		fAdr_t childAdr = net->getNodeAdr(child);
+		LinkMod& lmx = path.value(x);
+		RateSpec rs = lmx.rs;
+		int parent = net->getPeer(lmx.child,lmx.lnk);
+		fAdr_t childAdr = net->getNodeAdr(lmx.child);
 		fAdr_t parentAdr = net->getNodeAdr(parent);
 		addNode(ctx,childAdr); addNode(ctx,parentAdr);
-		setPlink(ctx,childAdr,lnk); thaw(ctx,childAdr);
+		setPlink(ctx,childAdr,lmx.lnk); thaw(ctx,childAdr);
 		getLinkRates(ctx,childAdr) = rs;
-		if (child != net->getLeft(lnk)) rs.flip();
-		net->getAvailRates(lnk).subtract(rs);
+		if (lmx.child != net->getLeft(lmx.lnk)) rs.flip();
+		net->getAvailRates(lmx.lnk).subtract(rs);
 	}
 	return;
 }
@@ -1223,14 +1188,14 @@ void ComtInfo::addPath(int ctx, list<LinkMod>& path) {
  *  in bottom-up order; the path is assumed to have
  *  no "branching links" incident to the path
  */
-void ComtInfo::removePath(int ctx, list<LinkMod>& path) {
-	if (path.begin() == path.end()) return;
-	list<LinkMod>::iterator pp;
-	for (pp = path.begin(); pp != path.end(); pp++) {
-		fAdr_t childAdr = net->getNodeAdr(pp->child);
+void ComtInfo::removePath(int ctx, Glist<LinkMod>& path) {
+	if (path.empty()) return;
+	for (int x = path.first(); x != 0; x = path.next(x)) {
+		LinkMod& lmx = path.value(x);
+		fAdr_t childAdr = net->getNodeAdr(lmx.child);
 		RateSpec rs = getLinkRates(ctx,childAdr);
-		if (pp->child != net->getLeft(pp->lnk)) rs.flip();
-		net->getAvailRates(pp->lnk).add(rs);
+		if (lmx.child != net->getLeft(lmx.lnk)) rs.flip();
+		net->getAvailRates(lmx.lnk).add(rs);
 		removeNode(ctx,childAdr);
 	}
 	return;
@@ -1247,12 +1212,12 @@ void ComtInfo::removePath(int ctx, list<LinkMod>& path) {
  *  @return true if all links in comtree have sufficient available
  *  capacity to accommodate the changes
  */
-bool ComtInfo::computeMods(int ctx, list<LinkMod>& modList) {
+bool ComtInfo::computeMods(int ctx, Glist<LinkMod>& modList) {
 	fAdr_t root = getRoot(ctx);
-	map<fAdr_t,ComtRtrInfo>::iterator rp;
-	rp = comtree[ctx].rtrMap->find(root);
+	int x = comtree[ctx].rtrMap->find(root);
+	RateSpec& rs = comtree[ctx].rtrMap->getValue(x).subtreeRates;
 	modList.clear();
-	bool status = computeMods(ctx,root,rp->second.subtreeRates,modList);
+	bool status = computeMods(ctx,root,rs,modList);
 	return status;
 }
 
@@ -1273,17 +1238,17 @@ bool ComtInfo::computeMods(int ctx, list<LinkMod>& modList) {
  *  capacity to accommodate the changes
  */
 bool ComtInfo::computeMods(int ctx, fAdr_t radr, RateSpec& rootRates,
-			     list<LinkMod>& modList) {
+			     Glist<LinkMod>& modList) {
 	int rnum = net->getNodeNum(radr);
 	if (!net->isRouter(rnum)) return true;
-	map<fAdr_t,ComtRtrInfo>::iterator rp;
-	rp = comtree[ctx].rtrMap->find(radr);
-	int plnk = rp->second.plnk;
+	int x = comtree[ctx].rtrMap->find(radr);
+	ComtRtrInfo& cri = comtree[ctx].rtrMap->getValue(x);
+	int plnk = cri.plnk;
 	if (plnk != 0 && !isFrozen(ctx,radr)) {
 		// determine the required rates on link to parent
 		LinkMod nuMod;
 		nuMod.child = rnum; nuMod.lnk = plnk;
-		RateSpec& srates = rp->second.subtreeRates;
+		RateSpec& srates = cri.subtreeRates;
 		RateSpec trates = rootRates; trates.subtract(srates);
 		if (isCoreNode(ctx,radr)) {
 			nuMod.rs.set(srates.bitRateUp,trates.bitRateUp,
@@ -1294,21 +1259,22 @@ bool ComtInfo::computeMods(int ctx, fAdr_t radr, RateSpec& rootRates,
 			    	srates.pktRateUp,
 			    	min(srates.pktRateDown,trates.pktRateUp));
 		}
-		nuMod.rs.subtract(rp->second.plnkRates);
+		nuMod.rs.subtract(cri.plnkRates);
 		if (nuMod.rs.isZero()) return true; // no change needed
 		RateSpec availRates = net->getAvailRates(plnk);
 		if (rnum != net->getLeft(plnk)) availRates.flip();
 		if (!nuMod.rs.leq(availRates)) return false;
-		modList.push_back(nuMod);
+		modList.addLast(nuMod);
 	}
 
 	// Now, do subtrees; note that this method is going to be
 	// slow for comtrees with very large backbones; only way to
 	// fix it is to add child and sibling pointers; later, maybe
-	for (rp  = comtree[ctx].rtrMap->begin();
-	     rp != comtree[ctx].rtrMap->end(); rp++) {
-		if (radr != getParent(ctx,rp->first)) continue;
-		if (!computeMods(ctx,rp->first,rootRates,modList))
+	for (int x = comtree[ctx].rtrMap->first(); x != 0;
+		 x = comtree[ctx].rtrMap->next(x)) {
+		fAdr_t xadr = comtree[ctx].rtrMap->getKey(x);
+		if (radr != getParent(ctx,xadr)) continue;
+		if (!computeMods(ctx,xadr,rootRates,modList))
 			return false;
 	}
 	return true;
@@ -1323,15 +1289,14 @@ bool ComtInfo::computeMods(int ctx, fAdr_t radr, RateSpec& rootRates,
  *  that are either to be added or have their rate adjusted.
  *  and a RateSpec difference to be added to that link.
  */
-void ComtInfo::provision(int ctx, list<LinkMod>& modList) {
-	list<LinkMod>::iterator mlp;
+void ComtInfo::provision(int ctx, Glist<LinkMod>& modList) {
 	RateSpec delta;
-	for (mlp = modList.begin(); mlp != modList.end(); mlp++) {
-		int rtr = mlp->child; fAdr_t rtrAdr = net->getNodeAdr(rtr);
-		int plnk = mlp->lnk; delta = mlp->rs;
-		map<fAdr_t,ComtRtrInfo>::iterator rp;
-		rp = comtree[ctx].rtrMap->find(rtrAdr);
-		rp->second.plnkRates.add(delta);
+	for (int x = modList.first(); x != 0; x = modList.next(x)) {
+		LinkMod& lmx = modList.value(x);
+		int rtr = lmx.child; fAdr_t rtrAdr = net->getNodeAdr(rtr);
+		int plnk = lmx.lnk; delta = lmx.rs;
+		int rx = comtree[ctx].rtrMap->find(rtrAdr);
+		comtree[ctx].rtrMap->getValue(rx).plnkRates.add(delta);
 		if (rtr != net->getLeft(plnk)) delta.flip();
 		net->getAvailRates(plnk).subtract(delta);
 	}
@@ -1344,15 +1309,14 @@ void ComtInfo::provision(int ctx, list<LinkMod>& modList) {
  *  @param modList is a list of nodes, each representing a link in the comtree
  *  and a RateSpec difference to be removed from that link.
  */
-void ComtInfo::unprovision(int ctx, list<LinkMod>& modList) {
-	list<LinkMod>::iterator mlp;
+void ComtInfo::unprovision(int ctx, Glist<LinkMod>& modList) {
 	RateSpec delta;
-	for (mlp = modList.begin(); mlp != modList.end(); mlp++) {
-		int rtr = mlp->child; fAdr_t rtrAdr = net->getNodeAdr(rtr);
-		int plnk = mlp->lnk; delta = mlp->rs;
-		map<fAdr_t,ComtRtrInfo>::iterator rp;
-		rp = comtree[ctx].rtrMap->find(rtrAdr);
-		rp->second.plnkRates.add(delta);
+	for (int x = modList.first(); x != 0; x = modList.next(x)) {
+		LinkMod& lmx = modList.value(x);
+		int rtr = lmx.child; fAdr_t rtrAdr = net->getNodeAdr(rtr);
+		int plnk = lmx.lnk; delta = lmx.rs;
+		int rx = comtree[ctx].rtrMap->find(rtrAdr);
+		comtree[ctx].rtrMap->getValue(rx).plnkRates.add(delta);
 		if (rtr != net->getLeft(plnk)) delta.flip();
 		net->getAvailRates(plnk).add(delta);
 	}
@@ -1365,11 +1329,10 @@ void ComtInfo::unprovision(int ctx, list<LinkMod>& modList) {
  *  @param s is a reference to a string in which the result is returned
  *  @return a reference to s
  */
-string& ComtInfo::toString(string& s) {
-	s = "";
+string ComtInfo::toString() {
+	string s;
 	for (int ctx = firstComtree(); ctx != 0; ctx = nextComtree(ctx)) {
-		string s1;
-		s += comt2string(ctx,s1);
+		s += comt2string(ctx);
 	}
 	s += ";\n"; 
 	return s;
@@ -1383,30 +1346,27 @@ string& ComtInfo::toString(string& s) {
  *  @param s is a reference to a string in which result is returned
  *  @return a reference to s
  */
-string& ComtInfo::link2string(int ctx, int lnk, string& s) const {
+string ComtInfo::link2string(int ctx, int lnk) const {
 	stringstream ss;
 	fAdr_t childAdr = getChild(ctx,lnk);
 	int child = net->getNodeNum(childAdr);
 	int parent = net->getPeer(child,lnk);
-	ss << "(" << net->getNodeName(child,s);
+	ss << "(" << net->getNodeName(child);
 	if (net->isRouter(child))
 		ss << "." << net->getLLnum(lnk,child);
-	ss << "," << net->getNodeName(parent,s) << "."
+	ss << "," << net->getNodeName(parent) << "."
 	   << net->getLLnum(lnk,parent);
 	RateSpec rs;
 	if (net->isRouter(child)) {
-		map<fAdr_t,ComtRtrInfo>::iterator rp;
-		rp = comtree[ctx].rtrMap->find(childAdr);
-		rs = rp->second.plnkRates;
+		rs = comtree[ctx].rtrMap->getValue(
+			comtree[ctx].rtrMap->find(childAdr)).plnkRates;
 	} else {
-		map<fAdr_t,ComtLeafInfo>::iterator lp;
-		lp = comtree[ctx].leafMap->find(childAdr);
-		rs = lp->second.plnkRates;
+		rs = comtree[ctx].leafMap->getValue(
+			comtree[ctx].leafMap->find(childAdr)).plnkRates;
 	}
 	ss << ",(" << rs.bitRateUp << "," << rs.bitRateDown
 	   << ","  << rs.pktRateUp << "," << rs.pktRateDown << "))";
-	s = ss.str();
-	return s;
+	return ss.str();
 }
 
 /** Create a string representation of a parent link for a leaf.
@@ -1417,19 +1377,18 @@ string& ComtInfo::link2string(int ctx, int lnk, string& s) const {
  *  @param s is a reference to a string in which result is returned
  *  @return a reference to s
  */
-string& ComtInfo::leafLink2string(int ctx, fAdr_t leafAdr, string& s) const {
+string ComtInfo::leafLink2string(int ctx, fAdr_t leafAdr) const {
 	int leaf = net->getNodeNum(leafAdr);
-	if (leaf != 0) return link2string(ctx,net->firstLinkAt(leaf),s);
+	if (leaf != 0) return link2string(ctx,net->firstLinkAt(leaf));
 
-	map<fAdr_t,ComtLeafInfo>::iterator lp;
-	lp = comtree[ctx].leafMap->find(leafAdr);
-	int parent = net->getNodeNum(lp->second.parent);
+	int x = comtree[ctx].leafMap->find(leafAdr);
+	ComtLeafInfo& cli = comtree[ctx].leafMap->getValue(x);
+	int parent = net->getNodeNum(cli.parent);
 	stringstream ss;
-	ss << "(" << Forest::fAdr2string(leafAdr,s);
-	ss << "," << net->getNodeName(parent,s) << "." << lp->second.llnk;
-	ss << "," << lp->second.plnkRates.toString(s) << ")";
-	s = ss.str();
-	return s;
+	ss << "(" << Forest::fAdr2string(leafAdr)
+	   << "," << net->getNodeName(parent) << "." << cli.llnk
+	   << "," << cli.plnkRates.toString() << ")";
+	return ss.str();
 }
 
 /** Create a string representation of a comtree.
@@ -1439,20 +1398,19 @@ string& ComtInfo::leafLink2string(int ctx, fAdr_t leafAdr, string& s) const {
  *  @param s is a reference to a string in which result is returned
  *  @return a reference to s
  */
-string& ComtInfo::comt2string(int ctx, string& s) const {
-	s = "";
-	if (!validComtIndex(ctx)) return s;
+string ComtInfo::comt2string(int ctx) const {
+	if (!validComtIndex(ctx)) return "";
 	stringstream ss;
 	ss << "comtree(" << getComtree(ctx) << ","
-	   << net->getNodeName(net->getNodeNum(getOwner(ctx)),s) << ",";
-	ss << net->getNodeName(net->getNodeNum(getRoot(ctx)),s) << ","
+	   << net->getNodeName(net->getNodeNum(getOwner(ctx))) << ",";
+	ss << net->getNodeName(net->getNodeNum(getRoot(ctx))) << ","
 	   << (getConfigMode(ctx) ? "auto" : "manual") << ",";
-	ss << comtree[ctx].bbDefRates.toString(s) << ",";
-	ss << comtree[ctx].leafDefRates.toString(s);
+	ss << comtree[ctx].bbDefRates.toString() << ",";
+	ss << comtree[ctx].leafDefRates.toString();
 	int numNodes = comtree[ctx].rtrMap->size()
 			+ comtree[ctx].leafMap->size();
 	if (numNodes <= 1) {
-		ss << ")\n"; s = ss.str(); return s;
+		ss << ")\n"; return ss.str();
 	} else if (comtree[ctx].coreSet->size() > 1) {
 		ss << ",\n\t(";
 		// iterate through core nodes and print
@@ -1461,7 +1419,7 @@ string& ComtInfo::comt2string(int ctx, string& s) const {
 			if (c == getRoot(ctx)) continue;
 			if (first) first = false;
 			else	   ss << ",";
-			ss << net->getNodeName(net->getNodeNum(c),s);
+			ss << net->getNodeName(net->getNodeNum(c));
 		}
 		ss << ")";
 	} else {
@@ -1474,27 +1432,25 @@ string& ComtInfo::comt2string(int ctx, string& s) const {
 		int num2go = numNodes - 1;
 		// iterate through routers and print parent links
 		int numDone = 0;
-		map<fAdr_t,ComtRtrInfo>::iterator rp;
-		for (rp  = comtree[ctx].rtrMap->begin();
-		     rp != comtree[ctx].rtrMap->end(); rp++) {
-			if (rp->second.plnk == 0) continue;
-			ss << "\t" << link2string(ctx,rp->second.plnk,s);
+		for (int x = comtree[ctx].rtrMap->first(); x != 0;
+			 x = comtree[ctx].rtrMap->next(x)) {
+			int plnk = comtree[ctx].rtrMap->getValue(x).plnk;
+			if (plnk == 0) continue;
+			ss << "\t" << link2string(ctx,plnk);
 			if (++numDone < num2go) ss << ",";
 			ss << "\n";
 		}
 		// iterate through leaf nodes and print parent links
-		map<fAdr_t,ComtLeafInfo>::iterator lp;
-		for (lp  = comtree[ctx].leafMap->begin();
-		     lp != comtree[ctx].leafMap->end(); lp++) {
-			ss << "\t"
-			   << leafLink2string(ctx,lp->first,s);
+		for (int x = comtree[ctx].leafMap->first(); x != 0;
+			 x = comtree[ctx].leafMap->next(x)) {
+			fAdr_t leafAdr = comtree[ctx].rtrMap->getKey(x);
+			ss << "\t" << leafLink2string(ctx,leafAdr);
 			if (++numDone < num2go) ss << ",";
 			ss << "\n";
 		}
 		ss << ")\n";
 	}
-	s = ss.str();
-	return s;
+	return ss.str();
 }
 
 /** Create a string representation of a the status of a comtree.
@@ -1505,20 +1461,19 @@ string& ComtInfo::comt2string(int ctx, string& s) const {
  *  @param s is a reference to a string in which result is returned
  *  @return a reference to s
  */
-string& ComtInfo::comtStatus2string(int ctx, string& s) const {
-	s = "";
-	if (!validComtIndex(ctx)) return s;
+string ComtInfo::comtStatus2string(int ctx) const {
+	if (!validComtIndex(ctx)) return "";
 	stringstream ss;
 	ss << "comtree(" << getComtree(ctx) << ","
-	   << net->getNodeName(net->getNodeNum(getOwner(ctx)),s) << ",";
-	ss << net->getNodeName(net->getNodeNum(getRoot(ctx)),s) << ","
-	   << (getConfigMode(ctx) ? "auto" : "manual") << ",";
-	ss << comtree[ctx].bbDefRates.toString(s) << ",";
-	ss << comtree[ctx].leafDefRates.toString(s);
+	   << net->getNodeName(net->getNodeNum(getOwner(ctx))) << ","
+	   << net->getNodeName(net->getNodeNum(getRoot(ctx))) << ","
+	   << (getConfigMode(ctx) ? "auto" : "manual") << ","
+	   << comtree[ctx].bbDefRates.toString() << ","
+	   << comtree[ctx].leafDefRates.toString();
 	int numNodes = comtree[ctx].rtrMap->size()
 			+ comtree[ctx].leafMap->size();
 	if (numNodes <= 1) {
-		ss << ")\n"; s = ss.str(); return s;
+		ss << ")\n"; return ss.str();
 	} else if (comtree[ctx].coreSet->size() > 1) {
 		ss << ",\n\t(";
 		// iterate through core nodes and print
@@ -1527,7 +1482,7 @@ string& ComtInfo::comtStatus2string(int ctx, string& s) const {
 			if (c == getRoot(ctx)) continue;
 			if (first) first = false;
 			else	   ss << ",";
-			ss << net->getNodeName(net->getNodeNum(c),s);
+			ss << net->getNodeName(net->getNodeNum(c));
 		}
 		ss << ")";
 	} else {
@@ -1539,71 +1494,68 @@ string& ComtInfo::comtStatus2string(int ctx, string& s) const {
 		ss << ",\n";
 		// count number of nodes to be added to string
 		int num2go = comtree[ctx].rtrMap->size();
-		map<fAdr_t,ComtLeafInfo>::iterator lp;
-		for (lp  = comtree[ctx].leafMap->begin();
-		     lp != comtree[ctx].leafMap->end(); lp++) {
-			if (net->getNodeNum(lp->first) != 0) num2go++;
+		for (fAdr_t leafAdr = firstLeaf(ctx); leafAdr != 0;
+			    leafAdr = nextLeaf(ctx,leafAdr)) {
+			if (net->getNodeNum(leafAdr) !=0) num2go++;
 		}
 		// iterate through routers and print nodes, parents, rates
 		// and link counts
 		int numDone = 0;
-		map<fAdr_t,ComtRtrInfo>::iterator rp;
-		for (rp  = comtree[ctx].rtrMap->begin();
-		     rp != comtree[ctx].rtrMap->end(); rp++) {
-			fAdr_t radr = rp->first;
+		for (int x = comtree[ctx].rtrMap->first(); x != 0;
+			 x = comtree[ctx].rtrMap->next(x)) {
+			fAdr_t radr = comtree[ctx].rtrMap->getKey(x);
+			ComtRtrInfo& cri = comtree[ctx].rtrMap->getValue(x);
 			int rtr = net->getNodeNum(radr);
 			ss << "\t(";
-			if (rp->second.plnk == 0) { // special case of root
-				ss << net->getNodeName(rtr,s) << ","
-				   << rp->second.lnkCnt;
+			if (cri.plnk == 0) { // special case of root
+				ss << net->getNodeName(rtr) << ","
+				   << cri.lnkCnt;
 			} else {
-				int parent = net->getPeer(rtr,rp->second.plnk);
-				ss << net->getNodeName(rtr,s) << "."
-				   << net->getLLnum(rp->second.plnk,rtr) << ",";
-				ss << net->getNodeName(parent,s) << ".";
-				ss << net->getLLnum(rp->second.plnk,parent) 
-				   << "," << rp->second.plnkRates.toString(s)
-				   << "," << rp->second.lnkCnt;
+				int parent = net->getPeer(rtr,cri.plnk);
+				ss << net->getNodeName(rtr) << "."
+				   << net->getLLnum(cri.plnk,rtr) << ",";
+				ss << net->getNodeName(parent) << ".";
+				ss << net->getLLnum(cri.plnk,parent) 
+				   << "," << cri.plnkRates.toString()
+				   << "," << cri.lnkCnt;
 			}
 			ss << ")";
 			if (++numDone < num2go) ss << ",";
 			ss << "\n";
 		}
 		// iterate through static leaf nodes and print parent links
-		for (lp  = comtree[ctx].leafMap->begin();
-		     lp != comtree[ctx].leafMap->end(); lp++) {
-			fAdr_t ladr = lp->first;
+		for (int x = comtree[ctx].leafMap->first(); x != 0;
+			 x = comtree[ctx].leafMap->next(x)) {
+			fAdr_t ladr = comtree[ctx].leafMap->getKey(x);
+			ComtLeafInfo& cli = comtree[ctx].leafMap->getValue(x);
 			int leaf = net->getNodeNum(ladr);
 			if (leaf == 0) continue; // skip dynamic leafs
 			ss << "\t(";
-			int parent = net->getNodeNum(lp->second.parent);
-			ss << net->getNodeName(leaf,s) << ",";
-			ss << net->getNodeName(parent,s) << "."
-			   << lp->second.llnk ;
-			ss << "," << lp->second.plnkRates.toString(s) << ")";
+			int parent = net->getNodeNum(cli.parent);
+			ss << net->getNodeName(leaf) << ","
+			   << net->getNodeName(parent) << "." << cli.llnk
+			   << "," << cli.plnkRates.toString() << ")";
 			if (++numDone < num2go) ss << ",";
 			ss << "\n";
 		}
 		ss << ")\n";
 	}
-	s = ss.str();
-	return s;
+	return ss.str();
 }
 
-string& ComtInfo::comtStatus22string(int ctx, string& s) const {
-	s = "";
-	if (!validComtIndex(ctx)) return s;
+string ComtInfo::comtStatus22string(int ctx) const {
+	if (!validComtIndex(ctx)) return "";
 	stringstream ss;
 	ss << "comtree(" << getComtree(ctx) << ","
-	   << net->getNodeName(net->getNodeNum(getOwner(ctx)),s) << ",";
-	ss << net->getNodeName(net->getNodeNum(getRoot(ctx)),s) << ","
+	   << net->getNodeName(net->getNodeNum(getOwner(ctx))) << ",";
+	ss << net->getNodeName(net->getNodeNum(getRoot(ctx))) << ","
 	   << (getConfigMode(ctx) ? "auto" : "manual") << ",";
-	ss << comtree[ctx].bbDefRates.toString(s) << ",";
-	ss << comtree[ctx].leafDefRates.toString(s);
+	ss << comtree[ctx].bbDefRates.toString() << ",";
+	ss << comtree[ctx].leafDefRates.toString();
 	int numNodes = comtree[ctx].rtrMap->size()
 			+ comtree[ctx].leafMap->size();
 	if (numNodes <= 1) {
-		ss << ")\n"; s = ss.str(); return s;
+		ss << ")\n"; return ss.str();
 	} else if (comtree[ctx].coreSet->size() > 1) {
 		ss << ",\n\t(";
 		// iterate through core nodes and print
@@ -1612,7 +1564,7 @@ string& ComtInfo::comtStatus22string(int ctx, string& s) const {
 			if (c == getRoot(ctx)) continue;
 			if (first) first = false;
 			else	   ss << ",";
-			ss << net->getNodeName(net->getNodeNum(c),s);
+			ss << net->getNodeName(net->getNodeNum(c));
 		}
 		ss << ")";
 	} else {
@@ -1624,56 +1576,55 @@ string& ComtInfo::comtStatus22string(int ctx, string& s) const {
 		ss << ",\n";
 		// count number of nodes to be added to string
 		int num2go = comtree[ctx].rtrMap->size();
-		map<fAdr_t,ComtLeafInfo>::iterator lp;
-		for (lp  = comtree[ctx].leafMap->begin();
-		     lp != comtree[ctx].leafMap->end(); lp++) {
-			if (net->getNodeNum(lp->first) != 0) num2go++;
+		for (int x = comtree[ctx].leafMap->first(); x != 0;
+			 x = comtree[ctx].leafMap->next(x)) {
+			fAdr_t ladr = comtree[ctx].leafMap->getKey(x);
+			if (net->getNodeNum(ladr) != 0) num2go++;
 		}
 		// iterate through routers and print nodes, parents, rates
 		// and link counts
 		int numDone = 0;
-		map<fAdr_t,ComtRtrInfo>::iterator rp;
-		for (rp  = comtree[ctx].rtrMap->begin();
-		     rp != comtree[ctx].rtrMap->end(); rp++) {
-			fAdr_t radr = rp->first;
+		for (int x = comtree[ctx].rtrMap->first(); x != 0;
+			 x = comtree[ctx].rtrMap->next(x)) {
+			fAdr_t radr = comtree[ctx].rtrMap->getKey(x);
+			ComtRtrInfo& cri = comtree[ctx].rtrMap->getValue(x);
 			int rtr = net->getNodeNum(radr);
 			ss << "\t(";
-			if (rp->second.plnk == 0) { // special case of root
-				ss << net->getNodeName(rtr,s) << ","
-				   << rp->second.lnkCnt;
+			if (cri.plnk == 0) { // special case of root
+				ss << net->getNodeName(rtr) << ","
+				   << cri.lnkCnt;
 			} else {
-				int parent = net->getPeer(rtr,rp->second.plnk);
-				ss << net->getNodeName(rtr,s) << "."
-				   << net->getLLnum(rp->second.plnk,rtr) << ",";
-				ss << net->getNodeName(parent,s) << ".";
-				ss << net->getLLnum(rp->second.plnk,parent) 
-				   << "," << rp->second.plnkRates.toString(s);
-				ss << "," << rp->second.subtreeRates.toString(s)
-				   << "," << rp->second.lnkCnt;
+				int parent = net->getPeer(rtr,cri.plnk);
+				ss << net->getNodeName(rtr) << "."
+				   << net->getLLnum(cri.plnk,rtr) << ","
+				   << net->getNodeName(parent) << "."
+				   << net->getLLnum(cri.plnk,parent) 
+				   << "," << cri.plnkRates.toString()
+				   << "," << cri.subtreeRates.toString()
+				   << "," << cri.lnkCnt;
 			}
 			ss << ")";
 			if (++numDone < num2go) ss << ",";
 			ss << "\n";
 		}
 		// iterate through static leaf nodes and print parent links
-		for (lp  = comtree[ctx].leafMap->begin();
-		     lp != comtree[ctx].leafMap->end(); lp++) {
-			fAdr_t ladr = lp->first;
+		for (int x = comtree[ctx].leafMap->first(); x != 0;
+			 x = comtree[ctx].leafMap->next(x)) {
+			fAdr_t ladr = comtree[ctx].leafMap->getKey(x);
+			ComtLeafInfo& cli = comtree[ctx].leafMap->getValue(x);
 			int leaf = net->getNodeNum(ladr);
 			if (leaf == 0) continue; // skip dynamic leafs
 			ss << "\t(";
-			int parent = net->getNodeNum(lp->second.parent);
-			ss << net->getNodeName(leaf,s) << ",";
-			ss << net->getNodeName(parent,s) << "."
-			   << lp->second.llnk ;
-			ss << "," << lp->second.plnkRates.toString(s) << ")";
+			int parent = net->getNodeNum(cli.parent);
+			ss << net->getNodeName(leaf) << ","
+			   << net->getNodeName(parent) << "." << cli.llnk
+			   << "," << cli.plnkRates.toString() << ")";
 			if (++numDone < num2go) ss << ",";
 			ss << "\n";
 		}
 		ss << ")\n";
 	}
-	s = ss.str();
-	return s;
+	return ss.str();
 }
 
 } // ends namespace

@@ -14,49 +14,19 @@ namespace forest {
 /** Constructor for AdminTable, allocates space and initializes table. */
 AdminTable::AdminTable(int maxAdmins) : maxAdm(maxAdmins) {
 	avec = new Admin[maxAdm+1];
-	admins = new UiSetPair(maxAdm);
-	nameMap = new map<string, int>();
+	nameMap = new HashSet<string, Hash::string>(maxAdm);
 	maxAdx = 0;
 }
 	
 /** Destructor for AdminTable, frees dynamic storage */
-AdminTable::~AdminTable() {
-	delete [] avec; delete admins; delete nameMap;
-	pthread_mutex_destroy(&mapLock);
-}
+AdminTable::~AdminTable() { delete [] avec; delete nameMap; }
 
 /** Initialize lock and condition variables.  */
 bool AdminTable::init() {
-        if (pthread_mutex_init(&mapLock,NULL) != 0) return false;
-	for (int adx = 1; adx <= maxAdm; adx++) {
+	for (int adx = 1; adx <= maxAdm; adx++)
 		avec[adx].busyBit = false;
-		if (pthread_cond_init(&avec[adx].busyCond,NULL) != 0)
-			return false;
-	}
 	return true;
 }
-
-/** Lock an admin's table entry.
- *  @param adx is an admin index
- *  @return true if able to a lock on the specified admin;
- *  return false if the admin index does not refer to a valid admin
-bool AdminTable::lockAdmin(int adx) {
-	lockMap();
-	if (!admins->isIn(adx)) {
-		unlockMap(); return 0;
-	}
-	while (avec[adx].busyBit) { // wait until admin's entry is not busy
-		pthread_cond_wait(&avec[adx].busyCond,&mapLock);
-		if (!admins->isIn(adx)) {
-			pthread_cond_signal(&avec[adx].busyCond);
-			unlockMap(); return false;
-		}
-	}
-	avec[adx].busyBit = true; // set busyBit to lock admin table entry
-	unlockMap();
-	return true;
-}
- */
 
 /** Get an admin by name and lock its table entry.
  *  @param aname is an admin name
@@ -66,20 +36,15 @@ bool AdminTable::lockAdmin(int adx) {
  *  must release it when done using it
  */
 int AdminTable::getAdmin(const string& aname) {
-	lockMap();
-	map<string, int>::iterator p = nameMap->find(aname);
-	if (p == nameMap->end()) { unlockMap(); return 0; }
-	int adx = p->second;
-	while (avec[adx].busyBit) { // wait until admin's entry is not busy
-		pthread_cond_wait(&avec[adx].busyCond,&mapLock);
-		p = nameMap->find(aname);
-		if (p == nameMap->end()) {
-			pthread_cond_signal(&avec[adx].busyCond);
-			unlockMap(); return 0;
-		}
+	unique_lock<mutex> lck(mapLock);
+	int adx = nameMap->find(aname);
+	if (adx == 0) return 0;
+	while (avec[adx].busyBit) { // wait until entry not busy
+		avec[adx].busyCond.wait(lck);
+		adx = nameMap->find(aname);
+		if (adx == 0) return 0;
 	}
-	avec[adx].busyBit = true; // set busyBit to lock admin table entry
-	unlockMap();
+	avec[adx].busyBit = true; // set busyBit to lock entry
 	return adx;
 }
 
@@ -88,10 +53,9 @@ int AdminTable::getAdmin(const string& aname) {
  *  @param adx is the index of a locked comtree.
  */
 void AdminTable::releaseAdmin(int adx) {
-	lockMap();
+	unique_lock<mutex> lck(mapLock);
 	avec[adx].busyBit = false;
-	pthread_cond_signal(&avec[adx].busyCond);
-	unlockMap();
+	avec[adx].busyCond.notify_one();
 }
 
 /** Get the first admin in the list of valid admins.
@@ -99,19 +63,15 @@ void AdminTable::releaseAdmin(int adx) {
  *  valid admin; on a successful return, the admin is locked
  */
 int AdminTable::firstAdmin() {
-	lockMap();
-	int adx = admins->firstIn();
-	if (adx == 0) { unlockMap(); return 0; }
+	unique_lock<mutex> lck(mapLock);
+	int adx = nameMap->first();
+	if (adx == 0) return 0;
 	while (avec[adx].busyBit) {
-		pthread_cond_wait(&avec[adx].busyCond,&mapLock);
-		adx = admins->firstIn(); // first admin may have changed
-		if (adx == 0) {
-			pthread_cond_signal(&avec[adx].busyCond);
-			unlockMap(); return 0;
-		}
+		avec[adx].busyCond.wait(lck);
+		adx = nameMap->first(); // first admin may have changed
+		if (adx == 0) return 0;
 	}
 	avec[adx].busyBit = true;
-	unlockMap();
 	return adx;
 }
 
@@ -123,29 +83,25 @@ int AdminTable::firstAdmin() {
  *  is released and the next admin is locked.
  */
 int AdminTable::nextAdmin(int adx) {
-	lockMap();
-	int nuAdx = admins->nextIn(adx);
+	unique_lock<mutex> lck(mapLock);
+	int nuAdx = nameMap->next(adx);
 	if (nuAdx == 0) {
 		avec[adx].busyBit = false;
-		pthread_cond_signal(&avec[adx].busyCond);
-		unlockMap();
+		avec[adx].busyCond.notify_one();
 		return 0;
 	}
-	while (avec[nuAdx].busyBit) {
-		pthread_cond_wait(&avec[nuAdx].busyCond,&mapLock);
-		nuAdx = admins->nextIn(adx);
+	while (avec[adx].busyBit) {
+		avec[adx].busyCond.wait(lck);
+		nuAdx = nameMap->next(adx);
 		if (nuAdx == 0) {
 			avec[adx].busyBit = false;
-			pthread_cond_signal(&avec[adx].busyCond);
-			pthread_cond_signal(&avec[nuAdx].busyCond);
-			unlockMap();
+			avec[adx].busyCond.notify_one();
 			return 0;
 		}
 	}
-	avec[nuAdx].busyBit = true;
+	avec[adx].busyBit = true;
 	avec[adx].busyBit = false;
-	pthread_cond_signal(&avec[adx].busyCond);
-	unlockMap();
+	avec[adx].busyCond.notify_one();
 	return nuAdx;
 }
 
@@ -156,26 +112,17 @@ int AdminTable::nextAdmin(int adx) {
  *  release it when done.
  *  @param aname is the admin name
  *  @param pwd is the admin password
- *  @param adx is an optional argument specifying the admin index
- *  to be used for this new admin; if adx == 0, the admin index is
- *  assigned automatically (this is the default behavior)
+ *  @param adx is an optional argument; if present and non-zero, the new
+ *  entry is assigned the index adx, if that index is not already in use
  *  @return the index of the new table entry or 0 on failure;
  *  can fail if aname clashes with an existing name, or there is no space left
  */
 int AdminTable::addAdmin(string& aname, string& pwd, int adx) {
-	lockMap();
-	map<string,int>::iterator p = nameMap->find(aname);
-	if (p != nameMap->end()) { unlockMap(); return 0; }
-	if (adx != 0) {
-		if (admins->isIn(adx)) adx = 0;
-	} else {
-		adx = admins->firstOut();
-	}
-	if (adx == 0) { unlockMap(); return 0;}
-	nameMap->insert(pair<string,int>(aname,adx));
-	admins->swap(adx);
+	unique_lock<mutex> lck(mapLock);
+	if (nameMap->find(aname) != 0) return 0;
+	adx = nameMap->insert(aname,adx);
+	if (adx == 0) return 0;
 	avec[adx].busyBit = true;
-	unlockMap();
 
 	setAdminName(adx,aname); setPassword(adx,pwd);
 	setRealName(adx,"noname"); setEmail(adx,"nomail");
@@ -190,12 +137,10 @@ int AdminTable::addAdmin(string& aname, string& pwd, int adx) {
  *  @param adx is the index of the admin to be deleted
  */
 void AdminTable::removeAdmin(int adx) {
-	lockMap();
-	nameMap->erase(avec[adx].aname);
-	admins->swap(adx);
+	unique_lock<mutex> lck(mapLock);
+	nameMap->remove(nameMap->retrieve(adx));
 	avec[adx].busyBit = false;
-	pthread_cond_signal(&avec[adx].busyCond);
-	unlockMap();
+	avec[adx].busyCond.notify_one();
 }
 
 /** Read an admin record from an input file and initialize its table entry.
@@ -210,19 +155,19 @@ bool AdminTable::readEntry(istream& in, int adx) {
 	string aname, pwd, realName, email;
 
 	if (!in.good()) return false;
-        if (Misc::verify(in,'+')) {
-	        if (!Misc::readName(in, aname)      || !Misc::verify(in,',') ||
-		    !Misc::readWord(in, pwd)        || !Misc::verify(in,',') || 
-		    !Misc::readString(in, realName) || !Misc::verify(in,',') ||
-		    !Misc::readWord(in, email)) {
+        if (Util::verify(in,'+')) {
+	        if (!Util::readWord(in, aname)      || !Util::verify(in,',') ||
+		    !Util::readWord(in, pwd)        || !Util::verify(in,',') || 
+		    !Util::readString(in, realName) || !Util::verify(in,',') ||
+		    !Util::readWord(in, email)) {
 	                return false;
 		}
-		Misc::cflush(in,'\n');
-	} else if (Misc::verify(in,'-')) {
+		Util::nextLine(in);
+	} else if (Util::verify(in,'-')) {
 		maxAdx = max(adx, maxAdx);
-		Misc::cflush(in,'\n'); return true;
+		Util::nextLine(in); return true;
 	} else {
-		Misc::cflush(in,'\n'); return false;
+		Util::nextLine(in); return false;
 	}
 
 	if (addAdmin(aname, pwd, adx) == 0) return false;
@@ -243,36 +188,22 @@ bool AdminTable::readEntry(istream& in, int adx) {
  *  @return true on success, false on failure
  */
 bool AdminTable::read(istream& in) {
-	int i = 0;
+	int i = 1;
 	while (readEntry(in,i)) i++;
-	cout << "read " << i << " admin records, producing "
-	     << admins->getNumIn() << "table entries\n";
+	cout << "read " << i-1 << " admin records, producing "
+	     << nameMap->size() << "table entries\n";
         return true;
 }
-
-/** Construct a string representation of an admin.
- *  This metghod does no locking.
- *  @param adx is the admin index of the admin to be written
- *  @param s is a reference to a string in which result is returned
- *  @return a reference to s
- */
-string& AdminTable::admin2string(int adx, string& s) const {
-	string s1;
-	s  = getAdminName(adx) + ", " + getPassword(adx) + ", ";
-	s += ", \"" + getRealName(adx) + "\", " + getEmail(adx) + "\n";
-	return s;
-}
-
 
 /** Create a string representation of the admin table
  *  @param s is a reference to a string in which the result is returned
  *  @param includeSess is true if sessions are to be included, default=false
  *  @return a reference to s
  */
-string& AdminTable::toString(string& s) {
-	string s1; s = "";
+string AdminTable::toString() {
+	string s;
 	for (int adx = firstAdmin(); adx != 0; adx = nextAdmin(adx))
-                s += admin2string(adx,s1);
+                s += avec[adx].toString();
 	return s;
 }
 
@@ -280,9 +211,8 @@ string& AdminTable::toString(string& s) {
  *  @param out is a reference to an open output stream
  */
 void AdminTable::write(ostream& out) {
-	string s;
 	for (int adx = firstAdmin(); adx != 0; adx = nextAdmin(adx))
-                out << admin2string(adx,s);
+                out << avec[adx];
 }
 
 } // ends namespace
