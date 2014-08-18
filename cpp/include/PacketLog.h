@@ -9,6 +9,13 @@
 #ifndef PACKETLOG_H
 #define PACKETLOG_H
 
+#include <thread>
+#include <mutex>
+
+using std::thread;
+using std::mutex;
+using std::recursive_mutex;
+
 #include "Forest.h"
 #include "Util.h"
 #include "PacketStore.h"
@@ -26,12 +33,11 @@ public:
 		PacketLog(PacketStore*);
 		~PacketLog();
 
-	fltx	firstFilter() const;
-	fltx	nextFilter(fltx) const;
+	fltx	firstFilter();
+	fltx	nextFilter(fltx);
 
-	bool	validFilter(fltx) const;
+	bool	validFilter(fltx);
 
-	bool	match(fltx, pktx, int, bool) const;
 	void	enable(fltx);
 	void	disable(fltx);
 	fltx	addFilter();
@@ -40,7 +46,7 @@ public:
 	void	turnOnLogging(bool);
 	void	enableLocalLog(bool);
 
-	int	size() const;
+	int	size();
 	void 	log(int,int,bool,uint64_t);	
 	int	extract(int, string&);
 	void	write(ostream&);
@@ -75,17 +81,46 @@ private:
 	ListPair *filters;		///< in-use/free filter indexes
 
 	PacketStore *ps;
+
+	void 	loggit(int,int,bool,uint64_t);	
+	bool	match(fltx, pktx, int, bool) const;
+	static string nstime2string(uint64_t);
+
+	recursive_mutex mtx;
 };
 
-inline int PacketLog::size() const { return eventCount; }
+inline int PacketLog::size() {
+	unique_lock<recursive_mutex> lck(mtx);
+	return eventCount;
+}
 
-inline int PacketLog::firstFilter() const { return filters->firstIn(); }
-inline int PacketLog::nextFilter(int f) const { return filters->nextIn(f); }
+inline int PacketLog::firstFilter() {
+	unique_lock<recursive_mutex> lck(mtx);
+	return filters->firstIn();
+}
 
-inline bool PacketLog::validFilter(int f) const { return filters->isIn(f); }
+inline int PacketLog::nextFilter(int f) {
+	unique_lock<recursive_mutex> lck(mtx);
+	return filters->nextIn(f);
+}
 
-inline void PacketLog::enable(fltx f) { fvec[f].on = true; }
-inline void PacketLog::disable(fltx f) { fvec[f].on = false; }
+inline bool PacketLog::validFilter(int f) {
+	unique_lock<recursive_mutex> lck(mtx);
+	return filters->isIn(f);
+}
+
+inline void PacketLog::enable(fltx f) {
+	unique_lock<recursive_mutex> lck(mtx);
+	fvec[f].on = true;
+}
+inline void PacketLog::disable(fltx f) {
+	unique_lock<recursive_mutex> lck(mtx);
+	fvec[f].on = false;
+}
+
+inline void PacketLog::log(pktx px, int lnk, bool sendFlag, uint64_t now) {
+	if (logOn) loggit(px,lnk,sendFlag,now);
+}
 
 inline bool PacketLog::match(fltx f, pktx px, int lnk, bool sendFlag) const {
 	Packet& p = ps->getPacket(px);
@@ -109,7 +144,9 @@ inline bool PacketLog::match(fltx f, pktx px, int lnk, bool sendFlag) const {
  *  @param f is the index of some valid filter
  *  @return a reference to the PacketFilter object for f
  */
-inline PacketFilter& PacketLog::getFilter(fltx f) { return fvec[f]; }
+inline PacketFilter& PacketLog::getFilter(fltx f) {
+	return fvec[f];
+}
 
 /** Enable or disable logging of packets.
  *  Whenever logging is enabled, purge any left-over packets.
@@ -126,7 +163,20 @@ inline void PacketLog::enableLocalLog(bool on) {
 	logLocal = on; if (logLocal) { numOut = numDataOut = 0; }
 }
 
-} // ends namespace
+/** Create a string representation of a time value based on a ns time value.
+ *  The returned string gives the time as seconds and fractions of a second.
+ *  @param t is the ns time
+ *  @return the string
+ */
+inline string PacketLog::nstime2string(uint64_t t) {
+	uint64_t sec = t/1000000000;
+	uint64_t frac = (t/1000)%1000000;
+	
+	stringstream ss;
+	ss << sec << "." << setfill('0') << setw(6) << frac;
+	return ss.str();
+}
 
+} // ends namespace
 
 #endif

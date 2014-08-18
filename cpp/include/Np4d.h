@@ -77,7 +77,22 @@ public:
 	static int  recvBufBlock(int, char*, int);
 	static int  sendBufBlock(int, char*, int);
 	static int  sendString(int, const string&);
+
+	static void pack64(uint64_t, uint32_t*);
+	static uint64_t unpack64(uint32_t*);
 };
+
+inline void Np4d::pack64(uint64_t x, uint32_t* p) {
+	*p++ = htonl((uint32_t) ((x >> 32) & 0xffffffff));
+	*p   = htonl((uint32_t) (x & 0xffffffff));
+}
+
+inline uint64_t Np4d::unpack64(uint32_t* p) {
+	uint64_t x;
+	x  = ((uint64_t) ntohl(*p++)) << 32;
+	x |= (uint64_t) ntohl(*p);
+	return x;
+}
 
 } // ends namespace
 

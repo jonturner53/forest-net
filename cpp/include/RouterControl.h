@@ -33,6 +33,16 @@ public:
 
 private:
 	Router	*rtr;
+
+	IfaceTable *ift;		///< table defining interfaces
+	LinkTable *lt;			///< table defining links
+	ComtreeTable *ctt;		///< table of comtrees
+	RouteTable  *rt;		///< table of routes
+	PacketStore *ps;		///< packet buffers and headers
+	StatsModule *sm;		///< class for recording statistics
+	PacketLog *pktLog;		///< log for recording sample of packets
+	QuManager *qm;			///< queues and link schedulers
+
 	int	myThx;		///< my thread index
 	int	inQ;		///< input queue for this thread
 	int	outQ;		///< output queue, shared with other threads

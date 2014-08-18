@@ -387,8 +387,17 @@ inline int ComtreeTable::getLink(int ctx, int cLnk) const {
  *  @param cLnk is a comtree link number
  *  @return the queue identifier assigned to cLnk
  */
-inline int ComtreeTable::getLinkQ(int ctx, int cLnk) const {
+inline int ComtreeTable::getClnkQ(int ctx, int cLnk) const {
 	return getEntry(ctx).clMap->getValue(cLnk).qnum;
+}
+
+/** Get the queue identifier for a given comtree link.
+ *  @param ctx is a comtree index
+ *  @param lnk is a comtree link number
+ *  @return the queue identifier assigned to cLnk
+ */
+inline int ComtreeTable::getLnkQ(int ctx, int lnk) const {
+	return getEntry(ctx).clMap->get(lnk).qnum;
 }
 
 /** Get the allowed destination for packets received on a given comtree link.

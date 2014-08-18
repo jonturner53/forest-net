@@ -13,12 +13,15 @@
 #include <map>
 #include <set>
 #include <queue>
+#include <mutex>
 #include "Forest.h"
-#include "HashMap.h"
-#include "IdMap.h"
-#include "UiSetPair.h"
+#include "Hash.h"
+#include "HashSet.h"
+#include "ListPair.h"
 #include "Wgraph.h"
 #include "RateSpec.h"
+
+using std::mutex;
 
 namespace forest {
 
@@ -40,7 +43,7 @@ namespace forest {
  */
 class NetInfo {
 public:
-		NetInfo(int,int,int,int);
+		NetInfo(int,int,int);
 		~NetInfo();
 
 	// struct used by io routines
@@ -61,7 +64,7 @@ public:
 	int	nextNode(int) const;
 	// access node attributes
 	int	getMaxNode() const;
-	string& getNodeName(int,string&)const ;
+	string  getNodeName(int) const ;
 	int	getNodeNum(string&) const;
 	int	getNodeNum(fAdr_t) const;
 	Forest::ntyp_t getNodeType(int) const;
@@ -159,7 +162,6 @@ private:
 	int maxNode;		///< max node number in netTopo graph
 	int maxLink;		///< max link number in netTopo graph
 	int maxLeaf;		///< max number of leafs
-	int maxCtl;		///< maximum number of controllers
 
 	/** NetTopo is a weighted graph defining the network topology.
 	 *  Weights represent link costs */
@@ -184,7 +186,7 @@ private:
 	statusType status;	///< active/inactive status
 	};
 	LeafNodeInfo *leaf;
-	UiSetPair *leaves;	///< in-use and free leaf numbers
+	ListPair *leaves;	///< in-use and free leaf numbers
 	set<int> *controllers;	///< set of controllers (by node #)
 
 	static int const UNDEF_LAT = 91;	// invalid latitude
@@ -204,16 +206,18 @@ private:
 	IfInfo	*iface;		///< interface information
 	};
 	RtrNodeInfo *rtr;
-	UiSetPair *routers;	///< tracks routers and unused router numbers
+	ListPair *routers;	///< tracks routers and unused router numbers
 
 	/** maps a node name back to corresponding node number */
-	map<string, int> *nameNodeMap;
+	//map<string, int> *nameNodeMap;
+	HashSet<string,Hash::string> *nameNodeMap;
 
 	/** maps a forest address to a node number */
-	map<fAdr_t, int> *adrNodeMap;
+	// map<fAdr_t, int> *adrNodeMap;
+	HashSet<fAdr_t,Hash::s32> *adrNodeMap;
 
-	HashMap *locLnk2lnk;	///< maps router/local link# to global link#
-	uint64_t ll2l_key(int,int) const; ///< returns key used with locLnk2lnk
+	HashSet<Pair<int,int>,Hash::s32s32>
+		 *locLnk2lnk;	///< maps router/local link# to global link#
 
 	struct LinkInfo {
 	int	leftLnum;	///< local link number used by "left endpoint"
@@ -226,7 +230,7 @@ private:
 
 	RateSpec defaultLeafRates;	///< default link rates
 
-	pthread_mutex_t glock;	///< for locking in multi-threaded contexts
+	mutex gmtx;		///< for locking in multi-threaded contexts
 
 	// helper methods for reading a NetInfo file
 	bool	readRouter(istream&, RtrNodeInfo&, IfInfo*, string&);
@@ -249,8 +253,8 @@ private:
 	bool 	checkRtrRates() const;
 
 	// toString helper methods
-	string& rtr2string(int,string&) const;
-	string& leaf2string(int,string&) const;
+	string rtr2string(int) const;
+	string leaf2string(int) const;
 };
 
 
@@ -316,10 +320,10 @@ inline int NetInfo::getMaxNode() const { return maxNode; }
 
 /** Get the name for a specified node.
  *  @param n is a node number
- *  @param s is a provided string in which the result is to be returned
- *  @return a reference to s
+ *  @return the name
  */
-inline string& NetInfo::getNodeName(int n, string& s) const {
+inline string NetInfo::getNodeName(int n) const {
+	string s;
 	if (isLeaf(n)) s = leaf[n-maxRtr].name;
 	else if (isRouter(n)) s = rtr[n].name;
 	else s = "";
@@ -328,12 +332,11 @@ inline string& NetInfo::getNodeName(int n, string& s) const {
 
 /** Get the node number corresponding to a give node name.
  *  @param s is the name of a node
- *  @return an integer node number or 0 if the given string does not
+ *  @return an integer node number or 0 if the given string is not
  *  the name of any node
  */
 inline int NetInfo::getNodeNum(string& s) const {
-	map<string,int>::iterator p = nameNodeMap->find(s);
-	return ((p != nameNodeMap->end()) ? p->second : 0);
+	return nameNodeMap->find(s);
 }
 
 /** Get the node number corresponding to a give forest address.
@@ -342,8 +345,7 @@ inline int NetInfo::getNodeNum(string& s) const {
  *  is not used by any node
  */
 inline int NetInfo::getNodeNum(fAdr_t adr) const {
-	map<fAdr_t,int>::iterator p = adrNodeMap->find(adr);
-	return ((p != adrNodeMap->end()) ? p->second : 0);
+	return adrNodeMap->find(adr);
 }
 
 /** Get the type of a specified node.
@@ -364,9 +366,8 @@ inline bool NetInfo::setNodeName(int n, string& nam) {
 	if (!validNode(n)) return false;
 	if (isRouter(n)) rtr[n].name = nam;
 	else 		 leaf[n-maxRtr].name = nam;
-	string s;
-	nameNodeMap->erase(getNodeName(n,s));
-	(*nameNodeMap)[nam] = n;
+	nameNodeMap->remove(getNodeName(n));
+	nameNodeMap->insert(nam,n);
 	return true;
 }
 
@@ -379,10 +380,11 @@ inline bool NetInfo::setNodeAdr(int n, fAdr_t adr) {
 	if (isLeaf(n)) leaf[n-maxRtr].fAdr = adr;
 	else if (isRouter(n)) rtr[n].fAdr = adr;
 	else return false;
-	adrNodeMap->erase(getNodeAdr(n));
-	(*adrNodeMap)[adr] = n;
+	adrNodeMap->remove(getNodeAdr(n));
+	adrNodeMap->insert(adr,n);
 	return true;
 }
+
 /** Set the location of a node in the Forest network.
  *  @param n is a node number
  *  @param loc is a reference to a pair of doubles which defines the new
@@ -837,7 +839,9 @@ inline int NetInfo::getLinkLength(int lnk) const {
  */
 inline int NetInfo::getLinkNum(int nn, int llnk) const {
 	if (!validNode(nn)) return 0;
-	if (isRouter(nn)) return locLnk2lnk->get(ll2l_key(nn,llnk))/2;
+	if (isRouter(nn)) {
+		return locLnk2lnk->find(Pair<int,int>(nn,llnk))/2;
+	}
 	return firstLinkAt(nn);
 }
 
@@ -908,24 +912,15 @@ inline bool NetInfo::setLinkLength(int lnk, int len) {
 	return true;
 }
 
-/** Helper method used to define keys for internal locLnk2lnk HashMap.
- *  @param r is the node number of a router
- *  @param llnk is a local link number at r
- *  @return a hash key appropriate for use with locLnk2lnk
- */
-inline uint64_t NetInfo::ll2l_key(int r, int llnk) const {
-	return (uint64_t(r) << 32) | (uint64_t(llnk) & 0xffffffff);
-}
-
 /** Lock the data structure.
  *  Use in multi-threaded applications that dynamically modify the
  *  data structure. For now, just a single global lock. 
  */
-inline void NetInfo::lock() { pthread_mutex_lock(&glock); }
+inline void NetInfo::lock() { gmtx.lock(); }
 
 /** Unlock the data structure.
  */
-inline void NetInfo::unlock() { pthread_mutex_unlock(&glock); }
+inline void NetInfo::unlock() { gmtx.unlock(); }
 
 } // ends namespace
 

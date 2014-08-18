@@ -51,6 +51,15 @@ private:
 
 	Router	*rtr;			///< pointer to main router object
 
+	IfaceTable *ift;		///< table defining interfaces
+	LinkTable *lt;			///< table defining links
+	ComtreeTable *ctt;		///< table of comtrees
+	RouteTable  *rt;		///< table of routes
+	PacketStore *ps;		///< packet buffers and headers
+	StatsModule *sm;		///< class for recording statistics
+	PacketLog *pktLog;		///< log for recording sample of packets
+	QuManager *qm;			///< queues and link schedulers
+
 	int	maxSockNum;		///< largest socket num opened by ioProc
 	fd_set	*sockets;		///< file descr set for open sockets
 	int	cIf;			///< number of "current interface"
@@ -63,8 +72,6 @@ private:
                 thread	thred;		///< thread object
 		RouterControl *rc;	///< per thread RouterControl object
                 Quu<pktx> q;		///< used to send packets to thread
-		pktx	px;		///< outgoing request or sent reply
-		int	reps;		///< # of times request has been sent
 		int64_t rcvSeqNum;	///< rcvSeqNum of last packet to thred
         };
 	ThreadInfo *tpool;		///< pointer to thread pool
