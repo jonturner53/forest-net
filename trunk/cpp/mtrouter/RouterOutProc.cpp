@@ -17,63 +17,67 @@ namespace forest {
  *  access to all router variables and data structures
  */
 RouterOutProc::RouterOutProc(Router *rtr1) : rtr(rtr1) {
+	ift = rtr->ift; lt = rtr->lt;
+	ctt = rtr->ctt; rt = rtr->rt;
+	ps = rtr->ps; qm = rtr->qm;
+	sm = rtr->sm; pktLog = rtr->pktLog;
+	rptr = new Repeater(1000);
 }
 
 RouterOutProc::~RouterOutProc() {
+	delete rptr;
 }
+
+/** Start input processor.
+ *  Start() is a static method used to initiate a separate thread.
+ */
+void RouterOutProc::start(RouterOutProc *self) { self->run(); }
 
 /** Main output processing loop.
  *
  *  @param finishTime is the number of microseconds to run before stopping;
  *  if it is zero, the router runs without stopping (until killed)
  */
-void RouterOutProc::run(seconds runTime) {
-	bool didNothing;
-	int controlCount = 20;		// used to limit overhead of control
-					// packet processing
-        unique_lock  ltLock( rtr->ltMtx,defer_lock);
-	unique_lock cttLock(rtr->cttMtx,defer_lock);
-	unique_lock  rtLock(rtr->rtMtx, defer_lock);
-        lock(ltLock, cttLock, rtLock);
+void RouterOutProc::run() {
+        unique_lock<mutex>  ltLock( rtr->ltMtx,defer_lock);
+	unique_lock<mutex> cttLock(rtr->cttMtx,defer_lock);
+	unique_lock<mutex>  rtLock(rtr->rtMtx, defer_lock);
 
 	nanoseconds temp = high_resolution_clock::now() - rtr->tZero;
 	now = temp.count(); // time since router started running
-	int64_t startTime = now;
 	int64_t statsTime = now;
-	int64_t finishTime = runTime.count();
-	finishTime *= 1000000000; finishTime += now;
-	while (runTime.count() == 0 || now < finishTime) {
+	int64_t runTime = nanoseconds(rtr->runLength).count();
+	int64_t finishTime = now + runTime;
+	while (runTime == 0 || now < finishTime) {
 		// update time
 		nanoseconds temp = high_resolution_clock::now() - rtr->tZero;
 		now = temp.count();
 
-		didNothing = true;
+		bool didNothing = true;
 
+		pktx px;
 		// process packet from transfer queue, if any
 		if (!rtr->xferQ.empty()) {
 			didNothing = false;
-			pktx px = rtr->xferQ.deq();
-			Packet& p = rtr->ps->getPacket(px);
+			px = rtr->xferQ.deq();
+			Packet& p = ps->getPacket(px);
         		lock(ltLock, cttLock, rtLock);
-			int ctx = rtr->ctt->getComtIndex(p.comtree);
-			if (p.destAdr != rtr->myAdr) {
+			int ctx = ctt->getComtIndex(p.comtree);
+			if (p.dstAdr != rtr->myAdr) {
 				if (p.outLink == 0) {
 					forward(px,ctx);
 				} else if (p.outLink != 0) {
 					// enqueue it on specified link
-					int cLnk = rtr->ctt->getComtLink(
-							p.comtree,p.outLink);
-					int qid = rtr->ctt->getLinkQ(ctx,cLnk)
-					if (!rtr->qm->enq(px,qid,now))
-						rtr->ps->free(px);
+					int qid;
+					qid = ctt->getLinkQ(ctx,p.outLink);
+					if (!qm->enq(px,qid,now))
+						ps->free(px);
 				}
 			} else if (p.flags & Forest::ACK_FLAG) {
 				// find and remove matching request
-				int64_t seqNum =htohl((p.payload())[0]);
-				seqNum <<= 32;
-				seqNum |= ntohl((p.payload())[1]);
-				int rx = rptr->deleteMatch(seqNum);
-				if (rx != 0) ps->free(rx);
+				int64_t seqNum = Np4d::unpack64(p.payload());
+				pair<int,int> pp = rptr->deleteMatch(seqNum);
+				if (pp.first != 0) ps->free(pp.first);
 			} else if (p.type == Forest::SUB_UNSUB) {
 				subUnsub(px,ctx);
 			} else if (p.type == Forest::RTE_REPLY) {
@@ -92,17 +96,40 @@ void RouterOutProc::run(seconds runTime) {
 
 		// output processing
 		int lnk;
-		while ((px = rtr->qm->deq(lnk, now)) != 0) {
+		while ((px = qm->deq(lnk, now)) != 0) {
 			didNothing = false;
 			pktLog->log(px,lnk,true,now);
-			send(px,lnk);
+			Packet& p = ps->getPacket(px);
+			if (p.srcAdr == rtr->myAdr && 
+			    (p.type == Forest::CONNECT ||
+			     p.type == Forest::DISCONNECT ||
+			     p.type == Forest::SUB_UNSUB)) {
+				int cx = ps->clone(px);
+				if (cx != 0) {
+					uint64_t seqNum =
+						Np4d::unpack64(p.payload());
+					rptr->saveReq(cx, seqNum, now);
+				};
+			}
+			send(px);
 		}
 
 		// every 300 ms, update statistics and check for un-acked
 		// in-band control packets
 		if (now > statsTime + 300*1000000) {
-			sm->record(now); statsTime = now; resendControl();
-			didNothing = false;
+			sm->record(now); statsTime = now; didNothing = false;
+			pair<int,int> pp = rptr->overdue(now);
+			if (pp.first > 0) { // resend
+				pktx cx = ps->clone(pp.first);
+				if (cx != 0) {
+					Packet& c = ps->getPacket(cx);
+					pktLog->log(cx,c.outLink,true,now);
+					send(cx);
+				}
+			} else if (pp.first < 0) {
+				// no more retries, discard
+				ps->free(-pp.first);
+			}
 		}
 
 		// if did nothing on that pass, sleep for a millisecond.
@@ -126,21 +153,21 @@ void RouterOutProc::run(seconds runTime) {
  *  @param ctx is the comtree table index for the comtree in p's header
  */
 void RouterOutProc::forward(pktx px, int ctx) {
-	Packet& p = rtr->ps->getPacket(px);
-	int rtx = rtr->rt->getRtx(p.comtree,p.dstAdr);
+	Packet& p = ps->getPacket(px);
+	int rtx = rt->getRtx(p.comtree,p.dstAdr);
 	if (rtx != 0) { // valid route case
 		// reply to route request
 		if ((p.flags & Forest::RTE_REQ)) {
 			sendRteReply(px,ctx);
 			p.flags = (p.flags & (~Forest::RTE_REQ));
-			p.pack();
-			p.hdrErrUpdate();
+			p.pack(); p.hdrErrUpdate();
 		}
 		if (Forest::validUcastAdr(p.dstAdr)) {
-			int rcLnk = rtr->rt->getClnkNum(p.comtree, p.inLink);
-			int qid = rtr->ctt->getLinkQ(ctx,rcLnk);
-			if (lnk == p.inLink || !rtr->qm->enq(px,qid,now)) {
-				rtr->ps->free(px);
+			int rcLnk = rt->firstComtLink(rtx);
+			int qid = ctt->getClnkQ(ctx,rcLnk);
+			p.outLink = qm->getLink(qid);
+			if (p.outLink == p.inLink || !qm->enq(px,qid,now)) {
+				ps->free(px);
 			}
 			return;
 		}
@@ -151,7 +178,7 @@ void RouterOutProc::forward(pktx px, int ctx) {
 	// no valid route
 	if (Forest::validUcastAdr(p.dstAdr)) {
 		if (rtr->firstLeafAdr <= p.dstAdr &&
-		    p.dstAdr <= rtr->lastLeafAdr)) {
+		    p.dstAdr <= rtr->lastLeafAdr) {
 			// send error packet to client
 			p.type = Forest::UNKNOWN_DEST;
 			(p.payload())[0] = htonl(p.dstAdr);
@@ -159,9 +186,9 @@ void RouterOutProc::forward(pktx px, int ctx) {
 			p.srcAdr = rtr->myAdr;
 			p.length = Forest::OVERHEAD + sizeof(fAdr_t);
 			p.pack(); p.hdrErrUpdate(); p.payErrUpdate();
-			int cLnk = rtr->ctt->getClnkNum(ctx,p.inLink);
-			int qid = rtr->ctt->getLinkQ(ctx,cLnk);
-			if (!rtr->qm->enq(px,qid,now)) rtr->ps->free(px);
+			int qid = ctt->getLinkQ(ctx,p.inLink);
+			p.outLink = p.inLink;
+			if (!qm->enq(px,qid,now)) ps->free(px);
 			return;
 		}
 		// send to neighboring routers in comtree
@@ -183,59 +210,61 @@ void RouterOutProc::forward(pktx px, int ctx) {
  *  @param rtx is the route index for p, or 0 if there is no route
  */
 void RouterOutProc::multiSend(pktx px, int ctx, int rtx) {
-	int qvec[nLnks]; int n = 0;
-	Packet& p = rtr->ps->getPacket(px);
+	int qvec[lt->maxLink()]; int n = 0;
+	Packet& p = ps->getPacket(px);
 
 	int inLink = p.inLink;
 	if (Forest::validUcastAdr(p.dstAdr)) {
 		// flooding a unicast packet to neighboring routers
-		int myZip = Forest::zipCode(myAdr);
+		int myZip = Forest::zipCode(rtr->myAdr);
 		int pZip = Forest::zipCode(p.dstAdr);
-		for (int rcLnk = rtr->ctt->firstRtrLink(ctx); rcLnk != 0;
-			 rcLnk = rtr->ctt->nextRtrLink(ctx,rcLnk)) {
-			int lnk = rtr->ctt->getLink(ctx,rcLnk);
-			int peerZip = Forest::zipCode(rtr->lt->getPeerAdr(lnk));
+		for (int rcLnk = ctt->firstRtrLink(ctx); rcLnk != 0;
+			 rcLnk = ctt->nextRtrLink(ctx,rcLnk)) {
+			int lnk = ctt->getLink(ctx,rcLnk);
+			int peerZip =Forest::zipCode(lt->getEntry(lnk).peerAdr);
 			if (pZip == myZip && peerZip != myZip) continue;
 			if (lnk == inLink) continue;
-			qvec[n++] = rtr->ctt->getLinkQ(ctx,rcLnk);
+			qvec[n++] = ctt->getClnkQ(ctx,rcLnk);
 		}
 	} else { 
 		// forwarding a multicast packet
 		// first identify neighboring core routers to get copies
-		int pLink = rtr->ctt->getPlink(ctx);	
-		for (int rcLnk = rtr->ctt->firstCoreLink(ctx); rcLnk != 0;
-			 rcLnk = rtr->ctt->nextCoreLink(ctx,rcLnk)) {
-			int lnk = rtr->ctt->getLink(ctx,rcLnk);
+		int pLink = ctt->getPlink(ctx);	
+		for (int rcLnk = ctt->firstCoreLink(ctx); rcLnk != 0;
+			 rcLnk = ctt->nextCoreLink(ctx,rcLnk)) {
+			int lnk = ctt->getLink(ctx,rcLnk);
 			if (lnk == inLink || lnk == pLink) continue;
-			qvec[n++] = rtr->ctt->getLinkQ(ctx,rcLnk);
+			qvec[n++] = ctt->getClnkQ(ctx,rcLnk);
 		}
 		// now copy for parent
 		if (pLink != 0 && pLink != inLink) {
-			qvec[n++] = rtr->ctt->getLinkQ(ctt->getPCLink(ctx));
+			qvec[n++] = ctt->getClnkQ(ctx,ctt->getPClnk(ctx));
 		}
 		// now, copies for subscribers if any
 		if (rtx != 0) {
-			for (int rcLnk = rtr->rt->firstComtLink(rtx); rcLnk!=0;
-				 rcLnk = rtr->rt->nextComtLink(rtx)) {
-				int lnk = rtr->ctt->getLink(rcLnk);
+			for (int rcLnk = rt->firstComtLink(rtx); rcLnk!=0;
+				 rcLnk = rt->nextComtLink(rtx, rcLnk)) {
+				int lnk = ctt->getLink(ctx,rcLnk);
 				if (lnk == inLink) continue;
-				qvec[n++] = rtr->ctt->getLinkQ(rcLnk);
+				qvec[n++] = ctt->getClnkQ(ctx,rcLnk);
 			}
 		}
 	}
 
-	if (n == 0) { rtr->ps->free(px); return; }
+	if (n == 0) { ps->free(px); return; }
 
 	// make copies and queue them
         pktx px1 = px;
         for (int i = 0; i < n-1; i++) { // process first n-1 copies
-                if (rtr->qm->enq(px1,qvec[i],now)) {
-			px1 = rtr->ps->clone(px);
+		ps->getPacket(px1).outLink = qm->getLink(qvec[i]);
+                if (qm->enq(px1,qvec[i],now)) {
+			px1 = ps->clone(px);
 		}
         }
         // process last copy
-        if (!rtr->qm->enq(px1,qvec[n-1],now)) {
-		rtr->ps->free(px1);
+	ps->getPacket(px1).outLink = qm->getLink(qvec[n-1]);
+        if (!qm->enq(px1,qvec[n-1],now)) {
+		ps->free(px1);
 	}
 }
 
@@ -246,23 +275,25 @@ void RouterOutProc::multiSend(pktx px, int ctx, int rtx) {
  *  @param ctx is the comtree index for p's comtree
  */
 void RouterOutProc::sendRteReply(pktx px, int ctx) {
-	Packet& p = rtr->ps->getPacket(px);
+	Packet& p = ps->getPacket(px);
 
-	pktx px1 = rtr->ps->alloc();
-	Packet& p1 = rtr->ps->getPacket(px1);
+	pktx px1 = ps->alloc();
+	if (px1 == 0) return;
+	Packet& p1 = ps->getPacket(px1);
 	p1.length = Forest::OVERHEAD + sizeof(fAdr_t);
 	p1.type = Forest::RTE_REPLY;
 	p1.flags = 0;
 	p1.comtree = p.comtree;
-	p1.srcAdr = myAdr;
+	p1.srcAdr = rtr->myAdr;
 	p1.dstAdr = p.srcAdr;
 
 	p1.pack();
 	(p1.payload())[0] = htonl(p.dstAdr);
 	p1.hdrErrUpdate(); p.payErrUpdate();
 
-	int cLnk = rtr->ctt->getComtLink(rtr->ctt->getComtree(ctx),p.inLink);
-	if (!rtr->qm->enq(px1,rtr->ctt->getLinkQ(cLnk),now)) rtr->ps->free(px1);
+	int qid = ctt->getLinkQ(ctx,p.inLink);
+	p.outLink = p.inLink;
+	if (!qm->enq(px1,qid,now)) ps->free(px1);
 }
 
 /** Handle a route reply packet.
@@ -274,15 +305,15 @@ void RouterOutProc::sendRteReply(pktx px, int ctx) {
  *  that route, so long as the next hop is another router.
  */
 void RouterOutProc::handleRteReply(pktx px, int ctx) {
-	Packet& p = rtr->ps->getPacket(px);
-	int rtx = rtr->rt->getRteIndex(p.comtree, p.dstAdr);
-	int cLnk = rtr->ctt->getComtLink(ctt->getComtree(ctx),p.inLink);
+	Packet& p = ps->getPacket(px);
+	int rtx = rt->getRtx(p.comtree, p.dstAdr);
+	int cLnk = ctt->getClnkNum(ctt->getComtree(ctx),p.inLink);
 	if ((p.flags & Forest::RTE_REQ) && rtx != 0)
 		sendRteReply(px,ctx);
 	int adr = ntohl((p.payload())[0]);
 	if (Forest::validUcastAdr(adr) &&
-	    rtr->rt->getRteIndex(p.comtree,adr) == 0) {
-		rtr->rt->addEntry(p.comtree,adr,cLnk); 
+	    rt->getRtx(p.comtree,adr) == 0) {
+		rt->addRoute(p.comtree,adr,cLnk); 
 	}
 	if (rtx == 0) {
 		// send to neighboring routers in comtree
@@ -291,11 +322,28 @@ void RouterOutProc::handleRteReply(pktx px, int ctx) {
 		multiSend(px,ctx,rtx);
 		return;
 	}
-	int dcLnk = rtr->rt->getLink(rtx); int dLnk = rtr->ctt->getLink(dcLnk);
-	if (rtr->lt->getPeerType(dLnk) != Forest::ROUTER ||
-	    !rtr->qm->enq(px,dLnk,now))
-		rtr->ps->free(px);
+	int dcLnk = rt->firstComtLink(rtx);
+	int qid = ctt->getClnkQ(ctx,dcLnk);
+	p.outLink = qm->getLink(qid);
+	if (lt->getEntry(p.outLink).peerType != Forest::ROUTER ||
+	    !qm->enq(px,qid,now))
+		ps->free(px);
 	return;
+}
+
+/** Convert a packet to an ack or nack and queue it.
+ *  @param px is the packet index for the packet
+ *  @param ctx is the comtree index for the comtree px belongs to
+ *  @param ackNack is true for a positive ack, false for a negative ack
+ */
+void RouterOutProc::returnAck(pktx px, int ctx, bool ackNack) {
+	Packet& p = ps->getPacket(px);
+	p.dstAdr = p.srcAdr; p.srcAdr = rtr->myAdr;
+	p.flags |= (ackNack ? Forest::ACK_FLAG : Forest::NACK_FLAG);
+	p.outLink = p.inLink;
+	p.pack(); p.hdrErrUpdate();
+	int qid = ctt->getLinkQ(ctx,p.outLink);
+	if (!qm->enq(px,qid,now)) ps->free(px);
 }
 
 /** Perform subscription processing on a packet.
@@ -306,84 +354,81 @@ void RouterOutProc::handleRteReply(pktx px, int ctx) {
  *  @param ctx is the comtree index for p's comtree
  */
 void RouterOutProc::subUnsub(pktx px, int ctx) {
-	Packet& p = rtr->ps->getPacket(px);
+	Packet& p = ps->getPacket(px);
 	uint32_t *pp = p.payload();
 
 	// add/remove branches from routes
 	// if non-core node, also propagate requests upward as appropriate
-	int comt = rtr->ctt->getComtree(ctx);
+	int comt = ctt->getComtree(ctx);
 	int inLink = p.inLink;
-	int cLnk = rtr->ctt->getClnkNum(comt,inLink);
+	int cLnk = ctt->getClnkNum(comt,inLink);
 
 	// ignore subscriptions from the parent or core neighbors
-	if (inLink == rtr->ctt->getPlink(ctx) ||
-	    rtr->ctt->isCoreLink(ctx,cLnk)) {
-		rtr->ps->free(px); return;
+	if (inLink == ctt->getPlink(ctx) ||
+	    ctt->isCoreLink(ctx,cLnk)) {
+		returnAck(px,ctx,false); // negative ack
+		return;
+	}
+
+	// extract and check addcnt and dropcnt
+	uint32_t addcnt = ntohl(pp[2]);
+	if (Forest::OVERHEAD + (addcnt + 4)*4 > p.length) {
+		returnAck(px,ctx,false); // negative ack
+		return;
+	}
+	uint32_t dropcnt = ntohl(pp[addcnt+3]);
+	if (Forest::OVERHEAD + (addcnt + dropcnt + 4)*4 > p.length) {
+		returnAck(px,ctx,false); // negative ack
+		return;
 	}
 
 	// make copy to be used for ack
-	pktx cx = rtr->ps->fullCopy(px);
-	Packet& copy = rtr->ps->getPacket(cx);
+	pktx cx = ps->fullCopy(px);
 
+	// add subscriptions
 	bool propagate = false;
 	int rtx; fAdr_t addr;
-	
-	// add subscriptions
-	int addcnt = ntohl(pp[2]);
-	if (addcnt < 0 || addcnt > 350 ||
-	    Forest::OVERHEAD + (addcnt + 4)*4 > p.length) {
-		rtr->ps->free(px); rtr->ps->free(cx); return;
-	}
 	for (int i = 3; i <= addcnt + 2; i++) {
 		addr = ntohl(pp[i]);
 		if (!Forest::mcastAdr(addr)) continue;  // ignore unicast or 0
-		rtx = rtr->rt->getRteIndex(comt,addr);
+		rtx = rt->getRtx(comt,addr);
 		if (rtx == 0) { 
-			rtx = rtr->rt->addRoute(comt,addr,cLnk);
+			rtx = rt->addRoute(comt,addr,cLnk);
 			propagate = true;
 		} else if (!rt->isLink(rtx,cLnk)) {
-			rtr->rt->addLink(rtx,cLnk);
+			rt->addLink(rtx,cLnk);
 			pp[i] = 0; // so, parent will ignore
 		}
 	}
 	// remove subscriptions
-	int dropcnt = ntohl(pp[addcnt+3]);
-	if (dropcnt < 0 || addcnt + dropcnt > 350 ||
-	    Forest::OVERHEAD + (addcnt + dropcnt + 4)*4 > p.length) {
-		rtr->ps->free(px); rtr->ps->free(cx); return;
-	}
 	for (int i = addcnt + 4; i <= addcnt + dropcnt + 3; i++) {
 		addr = ntohl(pp[i]);
 		if (!Forest::mcastAdr(addr)) continue; // ignore unicast or 0
-		rtx = rtr->rt->getRtx(comt,addr);
+		rtx = rt->getRtx(comt,addr);
 		if (rtx == 0) continue;
-		rtr->rt->removeLink(rtx,cLnk);
-		if (rtr->rt->noLinks(rtx)) {
-			rtr->rt->removeRoute(rtx);
+		rt->removeLink(rtx,cLnk);
+		if (rt->noLinks(rtx)) {
+			rt->removeRoute(rtx);
 			propagate = true;
 		} else {
 			pp[i] = 0;
 		}		
 	}
 	// propagate subscription packet to parent if not a core node
-	if (propagate && !ctt->inCore(ctx) && rtr->ctt->getPlink(ctx) != 0) {
-		pp[0] = htonl((uint32_t) (seqNum >> 32));
-		pp[1] = htonl((uint32_t) (seqNum & 0xffffffff));
-		p.srcAdr = myAdr;
-		p.dstAdr = rtr->lt->getPeerAdr(rtr->ctt->getPlink(ctx));
-// change
-		sendControl(px,seqNum++,ctt->getPlink(ctx));
+	if (propagate && !ctt->inCore(ctx) && ctt->getPlink(ctx) != 0) {
+		Np4d::pack64(rtr->nextSeqNum(),pp);
+		p.srcAdr = rtr->myAdr;
+		p.outLink = ctt->getPlink(ctx);
+		p.dstAdr = lt->getEntry(p.outLink).peerAdr;
+		int qid = ctt->getLinkQ(ctx,p.outLink);
+		if (!qm->enq(px,qid,now)) ps->free(px);
 	} else {
-		rtr->ps->free(px);
+		ps->free(px);
 	}
 	// send ack back to sender
 	// note that we send ack before getting ack from sender
 	// this is by design
-	copy.flags |= Forest::ACK_FLAG;
-	copy.dstAdr = copy.srcAdr; copy.srcAdr = myAdr;
-	copy.pack();
-	int qid = rtr->ctt->getLinkQ(cLnk);
-        if (!rtr->qm->enq(cx,qid,now)) rtr->ps->free(cx);	
+	returnAck(cx,ctx,true);
 	return;
 }
 
@@ -391,246 +436,86 @@ void RouterOutProc::subUnsub(pktx px, int ctx) {
  *  @param px is the packet number of the packet to be handled.
  */
 void RouterOutProc::handleConnDisc(pktx px) {
-	Packet& p = rtr->ps->getPacket(px);
+	Packet& p = ps->getPacket(px);
 	int inLnk = p.inLink;
+	int ctx = ctt->getComtIndex(p.comtree);
 
-	if (p.srcAdr != rtr->lt->getPeerAdr(inLnk) ||
+	LinkTable::Entry& lte = lt->getEntry(inLnk);
+	if (p.srcAdr != lte.peerAdr ||
 	    p.length != Forest::OVERHEAD + 8) {
-		rtr->ps->free(px); return;
+		returnAck(px,ctx,false); return;
 	}
 
-	uint64_t nonce = ntohl(p.payload()[0]);
-	nonce <<= 32; nonce |= ntohl(p.payload()[1]);
-	if (nonce != rtr->lt->getNonce(inLnk)) { rtr->ps->free(px); return; }
+	uint64_t nonce = Np4d::unpack64(p.payload()+2);
+	if (nonce != lte.nonce) {
+		returnAck(px,ctx,false); return;
+	}
 	if (p.type == Forest::CONNECT) {
-		if (rtr->lt->isConnected(inLnk) &&
-		    !rtr->lt->revertEntry(inLnk)) {
-			rtr->ps->free(px); return;
+		if (lte.isConnected &&
+		    !lt->revertEntry(inLnk)) {
+			returnAck(px,ctx,false); return;
 		}
-		if (!rtr->lt->remapEntry(inLnk,p.tunIp,p.tunPort)) {
-			rtr->ps->free(px); return;
+		if (!lt->remapEntry(inLnk,p.tunIp,p.tunPort)) {
+			returnAck(px,ctx,false); return;
 		}
-		lt->setConnectStatus(inLnk,true);
-		if (nmAdr != 0 && rtr->lt->getPeerType(inLnk)==Forest::CLIENT) {
-			CtlPkt cp(CtlPkt::CLIENT_CONNECT,CtlPkt::REQUEST,0);
-			cp.adr1 = p.srcAdr; cp.adr2 = myAdr;
-			sendCpReq(cp,nmAdr);
+		lte.isConnected = true;
+		if (rtr->nmAdr != 0 && lte.peerType==Forest::CLIENT) {
+			pktx rx = ps->alloc();
+			if (rx == 0) { returnAck(px,ctx,false); return; }
+			Packet& rep = ps->getPacket(rx);
+			CtlPkt cp(rep);
+			cp.fmtClientConnect(p.srcAdr, rtr->myAdr);
+			p.type = Forest::NET_SIG; p.flags = 0;
+			p.length = Forest::OVERHEAD + cp.paylen;
+			p.srcAdr = rtr->myAdr; p.dstAdr = rtr->nmAdr;
+			p.comtree = Forest::NET_SIG_COMT;
+			p.pack(); p.payErrUpdate(); p.hdrErrUpdate();
+			forward(rx, ctt->getComtIndex(p.comtree));
 		}
 	} else if (p.type == Forest::DISCONNECT) {
-		rtr->lt->setConnectStatus(inLnk,false);
-		rtr->lt->revertEntry(inLnk);
-		if (nmAdr != 0 && rtr->lt->getPeerType(inLnk)==Forest::CLIENT) {
-			dropLink(inLnk);
-			CtlPkt cp(CtlPkt::CLIENT_DISCONNECT,CtlPkt::REQUEST,0);
-			cp.adr1 = p.srcAdr; cp.adr2 = myAdr;
-// todo
-			sendCpReq(cp,nmAdr);
+		lte.isConnected = false;
+		lt->revertEntry(inLnk);
+		if (rtr->nmAdr != 0 && lte.peerType == Forest::CLIENT) {
+			pktx rx = ps->alloc();
+			if (rx == 0) { returnAck(px,ctx,false); return; }
+			Packet& rep = ps->getPacket(rx);
+			CtlPkt cp(rep);
+			cp.fmtClientDisconnect(p.srcAdr, rtr->myAdr);
+			p.type = Forest::NET_SIG; p.flags = 0;
+			p.length = Forest::OVERHEAD + cp.paylen;
+			p.srcAdr = rtr->myAdr; p.dstAdr = rtr->nmAdr;
+			p.comtree = Forest::NET_SIG_COMT;
+			p.pack(); p.payErrUpdate(); p.hdrErrUpdate();
+			forward(rx, ctt->getComtIndex(p.comtree));
 		}
 	}
 	// send ack back to sender
-	p.flags |= Forest::ACK_FLAG; p.dstAdr = p.srcAdr; p.srcAdr = myAdr;
-	p.pack();
-	pktLog->log(px,inLnk,true,now); send(px,inLnk);
+	returnAck(px,ctx,true);
 	return;
-
-
-/** Send a connect packet to a peer router.
- *  @param lnk is link number of the link on which we want to connect.
- *  @param type is CONNECT or DISCONNECT
- */
-void RouterOutProc::sendConnDisc(int lnk, Forest::ptyp_t type) {
-	pktx px = rtr->ps->alloc();
-	Packet& p = rtr->ps->getPacket(px);
-
-	uint64_t nonce = rtr->lt->getNonce(lnk);
-	p.length = Forest::OVERHEAD + 8; p.type = type; p.flags = 0;
-	p.comtree = Forest::CONNECT_COMT;
-	p.srcAdr = myAdr; p.dstAdr = rtr->lt->getPeerAdr(lnk);
-	p.payload()[2] = htonl((uint32_t) (nonce >> 32));
-	p.payload()[3] = htonl((uint32_t) (nonce & 0xffffffff));
-
-	sendControl(px,nonce,lnk);
 }
 
-/** Send a control packet.
- */
-bool RouterOutProc::sendControl(pktx px, int lnk) {
-	Packet& p = rtr->ps->getPacket(px);
-	uint64_t = rtr->nextSeqNum();
-	p.payload()[0] = htonl((uint32_t) (seqNum >> 32));
-	p.payload()[1] = htonl((uint32_t) (seqNum & 0xffffffff));
-	p.pack();
+/** Send packet on specified link and recycle storage. */
+void RouterOutProc::send(pktx px) {
+	Packet p = ps->getPacket(px);
+	LinkTable::Entry& lte = lt->getEntry(p.outLink);
+	ipa_t farIp = lte.peerIp;
+	ipp_t farPort = lte.peerPort;
+	if (farIp == 0 || farPort == 0) { ps->free(px); return; }
 
-	// now, make copy of packet and save it in pending
-	pktx cx = rtr->ps->clone(px);
-	if (cx == 0) {
-		cerr << "RouterOutProc::sendControl: no packets left in packet "
-			"store\n";
-		return false;
+	int rv, lim = 0;
+	do {
+		rv = Np4d::sendto4d(rtr->sock[lte.iface],
+			(void *) p.buffer, p.length,
+			farIp, farPort);
+	} while (rv == -1 && errno == EAGAIN && lim++ < 10);
+	if (rv == -1) {
+		cerr << "RouterOutProc:: send: failure in sendto (errno="
+		     << errno << ")\n";
+		exit(1);
 	}
-
-	// save a record of the packet in pending map
-	int x = resendMap->insert(pid,px);
-
-	// send the packet
-// need to review this
-// another issue, when adding/removing a link, we need to
-/ send a conn/disc packet
-	comt_t comt = p.comtree;
-	if (rtr->booting) {
-		pktLog->log(cx,lnk,true,now); bootSend(cx,0);
-	} else if (lnk != 0) {
-		int ctx; int clnk; int qid;
-		if ((ctx = rtr->ctt->getComtIndex(comt)) == 0 ||
-		    (clnk = rtr->ctt->getClnkNum(comt,lnk)) == 0 ||
-                    (qid = rtr->ctt->getLinkQ(clnk)) == 0 ||
-                    (!rtr->qm->enq(cx,qid,now))) {
-			rtr->ps->free(cx);
-		}
-	} else {
-		forward(cx,rtr->ctt->getComtIndex(comt));
-	}
-	return true;
-}
-
-/** Retransmit any pending control packets that have timed out.
- *  This method checks the map of pending requests and whenever
- *  it finds a packet that has been waiting for an acknowledgement
- *  for more than a second, it retransmits it or gives up, 
- *  if it has already made three attempts.
- */
-void RouterOutProc::resendControl() {
-	map<uint64_t,ControlInfo>::iterator pp;
-	list<uint64_t> dropList;
-	for (pp = pending->begin(); pp != pending->end(); pp++) {
-		if (now < pp->second.timestamp + 1000000000) continue;
-		pktx px = pp->second.px;
-		Packet& p = rtr->ps->getPacket(px);
-		string s;
-		if (pp->second.nSent >= 3) { // give up on this packet
-			cerr << "RouterOutProc::resendControl: received no "
-				"reply to control packet after 3 attempts\n"
-			     << p.toString(s);
-			rtr->ps->free(px); dropList.push_front(pp->first);
-			continue;
-		}
-		// make copy of packet and send the copy
-		pp->second.timestamp = now;
-		pp->second.nSent++;
-		pktx cx = rtr->ps->fullCopy(px);
-		if (cx == 0) {
-			cerr << "RouterOutProc::resendControl: no packets left in "
-				"packet store\n";
-			break;
-		}
-		int lnk = pp->second.lnk; comt_t comt = p.comtree;
-		if (booting) {
-			pktLog->log(cx,lnk,true,now); iop->send(cx,lnk);
-		} else if (lnk != 0) {
-			int ctx; int clnk; int qid;
-			if ((ctx = rtr->ctt->getComtIndex(comt)) == 0 ||
-			    (clnk = rtr->ctt->getComtLink(comt,lnk)) == 0 ||
-	                    (qid = rtr->ctt->getLinkQ(clnk)) == 0 ||
-	                    (!rtr->qm->enq(cx,qid,now)))
-				rtr->ps->free(cx);
-		} else {
-			forward(cx,ctt->getComtIndex(comt));
-		}
-	}
-	// remove expired entries from pending list
-	for (uint64_t pid : dropList) pending->erase(pid);
-}
-
-/** Handle incoming replies to control packets.
- *  The reply is checked against the map of pending control packets,
- *  and if a match is found, the entry is removed from the map
- *  and the storage for the original control packet is freed.
- *  Currently, the only action on a reply is to print an error message
- *  to the log if we receive a negative reply.
- *  @param rx is the packet index of the reply packet
- */
-void RouterOutProc::handleControlReply(pktx rx) {
-	Packet& reply = rtr->ps->getPacket(rx);
-	uint64_t pid;
-
-	CtlPkt cpr;
-	if (reply.type == Forest::CONNECT || reply.type == Forest::DISCONNECT ||
-	    reply.type == Forest::SUB_UNSUB) {
-		pid  = ntohl(reply.payload()[0]); pid <<= 32;
-		pid |= ntohl(reply.payload()[1]);
-	} else if (reply.type == Forest::NET_SIG) {
-		cpr.reset(reply); pid = cpr.seqNum;
-	} else {
-		string s;
-		cerr << "RouterOutProc::handleControlReply: unexpected reply "
-		     << reply.toString(s); 
-		rtr->ps->free(rx); return;
-	}
-
-	map<uint64_t,ControlInfo>::iterator pp = pending->find(pid);
-	if (pp == pending->end()) {
-		// this is a reply to a request we never sent, or
-		// possibly, a reply to a request we gave up on
-		string s;
-		cerr << "RouterOutProc::handleControlReply: unexpected reply "
-		     << reply.toString(s); 
-		rtr->ps->free(rx); return;
-	}
-	// handle signalling packets
-	if (reply.type == Forest::NET_SIG) {
-		if (cpr.mode == CtlPkt::NEG_REPLY) {
-			string s;
-			cerr << "RouterOutProc::handleControlReply: got negative "
-			        "reply to "
-			     << rtr->ps->getPacket(pp->second.px).toString(s); 
-			cerr << "reply=" << reply.toString(s);
-		} else if (cpr.type == CtlPkt::BOOT_ROUTER) {
-			if (booting && !setup()) {
-				cerr << "RouterOutProc::handleControlReply: "
-					"setup failed after completion of boot "
-					"phase\n";
-				perror("");
-				pktLog->write(cout);
-				exit(1);
-			}
-			iop->closeBootSock();
-			booting = false;
-		}
-	}
-
-	// free both packets and erase pending entry
-	rtr->ps->free(pp->second.px); rtr->ps->free(rx); pending->erase(pp);
-}
-
-/** Send packet back to sender.
- *  Update the length, flip the addresses and pack the buffer.
- *  @param px is the packet number
- *  @param cp is a control packet to be packed
- */
-void RouterOutProc::returnToSender(pktx px, CtlPkt& cp) {
-	Packet& p = rtr->ps->getPacket(px);
-	cp.payload = p.payload(); 
-	int paylen = cp.pack();
-	if (paylen == 0) {
-		cerr << "RouterOutProc::returnToSender: control packet formatting "
-			"error, zero payload length\n";
-		rtr->ps->free(px);
-	}
-	p.length = (Packet::OVERHEAD + paylen);
-	p.flags = 0;
-	p.dstAdr = p.srcAdr;
-	p.srcAdr = myAdr;
-	p.pack();
-
-	if (booting) {
-		pktLog->log(px,0,true,now);
-		iop->send(px,0);
-		return;
-	}
-
-	int cLnk = rtr->ctt->getComtLink(p.comtree,p.inLink);
-	int qn = rtr->ctt->getLinkQ(cLnk);
-	if (!rtr->qm->enq(px,qn,now)) { rtr->ps->free(px); }
+	sm->cntOutLink(p.outLink,Forest::truPktLeng(p.length),
+		       (lte.peerType == Forest::ROUTER));
+	ps->free(px);
 }
 
 } // ends namespace

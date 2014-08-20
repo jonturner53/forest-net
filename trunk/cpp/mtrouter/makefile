@@ -13,9 +13,11 @@ IDIR := ${FROOT}/include
 
 HFILES = ${IDIR}/IfaceTable.h ${IDIR}/LinkTable.h \
 	${IDIR}/ComtreeTable.h ${IDIR}/RouteTable.h ${IDIR}/StatsModule.h \
-	${IDIR}/QuManager.h
+	${IDIR}/QuManager.h ${IDIR}/RouterInProc.h \
+	${IDIR}/RouterOutProc.h ${IDIR}/RouterControl.h
 OFILES = IfaceTable.o LinkTable.o ComtreeTable.o \
-	   RouteTable.o StatsModule.o QuManager.o
+	RouteTable.o StatsModule.o QuManager.o \
+	RouterInProc.o RouterOutProc.o RouterControl.o
 XFILES = Router
 
 ${OFILES} : ${HFILES}
@@ -29,8 +31,9 @@ all : ${FLIB} ${XFILES}
 ${FLIB} : ${OFILES}
 	ar -ru ${FLIB} ${OFILES}
 
-Router : RouterCore.o ${LIBS}
-	${CXX} ${CXXFLAGS} $< ${LIBS} -o $@
+Router : Router.o ${LIBS} RouterInProc.o RouterControl.o RouterOutProc.o
+	${CXX} ${CXXFLAGS} $< RouterInProc.o RouterControl.o \
+	RouterOutProc.o ${LIBS} -o $@
 
 clean :
 	rm -f *.o ${XFILES}

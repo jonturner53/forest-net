@@ -7,6 +7,8 @@
  */
 
 #include "Router.h"
+#include "RouterInProc.h"
+#include "RouterOutProc.h"
 
 using namespace forest;
 
@@ -122,9 +124,8 @@ Router::Router(const RouterInfo& config) {
 	nmAdr = config.nmAdr;
 	nmIp = config.nmIp;
 	ccAdr = config.ccAdr;
-	firstLeafAdr = config.firstLeafAdr;
-	lastLeafAdr = config.lastLeafAdr;
 	runLength = config.runLength;
+	leafAdr = 0;
 
 	try {
 		ps = new PacketStore(nPkts, nBufs);
@@ -142,7 +143,7 @@ Router::Router(const RouterInfo& config) {
 		rip = new RouterInProc(this);
 		rop = new RouterOutProc(this);
 
-		leafAdr = new ListPair((lastLeafAdr - firstLeafAdr)+1);
+		setLeafAdrRange(config.firstLeafAdr, config.lastLeafAdr);
 	} catch (std::bad_alloc e) {
 		Util::fatal("Router: unable to allocate space for Router");
         }
@@ -396,7 +397,7 @@ bool Router::checkTables() {
 	     ctx = ctt->nextComt(ctx)) {
 		int comt = ctt->getComtree(ctx);
 		int plnk = ctt->getPlink(ctx);
-		int pcLnk = ctt->getPClink(ctx);
+		int pcLnk = ctt->getPClnk(ctx);
 		if (plnk != ctt->getLink(ctx,pcLnk)) {
 			cerr << "Router::checkTables: parent link "
 			     <<  plnk << " not consistent with pcLnk\n";
