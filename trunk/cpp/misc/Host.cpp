@@ -11,15 +11,15 @@
 
 using namespace forest;
 
-
 /**
  *  usage:
- *       fHost myIpAdr rtrIpAdr repeatFlag delta finTime
+ *       Host myIpAdr rtrIpAdr repeatFlag delta finTime
  * 
- *  FHost is a simple packet generator for a forest host.
+ *  Host is a simple packet generator for a forest host.
  *  MyIpAdr and rtrIpAdr are the IP addresses of the host itself
- *  and the forest router it connects to. MyAdr is the forest adress
- *  of the host. Delta is the minimum number of microseconds
+ *  and the forest router it connects to. If repeatFlag is false
+ *  repeat specifications in the packet specification file are
+ *  ignored. Delta is the minimum number of microseconds
  *  between successive packet transmissions.
  *  FinTime is the number of seconds that the host should run.
  * 
@@ -30,8 +30,9 @@ using namespace forest;
  *  separated by blanks. The first value on each line is a
  *  pause specification that indicates the number of microseconds
  *  to wait before sending the packet. This is ignored if it is
- *  less than delta. The next three values specify the packet's
- *  length (in bytes), its comtree number and destination forest address.
+ *  less than delta. The next four values specify the packet's
+ *  length (in bytes), its comtree number, the source forest address,
+ *  and destination forest address.
  *  The remaining values on the line are interpreted as the values
  *  of successive payload words. If the number of specified values
  *  is not sufficient for the specified packet length, remaining
@@ -49,7 +50,7 @@ using namespace forest;
  *  If repeatFlag=0, Host sends each of the listed packets one time,
  *  ignoring all repeat specifications.
  * 
- *  FHost also receives incoming packets from its attached router.
+ *  Host also receives incoming packets from its attached router.
  *  It saves the first 50 of these and writes them to stdout
  *  at the end of execution. This is done as a basic debugging aid.
  */
@@ -62,12 +63,14 @@ int main(int argc, char *argv[]) {
 	    (rtrIpAdr = Np4d::ipAddress(argv[2])) == 0 ||
 	    sscanf(argv[3],"%d", &repeatFlag) != 1 ||
 	    sscanf(argv[4],"%d", &delta) != 1 ||
-	    sscanf(argv[5],"%d", &finTime) != 1)
-		fatal("usage: fHost myIpAdr routerIpAdr repeatCnt "
+	    sscanf(argv[5],"%d", &finTime) != 1) {
+		Util::fatal("usage: fHost myIpAdr routerIpAdr repeatCnt "
 		      "delta finTime");
+		exit(0); // redundant, but makes compiler happy
+	}
 
 	Host host(myIpAdr,rtrIpAdr);
-	if (!host.init()) fatal("Host:: initialization failure");
+	if (!host.init()) Util::fatal("Host:: initialization failure");
 	host.run((repeatFlag ? true : false), delta, 1000000*finTime);
 }
 
@@ -93,7 +96,7 @@ bool Host::init() {
 		Np4d::nonblock(sock);
 }
 
-void Host::run(bool repeatFlag, uint32_t delta, uint32_t finishTime) {
+void Host::run(bool repeatFlag, int delta, int finishTime) {
 // Run the host. If repeatFlag is false, then all repeat specifications
 // are ignored. Delta is the minimum time between packets.
 // FinishTime and delta are expressed in microseconds.
@@ -111,7 +114,7 @@ void Host::run(bool repeatFlag, uint32_t delta, uint32_t finishTime) {
 	np = 0;
 	while (np < nPkts) {
 		px = ps->alloc();
-		if (px == Null) fatal("Host::run: too many packets");
+		if (px == 0) Util::fatal("Host::run: too many packets");
 		if (!readPacket(px,pause,cnt)) break;
 		pkt[np].pause = pause;
 		if (pause >= 0) {
@@ -130,7 +133,7 @@ void Host::run(bool repeatFlag, uint32_t delta, uint32_t finishTime) {
 	uint32_t nextTime;	// time next packet is to go out
 	struct timeval ct, pt; // current and previous time values
 	if (gettimeofday(&ct, NULL) < 0)
-		fatal("Host::run: gettimeofday failure");
+		Util::fatal("Host::run: gettimeofday failure");
 	i = 0;	// index in pkt[] of next outgoing packet
 	now = 0; nextTime = 1000000;
 	while (now <= finishTime) {
@@ -139,7 +142,7 @@ void Host::run(bool repeatFlag, uint32_t delta, uint32_t finishTime) {
 		// input processing
 		px = receive();
 		Packet& p = ps->getPacket(px);
-		if (px != Null) {
+		if (px != 0) {
 			didNothing = false;
 			nRcvd++;
 			p.unpack();
@@ -177,12 +180,12 @@ void Host::run(bool repeatFlag, uint32_t delta, uint32_t finishTime) {
 					i += pkt[i].pause;
 				}
 			}
-			if (i < np) nextTime += max(delta,pkt[i].pause);
+			if (i < np) nextTime += std::max(delta,pkt[i].pause);
 		}
 		// update time variables
 		pt = ct;
-		if (gettimeofday(&ct,Null) < 0)
-			fatal("Host::run: gettimeofday failure");
+		if (gettimeofday(&ct,0) < 0)
+			Util::fatal("Host::run: gettimeofday failure");
 		now += (ct.tv_sec == pt.tv_sec ?
                            ct.tv_usec - pt.tv_usec :
                            ct.tv_usec + (1000000 - pt.tv_usec)
@@ -200,8 +203,8 @@ void Host::run(bool repeatFlag, uint32_t delta, uint32_t finishTime) {
 		nanosleep(&sleeptime,&rem);
 		// update time variables again following sleep
 		pt = ct;
-		if (gettimeofday(&ct,Null) < 0)
-			fatal("Host::run: gettimeofday failure");
+		if (gettimeofday(&ct,0) < 0)
+			Util::fatal("Host::run: gettimeofday failure");
 		now += (ct.tv_sec == pt.tv_sec ?
                            ct.tv_usec - pt.tv_usec :
                            ct.tv_usec + (1000000 - pt.tv_usec)
@@ -216,9 +219,8 @@ void Host::run(bool repeatFlag, uint32_t delta, uint32_t finishTime) {
 			cout << "recv[";
 		cout << setw(2) << setw(8) << events[i].time << "] ";
 		px = events[i].pkt;
-		string s;
 		Packet& p = ps->getPacket(px);
-		cout << p.toString(s);
+		cout << p.toString();
 	}
 	cout << endl;
 	cout << nRcvd << " packets received, " << nSent << " packets sent, "; 
@@ -226,16 +228,16 @@ void Host::run(bool repeatFlag, uint32_t delta, uint32_t finishTime) {
 
 bool Host::readPacket(pktx px, int& pause, int& cnt) {
 // Read an input packet from stdin and return it in p.
-        Misc::skipBlank(cin);
-        if (!Misc::readNum(cin,pause)) return false;
+        Util::skipBlank(cin);
+        if (!Util::readInt(cin,pause)) return false;
         if (pause < 0) {
-                if (!Misc::readNum(cin,cnt)) cnt = 0;
-                Misc::cflush(cin,'\n');
+                if (!Util::readInt(cin,cnt)) cnt = 0;
+                Util::nextLine(cin);
                 return true;
         }
         Packet& p = ps->getPacket(px);
         bool success = p.read(cin);
-        Misc::cflush(cin,'\n');
+        Util::nextLine(cin);
         return success;
 }
 
@@ -244,15 +246,15 @@ void Host::send(pktx px) {
 	Packet& p = ps->getPacket(px);
 	int rv = Np4d::sendto4d(sock,(void *) p.buffer, p.length,
 		    		rtrIpAdr, Forest::ROUTER_PORT);
-	if (rv == -1) fatal("Host::send: failure in sendto");
+	if (rv == -1) Util::fatal("Host::send: failure in sendto");
 }
 
 int Host::receive() { 
-// Return next waiting packet or Null if there is none. 
+// Return next waiting packet or 0 if there is none. 
 	int nbytes;	  // number of bytes in received packet
 
 	pktx px = ps->alloc();
-	if (px == Null) return Null;
+	if (px == 0) return 0;
 	Packet& p = ps->getPacket(px);
 
 	ipa_t remoteIp; ipp_t remotePort;
@@ -260,9 +262,9 @@ int Host::receive() {
                           	  remoteIp, remotePort);
         if (nbytes < 0) {
                 if (errno == EWOULDBLOCK) {
-                        ps->free(px); return Null;
+                        ps->free(px); return 0;
                 }
-                fatal("Host::receive: error in recvfrom call");
+                Util::fatal("Host::receive: error in recvfrom call");
         }
 
         p.bufferLen = nbytes;
