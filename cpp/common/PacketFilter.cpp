@@ -18,17 +18,15 @@ PacketFilter::PacketFilter() { on = false; }
  *  @param s is a reference to a string in which result is to be returned
  *  @return a reference to s
  */
-string& PacketFilter::toString(string& s) const {
+string PacketFilter::toString() const {
 	stringstream ss;
 	ss << (on ? '1' : '0' ) << " " << lnk << " "
-	   << (in ? '1' : '0') << (out ? '1' : '0') << " ";
-	ss << comt << " ";
-	ss << Forest::fAdr2string(srcAdr) << " ";
-	ss << Forest::fAdr2string(dstAdr) << " ";
-	ss << Packet::pktTyp2string(type);
-	ss << CtlPkt::cpType2string(cpType);
-	s = ss.str();
-	return s;
+	   << (in ? '1' : '0') << (out ? '1' : '0') << " " << comt << " "
+	   << Forest::fAdr2string(srcAdr) << " "
+	   << Forest::fAdr2string(dstAdr) << " "
+	   << Packet::pktTyp2string(type)
+	   << CtlPkt::cpType2string(cpType);
+	return ss.str();
 }
 
 bool PacketFilter::fromString(string& s) {

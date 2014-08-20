@@ -38,7 +38,9 @@ int Repeater::saveReq(int cx, int64_t seqNum, int64_t now, int idx) {
 
 /** Match a reply to a saved request and update.
  *  @param seqNum is the sequence number assigned to the reply
- *  @return the index associated with the saved copy or 0 if no match
+ *  @return a pair consisting of the packet index of the saved request packet
+ *  and the internal index that was associated with the saved copy; if
+ *  no matching request is found, the pair (0,0) is returned
  */
 pair<int,int> Repeater::deleteMatch(int64_t seqNum) {
 	int idx = pmap->find(seqNum);
