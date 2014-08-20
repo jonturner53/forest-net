@@ -30,9 +30,6 @@
 #include "PacketLog.h"
 #include "QuManager.h"
 
-#include "RouterInProc.h"
-#include "RouterOutProc.h"
-
 using namespace std::chrono;
 using std::thread;
 using std::mutex;
@@ -42,6 +39,7 @@ namespace forest {
 
 class RouterInProc;
 class RouterOutProc;
+class RouterControl;
 
 /** Structure used to carry information about a router.
  *  Used during initialization process.
@@ -76,6 +74,7 @@ public:
 	bool	setup();
 	bool	setupIface(int);
 	bool	setupAllIfaces();
+	bool	setLeafAdrRange(fAdr_t, fAdr_t);
 	void	run();
 	void	dump(ostream& os);
 
@@ -143,6 +142,21 @@ private:
 
 	uint64_t nextSeqNum();
 };
+
+
+/** Set the leaf address range.
+ *  @return true on success, false on failure; will fail if the
+ *  address range is invalid, or if some leaf addresses are currently in use.
+ */
+inline bool Router::setLeafAdrRange(fAdr_t first, fAdr_t last) {
+	if (!Forest::validUcastAdr(first) || !Forest::validUcastAdr(last) ||
+	    last <= first || (leafAdr != 0 && leafAdr->getNumIn() != 0))
+		return false;
+	if (leafAdr != 0) delete leafAdr;
+	leafAdr = new ListPair((last-first)+1);
+	firstLeafAdr = first; lastLeafAdr = last;
+	return true;
+}
 
 /** Allocate a new leaf address.
  *  Caller is assumed to hold the LinkTable lock.

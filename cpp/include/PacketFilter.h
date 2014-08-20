@@ -31,7 +31,7 @@ public:
 	CtlPkt::CpType cpType;		///< control packet type
 
 		PacketFilter();
-	string& toString(string& s) const;
+	string  toString() const;
 	bool fromString(string& s);
 };
 

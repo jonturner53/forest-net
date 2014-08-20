@@ -38,7 +38,6 @@ public:
 
 		Entry();
 		Entry(const Entry&);
-		~Entry();
 
 	string	toString() const;
 	friend	ostream& operator<<(ostream& out, const Entry& a) {
@@ -64,6 +63,7 @@ public:
 	int	lookup(fAdr_t) const;
 
 	Entry&	getEntry(int) const;
+	int	maxLink();
 
 	// modifiers
 	void	setPeerAdr(int, fAdr_t);
@@ -96,13 +96,13 @@ private:
 	int	readEntry(istream&);	 	
 };
 
-LinkTable::Entry::Entry() {
+inline LinkTable::Entry::Entry() {
 	iface  = 0;
 	peerIp = 0; peerPort = 0; peerType = Forest::UNDEF_NODE; peerAdr = 0;
 	isConnected = false; nonce = 0;
 }
 	
-LinkTable::Entry::Entry(const Entry& e) {
+inline LinkTable::Entry::Entry(const Entry& e) {
 	iface  = e.iface;
 	peerIp = e.peerIp; peerPort = e.peerPort;
 	peerType = e.peerType; peerAdr = e.peerAdr;
@@ -110,7 +110,7 @@ LinkTable::Entry::Entry(const Entry& e) {
 	rates = e.rates; availRates = e.availRates;
 }
 
-string LinkTable::Entry::toString() const {
+inline string LinkTable::Entry::toString() const {
 	stringstream ss;
 	ss << setw(6) << iface << "  ";
         ss << setw(12) << Np4d::ip2string(peerIp)
@@ -121,6 +121,11 @@ string LinkTable::Entry::toString() const {
         ss << " " << availRates.toString();
 	return ss.str();
 }
+
+/** Get the largest link number.
+ *  @return the largest link number that can be used
+ */
+inline int LinkTable::maxLink() { return maxLnk; }
 
 /** Determine if a link number is valid.
  *  @param lnk is a link number

@@ -50,13 +50,13 @@ public:
 		~QuManager();
 
 	// predicates
-	bool	validQ(int) const;
+	bool	validQ(int);
 	
 	// allocate/free queues
 	int	allocQ(int);	
 	void	freeQ(int);
 
-	int	getLnk(int);
+	int	getLink(int) const;
 
 	// set queue rates and length limits
 	bool	setLinkRates(int,RateSpec&);
@@ -106,15 +106,15 @@ private:
 };
 
 
-inline bool QuManager::validQ(int qid) const {
-	unique_lock lck(mtx);
+inline bool QuManager::validQ(int qid) {
+	unique_lock<mutex> lck(mtx);
 	return 1 <= qid && qid <= nQ && quInfo[qid].pktLim >= 0;
 }
 
 inline int QuManager::getLink(int qid) const { return quInfo[qid].lnk; }
 
 inline bool QuManager::setLinkRates(int lnk, RateSpec& rs) {
-	unique_lock lck(mtx);
+	unique_lock<mutex> lck(mtx);
 	if (lnk < 1 || lnk > nL) return false;
 	int br = max(rs.bitRateDown,1); 
 	int pr = max(rs.pktRateDown,1); 
@@ -125,7 +125,7 @@ inline bool QuManager::setLinkRates(int lnk, RateSpec& rs) {
 }
 
 inline bool QuManager::setQRates(int qid, RateSpec& rs) {
-	unique_lock lck(mtx);
+	unique_lock<mutex> lck(mtx);
 	if (!validQ(qid)) return false;
 	int br = min(rs.bitRateDown,8000000); 
 	int pr = min(rs.pktRateDown,1000000000); 
@@ -135,7 +135,7 @@ inline bool QuManager::setQRates(int qid, RateSpec& rs) {
 }
 
 inline bool QuManager::setQLimits(int qid, int np, int nb) {
-	unique_lock lck(mtx);
+	unique_lock<mutex> lck(mtx);
 	if (!validQ(qid)) return false;
 	np = max(0,np); nb = max(0,nb);
 	quInfo[qid].pktLim = np;
