@@ -112,13 +112,12 @@ inline LinkTable::Entry::Entry(const Entry& e) {
 
 inline string LinkTable::Entry::toString() const {
 	stringstream ss;
-	ss << setw(6) << iface << "  ";
-        ss << setw(12) << Np4d::ip2string(peerIp)
-           << ":" << setw(5) << left << peerPort << "  ";
-        ss << setw(10) << left << Forest::nodeType2string(peerType);
-        ss << " " << setw(10) << left <<Forest::fAdr2string(peerAdr);
-        ss << " " << rates.toString();
-        ss << " " << availRates.toString();
+	ss << setw(6) << iface << "  " << setw(12) << Np4d::ip2string(peerIp)
+           << ":" << setw(5) << left << peerPort << "  "
+           << setw(10) << left << Forest::nodeType2string(peerType)
+           << " " << setw(10) << left <<Forest::fAdr2string(peerAdr)
+           << " " << rates.toString() << " " << availRates.toString()
+	   << " " << nonce;
 	return ss.str();
 }
 
