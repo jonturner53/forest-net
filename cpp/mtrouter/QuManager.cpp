@@ -72,7 +72,7 @@ QuManager::~QuManager() {
  *  @return the qid of the assigned queue, or 0 no queues are available
  */
 int QuManager::allocQ(int lnk) {
-	unique_lock lck(mtx);
+	unique_lock<mutex> lck(mtx);
 	if (free == 0) return 0;
 	int qid = free; free = quInfo[qid].lnk;
 	quInfo[qid].lnk = lnk;
@@ -88,7 +88,7 @@ int QuManager::allocQ(int lnk) {
  *  queue will be returned to the free list.
  */
 void QuManager::freeQ(int qid) {
-	unique_lock lck(mtx);
+	unique_lock<mutex> lck(mtx);
 	if (qid == 0) return;
 	if (queues->empty(qid)) {
 		quInfo[qid].lnk = free; free = qid; qCnt--;
@@ -105,7 +105,7 @@ void QuManager::freeQ(int qid) {
  *  is at its limit for packets queued
  */
 bool QuManager::enq(int px, int qid, uint64_t now) {
-	unique_lock lck(mtx);
+	unique_lock<mutex> lck(mtx);
 	int pleng = Forest::truPktLeng((ps->getPacket(px)).length);
 	QuInfo& q = quInfo[qid]; int lnk = q.lnk;
 
@@ -158,7 +158,7 @@ bool QuManager::enq(int px, int qid, uint64_t now) {
  *  are no links that are ready to send a packet
  */
 int QuManager::deq(int& lnk, uint64_t now) {
-	unique_lock lck(mtx);
+	unique_lock<mutex> lck(mtx);
 	// first process virtually active links that should now be idle
 	//
 	int vl = vactive->findmin(); uint64_t d = vactive->key(vl);

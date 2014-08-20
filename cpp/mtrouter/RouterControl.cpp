@@ -8,19 +8,28 @@
 
 #include "RouterControl.h"
 
-using namespace forest;
+namespace forest {
 
 RouterControl::RouterControl(Router *rtr1, int thx,
-			Quu<int> inQ1, Quu<pair<int,int>> outQ1) 
+			Quu<int> *inQ1, Quu<pair<int,int>> *outQ1) 
 			: rtr(rtr1), myThx(thx), inQ(inQ1), outQ(outQ1) {
+	ift = rtr->ift; lt = rtr->lt;
+	ctt = rtr->ctt; rt = rtr->rt;
+	ps = rtr->ps; qm = rtr->qm;
+	sm = rtr->sm; pktLog = rtr->pktLog;
+}
+
+RouterControl::~RouterControl() {
+	ift = 0; lt = 0; ctt = 0; rt = 0;
+	ps = 0; qm = 0; sm = 0; pktLog = 0;
 }
 
 void RouterControl::start(RouterControl *self) { self->run(); }
 	
 void RouterControl::run() {
 	while (true) {
-		pktx px = inQ.deq(); // wait for incoming request packet
-		Packet& p = rtr->ps->getPacket(px);
+		pktx px = inQ->deq(); // wait for incoming request packet
+		Packet& p = ps->getPacket(px);
 		if (p.type != Forest::CLIENT_SIG && p.type != Forest::NET_SIG)
 			return;
 		CtlPkt cp(p);
@@ -34,68 +43,67 @@ void RouterControl::run() {
  *  @param cp is a reference to a control packet unpacked from the payload
  */
 void RouterControl::handleRequest(int px, CtlPkt& cp) {
-	Packet& p = rtr->ps->getPacket(px);
-	
 	switch (cp.type) {
 
 	// configuring logical interfaces
-	case CtlPkt::ADD_IFACE: 	addIface(cp,rcp); break;
-        case CtlPkt::DROP_IFACE:	dropIface(cp,rcp); break;
-        case CtlPkt::GET_IFACE:		getIface(cp,rcp); break;
-        case CtlPkt::MOD_IFACE:		modIface(cp,rcp); break;
-    	case CtlPkt::GET_IFACE_SET:	getIfaceSet(cp,rcp); break;
+	case CtlPkt::ADD_IFACE: 	addIface(cp); break;
+        case CtlPkt::DROP_IFACE:	dropIface(cp); break;
+        case CtlPkt::GET_IFACE:		getIface(cp); break;
+        case CtlPkt::MOD_IFACE:		modIface(cp); break;
+    	case CtlPkt::GET_IFACE_SET:	getIfaceSet(cp); break;
 
 	// configuring links
-        case CtlPkt::ADD_LINK:		addLink(cp,rcp); break;
-        case CtlPkt::DROP_LINK:		dropLink(cp,rcp); break;
-        case CtlPkt::GET_LINK:		getLink(cp,rcp); break;
-        case CtlPkt::MOD_LINK:		modLink(cp,rcp); break;
-        case CtlPkt::GET_LINK_SET:	getLinkSet(cp,rcp); break;
+        case CtlPkt::ADD_LINK:		addLink(cp); break;
+        case CtlPkt::DROP_LINK:		dropLink(cp); break;
+        case CtlPkt::GET_LINK:		getLink(cp); break;
+        case CtlPkt::MOD_LINK:		modLink(cp); break;
+        case CtlPkt::GET_LINK_SET:	getLinkSet(cp); break;
 
 	// configuring comtrees
-        case CtlPkt::ADD_COMTREE:	addComtree(cp,rcp); break;
-        case CtlPkt::DROP_COMTREE:	dropComtree(cp,rcp); break;
-        case CtlPkt::GET_COMTREE:	getComtree(cp,rcp); break;
-        case CtlPkt::MOD_COMTREE:	modComtree(cp,rcp); break;
-	case CtlPkt::GET_COMTREE_SET: 	getComtreeSet(cp,rcp); break;
+        case CtlPkt::ADD_COMTREE:	addComtree(cp); break;
+        case CtlPkt::DROP_COMTREE:	dropComtree(cp); break;
+        case CtlPkt::GET_COMTREE:	getComtree(cp); break;
+        case CtlPkt::MOD_COMTREE:	modComtree(cp); break;
+	case CtlPkt::GET_COMTREE_SET: 	getComtreeSet(cp); break;
 
-	case CtlPkt::ADD_COMTREE_LINK:	addComtreeLink(cp,rcp); break;
-	case CtlPkt::DROP_COMTREE_LINK: dropComtreeLink(cp,rcp); break;
-	case CtlPkt::GET_COMTREE_LINK:	getComtreeLink(cp,rcp); break;
-	case CtlPkt::MOD_COMTREE_LINK:	modComtreeLink(cp,rcp); break;
+	case CtlPkt::ADD_COMTREE_LINK:	addComtreeLink(cp); break;
+	case CtlPkt::DROP_COMTREE_LINK: dropComtreeLink(cp); break;
+	case CtlPkt::GET_COMTREE_LINK:	getComtreeLink(cp); break;
+	case CtlPkt::MOD_COMTREE_LINK:	modComtreeLink(cp); break;
 
 	// configuring routes
-        case CtlPkt::ADD_ROUTE:		addRoute(cp,rcp); break;
-        case CtlPkt::DROP_ROUTE:	dropRoute(cp,rcp); break;
-        case CtlPkt::GET_ROUTE:		getRoute(cp,rcp); break;
-        case CtlPkt::MOD_ROUTE:		modRoute(cp,rcp); break;
-    	case CtlPkt::GET_ROUTE_SET:	getRouteSet(cp,rcp); break;
+        case CtlPkt::ADD_ROUTE:		addRoute(cp); break;
+        case CtlPkt::DROP_ROUTE:	dropRoute(cp); break;
+        case CtlPkt::GET_ROUTE:		getRoute(cp); break;
+        case CtlPkt::MOD_ROUTE:		modRoute(cp); break;
+    	case CtlPkt::GET_ROUTE_SET:	getRouteSet(cp); break;
 
-	// configuring filters and retrieving pacets
-        case CtlPkt::ADD_FILTER:	addFilter(cp,rcp); break;
-        case CtlPkt::DROP_FILTER:	dropFilter(cp,rcp); break;
-        case CtlPkt::GET_FILTER:	getFilter(cp,rcp); break;
-        case CtlPkt::MOD_FILTER:	modFilter(cp,rcp); break;
-        case CtlPkt::GET_FILTER_SET:	getFilterSet(cp,rcp); break;
-        case CtlPkt::GET_LOGGED_PACKETS: getLoggedPackets(cp,rcp); break;
-        case CtlPkt::ENABLE_PACKET_LOG:	enablePacketLog(cp,rcp); break;
+	// configuring filters and retrieving packets
+        case CtlPkt::ADD_FILTER:	addFilter(cp); break;
+        case CtlPkt::DROP_FILTER:	dropFilter(cp); break;
+        case CtlPkt::GET_FILTER:	getFilter(cp); break;
+        case CtlPkt::MOD_FILTER:	modFilter(cp); break;
+        case CtlPkt::GET_FILTER_SET:	getFilterSet(cp); break;
+        case CtlPkt::GET_LOGGED_PACKETS: getLoggedPackets(cp); break;
+        case CtlPkt::ENABLE_PACKET_LOG:	enablePacketLog(cp); break;
 
 	// setting parameters
-	case CtlPkt::SET_LEAF_RANGE:	setLeafRange(cp,rcp); break;
+	case CtlPkt::SET_LEAF_RANGE:	setLeafRange(cp); break;
 
 	// comtree setup
+/*
 	case CtlPkt::JOIN:		joinComtree(cp); break
 	case CtlPkt::LEAVE:		leaveComtree(cp); break
 	case CtlPkt::ADD_BRANCH:	addBranch(cp); break
 	case CtlPkt::PRUNE:		prune(cp); break
 	case CtlPkt::CONFIRM:		confirm(cp); break
 	case CtlPkt::ABORT:		abort(cp); break
+*/
 
 	default:
 		cerr << "unrecognized control packet type " << cp.type
 		     << endl;
-		rcp.errMsg = "invalid control packet for router";
-		rcp.mode = CtlPkt::NEG_REPLY;
+		cp.fmtError("invalid control packet for router");
 		break;
 	}
 	returnToSender(px,cp);
@@ -108,14 +116,14 @@ void RouterControl::handleRequest(int px, CtlPkt& cp) {
  *  @param cp is a control packet to be packed
  */
 void RouterControl::returnToSender(pktx px, CtlPkt& cp) {
-	Packet& p = rtr->ps->getPacket(px);
+	Packet& p = ps->getPacket(px);
 	p.length = Packet::OVERHEAD + cp.paylen;
 	p.length = (p.length + 3)/4; // round up to next multiple of 4
 	p.flags = 0;
 	p.dstAdr = p.srcAdr;
 	p.srcAdr = rtr->myAdr;
 	p.pack();
-	outQ.enq(pair<int,int>(myThx,px));
+	outQ->enq(pair<int,int>(myThx,px));
 }
 
 /** Handle an ADD_IFACE control packet.
@@ -128,28 +136,26 @@ void RouterControl::addIface(CtlPkt& cp) {
 	if (!cp.xtrAddIface(iface, ip, rates)) { 
 		cp.fmtError("unable to unpack control packet"); return;
 	}
-	rates.bitRateUp = max(min(rates.bitRateUp,
-				Forest::MAXBITRATE), Forest::MINBITRATE),
-	rates.bitRateDown = max(min(rates.bitRateDown,
-				Forest::MAXBITRATE), Forest::MINBITRATE),
-	rates.pktRateUp = max(min(rates.pktRateUp,
-				Forest::MAXBITRATE), Forest::MINBITRATE),
-	rates.pktRateDown = max(min(rates.pktRateDown,
-				Forest::MAXBITRATE), Forest::MINBITRATE),
+	int minb = Forest::MINBITRATE; int maxb = Forest::MAXBITRATE;
+	int minp = Forest::MINPKTRATE; int maxp = Forest::MAXPKTRATE;
+	rates.bitRateUp   = max(min(rates.bitRateUp,  maxb),minb);
+	rates.bitRateDown = max(min(rates.bitRateDown,maxb),minb);
+	rates.pktRateUp   = max(min(rates.pktRateUp,  maxp),minp);
+	rates.pktRateDown = max(min(rates.pktRateDown,maxp),minp);
 
-	unique_lock iftLock(rtr->iftMtx);
-	if (rtr->ift->valid(iface)) {
+	unique_lock<mutex> iftLock(rtr->iftMtx);
+	if (ift->valid(iface)) {
 		cp.fmtError("addIface: requested interface "
 			    "conflicts with existing interface");
 		return;
-	} else if (!rtr->ift->addEntry(iface, cp.ip1, 0, rs)) {
+	} else if (!ift->addEntry(iface, ip, 0, rates)) {
 		cp.fmtError("addIface: cannot add interface");
 		return;
 	} else if (!rtr->setupIface(iface)) {
 		cp.fmtError("addIface: could not setup interface");
 		return;
 	}
-	IfaceTable::Entry& ifte = rtr->ift->getEntry(iface);
+	IfaceTable::Entry& ifte = ift->getEntry(iface);
 	cp.fmtAddIfaceReply(ifte.ipa, ifte.port);
 }
 
@@ -162,8 +168,8 @@ void RouterControl::dropIface(CtlPkt& cp) {
 	int iface; if (!cp.xtrDropIface(iface)) { 
 		cp.fmtError("unable to unpack control packet"); return;
 	}
-	unique_lock iftLock(rtr->iftMtx);
-	rtr->ift->removeEntry(iface);
+	unique_lock<mutex> iftLock(rtr->iftMtx);
+	ift->removeEntry(iface);
 	cp.fmtDropIfaceReply();
 }
 
@@ -176,14 +182,14 @@ void RouterControl::getIface(CtlPkt& cp) {
 	int iface; if (!cp.xtrGetIface(iface)) { 
 		cp.fmtError("unable to unpack control packet"); return;
 	}
-	unique_lock iftLock(rtr->iftMtx);
-	if (rtr->ift->valid(iface)) {
-		IfaceTable::Entry& ifte = rtr->ift->getEntry(iface);
+	unique_lock<mutex> iftLock(rtr->iftMtx);
+	if (ift->valid(iface)) {
+		IfaceTable::Entry& ifte = ift->getEntry(iface);
 		cp.fmtGetIfaceReply(iface, ifte.ipa, ifte.port,
 				    ifte.rates, ifte.availRates);
 		return;
 	}
-	rcp.fmtError("get iface: invalid interface");
+	cp.fmtError("get iface: invalid interface");
 }
 
 /** Handle a MOD_IFACE control packet.
@@ -197,10 +203,10 @@ void RouterControl::modIface(CtlPkt& cp) {
 	if (!cp.xtrModIface(iface, rates)) { 
 		cp.fmtError("unable to unpack control packet"); return;
 	}
-	unique_lock iftLock(rtr->iftMtx);
-	if (rtr->ift->valid(iface)) {
-		IfaceTable::Entry& ifte = rtr->ift->getEntry(iface);
-		ifte.rates = rates
+	unique_lock<mutex> iftLock(rtr->iftMtx);
+	if (ift->valid(iface)) {
+		IfaceTable::Entry& ifte = ift->getEntry(iface);
+		ifte.rates = rates;
 		cp.fmtModIfaceReply(); return;
 	}
 	cp.fmtError("mod iface: invalid interface");
@@ -220,30 +226,30 @@ void RouterControl::getIfaceSet(CtlPkt& cp) {
 	if (!cp.xtrGetIfaceSet(iface, count)) { 
 		cp.fmtError("unable to unpack control packet"); return;
 	}
-	unique_lock iftLock(rtr->iftMtx);
-	if (iface == 0) iface = rtr->ift->firstIface(); // 0 means 1st iface
-	else if (!rtr->ift->valid(iface)) {
+	unique_lock<mutex> iftLock(rtr->iftMtx);
+	if (iface == 0) iface = ift->firstIface(); // 0 means 1st iface
+	else if (!ift->valid(iface)) {
 		cp.fmtError("get iface set: invalid iface number");
 		return;
 	}
 	count = min(10, count);
 	int i = 0; string s;
 	while (i < count && iface != 0) {
-		s.append(to_string(ifIndex) + " "
-			 + rtr->ift->entry2string(ifIndex));
+		s.append(to_string(iface) + " " + ift->entry2string(iface));
 		if (s.length() > 1300) {
 			cp.fmtError("getIfaceSet: reply string too long");
-			return
+			return;
 		}
-		i++; iface = rtr->ift->nextIface(iface);
+		i++; iface = ift->nextIface(iface);
 	}
 	cp.fmtGetIfaceSetReply(i, iface, s);
 }
 
 void RouterControl::addLink(CtlPkt& cp) {
-	Forest::ntyp_t ntyp; int iface, lnk; ipa_t peerIp; ipp_t peerPort;
+	Forest::ntyp_t peerType; int iface, lnk; ipa_t peerIp; ipp_t peerPort;
 	fAdr_t peerAdr; uint64_t nonce;
-	if (!cp.xtrAddLink(ntyp, iface, lnk, peerIp, peerPort, peerAdr, nonce)) { 
+	if (!cp.xtrAddLink(peerType, iface, lnk, peerIp, peerPort,
+			   peerAdr, nonce)) { 
 		cp.fmtError("unable to unpack control packet"); return;
 	}
 	if (peerType == Forest::ROUTER && peerAdr == 0) {
@@ -253,17 +259,17 @@ void RouterControl::addLink(CtlPkt& cp) {
 	}
 
 	// lock both iface table and link table
-	unique_lock iftLock(rtr->iftMtx,defer_lock);
-	unique_lock  ltLock( rtr->ltMtx,defer_lock);
+	unique_lock<mutex> iftLock(rtr->iftMtx,defer_lock);
+	unique_lock<mutex>  ltLock( rtr->ltMtx,defer_lock);
 	lock(iftLock, ltLock);
 
-	if (rtr->lt->lookup(peerIp, peerPort) != 0 ||
-	    (lnk != 0 && rtr->lt->valid(lnk))) {
+	if (lt->lookup(peerIp, peerPort) != 0 ||
+	    (lnk != 0 && lt->valid(lnk))) {
 		cp.fmtError("add link: new link conflicts with existing link");
 		return;
 	}
 
-	IfaceTable::Entry& ifte = rtr->ift->getEntry(iface);
+	IfaceTable::Entry& ifte = ift->getEntry(iface);
 
 	// first ensure that the interface has enough
 	// capacity to support a new link of minimum capacity
@@ -286,14 +292,14 @@ void RouterControl::addLink(CtlPkt& cp) {
 	//	   lnk, peer address specified, peer (ip,port) specified
 
 	// add table entry with (ip,port) or nonce
-	// note: when rtr->lt->addEntry succeeds, link rates are
+	// note: when lt->addEntry succeeds, link rates are
 	// initialized to Forest minimum rates
-	lnk = rtr->lt->addEntry(lnk,peerIp,peerPort,nonce);
+	lnk = lt->addEntry(lnk,peerIp,peerPort,nonce);
 	if (lnk == 0) {
 		cp.fmtError("add link: cannot add requested link");
 		return;
 	}
-	LinkTable::Entry& lte = rtr->lt->getEntry(lnk);
+	LinkTable::Entry& lte = lt->getEntry(lnk);
 
 	if (peerType == Forest::ROUTER) {
 		lte.peerAdr = peerAdr;
@@ -302,9 +308,9 @@ void RouterControl::addLink(CtlPkt& cp) {
 		if (peerAdr == 0) lte.peerAdr = rtr->allocLeafAdr();
 		else if (rtr->allocLeafAdr(peerAdr)) lte.peerAdr = peerAdr;
 		if (lte.peerAdr == 0) {
-			rtr->lt->removeEntry(lnk);
+			lt->removeEntry(lnk);
 			cp.fmtError("add link: cannot add link using "
-					"specified address";
+					"specified address");
 			return;
 		}
 	}
@@ -316,22 +322,20 @@ void RouterControl::addLink(CtlPkt& cp) {
 	sm->clearLnkStats(lnk);
 	if (peerType == Forest::ROUTER && peerIp != 0 && peerPort != 0) {
 		// link to a router that's already up, so send connect
-		pktx px = rtr->ps->alloc();
-		Packet& p = rtr->ps->getPacket(px);
+		pktx px = ps->alloc();
+		Packet& p = ps->getPacket(px);
 
 		p.length = Forest::OVERHEAD + 8;
 		p.type = Forest::CONNECT; p.flags = 0;
 		p.comtree = Forest::NABOR_COMT;
-		p.srcAdr = myAdr; p.dstAdr = lte.peerAdr;
+		p.srcAdr = rtr->myAdr; p.dstAdr = lte.peerAdr;
 		int64_t seqNum = rtr->nextSeqNum();
-		(p.payload())[0] = htonl((int32_t) ((seqNum>>32) & 0xffffffff));
-		(p.payload())[1] = htonl((int32_t) (seqNum & 0xffffffff));
-		p.payload()[2] = htonl((uint32_t) (lte.nonce >> 32));
-		p.payload()[3] = htonl((uint32_t) (lte.nonce & 0xffffffff));
+		Np4d::pack64(seqNum, p.payload());
+		Np4d::pack64(lte.nonce, p.payload()+2);
 		p.outLink = lnk;
 		p.pack();
 		p.hdrErrUpdate();p.payErrUpdate();
-		outQ.enq(pair<int,int>(myThx,px));
+		outQ->enq(pair<int,int>(myThx,px));
 	}
 	cp.fmtAddLinkReply(lnk,peerAdr);
 	return;
@@ -350,32 +354,31 @@ void RouterControl::dropLink(CtlPkt& cp) {
 		cp.fmtError("unable to unpack control packet"); return;
 	}
 
-	unique_lock iftLock(rtr->iftMtx,defer_lock);
-	unique_lock  ltLock( rtr->ltMtx,defer_lock);
-	unique_lock cttLock(rtr->cttMtx,defer_lock);
-	unique_lock  rtLock( rtr->rtMtx,defer_lock);
-	lock(iftLock, ltLock, cttLock, rtrLock);
+	unique_lock<mutex> iftLock(rtr->iftMtx,defer_lock);
+	unique_lock<mutex>  ltLock( rtr->ltMtx,defer_lock);
+	unique_lock<mutex> cttLock(rtr->cttMtx,defer_lock);
+	unique_lock<mutex>  rtLock( rtr->rtMtx,defer_lock);
+	lock(iftLock, ltLock, cttLock, rtLock);
 
-	if (lnk == 0) lnk = rtr->lt->lookup(peerAdr);
+	if (lnk == 0) lnk = lt->lookup(peerAdr);
 
 	// remove all routes for all comtrees that use this link
-	Dlist comtList = rtr->ctt->getComtList(lnk);
-	for (int ctx = comtList.first(); ctx != 0; ctx = comtList.next()) {
-		rtr->lt->purge(rtr->ctt->getComtree(ctx),
-				rtr->ctt->getClnkNum(ctx,lnk));
+	const Dlist& comtList = ctt->getComtList(lnk);
+	for (int ctx = comtList.first(); ctx != 0; ctx = comtList.next(ctx)) {
+		rt->purge(ctt->getComtree(ctx), ctt->getClnkNum(ctx,lnk));
 	}
 	// now remove the link from all comtrees that it
 	// this may remove some comtrees as well
-	rtr->ctt->purgeLink(lnk);
+	ctt->purgeLink(lnk);
 
 	// now update the interface's ratespec and free the peer's address
-	LinkTable::Entry&  lte = rtr->lt->getEntry(lnk);
-	IfaceTable::Entry& ifte = rtr->ift->getEntry(lte.iface);
+	LinkTable::Entry&  lte = lt->getEntry(lnk);
+	IfaceTable::Entry& ifte = ift->getEntry(lte.iface);
 	ifte.availRates.add(lte.rates);
-	freeLeafAdr(lte.peerAdr); // ignores addresses outside leaf adr range
+	rtr->freeLeafAdr(lte.peerAdr); // ignores addrs outside leaf adr range
 
 	// and finally, remove the link from the link table
-	rtr->lt->removeEntry(lnk);
+	lt->removeEntry(lnk);
 	cp.fmtDropLinkReply();
 }
 
@@ -384,14 +387,15 @@ void RouterControl::getLink(CtlPkt& cp) {
 	if (!cp.xtrGetLink(lnk)) { 
 		cp.fmtError("unable to unpack control packet"); return;
 	}
-	unique_lock ltLock(rtr->ltMtx);
-	if (rtr->lt->valid(lnk)) {
-		cp.fmtGetLinkReply(lnk, lte.iface, lte.peerIp, lte.peerPort,
-				   lte.peerType, lte.peerAdr, lte.rates,
+	unique_lock<mutex> ltLock(rtr->ltMtx);
+	if (lt->valid(lnk)) {
+		LinkTable::Entry& lte = lt->getEntry(lnk);
+		cp.fmtGetLinkReply(lnk, lte.iface, lte.peerType, lte.peerIp,
+				   lte.peerPort, lte.peerAdr, lte.rates,
 				   lte.availRates);
 		return;
 	} 
-	cp.fmtError("get link: invalid link number";
+	cp.fmtError("get link: invalid link number");
 	return;
 }
 
@@ -407,28 +411,27 @@ void RouterControl::getLink(CtlPkt& cp) {
  */
 void RouterControl::getLinkSet(CtlPkt& cp) {
 	int lnk, count;
-	xtrGetLinkSet(lnk,count);
+	cp.xtrGetLinkSet(lnk,count);
 
-	unique_lock ltLock(rtr->ltMtx);
-	if (lnk == 0) lnk = rtr->lt->firstLink(); // 0 means start with first
-	else if (!rtr->lt->valid(lnk)) {
-		cp.fmtError("get link set: invalid link number";
+	unique_lock<mutex> ltLock(rtr->ltMtx);
+	if (lnk == 0) lnk = lt->firstLink(); // 0 means start with first
+	else if (!lt->valid(lnk)) {
+		cp.fmtError("get link set: invalid link number");
 		return;
 	}
 	count = min(10,count);
 	int i = 0;
 	string s;
 	while (i < count && lnk != 0) {
-		rcp.stringData.append(to_string(lnk) + " ");
-		rcp.stringData.append(rtr->lt->link2string(lnk) + "\n");
-		if (rcp.stringData.length() > 1300) {
+		s.append(to_string(lnk) + " " + lt->link2string(lnk) + "\n");
+		if (s.length() > 1300) {
 			cp.fmtError( "get link set: error while formatting "
-					"reply";
+					"reply");
 			return;
 		}
-		i++; lnk = rtr->lt->nextLink(lnk);
+		i++; lnk = lt->nextLink(lnk);
 	}
-	cp.fmtGetLinkSetReply(count, lnk);
+	cp.fmtGetLinkSetReply(count, lnk, s);
 	return;
 }
 
@@ -438,29 +441,28 @@ void RouterControl::modLink(CtlPkt& cp) {
 		cp.fmtError("unable to unpack control packet"); return;
 	}
 
-	unique_lock iftLock(rtr->iftMtx,defer_lock);
-	unique_lock ltLock(rtr->ltMtx,defer_lock);
+	unique_lock<mutex> iftLock(rtr->iftMtx,defer_lock);
+	unique_lock<mutex> ltLock(rtr->ltMtx,defer_lock);
 	lock(iftLock, ltLock);
 
-	if (!rtr->lt->valid(lnk)) {
-		cp.fmtError("get link: invalid link number";
+	if (!lt->valid(lnk)) {
+		cp.fmtError("get link: invalid link number");
 		return;
 	}
-	LinkTable::Entry& lte = rtr->lt->getEntry(lnk);
-	IfaceTable::Entry& ifte = rtr->ift->getEntry(lte.iface);
+	LinkTable::Entry& lte = lt->getEntry(lnk);
+	IfaceTable::Entry& ifte = ift->getEntry(lte.iface);
 	RateSpec delta = rates;
 	delta.subtract(lte.rates);
 	if (!delta.leq(ifte.availRates)) {
-		string s;
-		cp.fmtError("mod link: request " + rates.toString(s) +
-			"exceeds interface capacity";
+		cp.fmtError("mod link: request " + rates.toString() +
+			"exceeds interface capacity");
 		return;
 	}
 	ifte.availRates.subtract(delta);
 	lte.rates = rates;
 	lte.availRates.add(delta);
 	rtr->qm->setLinkRates(lnk,rates);
-	cp.fmtModLinkReply():
+	cp.fmtModLinkReply();
 	return;
 }
 
@@ -470,12 +472,12 @@ void RouterControl::addComtree(CtlPkt& cp) {
 		cp.fmtError("unable to unpack control packet"); return;
 	}
 
-	unique_lock cttLock(rtr->cttMtx);
-	if(rtr->ctt->validComtree(comt) || rtr->ctt->addEntry(comt) != 0) {
+	unique_lock<mutex> cttLock(rtr->cttMtx);
+	if(ctt->validComtree(comt) || ctt->addEntry(comt) != 0) {
 		cp.fmtAddComtreeReply();
 		return;
 	}
-	cp.fmtError("add comtree: cannot add comtree";
+	cp.fmtError("add comtree: cannot add comtree");
 	return;
 }
 
@@ -485,40 +487,38 @@ void RouterControl::dropComtree(CtlPkt& cp) {
 		cp.fmtError("unable to unpack control packet"); return;
 	}
 
-	unique_lock ltLock(rtr->ltMtx,defer_lock);
-	unique_lock cttLock(rtr->cttMtx,defer_lock);
-	unique_lock rtLock(rtr->rtMtx,defer_lock);
+	unique_lock<mutex> ltLock(rtr->ltMtx,defer_lock);
+	unique_lock<mutex> cttLock(rtr->cttMtx,defer_lock);
+	unique_lock<mutex> rtLock(rtr->rtMtx,defer_lock);
 	lock(ltLock, cttLock, rtLock);
 
-	int ctx = rtr->ctt->getComtIndex(comt);
+	int ctx = ctt->getComtIndex(comt);
 	if (ctx == 0) {
-		cp.fmtError("dropComtree: no such comtree";
+		cp.fmtError("dropComtree: no such comtree");
 		return;
 	}
-	ComtreeTable::Entry& cte = rtr->ctt->getEntry(ctx);
-	int plink = cte.pLnk;
-
-	int cLnk = rtr->ctt->firstComtLink(ctx);
+	ComtreeTable::Entry& cte = ctt->getEntry(ctx);
+	int cLnk = ctt->firstComtLink(ctx);
 	RateSpec pRates;
 	while (cLnk != 0) {
 		// remove all routes involving this comtree
-		rtr->lt->purge(comt,cLnk);
+		rt->purge(comt,cLnk);
 
 		// return assigned link bandwidth to link
-		int lnk = rtr->ctt->getLink(ctx,cLnk);
-		RouteTable::entry& lte = rtr->lt->getEntry(lnk);
-		lte.availRates.add(cte.rates);
+		int lnk = ctt->getLink(ctx,cLnk);
+		LinkTable::Entry& lte = lt->getEntry(lnk);
+		lte.availRates.add(ctt->getRates(ctx,cLnk));
 		
 		// return availRates on parent link
 		if (lnk == cte.pLnk) pRates = lte.availRates;
 
 		// de-allocate queue
-		qm->freeQ(rtr->ctt->getLinkQ(cLnk));
+		qm->freeQ(ctt->getClnkQ(ctx,cLnk));
 		
-		rtr->ctt->removeLink(ctx,cLnk);
-		cLnk = rtr->ctt->firstComtLink(ctx);
+		ctt->removeLink(ctx,cLnk);
+		cLnk = ctt->firstComtLink(ctx);
 	}
-	rtr->ctt->removeEntry(ctx); // and finally drop entry in comtree table
+	ctt->removeEntry(ctx); // and finally drop entry in comtree table
 	cp.fmtDropComtreeReply(pRates);
 	return;
 }
@@ -529,48 +529,48 @@ void RouterControl::getComtree(CtlPkt& cp) {
 		cp.fmtError("unable to unpack control packet"); return;
 	}
 
-	unique_lock cttLock(rtr->cttMtx);
-	int ctx = rtr->ctt->getComtIndex(comt);
+	unique_lock<mutex> cttLock(rtr->cttMtx);
+	int ctx = ctt->getComtIndex(comt);
 	if (ctx == 0) {
-		cp.fmtError("get comtree: invalid comtree";
+		cp.fmtError("get comtree: invalid comtree");
 		return;
 	}
-	ComtreeTable::Entry& cte = rtr->ctt->getEntry(ctx);
+	ComtreeTable::Entry& cte = ctt->getEntry(ctx);
 	cp.fmtGetComtreeReply(comt, cte.coreFlag, cte.pLnk,
-				rtr->ctt->getLinkCount(ctx));
+				ctt->getLinkCount(ctx));
 	return;
 }
 
 void RouterControl::modComtree(CtlPkt& cp) {
-	comt_t comt, int coreFlag, int plnk;
+	comt_t comt; int coreFlag; int plnk;
 	if (!cp.xtrModComtree(comt, coreFlag, plnk)) { 
 		cp.fmtError("unable to unpack control packet"); return;
 	}
-	unique_lock cttLock(rtr->cttMtx);
+	unique_lock<mutex> cttLock(rtr->cttMtx);
 
-	int ctx = rtr->ctt->getComtIndex(comt);
+	int ctx = ctt->getComtIndex(comt);
 	if (ctx != 0) {
-		ComtreeTable::Entry& cte = rtr->ctt->getEntry(ctx);
+		ComtreeTable::Entry& cte = ctt->getEntry(ctx);
 		if (coreFlag >= 0)
 			cte.coreFlag = coreFlag;
-		if (cp.link != 0) {
-			if (plnk != 0 && !rtr->ctt->isLink(ctx,plnk)) {
+		if (plnk != 0) {
+			if (plnk != 0 && !ctt->isLink(ctx,plnk)) {
 				cp.fmtError("specified link does "
-						"not belong to comtree";
+						"not belong to comtree");
 				return;
 			}
-			if (plnk != 0 && !rtr->ctt->isRtrLink(ctx,plnk)) {
+			if (plnk != 0 && !ctt->isRtrLink(ctx,plnk)) {
 				cp.fmtError("specified link does "
-						"not connect to a router";
+						"not connect to a router");
 				return;
 			}
 			cte.pLnk = plnk;
-			cte.pClnk = rtr->ctt->getClnkNum(comt,plnk);
+			cte.pClnk = ctt->getClnkNum(comt,plnk);
 		}
 		cp.fmtModComtreeReply();
 		return;
 	} 
-	cp.fmtError("modify comtree: invalid comtree";
+	cp.fmtError("modify comtree: invalid comtree");
 	return;
 }
 
@@ -590,102 +590,102 @@ void RouterControl::getComtreeSet(CtlPkt& cp) {
 		cp.fmtError("unable to unpack control packet"); return;
 	}
 
-	unique_lock cttLock(rtr->cttMtx);
+	unique_lock<mutex> cttLock(rtr->cttMtx);
 	int ctx;
 	if (comt == 0) // 0 means first
-		ctx = rtr->ctt->firstComtIndex();
+		ctx = ctt->firstComt();
 	else
-		ctx = rtr->ctt->getComtIndex(comt);
+		ctx = ctt->getComtIndex(comt);
 	if (ctx == 0) {
-		cp.fmtError("get comtree set: invalid comtree number";
+		cp.fmtError("get comtree set: invalid comtree number");
 		return;
 	}
 	count = min(10,count);
 	int i = 0;
+	string s;
 	while (i < count && ctx != 0) {
-		rcp.stringData.append(rtr->ctt->entry2string(ctx));
-		if (rcp.stringData.length() > 1300) {
+		s.append(ctt->entry2string(ctx));
+		if (s.length() > 1300) {
 			cp.fmtError( "get comtee set: error while formatting "
-					"reply";
+					"reply");
 			return;
 		}
-		i++; ctx = rtr->ctt->nextComtIndex(ctx);
+		i++; ctx = ctt->nextComt(ctx);
 	}
-	cp.fmtGetComtreeSetReply(i, ctx == 0 ? 0 : rtr->ctt->getComtree(ctx));
+	cp.fmtGetComtreeSetReply(i, ctx == 0 ? 0 : ctt->getComtree(ctx), s);
 	return;
 }
 
 void RouterControl::addComtreeLink(CtlPkt& cp) {
 	comt_t comt; int lnk, coreFlag; ipa_t peerIp; ipp_t peerPort;
 	fAdr_t peerAdr;
-	xtrAddComtreeLink(comt,lnk,coreFlag,peerIp,peerPort,peerAdr);
+	cp.xtrAddComtreeLink(comt,lnk,coreFlag,peerIp,peerPort,peerAdr);
 
-	unique_lock  ltLock(rtr->ltMtx,defer_lock);
-	unique_lock cttLock(rtr->cttMtx,defer_lock);
-	unique_lock  rtLock(rtr->rtMtx,defer_lock);
+	unique_lock<mutex>  ltLock(rtr->ltMtx,defer_lock);
+	unique_lock<mutex> cttLock(rtr->cttMtx,defer_lock);
+	unique_lock<mutex>  rtLock(rtr->rtMtx,defer_lock);
 	lock(ltLock, cttLock, rtLock);
-	int ctx = rtr->ctt->getComtIndex(comt);
+	int ctx = ctt->getComtIndex(comt);
 	if (ctx == 0) {
-		cp.fmtError("add comtree link: invalid comtree";
+		cp.fmtError("add comtree link: invalid comtree");
 		return;
 	}
-	if (lnk == 0 && cp.ip1 != 0 && cp.port1 != 0) {
-		lnk = rtr->lt->lookup(cp.ip1, cp.port1);
+	if (lnk == 0 && peerIp != 0 && peerPort != 0) {
+		lnk = lt->lookup(peerIp, peerPort);
 	} else if (lnk == 0 && peerAdr != 0) {
-		lnk = rtr->lt->lookup(peerAdr);
+		lnk = lt->lookup(peerAdr);
 	}
-	if (!rtr->lt->valid(lnk)) {
+	if (!lt->valid(lnk)) {
 		cp.fmtError("add comtree link: invalid link or "
-					"peer IP and port";
+					"peer IP and port");
 		return;
 	}
-	LinkTable::Entry& rte = rtr->lt->getEntry(lnk);
-	ComtreeTable::Entry& cte = rtr->ctt->getEntry(ctx);
+	LinkTable::Entry& lte = lt->getEntry(lnk);
 	bool isRtr = false;
 	if (lte.peerType == Forest::ROUTER) {
 		isRtr = true;
 		if (!coreFlag) {
 			cp.fmtError("add comtree link: must specify "
-					"core flag on links to routers";
+					"core flag on links to routers");
 			return;
 		}
 	}
-	int cLnk = rtr->ctt->getClnkNum(comt,lnk);
+	int cLnk = ctt->getClnkNum(comt,lnk);
 	if (cLnk != 0) {
 		cp.fmtError("addComtreeLink: specified "
-			       "link already in comtree";
+			       "link already in comtree");
 		return;
 	}
 	// define new comtree link
-	if (!rtr->ctt->addLink(ctx,lnk,isRtr,coreFlag)) {
+	if (!ctt->addLink(ctx,lnk,isRtr,coreFlag)) {
 		cp.fmtError("add comtree link: cannot add "
-				"requested comtree link";
+				"requested comtree link");
 		return;
 	}
-	cLnk = rtr->ctt->getClnkNum(comt,lnk);
-	ComtreeTable::ClnkInfo& cli = rtr->ctt->getClinkInfo(ctx,cLnk);
+	cLnk = ctt->getClnkNum(comt,lnk);
+	ComtreeTable::ClnkInfo& cli = ctt->getClnkInfo(ctx,cLnk);
 	cli.dest = 0;
 
 	// add unicast route to cLnk if peer is a leaf or a router
 	// in a different zip code
 	if (lte.peerType != Forest::ROUTER) {
-		int rtx = rtr->rt->getRtx(comt,peerAdr);
-		if (rtx == 0) rtr->rt->addEntry(comt,lte.peerAdr,cLnk);
+		int rtx = rt->getRtx(comt,peerAdr);
+		if (rtx == 0) rt->addRoute(comt,lte.peerAdr,cLnk);
 	} else {
 		int zipPeer = Forest::zipCode(lte.peerAdr);
-		if (zipPeer != Forest::zipCode(myAdr)) {
+		if (zipPeer != Forest::zipCode(rtr->myAdr)) {
 			fAdr_t dest = Forest::forestAdr(zipPeer,0);
-			int rtx = rtr->rt->getRtx(comt,dest);
-			if (rtx == 0) rtr->rt->addEntry(comt,dest,cLnk);
+			int rtx = rt->getRtx(comt,dest);
+			if (rtx == 0) rt->addRoute(comt,dest,cLnk);
 		}
 	}
 
 	// allocate queue and bind it to lnk and comtree link
 	int qid = qm->allocQ(lnk);
 	if (qid == 0) {
-		rtr->ctt->removeLink(ctx,cLnk);
+		ctt->removeLink(ctx,cLnk);
 		cp.fmtError("add comtree link: no queues "
-					"available for link";
+					"available for link");
 		return;
 	}
 	cli.qnum = qid;
@@ -695,7 +695,7 @@ void RouterControl::addComtreeLink(CtlPkt& cp) {
 		    	  Forest::MINPKTRATE,Forest::MINPKTRATE);
 	if (!minRates.leq(lte.availRates)) {
 		cp.fmtError("add comtree link: request "
-			       "exceeds link capacity";
+			       "exceeds link capacity");
 		return;
 	}
 	lte.availRates.subtract(minRates);
@@ -711,84 +711,83 @@ void RouterControl::addComtreeLink(CtlPkt& cp) {
 
 void RouterControl::dropComtreeLink(CtlPkt& cp) {
 	comt_t comt; int lnk; ipa_t peerIp; ipp_t peerPort; fAdr_t peerAdr;
-	xtrDropComtreeLink(comt, lnk, peerIp, peerPort, peerAdr);
+	cp.xtrDropComtreeLink(comt, lnk, peerIp, peerPort, peerAdr);
 
-	unique_lock  ltLock(rtr->ltMtx,defer_lock);
-	unique_lock cttLock(rtr->cttMtx,defer_lock);
-	unique_lock  rtLock(rtr->rtMtx,defer_lock);
+	unique_lock<mutex>  ltLock(rtr->ltMtx,defer_lock);
+	unique_lock<mutex> cttLock(rtr->cttMtx,defer_lock);
+	unique_lock<mutex>  rtLock(rtr->rtMtx,defer_lock);
 	lock(ltLock, cttLock, rtLock);
-	int ctx = rtr->ctt->getComtIndex(comt);
+	int ctx = ctt->getComtIndex(comt);
 	if (ctx == 0) {
-		cp.fmtError("drop comtree link: invalid comtree";
+		cp.fmtError("drop comtree link: invalid comtree");
 		return;
 	}
-	if (lnk == 0 && cp.ip1 != 0 && cp.port1 != 0) {
-		lnk = rtr->lt->lookup(cp.ip1, cp.port1);
+	if (lnk == 0 && peerIp != 0 && peerPort != 0) {
+		lnk = lt->lookup(peerIp, peerPort);
 	} else if (lnk == 0 && peerAdr != 0) {
-		lnk = rtr->lt->lookup(cp.adr1);
+		lnk = lt->lookup(peerAdr);
 	}
-	if (!rtr->lt->valid(lnk)) {
+	if (!lt->valid(lnk)) {
 		cp.fmtError("drop comtree link: invalid link "
-			       "or peer IP and port";
+			       "or peer IP and port");
 		return;
 	}
-	LinkTable::Entry& lte = rtr->lt->getEntry(lnk);
-	int cLnk = rtr->ctt->getComtLink(comt,lnk);
+	LinkTable::Entry& lte = lt->getEntry(lnk);
+	int cLnk = ctt->getLink(comt,lnk);
 	if (cLnk != 0) {
 		// remove all routes involving this comtree
-		rtr->lt->purge(comt,cLnk);
+		rt->purge(comt,cLnk);
 
 		// return assigned link bandwidth to link
-		ComtreeTable::ClnkInfo& cli = rtr->ctt->getClnkInfo(ctx,cLnk);
+		ComtreeTable::ClnkInfo& cli = ctt->getClnkInfo(ctx,cLnk);
 		lte.availRates.add(cli.rates);
 		
 		// de-allocate queue
 		qm->freeQ(cli.qnum);
 		
-		rtr->ctt->removeLink(ctx,cLnk);
+		ctt->removeLink(ctx,cLnk);
 	}
 	cp.fmtDropComtreeLinkReply(lte.availRates);
 	return;
 }
 
 void RouterControl::modComtreeLink(CtlPkt& cp) {
-	comt_t comt; int lnk; RateSpec rates;
-	if (!cp.xtrModComtreeLink(comt,lnk,rates)) { 
+	comt_t comt; int lnk; RateSpec rates; fAdr_t dest;
+	if (!cp.xtrModComtreeLink(comt,lnk,rates,dest)) { 
 		cp.fmtError("unable to unpack control packet"); return;
 	}
 
-	unique_lock  ltLock(rtr->ltMtx,defer_lock);
-	unique_lock cttLock(rtr->cttMtx,defer_lock);
+	unique_lock<mutex>  ltLock(rtr->ltMtx,defer_lock);
+	unique_lock<mutex> cttLock(rtr->cttMtx,defer_lock);
 	lock(ltLock, cttLock);
-	int ctx = rtr->ctt->getComtIndex(comt);
+	int ctx = ctt->getComtIndex(comt);
 	if (ctx == 0) {
-		cp.fmtError("modify comtree link: invalid comtree";
+		cp.fmtError("modify comtree link: invalid comtree");
 		return;
 	}
-	if (!rtr->lt->valid(lnk)) {
-		cp.fmtError("modify comtree link: invalid link number";
+	if (!lt->valid(lnk)) {
+		cp.fmtError("modify comtree link: invalid link number");
 		return;
 	}
-	int cLnk = rtr->ctt->getComtLink(comt,lnk);
+	int cLnk = ctt->getLink(comt,lnk);
 	if (cLnk == 0) {
 		cp.fmtError("modify comtree link: specified link "
-			       "not defined in specified comtree";
+			       "not defined in specified comtree");
 		return;
 	}
-	LinkTable::Entry& lte = rtr->lt->getEntry(lnk);
-	ComtreeTable::Entry& ctte = rtr->ctt->getEntry(ctx);
-	ComtreeTable::ClnkInfo& cli = rtr->ctt->getClnkInfo(ctx,cLnk);
+	LinkTable::Entry& lte = lt->getEntry(lnk);
+	ComtreeTable::ClnkInfo& cli = ctt->getClnkInfo(ctx,cLnk);
 
 	cli.dest = dest;
 	RateSpec diff = rates; diff.subtract(cli.rates);
 	if (!diff.leq(lte.availRates)) {
 		cp.fmtError("modify comtree link: new rate spec "
-				"exceeds available link capacity";
+				"exceeds available link capacity");
 		return;
 	}
 	lte.availRates.subtract(diff);
 	cli.rates = rates;
-	cp.fmtModComtreeLink(lte.availRates); // return available rate on link
+	cp.fmtModComtreeLinkReply(lte.availRates); // return avail rate on link
 	return;
 }
 
@@ -798,26 +797,26 @@ void RouterControl::getComtreeLink(CtlPkt& cp) {
 		cp.fmtError("unable to unpack control packet"); return;
 	}
 
-	unique_lock  ltLock(rtr->ltMtx,defer_lock);
-	unique_lock cttLock(rtr->cttMtx,defer_lock);
+	unique_lock<mutex>  ltLock(rtr->ltMtx,defer_lock);
+	unique_lock<mutex> cttLock(rtr->cttMtx,defer_lock);
 	lock(ltLock, cttLock);
-	int ctx = rtr->ctt->getComtIndex(comt);
+	int ctx = ctt->getComtIndex(comt);
 	if (ctx == 0) {
-		cp.fmtError("get comtree link: invalid comtree";
+		cp.fmtError("get comtree link: invalid comtree");
 		return;
 	}
-	if (!rtr->lt->valid(lnk)) {
-		cp.fmtError("get comtree link: invalid link number";
+	if (!lt->valid(lnk)) {
+		cp.fmtError("get comtree link: invalid link number");
 		return;
 	}
-	int cLnk = rtr->ctt->getClnkNum(comt,lnk);
+	int cLnk = ctt->getClnkNum(comt,lnk);
 	if (cLnk == 0) {
 		cp.fmtError("getComtreeLink: specified link "
-			  	"not defined in specified comtree";
+			  	"not defined in specified comtree");
 		return;
 	}
-	ComtreeTable::ClnkInfo& cli = rtr->ctt->getClnkInfo(ctx,cLnk);
-	cp.fmtGetComtreeLinkReply(comt,lnk,cli.rates,qid,cli.dest);
+	ComtreeTable::ClnkInfo& cli = ctt->getClnkInfo(ctx,cLnk);
+	cp.fmtGetComtreeLinkReply(comt, lnk, cli.rates, cli.qnum, cli.dest);
 	return;
 }
 
@@ -827,28 +826,28 @@ void RouterControl::addRoute(CtlPkt& cp) {
 		cp.fmtError("unable to unpack control packet"); return;
 	}
 
-	unique_lock cttLock(rtr->cttMtx,defer_lock);
-	unique_lock  rtLock(rtr->rtMtx,defer_lock);
+	unique_lock<mutex> cttLock(rtr->cttMtx,defer_lock);
+	unique_lock<mutex>  rtLock(rtr->rtMtx,defer_lock);
 	lock(cttLock, rtLock);
-	if (!rtr->ctt->validComtree(comt)) {
-		cp.fmtError("comtree not defined at this router\n";
+	if (!ctt->validComtree(comt)) {
+		cp.fmtError("comtree not defined at this router\n");
 		return;
 	}
 	if (!Forest::validUcastAdr(destAdr) && !Forest::mcastAdr(destAdr)) {
-		cp.fmtError("invalid address\n";
+		cp.fmtError("invalid address\n");
 		return;
 	}
-	int cLnk = rtr->ctt->getComtLink(comt,lnk);
-	int rtx = rtr->rt->getRteIndex(comt,destAdr);
+	int cLnk = ctt->getClnkNum(comt,lnk);
+	int rtx = rt->getRtx(comt,destAdr);
 	if (rtx != 0) {
 		cp.fmtError("add route: requested route "
-			        "conflicts with existing route";
+			        "conflicts with existing route");
 		return;
-	} else if (rtr->rt->addEntry(comt, destAdr, lnk)) {
+	} else if (rt->addRoute(comt, destAdr, cLnk)) {
 		cp.fmtAddRouteReply();
 		return;
 	}
-	cp.fmtError("add route: cannot add route";
+	cp.fmtError("add route: cannot add route");
 	return;
 }
 
@@ -858,18 +857,18 @@ void RouterControl::dropRoute(CtlPkt& cp) {
 		cp.fmtError("unable to unpack control packet"); return;
 	}
 
-	unique_lock cttLock(rtr->cttMtx,defer_lock);
-	unique_lock  rtLock(rtr->rtMtx,defer_lock);
+	unique_lock<mutex> cttLock(rtr->cttMtx,defer_lock);
+	unique_lock<mutex>  rtLock(rtr->rtMtx,defer_lock);
 	lock(cttLock, rtLock);
-	if (!rtr->ctt->validComtree(comt)) {
-		cp.fmtError("comtree not defined at this router\n";
+	if (!ctt->validComtree(comt)) {
+		cp.fmtError("comtree not defined at this router\n");
 		return;
 	}
 	if (!Forest::validUcastAdr(destAdr) && !Forest::mcastAdr(destAdr)) {
-		cp.fmtError("invalid address\n";
+		cp.fmtError("invalid address\n");
 		return;
 	}
-	rtr->rt->removeEntry(rtr->rt->getRtx(comt,destAdr));
+	rt->removeRoute(rt->getRtx(comt,destAdr));
 	cp.fmtDropRouteReply();
 	return;
 }
@@ -880,25 +879,26 @@ void RouterControl::getRoute(CtlPkt& cp) {
 		cp.fmtError("unable to unpack control packet"); return;
 	}
 
-	unique_lock cttLock(rtr->cttMtx,defer_lock);
-	unique_lock  rtLock(rtr->rtMtx,defer_lock);
+	unique_lock<mutex> cttLock(rtr->cttMtx,defer_lock);
+	unique_lock<mutex>  rtLock(rtr->rtMtx,defer_lock);
 	lock(cttLock, rtLock);
-	if (!rtr->ctt->validComtree(comt)) {
-		cp.fmtError("comtree not defined at this router\n";
+	int ctx = ctt->getComtIndex(comt);
+	if (ctx == 0) {
+		cp.fmtError("comtree not defined at this router\n");
 		return;
 	}
 	if (!Forest::validUcastAdr(destAdr) && !Forest::mcastAdr(destAdr)) {
-		cp.fmtError("invalid address\n";
+		cp.fmtError("invalid address\n");
 		return;
 	}
-	int rtx = rtr->rt->getRtx(comt,destAdr);
+	int rtx = rt->getRtx(comt,destAdr);
 	if (rtx != 0) {
 		int lnk = (Forest::validUcastAdr(destAdr) ?
-			   rtr->ctt->getLink(rtr->rt->firstComtLink(rtx)) : 0);
-		cp.fmtGetRoute(comt,destAdr,lnk,rtr->rt->getLinkCount(rtx));
+			   ctt->getLink(ctx,rt->firstComtLink(rtx)) : 0);
+		cp.fmtGetRouteReply(comt,destAdr,lnk,rt->getLinkCount(rtx));
 		return;
 	}
-	cp.fmtError("get route: no route for specified address";
+	cp.fmtError("get route: no route for specified address");
 	return;
 }
         
@@ -908,31 +908,31 @@ void RouterControl::modRoute(CtlPkt& cp) {
 		cp.fmtError("unable to unpack control packet"); return;
 	}
 
-	unique_lock cttLock(rtr->cttMtx,defer_lock);
-	unique_lock  rtLock(rtr->rtMtx,defer_lock);
+	unique_lock<mutex> cttLock(rtr->cttMtx,defer_lock);
+	unique_lock<mutex>  rtLock(rtr->rtMtx,defer_lock);
 	lock(cttLock, rtLock);
-	if (!rtr->ctt->validComtree(comt)) {
-		cp.fmtError("comtree not defined at this router\n";
+	if (!ctt->validComtree(comt)) {
+		cp.fmtError("comtree not defined at this router\n");
 		return;
 	}
 	if (!Forest::validUcastAdr(destAdr) && !Forest::mcastAdr(destAdr)) {
-		cp.fmtError("invalid address\n";
+		cp.fmtError("invalid address\n");
 		return;
 	}
-	int rtx = rtr->rt->getRtx(comt,destAdr);
+	int rtx = rt->getRtx(comt,destAdr);
 	if (rtx != 0) {
-		if (cp.link != 0) {
+		if (lnk != 0) {
 			if (Forest::mcastAdr(destAdr)) {
 				cp.fmtError("modify route: cannot "
-					    "set link in multicast route";
+					    "set link in multicast route");
 				return;
 			}
-			rtr->rt->setLink(rtx,cp.link);
+			rt->setLink(rtx,lnk);
 		}
 		cp.fmtReply();
 		return;
 	}
-	cp.fmtError("modify route: invalid route";
+	cp.fmtError("modify route: invalid route");
 	return;
 }
 
@@ -948,30 +948,31 @@ void RouterControl::modRoute(CtlPkt& cp) {
  */
 void RouterControl::getRouteSet(CtlPkt& cp) {
 	int rtx, count;
-	xtrGetRouteSet(rtx, count);
+	cp.xtrGetRouteSet(rtx, count);
 
-	unique_lock cttLock(rtr->cttMtx,defer_lock);
-	unique_lock  rtLock(rtr->rtMtx,defer_lock);
+	unique_lock<mutex> cttLock(rtr->cttMtx,defer_lock);
+	unique_lock<mutex>  rtLock(rtr->rtMtx,defer_lock);
 	lock(cttLock, rtLock);
 // think about re-doing this to use (comt,dest) pairs rather than rtx values
 	if (rtx == 0) {
-		rtx = rtr->rt->firstRtx(); // 0 means first route
-	} else if (!rtr->rt->validRtx(rtx)) {
-		cp.fmtError("get route set: invalid route number";
+		rtx = rt->firstRtx(); // 0 means first route
+	} else if (!rt->validRtx(rtx)) {
+		cp.fmtError("get route set: invalid route number");
 		return;
 	}
 	count = min(10,count);
 	int i = 0;
+	string s;
 	while (i < count && rtx != 0) {
-		rcp.stringData.append(rtr->rt->entry2string(rtx)); 
-		if (rcp.stringData.length() > 1300) {
+		s.append(rt->entry2string(rtx)); 
+		if (s.length() > 1300) {
 			cp.fmtError( "get route set: error while formatting "
-					"reply";
+					"reply");
 			return;
 		}
-		i++; rtx = rtr->rt->nextRtx(rIndex);
+		i++; rtx = rt->nextRtx(rtx);
 	}
-	cp.fmtGetRouteSetReply(count, rtx);
+	cp.fmtGetRouteSetReply(count, rtx, s);
 	return;
 }
 
@@ -992,7 +993,7 @@ void RouterControl::addFilter(CtlPkt& cp) {
 
 	fltx fx = pktLog->addFilter();
 	if (fx == 0) {
-		cp.fmtError("add filter: cannot add filter";
+		cp.fmtError("add filter: cannot add filter");
 		return;
 	}
 	cp.fmtAddFilterReply(fx);
@@ -1016,11 +1017,11 @@ void RouterControl::getFilter(CtlPkt& cp) {
 	}
 
 	if (!pktLog->validFilter(fx)) {
-		cp.fmtError("get filter: invalid filter index";
+		cp.fmtError("get filter: invalid filter index");
 		return;
 	}
-	PacketFilter& f = pktLog->getFilter(fx);
-	cp.fmtGetFilterReply(f.toString);
+	PacketFilter f = pktLog->getFilter(fx);
+	cp.fmtGetFilterReply(f.toString());
 	return;
 }
 
@@ -1030,7 +1031,7 @@ void RouterControl::modFilter(CtlPkt& cp) {
 		cp.fmtError("unable to unpack control packet"); return;
 	}
 	if (!pktLog->validFilter(fx)) {
-		cp.fmtError("mod filter: invalid filter index";
+		cp.fmtError("mod filter: invalid filter index");
 		return;
 	}
 	PacketFilter& f = pktLog->getFilter(fx);
@@ -1058,7 +1059,7 @@ void RouterControl::getFilterSet(CtlPkt& cp) {
 	if (fx == 0) {
 		fx = pktLog->firstFilter(); // 0 means start with first filter
 	} else if (!pktLog->validFilter(fx)) {
-		cp.fmtError("get filter set: invalid filter index";
+		cp.fmtError("get filter set: invalid filter index");
 		return;
 	}
 	count = min(10,count);
@@ -1070,7 +1071,7 @@ void RouterControl::getFilterSet(CtlPkt& cp) {
 
 		if (ss.str().length() > 1300) {
 			cp.fmtError("get filter set: error while "
-					"formatting reply";
+					"formatting reply");
 			return;
 		}
 		i++; fx = pktLog->nextFilter(fx);
@@ -1095,11 +1096,41 @@ void RouterControl::getLoggedPackets(CtlPkt& cp) {
 	return;
 }
 
+/** Enable packet logging.
+ *  @param cp is a reference to a received get logged packets control packet
+ *  @param rcp is a reference to the reply packet with fields to be
+ *  filled in
+ *  @return on success, false on failure
+ */
+void RouterControl::enablePacketLog(CtlPkt& cp) {
+	int en, local;
+	if (!cp.xtrEnablePacketLog(en, local)) { 
+		cp.fmtError("unable to unpack control packet"); return;
+	}
+	pktLog->turnOnLogging(en == 0 ? false : true);
+        pktLog->enableLocalLog(local == 0 ? false : true);
+	cp.fmtReply();
+	return;
+}
+
+/** Handle an incoming set leaf range request from a client.
+ *  @param cp is a reference to the received request packet
+ */
+void RouterControl::setLeafRange(CtlPkt& cp) {
+	fAdr_t first, last;
+	cp.xtrSetLeafRange(first, last);
+	unique_lock<mutex> lck(rtr->ltMtx);
+	if (!rtr->setLeafAdrRange(first, last)) {
+		cp.fmtError("could not set leaf address range"); return;
+	}
+	cp.fmtReply();
+	return;
+}
+
 /** Handle an incoming join request from a client.
  *  @param cp is a reference to the received request packet
  *  @param rcp is a reference to the reply packet with fields to be
  *  filled in
- *  @return on success, false on failure
  */
 void RouterControl::joinComtree(CtlPkt& cp) {
 	// if this client has another op in progress, add request to list

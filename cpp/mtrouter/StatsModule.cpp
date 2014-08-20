@@ -13,7 +13,7 @@ namespace forest {
 
 StatsModule::StatsModule(int maxStats1, int maxLnk1, int maxQ1,
 			 ComtreeTable* ctt1)
-		         : maxStats(maxStats1), maxLnk(maxLnk1), maxQ(maxQ1),
+			 : maxStats(maxStats1), maxLnk(maxLnk1), maxQ(maxQ1),
 			   ctt(ctt1) {
 	stat = new StatItem[maxStats+1];
 	lnkCnts = new LinkCounts[maxLnk+1];
@@ -27,7 +27,7 @@ StatsModule::StatsModule(int maxStats1, int maxLnk1, int maxQ1,
 		qCnts[i].bytLen = qCnts[i].pktLen = 0;
 	}
 	n = 0;
-    totInByte = 0; totInPkt = 0; totDiscards = 0;
+	totInByte = 0; totInPkt = 0; totDiscards = 0;
 	rtrInByte = 0; rtrInPkt = 0; 
 	leafInByte = 0; leafInPkt = 0; 
 	totOutByte = 0; totOutPkt = 0;
@@ -37,22 +37,23 @@ StatsModule::StatsModule(int maxStats1, int maxLnk1, int maxQ1,
 	
 StatsModule::~StatsModule() { delete [] stat; }
 
-void StatsModule::record(uint64_t now) {
 // Record statistics at time now.
+void StatsModule::record(uint64_t now) {
+	unique_lock<mutex> lck(mtx);
 	int i, val, ctx, cLnk, qid;
 
 	val = -1;
 	if (n == 0) return;
 
 	// check for the statsSwitch file
-        string fname = "statsSwitch";
-        ifstream sfs; sfs.open(fname.c_str());
-        string statsSwitch;
-        if (sfs.fail()) return;
-        if (!Util::readWord(sfs,statsSwitch) || statsSwitch != "on") {
-                sfs.close(); return;
+	string fname = "statsSwitch";
+	ifstream sfs; sfs.open(fname.c_str());
+	string statsSwitch;
+	if (sfs.fail()) return;
+	if (!Util::readWord(sfs,statsSwitch) || statsSwitch != "on") {
+				sfs.close(); return;
 	}
-        sfs.close();
+		sfs.close();
 	for (i = 1; i <= n; i++) {
 		StatItem& s = stat[i];
 		switch(s.typ) {
@@ -126,9 +127,9 @@ void StatsModule::record(uint64_t now) {
  *  outPkt L	number of packets sent on output link L
  *   inByt L	number of bytes received on input link L
  *  outByt L	number of bytes sent on output link L
- *    qPkt L C	number of packets for comtree C output link L
- *    qByt L C	number of bytes for comtree C on output link L
- *    disc L C 	number of packets discarded for comtree C on link L
+ *	qPkt L C	number of packets for comtree C output link L
+ *	qByt L C	number of bytes for comtree C on output link L
+ *	disc L C 	number of packets discarded for comtree C on link L
  * 
  *  If inPkt, outPkt, inByt, outByt are given with a link # of 0,
  *  the statistics for the router as a whole are reported. If the
@@ -141,20 +142,21 @@ void StatsModule::record(uint64_t now) {
  *  the link.
  */ 
 bool StatsModule::readStat(istream& in) {
+	// no lock here, caller must acquire lock
 	int lnk, comt;
 	cntrTyp typ; string typStr, fname;
 
 	Util::skipBlank(in);
 	if (!Util::readWord(in,typStr)) return false;
 
-             if (typStr ==  "inPkt") typ = inPkt;
-        else if (typStr == "outPkt") typ = outPkt;
-        else if (typStr ==  "inByt") typ = inByt;
-        else if (typStr == "outByt") typ = outByt;
-        else if (typStr ==   "qPkt") typ = qPkt;
-        else if (typStr ==   "qByt") typ = qByt;
-        else if (typStr ==   "disc") typ = disc;
-        else return false;
+			 if (typStr ==  "inPkt") typ = inPkt;
+		else if (typStr == "outPkt") typ = outPkt;
+		else if (typStr ==  "inByt") typ = inByt;
+		else if (typStr == "outByt") typ = outByt;
+		else if (typStr ==   "qPkt") typ = qPkt;
+		else if (typStr ==   "qByt") typ = qByt;
+		else if (typStr ==   "disc") typ = disc;
+		else return false;
 
 	switch (typ) {
 	case inPkt: case outPkt: case inByt: case outByt:
@@ -183,10 +185,11 @@ bool StatsModule::read(istream& in) {
 // integer, giving the number of items to be read. The input may
 // include blank lines and comment lines (any text starting with '#').
 // Each entry must be on a line by itself (possibly with a trailing comment).
+	unique_lock<mutex> lck(mtx);
 	int num;
  	Util::skipBlank(in);
-        if (!Util::readInt(in,num)) return false;
-        Util::nextLine(in);
+	if (!Util::readInt(in,num)) return false;
+	Util::nextLine(in);
 	while (num--) {
 		if (readStat(in)) return false;
 	}
@@ -201,6 +204,7 @@ bool StatsModule::read(istream& in) {
  *  @return the string
  */
 string StatsModule::stat2string(int i) const {
+	// no lock here - caller must acquire lock
 	stringstream ss;
 	StatItem& si = stat[i];
 	switch(si.typ) {
@@ -236,7 +240,8 @@ string StatsModule::stat2string(int i) const {
  *  @param s is a reference to a string in which the result is returned
  *  @return a reference to s
  */
-string StatsModule::toString() const {
+string StatsModule::toString() {
+	unique_lock<mutex> lck(mtx);
 	string s;
 	for (int i = 1; i <= n; i++) s += stat2string(i);
 	return s;

@@ -109,6 +109,35 @@ bool LinkTable::checkEntry(int lnk) {
 	return true;
 }
 
+/** Remap an entry added earlier using a nonce.
+ *  This modifies the entry so it can be looked up using the
+ *  peer's (ip,port) pair.
+ *  @param peerIp is the IP address of this link's peer
+ *  @param peerPort is the port number of this link's peer
+ *  @return true on success, false on failure
+ */
+bool LinkTable::remapEntry(int lnk, ipa_t peerIp, ipp_t peerPort) {
+	if (!valid(lnk)) return false;
+	Entry lte = getEntry(lnk);
+	if (map->getKey(lnk) != lte.nonce) return false;
+	if (!map->rekey(lnk,hashkey(peerIp,peerPort))) return false;
+	lte.peerIp = peerIp; lte.peerPort = peerPort;
+        return true;
+}
+
+/** Revert an entry that was remapped earlier.
+ *  This modifies the entry so it can be looked up using the nonce.
+ *  @return true on success, false on failure
+ */
+bool LinkTable::revertEntry(int lnk) {
+	if (!valid(lnk)) return false;
+	Entry lte = getEntry(lnk);
+	if (map->getKey(lnk) != hashkey(lte.peerIp, lte.peerPort)) return false;
+	if (!map->rekey(lnk,lte.nonce)) return false;
+	lte.peerIp = lte.peerPort = 0;
+        return true;
+}
+
 /** Read an entry from an input stream and store it in the link table.
  *  Each entry must be on its own line, possibly followed by a comment.
  *  A comment begins with a # sign and continues to the end of the link.
