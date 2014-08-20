@@ -158,7 +158,7 @@ bool LinkTable::revertEntry(int lnk) {
 int LinkTable::readEntry(istream& in) {
 	int lnk, iface; RateSpec rs;
 	ipa_t peerIp; int peerPort;
-	Forest::ntyp_t peerType; int peerAdr;
+	Forest::ntyp_t peerType; int peerAdr; uint64_t nonce;
 	string typStr;
 
 	Util::skipBlank(in);
@@ -168,7 +168,7 @@ int LinkTable::readEntry(istream& in) {
              !Util::readInt(in,peerPort) ||
 	     !Util::readWord(in,typStr) ||
 	     !Forest::readForestAdr(in,peerAdr) ||
-	     !rs.read(in)) {
+	     !rs.read(in) || !Util::readInt(in,nonce)) {
 		return 0;
 	}
 	Util::nextLine(in);
@@ -182,6 +182,7 @@ int LinkTable::readEntry(istream& in) {
         e.peerType = (Forest::ntyp_t) peerType;
 	e.peerAdr = peerAdr;
 	e.rates = rs; e.availRates = rs;
+	e.nonce = nonce;
 
 	if (!checkEntry(lnk)) { removeEntry(lnk); return 0; }
 
