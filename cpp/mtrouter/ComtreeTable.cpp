@@ -188,21 +188,35 @@ bool ComtreeTable::readEntry(istream& in) {
 	if (Util::verify(in,'*')) e.coreFlag = true;
 	if (!Util::readInt(in,plnk)) return false;
 
+	fAdr_t defDest; RateSpec defRates;
+	if (!Forest::readForestAdr(in,defDest) || !defRates.read(in))
+		return false;
+
 	if (!Util::verify(in,'{')) return false;
 	ClnkInfo cli;
-	cli.rates.set(Forest::MINBITRATE,Forest::MINBITRATE,
-		      Forest::MINPKTRATE,Forest::MINPKTRATE);
 	while (true) {
 		if (Util::verify(in,'}')) break;
 		int lnk;
 		if (!Util::readInt(in,lnk)) return false;
-		int cLnk = e.clMap->put(lnk,cli);
-		if (Util::verify(in,'+')) {
-			e.rtrLinks->addLast(cLnk);
-		} else if (Util::verify(in,'*')) {
-			e.rtrLinks->addLast(cLnk);
-			e.coreLinks->addLast(cLnk);
+		bool isRouter = false; bool isCore = false;
+		if (Util::verify(in,'+')) isRouter = true;
+		else if (Util::verify(in,'*')) isRouter = isCore = true;
+		// check for optional dest, rates
+		fAdr_t dest = defDest; RateSpec rates=defRates;
+		if (Util::verify(in,'[')) {
+			if (!Util::verify(in,'(')) {
+				if (!Forest::readForestAdr(in,dest))
+					return false;
+			}
+			if (Util::verify(in,'(')) {
+				if (!rates.read(in)) return false;
+			}
+			if (!Util::verify(in,']')) return false;
 		}
+		cli.dest = dest; cli.rates = rates;
+		int cLnk = e.clMap->put(lnk,cli);
+		if (isRouter) e.rtrLinks->addLast(cLnk);
+		if (isCore) e.coreLinks->addLast(cLnk);
 	}
 	Util::nextLine(in);
 

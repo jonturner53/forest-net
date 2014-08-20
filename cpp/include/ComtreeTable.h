@@ -152,8 +152,8 @@ inline ComtreeTable::ClnkInfo::~ClnkInfo() { }
  *  @return the string
  */
 inline string ComtreeTable::ClnkInfo::toString() const {
-	string s = Forest::fAdr2string(dest) + " "
-		   + to_string(qnum) + " " + rates.toString();
+	string s = "[" + Forest::fAdr2string(dest) + " "
+		   + rates.toString() + "]";
 	return s;
 }
 
@@ -201,10 +201,13 @@ inline ComtreeTable::Entry& ComtreeTable::Entry::operator=(Entry&& src) {
 inline string ComtreeTable::Entry::toString() const {
 	string s = (coreFlag ? "* " : " ") + to_string(pLnk) + " {";
 	for (int cLnk = clMap->first(); cLnk != 0; cLnk = clMap->next(cLnk)) {
+		ClnkInfo& cli = clMap->getValue(cLnk);
 		if (cLnk != clMap->first()) s += " ";
 		s += to_string(clMap->getKey(cLnk));
 		if (coreLinks->member(cLnk)) s += "*";
 		else if (rtrLinks->member(cLnk)) s += "+";
+		s += "[" + Forest::fAdr2string(cli.dest) + " "
+		  +  cli.rates.toString() + "]";
 	}
 	s += "}";
 	return s;
