@@ -20,6 +20,10 @@
 #include "ComtreeTable.h"
 #include "RouteTable.h"
 #include "PacketStore.h"
+#include "Router.h"
+#include "RouterControl.h"
+#include "Repeater.h"
+#include "RepeatHandler.h"
 #include "CtlPkt.h"
 #include "QuManager.h"
 #include "Quu.h"
@@ -35,6 +39,7 @@ using std::unique_lock;
 namespace forest {
 
 class Router;
+class RouterControl;
 
 class RouterInProc {
 public:
@@ -65,14 +70,13 @@ private:
 	int	cIf;			///< number of "current interface"
 	int	nRdy;			///< number of ready sockets
 
-	QuManager *qm;			///< queues and link schedulers
-
 	/// info for worker thread used to process an incoming control packet
 	struct ThreadInfo {
                 thread	thred;		///< thread object
-		RouterControl *rc;	///< per thread RouterControl object
+		RouterControl rc;	///< per thread RouterControl object
                 Quu<pktx> q;		///< used to send packets to thread
 		int64_t rcvSeqNum;	///< rcvSeqNum of last packet to thred
+		ThreadInfo() {};
         };
 	ThreadInfo *tpool;		///< pointer to thread pool
 	List	freeThreads;		///< list of unassigned thread indexs

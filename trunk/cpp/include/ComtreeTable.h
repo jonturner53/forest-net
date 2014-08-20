@@ -101,11 +101,12 @@ public:
 	comt_t	getComtree(int) const;
 	int	getLink(int, int) const;
 	int	getPlink(int) const;
-	int	getPClink(int) const;
+	int	getPClnk(int) const;
 	int	getLinkCount(int) const;
 	int	getClnkNum(int, int) const;
 	ClnkInfo& getClnkInfo(int, int) const;
 	int	getLinkQ(int, int) const;
+	int	getClnkQ(int, int) const;
 	fAdr_t	getDest(int, int) const;
 	RateSpec& getRates(int, int) const;
 	const Dlist& getComtList(int) const;
@@ -368,7 +369,7 @@ inline int ComtreeTable::getPlink(int ctx) const { return getEntry(ctx).pLnk; }
  *  (in the comtree) of this router;
  *  returns 0 if the router is the root of the comtree
  */
-inline int ComtreeTable::getPClink(int ctx) const {
+inline int ComtreeTable::getPClnk(int ctx) const {
 	return getEntry(ctx).pClnk;
 }
 
@@ -396,7 +397,7 @@ inline int ComtreeTable::getClnkQ(int ctx, int cLnk) const {
  *  @param lnk is a comtree link number
  *  @return the queue identifier assigned to cLnk
  */
-inline int ComtreeTable::getLnkQ(int ctx, int lnk) const {
+inline int ComtreeTable::getLinkQ(int ctx, int lnk) const {
 	return getEntry(ctx).clMap->get(lnk).qnum;
 }
 
@@ -422,10 +423,10 @@ inline RateSpec& ComtreeTable::getRates(int ctx, int cLnk) const {
 /** Get a list of comtrees that use a specified link.
  *  @param lnk is a link number
  *  @return a constant reference to a list of the comtrees that use lnk.
-inline const Dlist& getComtList(int lnk) const {
+ */
+inline const Dlist& ComtreeTable::getComtList(int lnk) const {
 	return comtList[lnk];
 }
-*/
 
 /** Get the first comtree link number for a given comtree.
  *  @param ctx is a comtree index

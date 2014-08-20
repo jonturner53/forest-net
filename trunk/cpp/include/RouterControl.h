@@ -9,9 +9,13 @@
 #ifndef RTRCTL_H
 #define RTRCTL_H
 
-#include <queue>
-#include <map>
-#include "RouterCore.h"
+#include <thread>
+#include <mutex>
+#include <chrono>
+#include "Forest.h"
+#include "Router.h"
+#include "Packet.h"
+#include "CtlPkt.h"
 
 using namespace chrono;
 using std::thread;
@@ -20,6 +24,8 @@ using std::defer_lock;
 
 namespace forest {
 
+class Router;
+
 /** This class handles incoming and outgoing control packets on
  *  behalf of a router core.
  *
@@ -27,9 +33,10 @@ namespace forest {
  */
 class RouterControl {
 public:
-		RouterControl(Router*, int, Quu<int>, Quu<pair<int,int>>);
+		RouterControl(Router*, int, Quu<int>*, Quu<pair<int,int>>*);
+		RouterControl() {};
 		~RouterControl();
-	static void start(RouterControl*)
+	static void start(RouterControl*);
 
 private:
 	Router	*rtr;
@@ -43,9 +50,9 @@ private:
 	PacketLog *pktLog;		///< log for recording sample of packets
 	QuManager *qm;			///< queues and link schedulers
 
-	int	myThx;		///< my thread index
-	int	inQ;		///< input queue for this thread
-	int	outQ;		///< output queue, shared with other threads
+	int	myThx;			///< my thread index
+	Quu<int> *inQ;			///< input queue for this thread
+	Quu<pair<int,int>> *outQ; 	///< output queue, shared among threads
 
 	void	run();
 
@@ -88,7 +95,7 @@ private:
 	void	modRoute(CtlPkt&);
 	void 	getRouteSet(CtlPkt&);
 
-	// interface table packets
+	// filter table packets
 	void	addFilter(CtlPkt&);
 	void	dropFilter(CtlPkt&);
 	void	getFilter(CtlPkt&);
@@ -97,20 +104,26 @@ private:
 	void	getLoggedPackets(CtlPkt&);
 	void	enablePacketLog(CtlPkt&);
 
-	// comtree setup packets
-	void	joinComtree(CtkPkt&);
-	void	leaveComtree(CtkPkt&);
-	void	addBranch(CtkPkt&);
-	void	prune(CtkPkt&);
-	void	confirm(CtkPkt&);
+	// configuration
+	void	setLeafRange(CtlPkt&);
 
 	// comtree setup packets
+	void	joinComtree(CtlPkt&);
+	void	leaveComtree(CtlPkt&);
+	void	addBranch(CtlPkt&);
+	void	prune(CtlPkt&);
+	void	confirm(CtlPkt&);
+	void	abort(CtlPkt&);
+
+	// comtree setup packets
+/*
 	bool	sendAddBranch(..);
 	bool	sendPrune(..);
 	bool	sendConfirm(..);
 	bool	sendAbort(..);
 	bool	sendAddNode(..);
 	bool	sendDropNode(..);
+*/
 };
 
 } // ends namespace

@@ -29,16 +29,14 @@ public:
 		~Host();
 
 	bool	init();			
-	void	run(bool,uint32_t,uint32_t);
+	void	run(bool,int,int);
 	bool 	readPacket(int,int&,int&); 
 	void	send(int);
 	int	receive();	
 private:
 	int	nPkts;			// max number of packets in script
 	ipa_t	myIpAdr;		// IP address of interface
-	uint16_t myPort;		// port number for all io
 	ipa_t	rtrIpAdr;		// IP address of router
-	fAdr_t	myAdr;			// forest address of host
 	int	sock;			// socket number
 
 	PacketStore *ps;		// pointer to packet store

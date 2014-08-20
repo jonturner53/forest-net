@@ -239,8 +239,8 @@ public:
 	void	fmtDropComtreeLinkReply(RateSpec, int64_t=0);
 	bool	xtrDropComtreeLinkReply(RateSpec&);
 
-	void	fmtModComtreeLink(comt_t, int, RateSpec, int64_t=0);
-	bool	xtrModComtreeLink(comt_t&, int&, RateSpec&);
+	void	fmtModComtreeLink(comt_t, int, RateSpec, fAdr_t, int64_t=0);
+	bool	xtrModComtreeLink(comt_t&, int&, RateSpec&, fAdr_t&);
 	void	fmtModComtreeLinkReply(RateSpec&, int64_t=0);
 	bool	xtrModComtreeLinkReply(RateSpec&);
 
