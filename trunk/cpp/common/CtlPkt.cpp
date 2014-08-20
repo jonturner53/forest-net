@@ -893,12 +893,15 @@ bool CtlPkt::xtrDropComtreeLinkReply(RateSpec& availRates) {
  *  @param comt is the number of the comtree
  *  @param lnk is the number of the link to be modified
  *  @param rates is the new rates for the comtree link
+ *  @param dest is the allowed destination for the comtree link, if
+ *  the link is retricted, else 0
  *  @param snum is the sequence number for the control packet
  */
-void CtlPkt::fmtModComtreeLink(comt_t comt, int lnk, RateSpec rates,int64_t snum) {
+void CtlPkt::fmtModComtreeLink(comt_t comt, int lnk, RateSpec rates,
+				fAdr_t dest, int64_t snum) {
 	type = MOD_COMTREE_LINK; mode = REQUEST; seqNum = snum;
 	fmtBase();
-	put(comt); put(lnk); put(rates); 
+	put(comt); put(lnk); put(rates); put(dest);
 	paylen = next - payload;
 }
 
@@ -906,11 +909,14 @@ void CtlPkt::fmtModComtreeLink(comt_t comt, int lnk, RateSpec rates,int64_t snum
  *  @param comt is the number of the comtree
  *  @param lnk is the number of the link to be modified
  *  @param rates is the new rates for the comtree link
+ *  @param dest is the allowed destination for the comtree link, if
+ *  the link is retricted, else 0
  *  @return true if the extracted packet passes basic checks
  */
-bool CtlPkt::xtrModComtreeLink(comt_t& comt, int& lnk, RateSpec& rates) {
+bool CtlPkt::xtrModComtreeLink(comt_t& comt, int& lnk, RateSpec& rates,
+				fAdr_t& dest) {
 	return	type == MOD_COMTREE_LINK && mode == REQUEST
-		&& get(comt) && get(lnk) && get(rates) 
+		&& get(comt) && get(lnk) && get(rates) && get(dest)
 		&& paylen >= (next - payload);
 }
 
@@ -2429,10 +2435,11 @@ string CtlPkt::toString() {
 		break;
 	case MOD_COMTREE_LINK:
 		if (mode == REQUEST) {
-			xtrModComtreeLink(comt,lnk,rs1);
+			xtrModComtreeLink(comt,lnk,rs1,adr1);
 			ss << " " << comt;
 			ss << " " << lnk;
 			ss << " " << rs1.toString();
+			ss << " " << Forest::fAdr2string(adr1);
 		} else
 			xtrModComtreeLinkReply(rs1);
 			ss << " " << rs1.toString();
