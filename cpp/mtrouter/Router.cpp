@@ -518,7 +518,8 @@ bool Router::setAvailRates() {
 		         cLnk = ctt->nextComtLink(ctx,cLnk)) {
 			int lnk = ctt->getLink(ctx,cLnk);
 			LinkTable::Entry& lte = lt->getEntry(lnk);
-			RateSpec comtRates = ctt->getRates(ctx, cLnk);
+			RateSpec comtRates;
+			comtRates = ctt->getRates(ctx, cLnk);
 			if (!comtRates.leq(lte.availRates)) {
 				cerr << "Router::setAvailRates: "
 					"oversubscribing link "
