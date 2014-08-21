@@ -35,17 +35,17 @@ ComtreeTable::~ComtreeTable() {
  *  @return true on success, else false
  */
 bool ComtreeTable::addLink(int ctx, int lnk, bool rflg, bool cflg) {
-        if (!validCtx(ctx)) return false;
+	if (!validCtx(ctx)) return false;
 	Entry& e = getEntry(ctx);
 	ClnkInfo cli;
 	int cLnk = e.clMap->put(lnk,cli);
 	if (cLnk == 0) return false;
 
-        if (rflg) e.rtrLinks->addLast(cLnk);
-        if (cflg) e.coreLinks->addLast(cLnk);
+	if (rflg) e.rtrLinks->addLast(cLnk);
+	if (cflg) e.coreLinks->addLast(cLnk);
 	comtList[lnk].addLast(ctx);
 
-        return true;
+	return true;
 }
 
 /** Remove a comtree link from the set of valid links for a comtree.
@@ -54,17 +54,17 @@ bool ComtreeTable::addLink(int ctx, int lnk, bool rflg, bool cflg) {
  *  @param return true on success, false on failure
  */
 bool ComtreeTable::removeLink(int ctx, int cLnk) {
-        if (!validCtx(ctx)) return false;
+	if (!validCtx(ctx)) return false;
 	Entry& e = getEntry(ctx);
 	if (!e.clMap->valid(cLnk)) return false;
 
-        int lnk = e.clMap->getKey(cLnk);
+	int lnk = e.clMap->getKey(cLnk);
 	if (lnk == e.pLnk) {
 		return removeEntry(ctx);
 	}
-        e.clMap->remove(lnk);
-        e.rtrLinks->remove(cLnk);
-        e.coreLinks->remove(cLnk);
+	e.clMap->remove(lnk);
+	e.rtrLinks->remove(cLnk);
+	e.coreLinks->remove(cLnk);
 	comtList[lnk].remove(ctx);
 	return true;
 }
@@ -183,8 +183,8 @@ bool ComtreeTable::readEntry(istream& in) {
 	int comt, plnk;
 	Entry e;
 
-        Util::skipBlank(in);
-        if (!Util::readInt(in, comt) || comt < 1) return false;
+	Util::skipBlank(in);
+	if (!Util::readInt(in, comt) || comt < 1) return false;
 	if (Util::verify(in,'*')) e.coreFlag = true;
 	if (!Util::readInt(in,plnk)) return false;
 
@@ -204,12 +204,10 @@ bool ComtreeTable::readEntry(istream& in) {
 		// check for optional dest, rates
 		fAdr_t dest = defDest; RateSpec rates=defRates;
 		if (Util::verify(in,'[')) {
-			if (!Util::verify(in,'(')) {
+			if (!rates.read(in)) {
 				if (!Forest::readForestAdr(in,dest))
 					return false;
-			}
-			if (Util::verify(in,'(')) {
-				if (!rates.read(in)) return false;
+				rates.read(in);
 			}
 			if (!Util::verify(in,']')) return false;
 		}
@@ -227,7 +225,7 @@ bool ComtreeTable::readEntry(istream& in) {
 
 	if (!checkEntry(ctx)) { removeEntry(ctx); return false; }
 	
-        return true;
+	return true;
 }
 
 /** Read comtree table entries from an input stream.
@@ -253,7 +251,7 @@ bool ComtreeTable::read(istream& in) {
 			return false;
 		}
 	}
-        return true;
+	return true;
 }
 
 /** Create a string representing a table entry
@@ -278,7 +276,7 @@ string ComtreeTable::toString() const {
 	ss << comtMap->size() << endl;
 	ss << "# comtree  coreFlag  pLink  links" << endl;
 	for (int ctx = firstComt(); ctx != 0; ctx = nextComt(ctx))
-                ss << entry2string(ctx);
+		ss << entry2string(ctx);
 	return ss.str();
 }
 
