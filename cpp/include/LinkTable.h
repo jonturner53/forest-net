@@ -116,8 +116,7 @@ inline string LinkTable::Entry::toString() const {
            << ":" << setw(5) << left << peerPort << "  "
            << setw(10) << left << Forest::nodeType2string(peerType)
            << " " << setw(10) << left <<Forest::fAdr2string(peerAdr)
-           << " " << rates.toString() << " " << availRates.toString()
-	   << " " << nonce;
+           << " " << rates.toString() << " " << nonce;
 	return ss.str();
 }
 

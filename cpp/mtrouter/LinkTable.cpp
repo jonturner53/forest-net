@@ -236,7 +236,7 @@ string LinkTable::toString() const {
 	stringstream ss;
 	ss << map->size() << endl;
 	ss << "# link  iface    peerIp:port     peerType  peerAdr   ";
-        ss << "  rates      avail rates      comtree count\n";
+        ss << "  rates      nonce\n";
 	for (int i = firstLink(); i != 0; i = nextLink(i)) 
 		ss << link2string(i) << endl;
 	return ss.str();

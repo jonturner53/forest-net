@@ -191,7 +191,7 @@ bool StatsModule::read(istream& in) {
 	if (!Util::readInt(in,num)) return false;
 	Util::nextLine(in);
 	while (num--) {
-		if (readStat(in)) return false;
+		if (!readStat(in)) return false;
 	}
 	string fname = "stats";
 	fs.open(fname.c_str(),fstream::app);
