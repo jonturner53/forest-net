@@ -108,7 +108,7 @@ bool IfaceTable::read(istream& in) {
 string IfaceTable::entry2string(int iface) const {
 	stringstream ss;
 	ss << setw(5) << iface << "   " << Np4d::ip2string(ift[iface].ipa)
-	   << " " << ift[iface].port << " "
+	   << ":" << ift[iface].port << " "
 	   << ift[iface].rates.toString() << endl;
 	return ss.str();
 }
@@ -120,7 +120,7 @@ string IfaceTable::entry2string(int iface) const {
 string IfaceTable::toString() const {
 	stringstream ss;
 	ss << ifaces->getNumIn() << endl;
-	ss << "# iface  ipAddress      bitRate  pktRate\n";
+	ss << "# iface  ipAddress:port      bitRate  pktRate\n";
 	for (int i = firstIface(); i != 0; i = nextIface(i)) 
 		ss << entry2string(i);
 	return ss.str();
