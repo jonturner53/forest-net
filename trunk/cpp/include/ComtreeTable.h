@@ -108,7 +108,7 @@ public:
 	int	getLinkQ(int, int) const;
 	int	getClnkQ(int, int) const;
 	fAdr_t	getDest(int, int) const;
-	RateSpec& getRates(int, int) const;
+	const RateSpec& getRates(int, int) const;
 	const Dlist& getComtList(int) const;
 
 	// add/remove/modify table entries
@@ -403,7 +403,7 @@ inline int ComtreeTable::getClnkQ(int ctx, int cLnk) const {
  *  @return the queue identifier assigned to cLnk
  */
 inline int ComtreeTable::getLinkQ(int ctx, int lnk) const {
-	if (cLnk == 0) return 0;
+	if (lnk == 0) return 0;
 	return getEntry(ctx).clMap->get(lnk).qnum;
 }
 
@@ -423,8 +423,7 @@ inline fAdr_t ComtreeTable::getDest(int ctx, int cLnk) const {
  *  @param cLnk is a comtree link number
  *  @return a reference to the rate spec for cLnk
  */
-inline RateSpec& ComtreeTable::getRates(int ctx, int cLnk) const {
-	if (cLnk == 0) return RateSpec(0);
+inline const RateSpec& ComtreeTable::getRates(int ctx, int cLnk) const {
 	return getEntry(ctx).clMap->getValue(cLnk).rates;
 }
 
