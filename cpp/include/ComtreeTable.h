@@ -382,6 +382,7 @@ inline int ComtreeTable::getPClnk(int ctx) const {
  *  @return the number of the associated link
  */
 inline int ComtreeTable::getLink(int ctx, int cLnk) const {
+	if (cLnk == 0) return 0;
 	Entry& e = getEntry(ctx);
 	return e.clMap->getKey(cLnk);
 }
@@ -392,6 +393,7 @@ inline int ComtreeTable::getLink(int ctx, int cLnk) const {
  *  @return the queue identifier assigned to cLnk
  */
 inline int ComtreeTable::getClnkQ(int ctx, int cLnk) const {
+	if (cLnk == 0) return 0;
 	return getEntry(ctx).clMap->getValue(cLnk).qnum;
 }
 
@@ -401,6 +403,7 @@ inline int ComtreeTable::getClnkQ(int ctx, int cLnk) const {
  *  @return the queue identifier assigned to cLnk
  */
 inline int ComtreeTable::getLinkQ(int ctx, int lnk) const {
+	if (cLnk == 0) return 0;
 	return getEntry(ctx).clMap->get(lnk).qnum;
 }
 
@@ -411,6 +414,7 @@ inline int ComtreeTable::getLinkQ(int ctx, int lnk) const {
  *  for this link
  */
 inline fAdr_t ComtreeTable::getDest(int ctx, int cLnk) const {
+	if (cLnk == 0) return 0;
 	return getEntry(ctx).clMap->getValue(cLnk).dest;
 }
 
@@ -420,6 +424,7 @@ inline fAdr_t ComtreeTable::getDest(int ctx, int cLnk) const {
  *  @return a reference to the rate spec for cLnk
  */
 inline RateSpec& ComtreeTable::getRates(int ctx, int cLnk) const {
+	if (cLnk == 0) return RateSpec(0);
 	return getEntry(ctx).clMap->getValue(cLnk).rates;
 }
 

@@ -125,8 +125,8 @@ inline bool QuManager::setLinkRates(int lnk, RateSpec& rs) {
 }
 
 inline bool QuManager::setQRates(int qid, RateSpec& rs) {
-	unique_lock<mutex> lck(mtx);
 	if (!validQ(qid)) return false;
+	unique_lock<mutex> lck(mtx);
 	int br = min(rs.bitRateDown,8000000); 
 	int pr = min(rs.pktRateDown,1000000000); 
 	quInfo[qid].nsPerByte =   8000000/br;
@@ -135,8 +135,8 @@ inline bool QuManager::setQRates(int qid, RateSpec& rs) {
 }
 
 inline bool QuManager::setQLimits(int qid, int np, int nb) {
-	unique_lock<mutex> lck(mtx);
 	if (!validQ(qid)) return false;
+	unique_lock<mutex> lck(mtx);
 	np = max(0,np); nb = max(0,nb);
 	quInfo[qid].pktLim = np;
 	quInfo[qid].byteLim = nb;
