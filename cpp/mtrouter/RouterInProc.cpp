@@ -18,7 +18,7 @@ RouterInProc::RouterInProc(Router *rtr1) : rtr(rtr1) {
 	ps = rtr->ps; qm = rtr->qm;
 	sm = rtr->sm; pktLog = rtr->pktLog;
 
-	nRdy = 0; maxSockNum = -1;
+	nRdy = 0; 
 	sockets = new fd_set;
 
 	// setup thread pool
@@ -209,6 +209,11 @@ void RouterInProc::bootSend(pktx px) {
  */
 bool RouterInProc::inBound() {
 	pktx px;
+	unique_lock<mutex> iftLock(rtr->iftMtx,defer_lock);
+	unique_lock<mutex>  ltLock(rtr->ltMtx,defer_lock);
+	unique_lock<mutex> cttLock(rtr->cttMtx,defer_lock);
+	unique_lock<mutex>  rtLock(rtr->rtMtx,defer_lock);
+	lock(iftLock,ltLock,cttLock,rtLock);
 	if (rtr->booting) {
 		px = bootReceive();
 		if (px == 0) return false;
@@ -226,6 +231,7 @@ bool RouterInProc::inBound() {
 			bootSend(px);
 			Util::fatal("RouterInProc::inBound: remote boot "
 				    "aborted by NetMgr");
+			exit(0);
 		}
 	} else {
 		px = receive();
@@ -235,18 +241,12 @@ bool RouterInProc::inBound() {
 	p.outLink = 0;
 	p.rcvSeqNum = ++rcvSeqNum;
         pktLog->log(px,p.inLink,false,now);
-	// lock ctt
 	int ctx = ctt->getComtIndex(p.comtree);
 	if (!pktCheck(px,ctx)) {
-		// unlock ctt
-		ps->free(px);
-	} else if (p.dstAdr != rtr->myAdr && 
-		   (p.type == Forest::CLIENT_DATA ||
-		    p.type == Forest::NET_SIG)) {
-		// unlock ctt
-		forward(px);
-	} else if (p.dstAdr == rtr->myAdr &&
-		   (p.type== Forest::NET_SIG || p.type == Forest::CLIENT_SIG)) {
+		ps->free(px); return true;
+	}
+	if (p.dstAdr == rtr->myAdr &&
+	    (p.type== Forest::NET_SIG || p.type == Forest::CLIENT_SIG)) {
 		CtlPkt cp(p);
 		if (cp.mode != CtlPkt::REQUEST) {
 			// reply to a request sent earlier
@@ -300,35 +300,30 @@ bool RouterInProc::inBound() {
 			// and send original to the thread
 			tpool[thx].q.enq(px);
 			return true;
-		} else {
-			// request for changing comtree
-			int thx = comtSet->find(p.comtree);
-			if (thx == 0) {
-				// no thread assigned to this comtree yet
-				// assign a worker thread
-				thx = freeThreads.first();
-				if (thx == 0) {
-					cp.fmtError("to busy to handle request,"
-						    " retry later");
-					p.dstAdr = p.srcAdr;
-					p.srcAdr = rtr->myAdr;
-					p.pack();
-					forward(px);
-					return true;
-				}
-				freeThreads.removeFirst();
-				comtSet->insert(p.comtree,thx);
-			}
-			tpool[thx].rcvSeqNum = p.rcvSeqNum;
-			tpool[thx].q.enq(px);
-			return true;
 		}
-	} else {
-		cerr << "RouterInProc::inBound: unrecognized packet "
-			+ p.toString() << endl;
-		ps->free(px);
+		// request for changing comtree
+		int thx = comtSet->find(p.comtree);
+		if (thx == 0) {
+			// no thread assigned to this comtree yet
+			// assign a worker thread
+			thx = freeThreads.first();
+			if (thx == 0) {
+				cp.fmtError("to busy to handle request,"
+					    " retry later");
+				p.dstAdr = p.srcAdr;
+				p.srcAdr = rtr->myAdr;
+				p.pack();
+				forward(px);
+				return true;
+			}
+			freeThreads.removeFirst();
+			comtSet->insert(p.comtree,thx);
+		}
+		tpool[thx].rcvSeqNum = p.rcvSeqNum;
+		tpool[thx].q.enq(px);
+		return true;
 	}
-	return true;
+	forward(px); return true;
 }
 
 /** Check for an outbound packet and process it. 
@@ -382,6 +377,8 @@ bool RouterInProc::outBound() {
 
 // Return next waiting packet or 0 if there is none. 
 pktx RouterInProc::receive() { 
+static int foo = 0;
+if (foo++ < 10) cerr << "R0\n";
 	if (nRdy == 0) { // if no ready interface check for new arrivals
 		FD_ZERO(sockets);
 		for (int i = ift->firstIface(); i != 0; i = ift->nextIface(i)) {
@@ -390,7 +387,7 @@ pktx RouterInProc::receive() {
 		struct timeval zero; zero.tv_sec = zero.tv_usec = 0;
 		int cnt = 0;
 		do {
-			nRdy = select(maxSockNum+1,sockets,
+			nRdy = select(rtr->maxSockNum+1,sockets,
 			       (fd_set *)NULL, (fd_set *)NULL, &zero);
 		} while (nRdy < 0 && cnt++ < 10);
 		if (cnt > 5) {

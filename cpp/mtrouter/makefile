@@ -21,6 +21,7 @@ OFILES = IfaceTable.o LinkTable.o ComtreeTable.o \
 XFILES = Router
 
 ${OFILES} : ${HFILES}
+Router.o : ${HFILES}
 
 .cpp.o:
 	${CXX} ${CXXFLAGS} -c $<

@@ -118,7 +118,7 @@ bool LinkTable::checkEntry(int lnk) {
  */
 bool LinkTable::remapEntry(int lnk, ipa_t peerIp, ipp_t peerPort) {
 	if (!valid(lnk)) return false;
-	Entry lte = getEntry(lnk);
+	Entry& lte = getEntry(lnk);
 	if (map->getKey(lnk) != lte.nonce) return false;
 	if (!map->rekey(lnk,hashkey(peerIp,peerPort))) return false;
 	lte.peerIp = peerIp; lte.peerPort = peerPort;
@@ -131,7 +131,7 @@ bool LinkTable::remapEntry(int lnk, ipa_t peerIp, ipp_t peerPort) {
  */
 bool LinkTable::revertEntry(int lnk) {
 	if (!valid(lnk)) return false;
-	Entry lte = getEntry(lnk);
+	Entry& lte = getEntry(lnk);
 	if (map->getKey(lnk) != hashkey(lte.peerIp, lte.peerPort)) return false;
 	if (!map->rekey(lnk,lte.nonce)) return false;
 	lte.peerIp = lte.peerPort = 0;
@@ -177,13 +177,11 @@ int LinkTable::readEntry(istream& in) {
 	peerType = Forest::getNodeType(typStr);
 	if (peerType == Forest::UNDEF_NODE) return 0;
 
-	if (!addEntry(lnk,peerIp,peerPort,0)) return 0;
+	if (!addEntry(lnk,peerIp,peerPort,nonce)) return 0;
 	Entry& e = getEntry(lnk);
 	e.iface = iface; 
-        e.peerType = (Forest::ntyp_t) peerType;
-	e.peerAdr = peerAdr;
+        e.peerType = (Forest::ntyp_t) peerType; e.peerAdr = peerAdr;
 	e.rates = rs; e.availRates = rs;
-	e.nonce = nonce;
 
 	if (!checkEntry(lnk)) { removeEntry(lnk); return 0; }
 

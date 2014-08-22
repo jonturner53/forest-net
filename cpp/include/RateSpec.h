@@ -115,6 +115,9 @@ public:
 
 	bool read(istream&);
 	string toString() const;
+	friend ostream& operator<<(ostream& out, const RateSpec& rs) {
+		return out << rs.toString();
+	}
 };
 
 } // ends namespace

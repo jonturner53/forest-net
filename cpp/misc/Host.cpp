@@ -229,7 +229,9 @@ void Host::run(bool repeatFlag, int delta, int finishTime) {
 bool Host::readPacket(pktx px, int& pause, int& cnt) {
 // Read an input packet from stdin and return it in p.
         Util::skipBlank(cin);
-        if (!Util::readInt(cin,pause)) return false;
+        if (!Util::readInt(cin,pause)) {
+		return false;
+	}
         if (pause < 0) {
                 if (!Util::readInt(cin,cnt)) cnt = 0;
                 Util::nextLine(cin);
