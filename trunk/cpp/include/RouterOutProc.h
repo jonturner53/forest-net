@@ -65,7 +65,7 @@ private:
 
 	Repeater *rptr;			///< used for connect/subunsub packets
 
-	void	send(pktx);
+	void	send(pktx,int64_t);
 	void	forward(pktx, int);
 	void	multiSend(pktx, int, int);
 	void	sendRteReply(pktx, int);

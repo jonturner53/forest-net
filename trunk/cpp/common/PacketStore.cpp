@@ -82,9 +82,7 @@ pktx PacketStore::clone(pktx px) {
  *  @return the index of the new packet.
  */
 pktx PacketStore::fullCopy(pktx px) {
-	unique_lock<mutex> lck(mtx);
 	int px1 = alloc();
-	lck.unlock();
 	if (px1 == 0) return 0;
 	Packet& p = getPacket(px); Packet& p1 = getPacket(px1);
 	pkt[px1] = pkt[px];

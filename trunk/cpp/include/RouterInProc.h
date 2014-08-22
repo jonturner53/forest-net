@@ -65,7 +65,6 @@ private:
 	PacketLog *pktLog;		///< log for recording sample of packets
 	QuManager *qm;			///< queues and link schedulers
 
-	int	maxSockNum;		///< largest socket num opened by ioProc
 	fd_set	*sockets;		///< file descr set for open sockets
 	int	cIf;			///< number of "current interface"
 	int	nRdy;			///< number of ready sockets

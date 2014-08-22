@@ -98,11 +98,6 @@ int main(int argc, char *argv[]) {
 		Util::fatal("Router:: error processing command line arguments");
 	Router router(args);
 
-	if (args.mode.compare("local") == 0) {
-		if (!router.readTables(args) || !router.setup())
-			Util::fatal("Router::main: could not complete local "
-					"configuration\n");
-	}
 	router.run();
 	return 0;
 }
@@ -234,6 +229,7 @@ bool Router::readTables(const RouterInfo& config) {
  *  initial configuration is fully consistent.
  */
 bool Router::setup() {
+cerr << "setting up\n";
 	dump(cout);
 	if (!setupAllIfaces()) return false;
 	if (!setupLeafAddresses()) return false;
@@ -242,6 +238,7 @@ bool Router::setup() {
 	if (!setAvailRates()) return false;
 	addLocalRoutes();
 
+cerr << "done setting up\n";
 	return true;
 }
 
@@ -253,7 +250,7 @@ bool Router::setupAllIfaces() {
 	for (int iface = ift->firstIface(); iface != 0;
 		 iface = ift->nextIface(iface)) {
 		if (sock[iface] > 0) continue;
-		if (setupIface(iface)) {
+		if (!setupIface(iface)) {
 			cerr << "Router::setupIfaces: could not "
 				"setup interface " << iface << endl;
 			return false;
@@ -329,10 +326,11 @@ bool Router::setupQueues() {
 			if (qid == 0) return false;
 			ctt->setLinkQ(ctx,cLnk,qid);
 			qm->setQRates(qid,rs);
-			if (lt->getEntry(lnk).peerType == Forest::ROUTER)
+			if (lt->getEntry(lnk).peerType == Forest::ROUTER) {
 				qm->setQLimits(qid,100,200000);
-			else
+			} else {
 				qm->setQLimits(qid,50,100000);
+			}
 			sm->clearQuStats(qid);
 		}
 	}
@@ -566,12 +564,15 @@ void Router::dump(ostream& out) {
 
 void Router::run() {
 	// start input and output threads
+cerr << "launching inProc, outProc\n";
 	thread inThred(RouterInProc::start,rip);
 	thread outThred(RouterOutProc::start,rop);
 
 	// wait for them to finish
+cerr << "waiting for  inProc, outProc\n";
 	inThred.join();
 	outThred.join();
+cerr << "and done\n";
 
 	cout << endl;
 	dump(cout); 		// print final tables

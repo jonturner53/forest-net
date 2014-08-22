@@ -154,10 +154,10 @@ string RouteTable::entry2string(int rtx) const {
    	   << Forest::fAdr2string(getAddress(rtx)) << " ";
 	if (noLinks(rtx)) { ss << "-\n"; return ss.str(); }
 	Vset& lset = rteMap->getValue(rtx);
-	for (int cLnk = lset.first(); cLnk != 0; cLnk = lset.next(cLnk)) {
-		if (cLnk != lset.first()) ss << ",";
+	for (int x = lset.first(); x != 0; x = lset.next(x)) {
+		if (x != lset.first()) ss << ",";
 		int ctx = ctt->getComtIndex(getComtree(rtx));
-		ss << ctt->getLink(ctx, cLnk);
+		ss << ctt->getLink(ctx, lset.retrieve(x));
 	}
 	ss << endl;
 	return ss.str();

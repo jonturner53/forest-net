@@ -45,13 +45,14 @@ public:
 	// iteration methods
 	int	firstRtx() const;
 	int	nextRtx(int) const;
-	int	firstComtLink(int) const;
-	int	nextComtLink(int, int) const;
+	int	firstClx(int) const;
+	int	nextClx(int, int) const;
 
 	// access methods
 	int	getRtx(comt_t, fAdr_t) const;
 	comt_t	getComtree(int) const;
 	fAdr_t	getAddress(int) const;	
+	int	getClnk(int, int) const;
 	int 	getLinkCount(int) const; 		
 
 	// modifiers
@@ -132,25 +133,25 @@ inline int RouteTable::nextRtx(int rtx) const {
 	return rteMap->next(rtx);
 }
 
-/** Get the first comtree link for a given route.
- *  This method is used to iterate through all the links in the route.
+/** Get the first comtree link index for a given route.
+ *  This method is used to iterate through all the comtree links in the route.
  *  The order of comtree links is arbitrary.
- *  @return the first route index, or 0 if there are none
+ *  @return the first comtree link index, or 0 if there are none
  */
-inline int RouteTable::firstComtLink(int rtx) const {
+inline int RouteTable::firstClx(int rtx) const {
 	return rteMap->getValue(rtx).first();
 }
 
-/** Get the next comtree link following a given comtree link.
+/** Get the next comtree link index following a given comtree link index.
  *  This method is used to iterate through all the links in a route.
  *  The order of comtree links is arbitrary.
  *  @param rtx is a route index
- *  @param cLnk is a comtree link number
- *  @return the next comtree link number for the given route following cLnk,
+ *  @param clx is a comtree link index
+ *  @return the next comtree link index for the given route following clx,
  *  or 0 if there is no next comtree link
  */
-inline int RouteTable::nextComtLink(int rtx, int cLnk) const {
-	return rteMap->getValue(rtx).next(cLnk);
+inline int RouteTable::nextClx(int rtx, int clx) const {
+	return rteMap->getValue(rtx).next(clx);
 }
 
 /** Get the route index for a given comtree and destination address.
@@ -178,6 +179,16 @@ inline comt_t RouteTable::getComtree(int rtx) const {
 inline fAdr_t RouteTable::getAddress(int rtx) const {
 	uint64_t kee = rteMap->getKey(rtx);
 	return (fAdr_t) (kee & 0xffffffff);
+}
+
+/** Get the comtree link for a given clx.
+ *  @param rtx is a route index
+ *  @param clx is a comtree link index (as returned by firstClx, for example)
+ *  @param return the comtree link number associated with the given (ctx,clx)
+ *  pair
+ */
+inline int RouteTable::getClnk(int rtx, int clx) const {
+	return rteMap->getValue(rtx).retrieve(clx);
 }
 
 /** Get the number of links used by a route.

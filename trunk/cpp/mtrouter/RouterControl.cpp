@@ -894,7 +894,8 @@ void RouterControl::getRoute(CtlPkt& cp) {
 	int rtx = rt->getRtx(comt,destAdr);
 	if (rtx != 0) {
 		int lnk = (Forest::validUcastAdr(destAdr) ?
-			   ctt->getLink(ctx,rt->firstComtLink(rtx)) : 0);
+			   ctt->getLink(ctx,rt->getClnk(rtx,rt->firstClx(rtx)))
+			   : 0);
 		cp.fmtGetRouteReply(comt,destAdr,lnk,rt->getLinkCount(rtx));
 		return;
 	}

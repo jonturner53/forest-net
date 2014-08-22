@@ -40,6 +40,9 @@ public:
 	string	toString() const;
 	static string pktTyp2string(Forest::ptyp_t);
 	static bool string2pktTyp(string&, Forest::ptyp_t&);
+	friend ostream& operator<<(ostream& out, const Packet& p) {
+		return out << p.toString();
+	}
 
 	// packet fields - note: all public
 	int	version;		///< version number field
