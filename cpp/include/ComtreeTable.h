@@ -383,8 +383,7 @@ inline int ComtreeTable::getPClnk(int ctx) const {
  */
 inline int ComtreeTable::getLink(int ctx, int cLnk) const {
 	if (cLnk == 0) return 0;
-	Entry& e = getEntry(ctx);
-	return e.clMap->getKey(cLnk);
+	return getEntry(ctx).clMap->getKey(cLnk);
 }
 
 /** Get the queue identifier for a given comtree link.

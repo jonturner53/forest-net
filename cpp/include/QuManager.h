@@ -26,7 +26,7 @@ inline ostream& operator<<(ostream& out,
 #include "Dheap.h"
 #include "DheapSet.h"
 #include "PacketStore.h"
-#include "StatsModule.h"
+#include "RateSpec.h"
 
 using namespace chrono;
 using std::thread;
@@ -46,7 +46,7 @@ namespace forest {
  */
 class QuManager {
 public:
-		QuManager(int,int,int,int,PacketStore*,StatsModule*);
+		QuManager(int,int,int,int,PacketStore*);
 		~QuManager();
 
 	// predicates
@@ -62,9 +62,10 @@ public:
 	bool	setLinkRates(int,RateSpec&);
 	bool	setQRates(int,RateSpec&);
 	bool	setQLimits(int,int,int);
+	void 	getStats(int, int, int&, int&, int&);
 
 	// enq and deq packets
-	bool	enq(int, int, uint64_t);
+	void	enq(int, int, uint64_t);
 	int	deq(int&, uint64_t);
 	
 private:
@@ -86,6 +87,7 @@ private:
 	uint32_t minDelta;		///< min # of ns between packets
 	uint64_t avgPktTime;		///< average time to send recent packets
 	uint64_t vt;			///< virtual time for link
+	int	pktCount;		///< number of packets queued for link
 	};
 	LinkInfo *lnkInfo;		///< lnkInfo[lnk] hold info on lnk
 
@@ -93,6 +95,8 @@ private:
 	int	lnk;			///< link that queue is assigned to
 	uint32_t nsPerByte;		///< ns of delay per data byte
 	uint32_t minDelta;		///< min # of ns between packets
+	int	pktCount;		///< number of packets in queue
+	int	byteCount;		///< number of bytes in queue
 	int	pktLim;			///< limit on # of packets in queue
 	int	byteLim;		///< limit on # of bytes in queue
 	uint64_t vft;			///< virtual finish time for queue
@@ -102,7 +106,6 @@ private:
 	DheapSet<uint64_t> *hset;	///< set of heaps for pkt scheduler
 
 	PacketStore *ps;		///< pointer to packet store object
-	StatsModule *sm;		///< pointer to statistics module
 };
 
 
@@ -141,6 +144,26 @@ inline bool QuManager::setQLimits(int qid, int np, int nb) {
 	quInfo[qid].pktLim = np;
 	quInfo[qid].byteLim = nb;
 	return true;
+}
+
+/** Sample the statistics counters.
+ *  @param lnk is a link number
+ *  @param qid is a queue identifier
+ *  @param lnkPktCount is a reference used to return the value of the packet
+ *  count for the specified link; if lnk == 0, the packet count for the
+ *  link associated with qid is returned
+ *  @param qPktCount is a reference used to return the value of the packet
+ *  count for the specified queue
+ *  @param qByteCount is a reference used to return the value of the byte
+ *  count for the specified queue
+ */
+inline void QuManager::getStats(int lnk, int qid, int& lnkPktCount,
+				int& qPktCount, int& qByteCount) {
+	unique_lock<mutex> lck(mtx);
+	lnkPktCount = (lnk == 0 ? lnkInfo[quInfo[qid].lnk].pktCount :
+				  lnkInfo[lnk].pktCount);
+	qPktCount = quInfo[qid].pktCount;
+	qByteCount = quInfo[qid].byteCount;
 }
 
 } // ends namespace

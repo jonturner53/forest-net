@@ -13,6 +13,7 @@
 #include "Forest.h"
 #include "Packet.h"
 #include "RateSpec.h"
+#include "StatCounts.h"
 #include "Hash.h"
 #include "HashSet.h"
 #include "HashMap.h"
@@ -35,6 +36,7 @@ public:
 	uint64_t nonce;			///< used by peer when connecting
 	RateSpec rates;			///< rate spec for link rates
 	RateSpec availRates;		///< rate spec for available rates
+	StatCounts stats;		///< rate statistics for link
 
 		Entry();
 		Entry(const Entry&);
@@ -72,7 +74,25 @@ public:
 	bool	remapEntry(int, ipa_t, ipp_t, uint64_t); 
 	bool	revertEntry(int);
 	bool	removeEntry(int);		
-	bool	connect(int lnk, ipa_t peerIp, ipp_t peerPort);
+	bool	connect(int, ipa_t, ipp_t);
+	void	countIncoming(int lnk, int leng) {
+		Entry& e = getEntry(leng);
+		e.stats.updateIn(leng);
+		if (e.peerType == Forest::ROUTER)
+			rtrStats.updateIn(leng);
+		else
+			leafStats.updateIn(leng);
+	}
+	void	countOutgoing(int lnk, int leng) {
+		Entry& e = getEntry(leng);
+		e.stats.updateOut(leng);
+		if (e.peerType == Forest::ROUTER)
+			rtrStats.updateOut(leng);
+		else
+			leafStats.updateOut(leng);
+	}
+	void	getStats(int, StatCounts&) const;
+	void	getStats(StatCounts&, StatCounts&) const;
 
 	// io routines
 	bool read(istream&);
@@ -85,6 +105,8 @@ public:
 
 private:
 	int	maxLnk;			///< maximum link number
+	StatCounts rtrStats;		///< rates to/from other routers
+	StatCounts leafStats;		///< rates to/from leaf nodes
 
 	/// map from remote peer's (ip,port) pair to entry
 	HashMap<uint64_t,Entry,Hash::u64> *map;
@@ -192,6 +214,23 @@ inline int LinkTable::lookup(fAdr_t peerAdr) const {
  */
 inline LinkTable::Entry& LinkTable::getEntry(int lnk) const {
 	return map->getValue(lnk);
+}
+
+/** Get a sample of the link statistics.
+ *  @param lnk is a link number
+ *  @param stats is a reference used to return the value of the link statistics
+ */
+inline void LinkTable::getStats(int lnk, StatCounts& stats) const {
+	stats = getEntry(lnk).stats;
+}
+
+/** Get a sample of the router statistics.
+ *  @param lnk is a link number
+ *  @param stats is a reference used to return the value of the link statistics
+ */
+inline void LinkTable::getStats(StatCounts& rtrStats, StatCounts& leafStats)
+				const {
+	rtrStats = this->rtrStats; leafStats = this->leafStats;
 }
 
 } // ends namespace

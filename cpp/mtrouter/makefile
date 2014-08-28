@@ -12,11 +12,10 @@ JAVAC := javac
 IDIR := ${FROOT}/include
 
 HFILES = ${IDIR}/IfaceTable.h ${IDIR}/LinkTable.h \
-	${IDIR}/ComtreeTable.h ${IDIR}/RouteTable.h ${IDIR}/StatsModule.h \
+	${IDIR}/ComtreeTable.h ${IDIR}/RouteTable.h ${IDIR}/StatCounts.h \
 	${IDIR}/QuManager.h ${IDIR}/RouterInProc.h \
 	${IDIR}/RouterOutProc.h ${IDIR}/RouterControl.h
-OFILES = IfaceTable.o LinkTable.o ComtreeTable.o \
-	RouteTable.o StatsModule.o QuManager.o \
+OFILES = IfaceTable.o LinkTable.o ComtreeTable.o RouteTable.o QuManager.o \
 	RouterInProc.o RouterOutProc.o RouterControl.o
 XFILES = Router
 

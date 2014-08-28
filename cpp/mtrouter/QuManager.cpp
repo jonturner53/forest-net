@@ -35,10 +35,8 @@ namespace forest {
 
 
 // Constructor for QuManager, allocates space and initializes everything.
-QuManager::QuManager(int nL1, int nP1, int nQ1, int maxppl1,
-		     PacketStore *ps1, StatsModule *sm1)
-	   	    : nL(nL1), nP(nP1), nQ(nQ1),
-		      maxppl(maxppl1), ps(ps1), sm(sm1) {
+QuManager::QuManager(int nL1, int nP1, int nQ1, int maxppl1, PacketStore *ps1)
+	   	    : nL(nL1), nP(nP1), nQ(nQ1), maxppl(maxppl1), ps(ps1) {
 	queues = new ListSet(nP,nQ);
 	active = new Dheap<uint64_t>(nL);  
 	vactive = new Dheap<uint64_t>(nL);
@@ -77,6 +75,7 @@ int QuManager::allocQ(int lnk) {
 	int qid = free; free = quInfo[qid].lnk;
 	quInfo[qid].lnk = lnk;
 	quInfo[qid].pktLim = 0; // non-negative value for assigned queues
+	quInfo[qid].pktCount = 0; quInfo[qid].byteCount = 0;
 	qCnt++;
 	return qid;
 }
@@ -97,24 +96,24 @@ void QuManager::freeQ(int qid) {
 }
 
 /** Enqueue a packet.
+ *  If the queue is full or the link has reached the maximum allowed,
+ *  the packet is silently discarded.
  *  @param p is the packet number of the packet to be queued
  *  @param q is the the qid for the queue for the packet
  *  @param now is the current time
- *  @return true on success, false on failure; the operation can fail
- *  if the qid is invalid, if the queue is already full, or the link
- *  is at its limit for packets queued
  */
-bool QuManager::enq(int px, int qid, uint64_t now) {
+void QuManager::enq(int px, int qid, uint64_t now) {
 	unique_lock<mutex> lck(mtx);
-	int pleng = Forest::truPktLeng((ps->getPacket(px)).length);
+	if (px == 0 || qid < 0 || qid > nQ || quInfo[qid].pktLim < 0)
+		return;
 	QuInfo& q = quInfo[qid]; int lnk = q.lnk;
+	int pleng = Forest::truPktLeng((ps->getPacket(px)).length);
 
 	// don't queue it if too many packets for link
 	// or if queue is past its limits
-	if (sm->getLinkQlen(lnk) >= maxppl ||
-	    sm->getQlen(qid) >= q.pktLim ||
-	    sm->getQbytes(qid) + pleng > q.byteLim) {
-		return false;
+	if (lnkInfo[lnk].pktCount >= maxppl ||
+	    q.pktCount >= q.pktLim || q.byteCount + pleng > q.byteLim) {
+		return;
 	}
 
 	if (queues->empty(qid)) {
@@ -146,8 +145,8 @@ bool QuManager::enq(int px, int qid, uint64_t now) {
 
 	// add packet to queue
 	queues->addLast(px,qid);
-	sm->incQlen(qid,lnk,pleng);
-	return true;
+	lnkInfo[lnk].pktCount++; q.pktCount++; q.byteCount += pleng;
+	return;
 }
 
 /** Dequeue the next packet that is ready to go out.
@@ -160,7 +159,6 @@ bool QuManager::enq(int px, int qid, uint64_t now) {
 int QuManager::deq(int& lnk, uint64_t now) {
 	unique_lock<mutex> lck(mtx);
 	// first process virtually active links that should now be idle
-	//
 	int vl = vactive->findmin(); uint64_t d = vactive->key(vl);
 	while (vl != 0 && now >= d) {
 		vactive->remove(vl);
@@ -175,10 +173,10 @@ int QuManager::deq(int& lnk, uint64_t now) {
 	int qid = hset->findMin(lnk);
 	pktx px = queues->removeFirst(qid);
 	int pleng = Forest::truPktLeng(ps->getPacket(px).length);
-	sm->decQlen(qid,lnk,pleng);
 
 	// and update scheduling heap and virtual time of lnk
 	QuInfo& q = quInfo[qid];
+	lnkInfo[lnk].pktCount--; q.pktCount--; q.byteCount -= pleng;
 	lnkInfo[lnk].vt = q.vft;
 	if (queues->empty(qid)) {
 		hset->deleteMin(lnk);

@@ -27,8 +27,7 @@
 #include "CtlPkt.h"
 #include "QuManager.h"
 #include "Quu.h"
-#include "IoProcessor.h"
-#include "StatsModule.h"
+#include "StatCounts.h"
 #include "PacketLog.h"
 
 using namespace std::chrono;
@@ -50,6 +49,7 @@ public:
 private:
 	const static int numThreads = 100; ///< max number in thread pool
 	const static int maxReplies = 10000; ///< max # of remembered replies
+	const static int MAXFANOUT = 512; ///< limit on packet fanout
 	typedef high_resolution_clock::time_point timePoint;
 
 	uint64_t now;			///< relative to router start time
@@ -61,7 +61,6 @@ private:
 	ComtreeTable *ctt;		///< table of comtrees
 	RouteTable  *rt;		///< table of routes
 	PacketStore *ps;		///< packet buffers and headers
-	StatsModule *sm;		///< class for recording statistics
 	PacketLog *pktLog;		///< log for recording sample of packets
 	QuManager *qm;			///< queues and link schedulers
 
@@ -87,31 +86,29 @@ private:
 	RepeatHandler *repH;		///< for handling received repeats
 
 	void	run();
-	bool	inBound();
-	bool	outBound();
+	bool	mainline();
 
 	// booting
 	int	bootSock;		///< socket used while booting
+	bool	bootRouter();
 	bool	bootStart();
 	pktx	bootReceive();
 	void	bootSend(pktx);
 
-	// basic forwarding 
+	// forwarding 
 	pktx	receive();
-	void 	forward(pktx);
 	bool	pktCheck(pktx,int);
+	void	forward(pktx, int);
+	void	multiForward(pktx, int, int);
 
-	// inband control
+	// control packets
+	void 	handleControl(pktx, int);
 	void 	handleConnDisc(pktx);
 	void 	handleRteReply(pktx, int);
 	void	sendRteReply(pktx,int);	
+	void	returnAck(pktx,int,bool);	
 	void	subUnsub(pktx,int);
 };
-
-inline void RouterInProc::forward(pktx px) {
-	if (rtr->booting) bootSend(px);
-	else rtr->xferQ.enq(px);
-}
 
 } // ends namespace
 
