@@ -128,10 +128,9 @@ Router::Router(const RouterInfo& config) {
 		lt = new LinkTable(nLnks);
 		ctt = new ComtreeTable(nComts,10*nComts);
 		rt = new RouteTable(nRts,myAdr,ctt);
-		sm = new StatsModule(1000, nLnks, nQus, ctt);
 		pktLog = new PacketLog(ps);
 		qm = new QuManager(nLnks, nPkts, nQus, min(50,5*nPkts/nLnks),
-				   ps, sm);
+				   ps);
 		sock = new int[nIfaces+1];
 		maxSockNum = -1;
 	
@@ -157,7 +156,7 @@ Router::Router(const RouterInfo& config) {
 Router::~Router() {
 // consider thread cleanup
 	delete rip; delete rop; delete rop;
-	delete pktLog; delete qm; delete sm;
+	delete pktLog; delete qm; 
 	delete rt; delete ctt; delete lt; delete ift; delete ps;
 	delete leafAdr; delete [] sock;
 }
@@ -208,15 +207,6 @@ bool Router::readTables(const RouterInfo& config) {
 		if (fs.fail() || !rt->read(fs)) {
 			cerr << "Router::readTables: can't read "
 			     << "routing table\n";
-			return false;
-		}
-		fs.close();
-	}
-	if (config.statSpec.compare("") != 0) {
-		ifstream fs; fs.open(config.statSpec.c_str());
-		if (fs.fail() || !sm->read(fs)) {
-			cerr << "Router::readTables: can't read "
-			     << "statistics spec\n";
 			return false;
 		}
 		fs.close();
@@ -331,7 +321,6 @@ bool Router::setupQueues() {
 			} else {
 				qm->setQLimits(qid,50,100000);
 			}
-			sm->clearQuStats(qid);
 		}
 	}
 	return true;
@@ -506,7 +495,6 @@ bool Router::setAvailRates() {
 		ifte.availRates.subtract(lte.rates);
 		lte.availRates = lte.rates;
 		lte.availRates.scale(.9); // allocate at most 90% of link
-		sm->clearLnkStats(lnk);
 	}
 	if (!success) return false;
 	int ctx;
@@ -559,7 +547,6 @@ void Router::dump(ostream& out) {
 	out << "Link Table\n\n" << lt->toString() << endl;
 	out << "Comtree Table\n\n" << ctt->toString() << endl;
 	out << "Routing Table\n\n" << rt->toString() << endl;
-	out << "Statistics\n\n" << sm->toString() << endl;
 }
 
 void Router::run() {

@@ -139,7 +139,7 @@ public:
 	static const int MAXBITRATE = 900000;	///< max link bit rate in Kb/s
 	static const int MINPKTRATE = 1; 	///< min packet rate in p/s
 	static const int MAXPKTRATE = 450000;	///< max packet rate in p/s
-	static const uint32_t BUF_SIZ = 1600;	///< size of a packet buffer
+	static const uint32_t BUF_SIZ = 2048;	///< size of a packet buffer
 
 	// comtrees used for control
 	static const comt_t NABOR_COMT = 1;	///< dummy comtree for neighbors

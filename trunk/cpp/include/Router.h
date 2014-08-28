@@ -26,7 +26,6 @@
 #include "ComtreeTable.h"
 #include "RouteTable.h"
 #include "PacketStore.h"
-#include "StatsModule.h"
 #include "PacketLog.h"
 #include "QuManager.h"
 
@@ -105,7 +104,6 @@ private:
 	ComtreeTable *ctt;		///< table of comtrees
 	RouteTable  *rt;		///< table of routes
 	PacketStore *ps;		///< packet buffers and headers
-	StatsModule *sm;		///< class for recording statistics
 	PacketLog *pktLog;		///< log for recording sample of packets
 	QuManager *qm;			///< queues and link schedulers
 

@@ -22,11 +22,10 @@
 #include "RouteTable.h"
 #include "PacketStore.h"
 #include "CtlPkt.h"
+#include "StatCounts.h"
 #include "QuManager.h"
-#include "StatsModule.h"
 #include "PacketLog.h"
 #include "Repeater.h"
-
 #include "Router.h"
 
 using namespace chrono;
@@ -48,31 +47,17 @@ public:
 	void	run();
 	static void start(RouterOutProc*);
 private:
-	typedef high_resolution_clock::time_point timePoint;
-
 	int64_t now;			///< current time
 
 	Router	*rtr;			///< pointer to main router object
 
 	IfaceTable *ift;		///< table defining interfaces
 	LinkTable *lt;			///< table defining links
-	ComtreeTable *ctt;		///< table of comtrees
-	RouteTable  *rt;		///< table of routes
 	PacketStore *ps;		///< packet buffers and headers
-	StatsModule *sm;		///< class for recording statistics
 	PacketLog *pktLog;		///< log for recording sample of packets
 	QuManager *qm;			///< queues and link schedulers
 
-	Repeater *rptr;			///< used for connect/subunsub packets
-
-	void	send(pktx,int64_t);
-	void	forward(pktx, int);
-	void	multiSend(pktx, int, int);
-	void	sendRteReply(pktx, int);
-	void	handleRteReply(pktx, int);
-	void	subUnsub(pktx, int);
-	void	handleConnDisc(pktx);
-	void	returnAck(pktx, int, bool);
+	void	send(pktx,int);
 };
 
 

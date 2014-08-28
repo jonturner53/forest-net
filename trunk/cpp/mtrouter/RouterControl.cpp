@@ -13,15 +13,13 @@ namespace forest {
 RouterControl::RouterControl(Router *rtr1, int thx,
 			Quu<int> *inQ1, Quu<pair<int,int>> *outQ1) 
 			: rtr(rtr1), myThx(thx), inQ(inQ1), outQ(outQ1) {
-	ift = rtr->ift; lt = rtr->lt;
-	ctt = rtr->ctt; rt = rtr->rt;
-	ps = rtr->ps; qm = rtr->qm;
-	sm = rtr->sm; pktLog = rtr->pktLog;
+	ift = rtr->ift; lt = rtr->lt; ctt = rtr->ctt; rt = rtr->rt;
+	ps = rtr->ps; qm = rtr->qm; pktLog = rtr->pktLog;
 }
 
 RouterControl::~RouterControl() {
 	ift = 0; lt = 0; ctt = 0; rt = 0;
-	ps = 0; qm = 0; sm = 0; pktLog = 0;
+	ps = 0; qm = 0; pktLog = 0;
 }
 
 void RouterControl::start(RouterControl *self) { self->run(); }
@@ -319,7 +317,6 @@ void RouterControl::addLink(CtlPkt& cp) {
 	lte.iface = iface;
 	lte.peerType = peerType;
 	lte.isConnected = false;
-	sm->clearLnkStats(lnk);
 	if (peerType == Forest::ROUTER && peerIp != 0 && peerPort != 0) {
 		// link to a router that's already up, so send connect
 		pktx px = ps->alloc();
@@ -461,7 +458,7 @@ void RouterControl::modLink(CtlPkt& cp) {
 	ifte.availRates.subtract(delta);
 	lte.rates = rates;
 	lte.availRates.add(delta);
-	rtr->qm->setLinkRates(lnk,rates);
+	qm->setLinkRates(lnk,rates);
 	cp.fmtModLinkReply();
 	return;
 }
@@ -704,7 +701,6 @@ void RouterControl::addComtreeLink(CtlPkt& cp) {
 	qm->setQRates(qid,minRates);
 	if (isRtr) qm->setQLimits(qid,500,1000000);
 	else	   qm->setQLimits(qid,500,1000000);
-	sm->clearQuStats(qid);
 	cp.fmtAddComtreeLinkReply(lnk,lte.availRates);
 	return;
 }

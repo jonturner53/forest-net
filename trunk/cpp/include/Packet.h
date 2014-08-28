@@ -54,6 +54,7 @@ public:
 	fAdr_t	dstAdr;			///< destination address
 	int	inLink;			///< link on which packet arrived
 	int	outLink;		///< outgoing link for packet
+	int	outQueue;		///< outgoing queue for packet
 	ipa_t	tunIp;			///< peer IP addr from substrate header
 	ipp_t	tunPort;		///< peer port # from substrate header
 	int64_t	rcvSeqNum;		///< used by router to identify packets
