@@ -32,62 +32,56 @@ public:		Quu(int=10);
 	void	reset();
 	void	resize(int);
 	bool	empty() const;
+	bool	full() const;
 
 	void	enq(T);
 	T	deq();	
 private:
-	int	qMax;			///< max number of items in queue
+	int	N;			///< max number of items in queue
 
-	int	count;			///< number of items in queue
-	int	head;			///< index of first item in buf
-	int 	tail;			///< index of first empty space in buf
+	atomic<int> count;		///< number of items in queue
+	int	rp;			///< index of first item in buf
+	int 	wp;			///< index of first empty space in buf
 
 	T	*buf;			///< where values are stored
 
-	mutex mtx;			///< used to ensure mutual exclusion
-	condition_variable emptyQ;	///< condition variable for empty queue
-	condition_variable fullQ;	///< condition variable for full queue
+	mutex emtx, dmtx;		///< used to ensure mutual exclusion
+	condition_variable notEmpty;	///< condition variable for empty queue
+	condition_variable notFull;	///< condition variable for full queue
 };
 
 /** Constructor for Quu objects.
- *  @param qMax1 is the maximum number of elements that can be queued.
+ *  @param x is the log2 of the maximum number of elements that can be queued
  */
 template<class T>
-Quu<T>::Quu(int qMax1) {
-	qMax = qMax1;
-	count = head = tail = 0;
-	buf = new T[qMax];
+Quu<T>::Quu(int x) : N(1 << x) {
+	buf = new T[N];
+	count.store(0); rp = wp = 0;
 }
 
 /** Destructor for Quu objects. */
 template<class T>
 Quu<T>::~Quu() { delete [] buf; }
 
-/** Reset the queue, discarding any contents.
- *  This should only be used in contexts where there is a single writer,
- *  and only the writing thread should do it.
- */
-template<class T>
-inline void Quu<T>::reset() {
-	unique_lock<mutex> lck(mtx);
-	count = tail = head = 0;
-}
-
 /** Resize the queue, discarding any contents.
- *  This should only be used when the queue is empty and preferably
- *  before any threads are using the Quu.
+ *  This should only be used before any threads are using the Quu.
  */
 template<class T>
-inline void Quu<T>::resize(int nuSiz) {
-	unique_lock<mutex> lck(mtx);
-	qMax = nuSiz; delete [] buf; buf = new T[qMax+1];
+inline void Quu<T>::resize(int x) {
+	N = 1 << x; delete [] buf; buf = new T[N];
 }
 
 /** Determine if queue is empty.
  *  @return true if the queue is empty, else false
  */
 template<class T>
-inline bool Quu<T>::empty() const { return count == 0; }
+inline bool Quu<T>::empty() const { return count.load() == 0; }
+
+/** Determine if queue is full.
+ *  @return true if the queue is full, else false
+ */
+template<class T>
+inline bool Quu<T>::full() const { return count.load() == N; }
 
 /** Add value to the end of the queue.
  *  The calling thread is blocked if the queue is full.
@@ -95,15 +89,19 @@ inline bool Quu<T>::empty() const { return count == 0; }
  */
 template<class T>
 void Quu<T>::enq(T x) {
-	unique_lock<mutex> lck(mtx);
-	while (count == qMax) { fullQ.wait(lck); }
+	unique_lock<mutex> elck(emtx);
+	notFull.wait(elck,[=]{return !full();});
 
-	buf[tail] = x;
-	count++;
-	tail = (tail + 1) % qMax;
+	buf[wp] = x;
+	wp = (wp+1)%N;
 
-	lck.unlock();
-	emptyQ.notify_one();
+	bool wakeup = (count++ == 0 ? true : false);
+	elck.unlock();
+
+	if (wakeup) {
+		unique_lock<mutex> dlck(dmtx);
+		notEmpty.notify_all();
+	}
 }
 
 /** Remove and return first item in the queue.
@@ -111,15 +109,19 @@ void Quu<T>::enq(T x) {
  *  @return the next item in the queue
  */
 template<class T> T Quu<T>::deq() {
-	unique_lock<mutex> lck(mtx);
-	while (count == 0) { emptyQ.wait(lck); }
+	unique_lock<mutex> dlck(dmtx);
+	notEmpty.wait(dlck,[=]{return !empty();});
 
-	T x = buf[head];
-	count--;
-	head = (head + 1) % qMax;
+	T x = buf[rp];
+	rp = (rp+1)% N;
 
-	lck.unlock();
-	fullQ.notify_one();
+	bool wakeup = (count-- == N ? true : false);
+	dlck.unlock();
+
+	if (wakeup) {
+		unique_lock<mutex> elck(emtx);
+		notFull.notify_all();
+	}
 	return x;
 }
 
