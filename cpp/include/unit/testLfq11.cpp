@@ -22,12 +22,12 @@ Lfq11<int> q1(4);
 void f(int i) {
 	int x;
 	if (i == 0) {
-		for (int j = 0; j < 10000000; j++) {
+		for (int j = 0; j < 5000000; j++) {
 			do { x = q0.deq(); } while(x == 0);
 			while (!q1.enq(x)) ;
 		}
 	} else {
-		for (int j = 0; j < 10000000; j++) {
+		for (int j = 0; j < 5000000; j++) {
 			do { x = q1.deq(); } while(x == 0);
 			while (!q0.enq(x)) ;
 		}
