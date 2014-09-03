@@ -111,7 +111,7 @@ namespace forest {
 Router::Router(const RouterInfo& config) {
 	int nIfaces = 50; int nLnks = 1000;
 	int nComts = 5000; int nRts = 100000;
-	int nPkts = 100000; int nBufs = 50000;
+	int nPkts = 1 << 17; int nBufs = 1 << 16;
 	int nQus = 10000;
 
 	myAdr = config.myAdr;
@@ -123,7 +123,7 @@ Router::Router(const RouterInfo& config) {
 	leafAdr = 0;
 
 	try {
-		ps = new PacketStore(nPkts, nBufs);
+		ps = new PacketStore(17, 16);
 		ift = new IfaceTable(nIfaces);
 		lt = new LinkTable(nLnks);
 		ctt = new ComtreeTable(nComts,10*nComts);

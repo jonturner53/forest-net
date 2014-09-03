@@ -10,26 +10,25 @@
 
 namespace forest {
 
-
 /** Constructor allocates space and initializes free lists.
- *  @param N1 is number of packets to allocate space for
- *  @param M1 is the number of buffers to allocate space for
+ *  @param px is log2(number of packets to allocate space for)
+ *  @param bx is log2(number of buffers to allocate space for)
  */
-PacketStore::PacketStore(int N1, int M1) : N(N1), M(M1) {
+PacketStore::PacketStore(int px, int bx) : N(1 << px), M(1 << bx) {
 	n = m = 0;
-	pkt = new Packet[N+1]; pb = new int[N+1];
+	pkt = new Packet[N+1];
 	buff = new buffer_t[M+1];
-	ref = new int[M+1];
-	freePkts = new List(N); freeBufs = new List(M);
+	ref = new atomic<int>[M+1];
+	freePkts = new Lfq<int>(N); freeBufs = new Lfq<int>(M);
 
 	int i;
-	for (i = 1; i <= N; i++) { freePkts->addLast(i); pb[i] = 0; }
-	for (i = 1; i <= M; i++) { freeBufs->addLast(i); ref[i] = 0; }
-	pb[0] = ref[0] = 0;
+	for (i = 1; i <= N; i++) { freePkts->enq(i); pkt[i].buffer = 0; }
+	for (i = 1; i <= M; i++) { freeBufs->enq(i); ref[i].store(0); }
+	pkt[0].buffer = 0; ref[0].store(0);
 };
 	
 PacketStore::~PacketStore() {
-	delete [] pkt; delete [] pb; delete [] buff; delete [] ref;
+	delete [] pkt; delete [] buff; delete [] ref;
 	delete freePkts; delete freeBufs;
 }
 
@@ -37,13 +36,13 @@ PacketStore::~PacketStore() {
  *  @return the packet number or 0, if no more packets available
  */
 pktx PacketStore::alloc() {
-	unique_lock<mutex> lck(mtx);
-
-	if (freePkts->empty() || freeBufs->empty()) return 0;
-	n++; m++;
-	pktx px = freePkts->get(1); freePkts->removeFirst();
-	int b = freeBufs->get(1); freeBufs->removeFirst();
-	ref[b] = 1;
+	pktx px = freePkts->deq();
+	if (px == 0) return 0;
+	int b = freeBufs->deq();
+	if (b == 0) {
+		freePkts->enq(px); return 0;
+	}
+	ref[b].store(1);
 	pkt[px].buffer = &buff[b];
 	return px;
 }
@@ -53,11 +52,10 @@ pktx PacketStore::alloc() {
  *  @param px is the packet number of the packet to be released
  */
 void PacketStore::free(pktx px) {
-	unique_lock<mutex> lck(mtx);
-	if (px < 1 || px > N || freePkts->member(px)) return;
+	if (px < 1 || px > N || pkt[px].buffer == 0) return;
 	int b = pkt[px].buffer - buff;
-	freePkts->addFirst(px); n--;
-	if ((--ref[b]) == 0) { freeBufs->addFirst(b); m--; }
+	pkt[px].buffer = 0; freePkts->enq(px);
+	if ((--ref[b]) == 0) freeBufs->enq(b);
 }
 
 /** Make a "clone" of an existing packet.
@@ -67,14 +65,12 @@ void PacketStore::free(pktx px) {
  *  @return the index of the new packet or 0 on failure
  */
 pktx PacketStore::clone(pktx px) {
-	unique_lock<mutex> lck(mtx);
-	if (freePkts->empty()) return 0;
-	n++;
-	pktx px1 = freePkts->get(1); freePkts->removeFirst();
-	lck.unlock();
-	pkt[px1] = pkt[px];
+	if (px < 1 || px > N || pkt[px].buffer == 0) return 0;
+	pktx cx = freePkts->deq();
+	if (cx == 0) return 0;
+	pkt[cx] = pkt[px];
 	int b = pkt[px].buffer - buff; ref[b]++;
-	return px1;
+	return cx;
 }
 
 /** Allocate a new packet with the same content as p.
@@ -82,14 +78,14 @@ pktx PacketStore::clone(pktx px) {
  *  @return the index of the new packet.
  */
 pktx PacketStore::fullCopy(pktx px) {
-	int px1 = alloc();
-	if (px1 == 0) return 0;
-	Packet& p = getPacket(px); Packet& p1 = getPacket(px1);
-	pkt[px1] = pkt[px];
-	int len = (p.length+3)/4;
-	std::copy(&((*p.buffer)[0]), &((*p.buffer)[0])+len, &((*p1.buffer)[0]));
-	return px1;
+	int cx = alloc();
+	if (cx == 0) return 0;
+	pkt[cx] = pkt[px];
+	uint32_t* pp = (uint32_t*) pkt[px].buffer;
+	uint32_t* cp = (uint32_t*) pkt[cx].buffer;
+	int len = (pkt[px].length+3)/4;
+	std::copy(pp, &pp[len], cp);
+	return cx;
 }
 
 } // ends namespace
-

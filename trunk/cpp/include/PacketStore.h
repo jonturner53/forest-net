@@ -20,6 +20,7 @@ using std::thread;
 #include "Forest.h"
 #include "List.h"
 #include "Packet.h"
+#include "Lfq.h"
 
 namespace forest {
 
@@ -34,7 +35,7 @@ typedef int pktx;
  */
 class PacketStore {
 public:
-                PacketStore(int=100000, int=50000);
+                PacketStore(int=17, int=16);
                 ~PacketStore();
 
 	// getters 
@@ -55,16 +56,12 @@ private:
         int     n;                      ///< number of packets in use
         int     m;                      ///< number of buffers in use
 
-	mutex	mtx;			///< lock on packet store
-
-        Packet	*pkt;             	///< hkt[i] = packet with index i
-        int     *pb;                    ///< pb[i] = index of packet i's buffer
-
+        Packet	*pkt;             	///< pkt[i] = packet with index i
         buffer_t *buff;                 ///< array of packet buffers
-        int     *ref;                   ///< array of ref counts for buffers
+        atomic<int> *ref;               ///< array of ref counts for buffers
 
-        List    *freePkts;              ///< list of free packets
-        List    *freeBufs;              ///< list of free buffers
+        Lfq<int> *freePkts;              ///< list of free packets
+        Lfq<int> *freeBufs;              ///< list of free buffers
 };
 
 /** Get reference to packet header.
@@ -74,15 +71,6 @@ private:
 inline Packet& PacketStore::getPacket(pktx px) const {
 	return pkt[px];
 }
-
-/** Set the fields in a packet.
- *  @param px is the packet whose header is to be updated
- *  @param p is a reference to a header whose value is to be
- *  copied into the header for px
-inline void PacketStore::setPacket(pktx px, const Packet& p) {
-	pkt[px] = p;
-}
-*/
 
 } // ends namespace
 
