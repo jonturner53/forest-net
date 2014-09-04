@@ -15,7 +15,6 @@
 #include <mutex>
 #include <chrono>
 
-#include "Quu.h"
 #include "IfaceTable.h"
 #include "LinkTable.h"
 #include "ComtreeTable.h"

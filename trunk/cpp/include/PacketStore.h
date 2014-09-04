@@ -20,7 +20,7 @@ using std::thread;
 #include "Forest.h"
 #include "List.h"
 #include "Packet.h"
-#include "Lfq.h"
+#include "NonblockingQ.h"
 
 namespace forest {
 
@@ -60,8 +60,8 @@ private:
         buffer_t *buff;                 ///< array of packet buffers
         atomic<int> *ref;               ///< array of ref counts for buffers
 
-        Lfq<int> *freePkts;              ///< list of free packets
-        Lfq<int> *freeBufs;              ///< list of free buffers
+        NonblockingQ<int> *freePkts;   	///< list of free packets
+        NonblockingQ<int> *freeBufs;   	///< list of free buffers
 };
 
 /** Get reference to packet header.

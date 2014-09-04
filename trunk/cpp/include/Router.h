@@ -17,10 +17,11 @@
 #include <atomic>
 
 #include "stdinc.h"
+#include "NonblockingQ11.h"
+
 #include "Forest.h"
 #include "CtlPkt.h"
 
-#include "Quu.h"
 #include "IfaceTable.h"
 #include "LinkTable.h"
 #include "ComtreeTable.h"
@@ -89,15 +90,15 @@ private:
         seconds runLength; 		///< # of seconds for router to run
 	high_resolution_clock::time_point tZero; ///< router start time
 
-	uint64_t seqNum;		///< sequence number for ctl packets
-	mutex	snLock;			///< lock for sequence number
+	atomic<uint64_t> seqNum;	///< sequence number for ctl packets
+	uint64_t nextSeqNum() { return seqNum++; }
 
 	fAdr_t	firstLeafAdr;		///< first leaf address
 	fAdr_t	lastLeafAdr;		///< last leaf address
 	ListPair *leafAdr;		///< offsets for leaf addresses
 
 	/// XferQ used to transfer packets from input thread to output thread.
-	Lfq11<int> xferQ;
+	NonblockingQ11<int> xferQ;
 
 	IfaceTable *ift;		///< table defining interfaces
 	LinkTable *lt;			///< table defining links
@@ -138,7 +139,6 @@ private:
 	bool	validLeafAdr(fAdr_t) const;
 	bool	isFreeLeafAdr(fAdr_t) const;
 
-	uint64_t nextSeqNum();
 };
 
 

@@ -13,11 +13,11 @@ IDIR := ${FROOT}/include
 
 HFILES = ${IDIR}/Forest.h ${IDIR}/RateSpec.h ${IDIR}/CtlPkt.h ${IDIR}/Packet.h \
 	 ${IDIR}/PacketLog.h ${IDIR}/PacketStore.h  ${IDIR}/PacketStoreTs.h \
-	 ${IDIR}/Queue.h ${IDIR}/Lfq.h ${IDIR}/Np4d.h \
+	 ${IDIR}/Queue.h ${IDIR}/Np4d.h \
 	${IDIR}/Packet.h ${IDIR}/Logger.h \
 	${IDIR}/PacketFilter.h ${IDIR}/Repeater.h ${IDIR}/RepeatHandler.h
 OFILES = Forest.o RateSpec.o CtlPkt.o Packet.o PacketLog.o PacketStore.o \
-	 PacketStoreTs.o Queue.o Lfq.o Np4d.o Packet.o \
+	 PacketStoreTs.o Queue.o Np4d.o Packet.o \
 	 Logger.o NetBuffer.o PacketFilter.o Repeater.o RepeatHandler.o
 ${OFILES} : ${HFILES}
 

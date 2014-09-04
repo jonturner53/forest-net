@@ -12,6 +12,7 @@
 #include <thread>
 #include <mutex>
 #include <chrono>
+#include "BlockingQ.h"
 #include "Forest.h"
 #include "Router.h"
 #include "Packet.h"
@@ -33,7 +34,8 @@ class Router;
  */
 class RouterControl {
 public:
-		RouterControl(Router*, int, Quu<int>*, Quu<pair<int,int>>*);
+		RouterControl(Router*, int,
+			      BlockingQ<int>*, BlockingQ<pair<int,int>>*);
 		RouterControl() {};
 		~RouterControl();
 	static void start(RouterControl*);
@@ -50,8 +52,8 @@ private:
 	QuManager *qm;			///< queues and link schedulers
 
 	int	myThx;			///< my thread index
-	Quu<int> *inQ;			///< input queue for this thread
-	Quu<pair<int,int>> *outQ; 	///< output queue, shared among threads
+	BlockingQ<int> *inQ;		///< input queue for this thread
+	BlockingQ<pair<int,int>> *outQ;	///< output queue, shared among threads
 
 	void	run();
 

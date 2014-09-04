@@ -26,7 +26,7 @@
 #include "RepeatHandler.h"
 #include "CtlPkt.h"
 #include "QuManager.h"
-#include "Quu.h"
+#include "BlockingQ.h"
 #include "StatCounts.h"
 #include "PacketLog.h"
 
@@ -73,13 +73,13 @@ private:
 	struct ThreadInfo {
                 thread	thred;		///< thread object
 		RouterControl rc;	///< per thread RouterControl object
-                Quu<pktx> q;		///< used to send packets to thread
+                BlockingQ<pktx> q;	///< used to send packets to thread
 		int64_t rcvSeqNum;	///< rcvSeqNum of last packet to thred
 		ThreadInfo() {};
         };
 	ThreadInfo *tpool;		///< pointer to thread pool
 	List	freeThreads;		///< list of unassigned thread indexs
-	Quu<pair<int,int>> retQ;	///< Quu coming from worker threads
+	BlockingQ<pair<int,int>> retQ;	///< queue coming from worker threads
 	int64_t rcvSeqNum;		///< used to coordinate thread dealloc
 
 	HashSet<comt_t, Hash::u32> *comtSet; ///< maps comt->thx
