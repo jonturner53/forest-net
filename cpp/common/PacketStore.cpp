@@ -19,7 +19,8 @@ PacketStore::PacketStore(int px, int bx) : N(1 << px), M(1 << bx) {
 	pkt = new Packet[N+1];
 	buff = new buffer_t[M+1];
 	ref = new atomic<int>[M+1];
-	freePkts = new Lfq<int>(N); freeBufs = new Lfq<int>(M);
+	freePkts = new NonblockingQ<int>(N);
+	freeBufs = new NonblockingQ<int>(M);
 
 	int i;
 	for (i = 1; i <= N; i++) { freePkts->enq(i); pkt[i].buffer = 0; }

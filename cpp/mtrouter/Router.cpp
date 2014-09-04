@@ -111,7 +111,7 @@ namespace forest {
 Router::Router(const RouterInfo& config) {
 	int nIfaces = 50; int nLnks = 1000;
 	int nComts = 5000; int nRts = 100000;
-	int nPkts = 1 << 17; int nBufs = 1 << 16;
+	int nPkts = 1 << 17;
 	int nQus = 10000;
 
 	myAdr = config.myAdr;
@@ -123,7 +123,7 @@ Router::Router(const RouterInfo& config) {
 	leafAdr = 0;
 
 	try {
-		ps = new PacketStore(17, 16);
+		ps = new PacketStore(17, 16); // 2^17 packets, 2^16 buffers
 		ift = new IfaceTable(nIfaces);
 		lt = new LinkTable(nLnks);
 		ctt = new ComtreeTable(nComts,10*nComts);
@@ -136,6 +136,8 @@ Router::Router(const RouterInfo& config) {
 	
 		rip = new RouterInProc(this);
 		rop = new RouterOutProc(this);
+
+		xferQ.resize(10); // 2^10 slots in transfer queue
 
 		setLeafAdrRange(config.firstLeafAdr, config.lastLeafAdr);
 	} catch (std::bad_alloc e) {
@@ -159,13 +161,6 @@ Router::~Router() {
 	delete pktLog; delete qm; 
 	delete rt; delete ctt; delete lt; delete ift; delete ps;
 	delete leafAdr; delete [] sock;
-}
-
-/** Get the next sequence number.  */
-uint64_t Router::nextSeqNum() {
-	unique_lock<mutex> lck(snLock);
-	uint64_t sn = ++seqNum;
-	return sn;
 }
 
 /** Read router configuration tables from files.

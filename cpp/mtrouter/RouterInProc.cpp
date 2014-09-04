@@ -300,7 +300,7 @@ void RouterInProc::bootSend(pktx px) {
 	return;
 }
 
-/** Check for a incoming and outgoings packets and process them. 
+/** Check for incoming and outgoings packets and process them. 
  *  @return true if a packet was processed, false if nothing happening
  */
 bool RouterInProc::mainline() {
@@ -311,7 +311,9 @@ bool RouterInProc::mainline() {
 	unique_lock<mutex>  rtLock(rtr->rtMtx,defer_lock);
 	lock(iftLock,ltLock);
 
-	px = receive();
+	if (rtr->xferQ.full()) overload = true;
+	else if (rtr->xferQ.empty()) overload = false;
+	px = (overload ? 0 : receive());
 	if (px != 0) {
 		Packet& p = ps->getPacket(px);
 		p.outQueue = 0;
@@ -331,7 +333,7 @@ bool RouterInProc::mainline() {
 		handleControl(px,ctx);
 		return true;
 	}
-	// check for packet from RouterControl
+	// check for outgoing packet from RouterControl
 	if (retQ.empty()) { 
 		// check for overdue packet and resend
 		pair<int,int> pp = rptr->overdue(now);
@@ -375,7 +377,8 @@ bool RouterInProc::mainline() {
 		ps->free(px); return true;
 	}
 	if (p.type != Forest::CLIENT_SIG || p.type != Forest::NET_SIG) {
-		rtr->xferQ.enq(px); return true;
+		if (rtr->xferQ.enq(px) == 0) ps->free(px);
+		return true;
 	}
 	CtlPkt cp(p);
 	if (cp.mode == CtlPkt::REQUEST) {
@@ -530,7 +533,7 @@ void RouterInProc::forward(pktx px, int ctx) {
 				ps->free(px);
 			} else {
 				p.outQueue = ctt->getClnkQ(ctx,rcLnk);
-				rtr->xferQ.enq(px);
+				if (rtr->xferQ.enq(px) == 0) ps->free(px);
 			}
 			return;
 		}
@@ -550,7 +553,7 @@ void RouterInProc::forward(pktx px, int ctx) {
 			p.length = Forest::OVERHEAD + sizeof(fAdr_t);
 			p.pack(); p.hdrErrUpdate(); p.payErrUpdate();
 			p.outQueue = ctt->getLinkQ(ctx,p.inLink);
-			rtr->xferQ.enq(px);
+			if (rtr->xferQ.enq(px) == 0) ps->free(px);
 			return;
 		}
 		// send to neighboring routers in comtree
@@ -619,7 +622,7 @@ void RouterInProc::multiForward(pktx px, int ctx, int rtx) {
 		}
 	}
 	buf[next] = 0;
-	rtr->xferQ.enq(px); // place packet in transfer queue
+	if (rtr->xferQ.enq(px) == 0) ps->free(px);
 }
 
 /** Send route reply back towards p's source.
@@ -646,7 +649,7 @@ void RouterInProc::sendRteReply(pktx px, int ctx) {
 	p1.hdrErrUpdate(); p.payErrUpdate();
 
 	p.outQueue = ctt->getLinkQ(ctx,p.inLink);
-	rtr->xferQ.enq(px);
+	if (rtr->xferQ.enq(px) == 0) ps->free(px);
 }
 
 /** Handle a route reply packet.
@@ -682,7 +685,7 @@ void RouterInProc::handleRteReply(pktx px, int ctx) {
 	int lnk = ctt->getLink(ctx,dcLnk);
 	if (lt->getEntry(lnk).peerType == Forest::ROUTER) {
 		p.outQueue = ctt->getClnkQ(ctx,dcLnk);
-		rtr->xferQ.enq(px);
+		if (rtr->xferQ.enq(px) ==0) ps->free(px);
 	} else {
 		ps->free(px);
 	}
@@ -700,7 +703,7 @@ void RouterInProc::returnAck(pktx px, int ctx, bool ackNack) {
 	p.flags |= (ackNack ? Forest::ACK_FLAG : Forest::NACK_FLAG);
 	p.pack(); p.hdrErrUpdate();
 	p.outQueue = ctt->getLinkQ(ctx,p.inLink);
-	rtr->xferQ.enq(px);
+	if (rtr->xferQ.enq(px) == 0) ps->free(px);
 }
 
 /** Perform subscription processing on a packet.
@@ -785,7 +788,7 @@ void RouterInProc::subUnsub(pktx px, int ctx) {
 		if (cx != 0) {
 			rptr->saveReq(cx, seqNum, now);
 		};
-		rtr->xferQ.enq(px);
+		if (rtr->xferQ.enq(px) == 0) ps->free(px);
 	} else {
 		ps->free(px);
 	}

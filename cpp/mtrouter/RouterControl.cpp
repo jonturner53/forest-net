@@ -11,7 +11,7 @@
 namespace forest {
 
 RouterControl::RouterControl(Router *rtr1, int thx,
-			Quu<int> *inQ1, Quu<pair<int,int>> *outQ1) 
+			BlockingQ<int> *inQ1, BlockingQ<pair<int,int>> *outQ1) 
 			: rtr(rtr1), myThx(thx), inQ(inQ1), outQ(outQ1) {
 	ift = rtr->ift; lt = rtr->lt; ctt = rtr->ctt; rt = rtr->rt;
 	ps = rtr->ps; qm = rtr->qm; pktLog = rtr->pktLog;
