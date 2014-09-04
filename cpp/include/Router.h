@@ -97,7 +97,7 @@ private:
 	ListPair *leafAdr;		///< offsets for leaf addresses
 
 	/// XferQ used to transfer packets from input thread to output thread.
-	Quu<int> xferQ;
+	Lfq11<int> xferQ;
 
 	IfaceTable *ift;		///< table defining interfaces
 	LinkTable *lt;			///< table defining links

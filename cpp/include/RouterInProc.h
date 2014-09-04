@@ -53,6 +53,7 @@ private:
 	typedef high_resolution_clock::time_point timePoint;
 
 	uint64_t now;			///< relative to router start time
+	bool overload;			///< set when xferQ fills
 
 	Router	*rtr;			///< pointer to main router object
 
