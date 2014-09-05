@@ -22,9 +22,10 @@ RouterInProc::RouterInProc(Router *rtr1) : rtr(rtr1) {
 	sockets = new fd_set;
 
 	// setup thread pool
+	retQ.resize(4*numThreads + 100);
 	tpool = new ThreadInfo[numThreads+1];
 	for (int i = 1; i <= numThreads; i++) {
-		tpool[i].q.resize(100);
+		tpool[i].q.resize(50);
 		tpool[i].rc = RouterControl(rtr, i, &(tpool[i].q), &retQ);
 		tpool[i].thred = thread(RouterControl::start,&tpool[i].rc);
 	}
