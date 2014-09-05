@@ -11,10 +11,10 @@
 namespace forest {
 
 /** Constructor allocates space and initializes free lists.
- *  @param px is log2(number of packets to allocate space for)
- *  @param bx is log2(number of buffers to allocate space for)
+ *  @param numPkts is the number of packets to allocate space for
+ *  @param numBufs is the number of buffers to allocate space for
  */
-PacketStore::PacketStore(int px, int bx) : N(1 << px), M(1 << bx) {
+PacketStore::PacketStore(int numPkts, int numBufs) : N(numPkts), M(numBufs) {
 	n = m = 0;
 	pkt = new Packet[N+1];
 	buff = new buffer_t[M+1];
