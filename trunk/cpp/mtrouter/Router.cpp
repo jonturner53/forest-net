@@ -146,14 +146,18 @@ Router::Router(const RouterInfo& config) {
         }
 
 	if (config.mode.compare("local") == 0) {
+cerr << "P\n";
+		booting = false;
 		if (!readTables(config) || !setup())
 			Util::fatal("Router: could not complete local "
 					"configuration\n");
 	} else {
+cerr << "Q\n";
 		booting = true;
 	}
 	seqNum = 0;
 	tZero = high_resolution_clock::now();
+	pktLog->turnOnLogging(false);
 }
 
 Router::~Router() {
@@ -270,6 +274,19 @@ bool Router::setupIface(int i) {
                 return false;
         }
 	ifte.port = Np4d::getSockPort(sock[i]);
+
+	// configure receive buffer size
+	int bsiz = (1 << 19); socklen_t len = sizeof(bsiz);
+	if (setsockopt(sock[i],SOL_SOCKET,SO_RCVBUF,(void*) (&bsiz), len)<0) {
+		perror("");
+		Util::fatal("Router::setupIface: can't get socket buffer size");
+	}
+	int bsiz2;
+	if (getsockopt(sock[i],SOL_SOCKET,SO_RCVBUF,(void*) (&bsiz2), &len)<0) {
+		perror("");
+		Util::fatal("Router::setupIface: can't get socket buffer size");
+	}
+	cout << "receive socket buffer size: " << bsiz2 << endl;
 
 	return true;
 }

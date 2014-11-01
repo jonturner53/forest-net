@@ -10,7 +10,6 @@
 
 namespace forest {
 
-
 /** Constructor for IfaceTable, allocates space and initializes private data.
  */
 IfaceTable::IfaceTable(int maxIf1) : maxIf(maxIf1) {

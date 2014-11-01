@@ -9,6 +9,11 @@
 #ifndef HOST_H
 #define HOST_H
 
+#include <thread>
+#include <chrono>
+
+using namespace std::chrono;
+
 #include "Forest.h"
 #include "Packet.h"
 #include "PacketStore.h"
@@ -29,8 +34,8 @@ public:
 		~Host();
 
 	bool	init();			
-	void	run(bool,int,int);
-	bool 	readPacket(int,int&,int&); 
+	void	run(bool,int64_t,int);
+	bool 	readPacket(int,int64_t&,int&); 
 	void	send(int);
 	int	receive();	
 private:

@@ -23,6 +23,8 @@ using std::thread;
 using std::unique_lock;
 using std::defer_lock;
 
+using namespace grafalgo;
+
 namespace forest {
 
 class Router;

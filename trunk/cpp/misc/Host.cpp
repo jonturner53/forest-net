@@ -6,7 +6,6 @@
  *  See http://www.apache.org/licenses/LICENSE-2.0 for details.
  */
 
-#include "stdinc.h"
 #include "Host.h"
 
 using namespace forest;
@@ -19,7 +18,7 @@ using namespace forest;
  *  MyIpAdr and rtrIpAdr are the IP addresses of the host itself
  *  and the forest router it connects to. If repeatFlag is false
  *  repeat specifications in the packet specification file are
- *  ignored. Delta is the minimum number of microseconds
+ *  ignored. Delta is the minimum number of nanoseconds
  *  between successive packet transmissions.
  *  FinTime is the number of seconds that the host should run.
  * 
@@ -28,7 +27,7 @@ using namespace forest;
  *  comment lines (which begin with '#'). Each non-blank, non-comment
  *  line specifies one packet in the form of a list of integer values
  *  separated by blanks. The first value on each line is a
- *  pause specification that indicates the number of microseconds
+ *  pause specification that indicates the number of nanoseconds
  *  to wait before sending the packet. This is ignored if it is
  *  less than delta. The next four values specify the packet's
  *  length (in bytes), its comtree number, the source forest address,
@@ -71,7 +70,7 @@ int main(int argc, char *argv[]) {
 
 	Host host(myIpAdr,rtrIpAdr);
 	if (!host.init()) Util::fatal("Host:: initialization failure");
-	host.run((repeatFlag ? true : false), delta, 1000000*finTime);
+	host.run((repeatFlag ? true : false), (int64_t) delta, finTime);
 }
 
 namespace forest {
@@ -96,19 +95,19 @@ bool Host::init() {
 		Np4d::nonblock(sock);
 }
 
-void Host::run(bool repeatFlag, int delta, int finishTime) {
+void Host::run(bool repeatFlag, int64_t delta, int finishTime) {
 // Run the host. If repeatFlag is false, then all repeat specifications
-// are ignored. Delta is the minimum time between packets.
-// FinishTime and delta are expressed in microseconds.
+// are ignored. Delta is the minimum time between packets in nanoseconds.
+// FinishTime is the number of seconds to run.
 
-	int i, pause, cnt, np;
+	int i, cnt, np;
+	int64_t pause;
 	pktx px;
 	const int MAXEVENTS = 200;
-	struct { bool sendFlag; uint32_t time; int pkt;} events[MAXEVENTS];
+	struct { bool sendFlag; int64_t time; int pkt;} events[MAXEVENTS];
 	int evCnt = 0;
 	int nRcvd = 0; int nSent = 0; 	// counts of received and sent packets
-	bool didNothing;
-	struct { int pause, p, cnt, iter; } pkt[nPkts+1];
+	struct { int64_t pause, p, cnt, iter; } pkt[nPkts+1];
 
 	// read packets from file into packetStore
 	np = 0;
@@ -129,21 +128,17 @@ void Host::run(bool repeatFlag, int delta, int finishTime) {
 	}
 	if (np == 0) return;
 
-	uint32_t now;    	// free-running microsecond count
-	uint32_t nextTime;	// time next packet is to go out
-	struct timeval ct, pt; // current and previous time values
-	if (gettimeofday(&ct, NULL) < 0)
-		Util::fatal("Host::run: gettimeofday failure");
-	i = 0;	// index in pkt[] of next outgoing packet
-	now = 0; nextTime = 1000000;
-	while (now <= finishTime) {
+	high_resolution_clock::time_point t0 = high_resolution_clock::now();
+	int64_t now = 0;    	// number of nanoseconds since t0
+	int64_t nextTime = pkt[0].pause; // time when next packet is to go
+
+	i = 0;
+	while (now <= ((int64_t) finishTime)*1000000000) {
 		// receive packet if any and record statistics
-		didNothing = true;
 		// input processing
 		px = receive();
 		Packet& p = ps->getPacket(px);
 		if (px != 0) {
-			didNothing = false;
 			nRcvd++;
 			p.unpack();
 			if (evCnt < MAXEVENTS) {
@@ -159,7 +154,8 @@ void Host::run(bool repeatFlag, int delta, int finishTime) {
 		// send next packet
 		if (i < np && now >= nextTime) {
 			send(pkt[i].p);
-			didNothing = false;
+if (nSent < 20)
+cerr << i << " " << now << " " << nextTime << endl;
 			nSent++;
 			if (evCnt < MAXEVENTS) {
 				pktx px1 = ps->clone(pkt[i].p);
@@ -169,6 +165,8 @@ void Host::run(bool repeatFlag, int delta, int finishTime) {
 				evCnt++;
 			}
 			i++;
+if (nSent < 20)
+cerr << i << " " << pkt[i].pause << " " << pkt[i].cnt << endl;
 			while (i < np && pkt[i].pause < 0) { // repeat spec
 				if (pkt[i].cnt <= 0) { // repeat forever
 					i += pkt[i].pause;
@@ -182,33 +180,16 @@ void Host::run(bool repeatFlag, int delta, int finishTime) {
 			}
 			if (i < np) nextTime += std::max(delta,pkt[i].pause);
 		}
-		// update time variables
-		pt = ct;
-		if (gettimeofday(&ct,0) < 0)
-			Util::fatal("Host::run: gettimeofday failure");
-		now += (ct.tv_sec == pt.tv_sec ?
-                           ct.tv_usec - pt.tv_usec :
-                           ct.tv_usec + (1000000 - pt.tv_usec)
-			);
-		if (!didNothing) continue;
 
-		// if next packet not due to go soon, sleep until almost time
-		if (now + 500 >= nextTime) continue;
-		struct timespec sleeptime, rem;
-		sleeptime.tv_sec = 0;
-		if (nextTime - (now + 500) < 2500)
-			sleeptime.tv_nsec = (nextTime - (now + 500))*1000;
-		else
-			sleeptime.tv_nsec = 2500000;
-		nanosleep(&sleeptime,&rem);
-		// update time variables again following sleep
-		pt = ct;
-		if (gettimeofday(&ct,0) < 0)
-			Util::fatal("Host::run: gettimeofday failure");
-		now += (ct.tv_sec == pt.tv_sec ?
-                           ct.tv_usec - pt.tv_usec :
-                           ct.tv_usec + (1000000 - pt.tv_usec)
-			);
+		// update time variables and possibly sleep
+		nanoseconds temp = high_resolution_clock::now() - t0;
+		now = temp.count();
+
+		if (nextTime > now + 1200000) {
+			this_thread::sleep_for(milliseconds(1));
+			temp = high_resolution_clock::now() - t0;
+			now = temp.count();
+		}
 	}
 
 	// print recorded events
@@ -217,16 +198,14 @@ void Host::run(bool repeatFlag, int delta, int finishTime) {
 			cout << "send[";
 		else
 			cout << "recv[";
-		cout << setw(2) << setw(8) << events[i].time << "] ";
-		px = events[i].pkt;
-		Packet& p = ps->getPacket(px);
-		cout << p.toString();
+		cout << (((double) events[i].time)/1000000000) << "] ";
+		cout << ps->getPacket(events[i].pkt).toString();
 	}
 	cout << endl;
 	cout << nRcvd << " packets received, " << nSent << " packets sent, "; 
 }
 
-bool Host::readPacket(pktx px, int& pause, int& cnt) {
+bool Host::readPacket(pktx px, int64_t& pause, int& cnt) {
 // Read an input packet from stdin and return it in p.
         Util::skipBlank(cin);
         if (!Util::readInt(cin,pause)) {

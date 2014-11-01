@@ -86,10 +86,10 @@ bool Packet::read(istream& in) {
 	int flgs, comt; string ptypString;
 
 	Util::skipBlank(in);
-	if (!Util::readInt(in,length) ||
-	    !Util::readWord(in,ptypString) ||
-	    !Util::readInt(in,flgs) ||
-	    !Util::readInt(in,comt) ||
+	if (!Util::readInt(in,length,true) ||
+	    !Util::readWord(in,ptypString,true) ||
+	    !Util::readInt(in,flgs,true) ||
+	    !Util::readInt(in,comt,true) ||
 	    !Forest::readForestAdr(in,srcAdr) ||
 	    !Forest::readForestAdr(in,dstAdr))
 		return false;
@@ -108,7 +108,7 @@ bool Packet::read(istream& in) {
 	buffer_t& b = *buffer;
 	pack(); int32_t x;
 	for (int i = 0; i < min(8,(length-HDRLEN)/4); i++) {
-		if (Util::readInt(in,x)) b[(HDRLEN/4)+i] = htonl(x);
+		if (Util::readInt(in,x,true)) b[(HDRLEN/4)+i] = htonl(x);
 		else b[(HDRLEN/4)+i] = 0;
 	}
 	hdrErrUpdate(); payErrUpdate();

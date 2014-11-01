@@ -7,7 +7,7 @@ FLIB := ${FROOT}/lib/lib-forest.a
 LIBS := ${FLIB} ${AROOT}/lib/lib-ds.a ${AROOT}/lib/lib-util.a
 BIN := ~/bin
 WARN := -Wall 
-CXXFLAGS := ${WARN} ${ARCH} ${INCLUDES} -pthread -O2 -std=c++0x
+CXXFLAGS := ${WARN} ${ARCH} -pthread -O2 -std=c++0x
 JAVAC := javac
 IDIR := ${FROOT}/include
 
@@ -23,7 +23,7 @@ ${OFILES} : ${HFILES}
 Router.o : ${HFILES}
 
 .cpp.o:
-	${CXX} ${CXXFLAGS} -c $<
+	${CXX} ${CXXFLAGS} ${INCLUDES} -c $<
 
 all : ${FLIB} ${XFILES}
 	cp ${XFILES} ${BIN}

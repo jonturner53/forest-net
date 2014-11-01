@@ -45,6 +45,10 @@ RouterInProc::~RouterInProc() {
  */
 void RouterInProc::start(RouterInProc *self) { self->run(); }
 
+int i1=0; int i2=0; int i3=0; int i4=0;
+high_resolution_clock::time_point t1, t2, t3, t4;
+nanoseconds d1(0), d2(0), d3(0), d4(0);
+
 /** Main input processing loop.
  */
 void RouterInProc::run() {
@@ -79,9 +83,12 @@ void RouterInProc::run() {
 		if (px != 0) ps->free(px); 
 
 		if (!mainline()) {
-			this_thread::sleep_for(milliseconds(1));
+		//	this_thread::sleep_for(milliseconds(1));
 		}
 	}
+
+	cerr << "   getting: " << i1 << " " << (d1.count()/i1) << endl;
+	cerr << "forwarding: " << i2 << " " << (d2.count()/i2) << endl;
 }
 
 /** Send a boot request and then process configuration packets from NetMgr.
@@ -301,6 +308,7 @@ void RouterInProc::bootSend(pktx px) {
 	return;
 }
 
+int foo=0;
 /** Check for incoming and outgoings packets and process them. 
  *  @return true if a packet was processed, false if nothing happening
  */
@@ -310,25 +318,29 @@ bool RouterInProc::mainline() {
 	unique_lock<mutex>  ltLock(rtr->ltMtx,defer_lock);
 	unique_lock<mutex> cttLock(rtr->cttMtx,defer_lock);
 	unique_lock<mutex>  rtLock(rtr->rtMtx,defer_lock);
-	lock(iftLock,ltLock);
+	//lock(iftLock,ltLock);
 
-	if (rtr->xferQ.full()) overload = true;
-	else if (rtr->xferQ.empty()) overload = false;
-	px = (overload ? 0 : receive());
+t1 = high_resolution_clock::now();
+	px = receive();
 	if (px != 0) {
+d1 += (high_resolution_clock::now() - t1); i1++;
 		Packet& p = ps->getPacket(px);
+//if (i1 < 10) cerr << p.toString();
 		p.outQueue = 0;
 		((uint32_t*) p.buffer)[1500] = 0; // clear multicast qids
 		p.rcvSeqNum = ++rcvSeqNum;
-		pktLog->log(px,p.inLink,false,now);
-		lock(cttLock, rtLock);
+		//pktLog->log(px,p.inLink,false,now);
+		//lock(cttLock, rtLock);
 		int ctx = ctt->getComtIndex(p.comtree);
 		if (!pktCheck(px,ctx)) {
 			ps->free(px); return true;
 		}
-		iftLock.unlock(); ltLock.unlock();
+		//iftLock.unlock(); ltLock.unlock();
 		if (p.dstAdr != rtr->myAdr) {
-			forward(px,ctx); return true;
+t2 = high_resolution_clock::now(); 
+			forward(px,ctx);
+d2 += high_resolution_clock::now() - t2; i2++; 
+			return true;
 		}
 		// otherwise must be some kind of control packet
 		handleControl(px,ctx);
@@ -342,7 +354,7 @@ bool RouterInProc::mainline() {
 		if (pp.first > 0) {
 			pktx cx = ps->clone(pp.first);
 			if (cx == 0) return true;
-			lock(cttLock, rtLock);
+			//lock(cttLock, rtLock);
 			int ctx = ctt->getComtIndex(ps->getPacket(cx).comtree);
 			forward(cx,ctx); return true;
 		} 
@@ -388,7 +400,7 @@ bool RouterInProc::mainline() {
 		cp.updateSeqNum();
 		// make and save copy in repeat handler, send original
 		pktx cx = ps->clone(px);
-		lock(cttLock, rtLock);
+		//lock(cttLock, rtLock);
 		int ctx = ctt->getComtIndex(p.comtree);
 		if (ctx == 0) { ps->free(px); return true; }
 		forward(px,ctx);
@@ -398,7 +410,7 @@ bool RouterInProc::mainline() {
 	// it's a reply, make copy, send original, save copy in repeat handler
 	// and recycle corresponding request that was stored in repeat handler
 	pktx cx = ps->clone(px);
-	lock(cttLock, rtLock);
+	//lock(cttLock, rtLock);
 	int ctx = ctt->getComtIndex(p.comtree);
 	if (ctx == 0) { ps->free(px); return true; }
 	forward(px,ctx);
@@ -534,7 +546,9 @@ void RouterInProc::forward(pktx px, int ctx) {
 				ps->free(px);
 			} else {
 				p.outQueue = ctt->getClnkQ(ctx,rcLnk);
-				if (rtr->xferQ.enq(px) == 0) ps->free(px);
+				if (rtr->xferQ.enq(px) == 0) {
+					ps->free(px);
+				}
 			}
 			return;
 		}
@@ -565,7 +579,7 @@ void RouterInProc::forward(pktx px, int ctx) {
 	return;
 }
 
-/** Setup to forestf multiple copies of a packet.
+/** Setup to forward multiple copies of a packet.
  *  Copies outgoing queue identifiers to packet's buffer, in otherwise
  *  unused space at end of buffer. This information is used in 
  *  RouterOutProc where copies of packets are created and queued. 
@@ -895,7 +909,9 @@ pktx RouterInProc::receive() {
 	// Now, read the packet from the interface
 	pktx px = ps->alloc();
 	if (px == 0) {
-		cerr << "RouterInProc:receive: out of packets\n";
+		static int cnt = 0;
+		if (cnt++ < 10)
+			cerr << "RouterInProc:receive: out of packets\n";
 		return 0;
 	}
 	Packet& p = ps->getPacket(px);
@@ -929,6 +945,7 @@ pktx RouterInProc::receive() {
 	p.tunIp = sIpAdr; p.tunPort = sPort;
 
 	lt->countIncoming(lnk,Forest::truPktLeng(nbytes));
+
 	return px;
 }
 

@@ -30,6 +30,7 @@ public:
 	int	iface;			///< interface number for link
 	ipa_t	peerIp;			///< IP address of peer endpoint
 	ipp_t	peerPort;		///< peer port number
+	sockaddr_in sa;			///< socket address of peer
 	Forest::ntyp_t peerType;	///< node type of peer
 	fAdr_t	peerAdr;		///< peer's forest address
 	bool	isConnected;		///< true if link is connected
@@ -76,7 +77,7 @@ public:
 	bool	removeEntry(int);		
 	bool	connect(int, ipa_t, ipp_t);
 	void	countIncoming(int lnk, int leng) {
-		Entry& e = getEntry(leng);
+		Entry& e = getEntry(lnk);
 		e.stats.updateIn(leng);
 		if (e.peerType == Forest::ROUTER)
 			rtrStats.updateIn(leng);
@@ -84,7 +85,7 @@ public:
 			leafStats.updateIn(leng);
 	}
 	void	countOutgoing(int lnk, int leng) {
-		Entry& e = getEntry(leng);
+		Entry& e = getEntry(lnk);
 		e.stats.updateOut(leng);
 		if (e.peerType == Forest::ROUTER)
 			rtrStats.updateOut(leng);

@@ -103,7 +103,7 @@ void QuManager::freeQ(int qid) {
  *  @param now is the current time
  */
 void QuManager::enq(int px, int qid, uint64_t now) {
-	unique_lock<mutex> lck(mtx);
+	//unique_lock<mutex> lck(mtx);
 	if (px == 0 || qid < 0 || qid > nQ || quInfo[qid].pktLim < 0)
 		return;
 	QuInfo& q = quInfo[qid]; int lnk = q.lnk;
@@ -157,7 +157,7 @@ void QuManager::enq(int px, int qid, uint64_t now) {
  *  are no links that are ready to send a packet
  */
 int QuManager::deq(int& lnk, uint64_t now) {
-	unique_lock<mutex> lck(mtx);
+	//unique_lock<mutex> lck(mtx);
 	// first process virtually active links that should now be idle
 	int vl = vactive->findmin(); uint64_t d = vactive->key(vl);
 	while (vl != 0 && now >= d) {

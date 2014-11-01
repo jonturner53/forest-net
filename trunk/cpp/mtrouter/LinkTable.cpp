@@ -38,6 +38,7 @@ int LinkTable::addEntry(int lnk, ipa_t peerIp, ipp_t peerPort, uint64_t nonce) {
 	Entry e;
 	e.iface= 0; e.isConnected = false; e.nonce = nonce;
 	e.peerIp = peerIp; e.peerPort = peerPort;
+	Np4d::initSockAdr(e.peerIp,e.peerPort,e.sa);
 	e.peerAdr = 0; e.peerType = Forest::UNDEF_NODE;
 	e.rates.set(Forest::MINBITRATE,Forest::MINBITRATE,
 		    Forest::MINPKTRATE,Forest::MINPKTRATE);
@@ -57,12 +58,14 @@ int LinkTable::addEntry(int lnk, ipa_t peerIp, ipp_t peerPort, uint64_t nonce) {
  *  @return true on success, false on failure
  */
 bool LinkTable::connect(int lnk, ipa_t peerIp, ipp_t peerPort) {
+cerr << "connect " << Np4d::ip2string(peerIp) << " " << peerPort << endl;
 	if (!valid(lnk)) return false;
 	Entry& e = getEntry(lnk);
 	if (e.isConnected == true) return false; // already connected
 	if (map->find(e.nonce) != lnk) return false;
 	if (!map->rekey(lnk, hashkey(peerIp,peerPort))) return false;
 	e.peerIp = peerIp; e.peerPort = peerPort; e.isConnected = true;
+	Np4d::initSockAdr(e.peerIp,e.peerPort,e.sa);
         return true;
 }
 
@@ -117,11 +120,13 @@ bool LinkTable::checkEntry(int lnk) {
  *  @return true on success, false on failure
  */
 bool LinkTable::remapEntry(int lnk, ipa_t peerIp, ipp_t peerPort) {
+cerr << "remap " << Np4d::ip2string(peerIp) << " " << peerPort << endl;
 	if (!valid(lnk)) return false;
 	Entry& lte = getEntry(lnk);
 	if (map->getKey(lnk) != lte.nonce) return false;
 	if (!map->rekey(lnk,hashkey(peerIp,peerPort))) return false;
 	lte.peerIp = peerIp; lte.peerPort = peerPort;
+	Np4d::initSockAdr(peerIp,peerPort,lte.sa);
         return true;
 }
 
@@ -130,11 +135,13 @@ bool LinkTable::remapEntry(int lnk, ipa_t peerIp, ipp_t peerPort) {
  *  @return true on success, false on failure
  */
 bool LinkTable::revertEntry(int lnk) {
+cerr << "revert " << lnk << endl;
 	if (!valid(lnk)) return false;
 	Entry& lte = getEntry(lnk);
 	if (map->getKey(lnk) != hashkey(lte.peerIp, lte.peerPort)) return false;
 	if (!map->rekey(lnk,lte.nonce)) return false;
 	lte.peerIp = lte.peerPort = 0;
+	Np4d::initSockAdr(0,0,lte.sa);
         return true;
 }
 
