@@ -6,6 +6,7 @@
  *  See http://www.apache.org/licenses/LICENSE-2.0 for details.
  */
 
+//#include <linux/sockios.h>
 #include "Np4d.h"
 
 namespace forest {
@@ -73,23 +74,22 @@ ipa_t Np4d::myIpAddress() {
  *  IP address and port number.
  *  @param ipa is an IP address
  *  @param ipp is a port number
- *  @param sap is pointer to the IP address structure
+ *  @param sa is a reference to an IP address structure
  */
-void Np4d::initSockAdr(ipa_t ipa, ipp_t port, sockaddr_in *sap) {
-        bzero(sap, sizeof(sockaddr_in));
-        sap->sin_family = AF_INET;
-        sap->sin_addr.s_addr = (ipa == 0 ? INADDR_ANY : htonl(ipa));
-        sap->sin_port = htons(port);
+void Np4d::initSockAdr(ipa_t ipa, ipp_t port, sockaddr_in& sa) {
+        bzero(&sa, sizeof(sockaddr_in));
+        sa.sin_family = AF_INET;
+        sa.sin_addr.s_addr = (ipa == 0 ? INADDR_ANY : htonl(ipa));
+        sa.sin_port = htons(port);
 }
 
 /** Extract an IP address and port number from a socket address structure.
- *  @param sap is pointer to the IP address structure
+ *  @param sa is a reference to an IP address structure
  *  @param ipa is a reference to an IP address
  *  @param ipp is a reference to a port number
  */
-void Np4d::extractSockAdr(sockaddr_in *sap, ipa_t& ipa, ipp_t& ipp) {
-        ipa = ntohl(sap->sin_addr.s_addr);
-        ipp = ntohs(sap->sin_port);
+void Np4d::extractSockAdr(sockaddr_in& sa, ipa_t& ipa, ipp_t& ipp) {
+        ipa = ntohl(sa.sin_addr.s_addr); ipp = ntohs(sa.sin_port);
 }
 
 /** Get the local port number associated with a given socket.
@@ -160,7 +160,7 @@ int Np4d::streamSocket() {
  */
 bool Np4d::bind4d(int sock, ipa_t ipa, ipp_t ipp) {
 	sockaddr_in sa;
-	initSockAdr(ipa,ipp,&sa);
+	initSockAdr(ipa,ipp,sa);
 
 	int x = ::bind(sock,(struct sockaddr *) &sa, sizeof(sa));
 
@@ -194,7 +194,7 @@ int Np4d::accept4d(int sock, ipa_t& ipa, ipp_t& ipp) {
 	sockaddr_in sa; socklen_t len = sizeof(sa);
 	sock = accept(sock,(struct sockaddr *) &sa, &len);
 	if (sock < 0) return -1;
-	extractSockAdr(&sa,ipa,ipp);
+	extractSockAdr(sa,ipa,ipp);
 	return sock;
 }
 
@@ -206,7 +206,7 @@ int Np4d::accept4d(int sock, ipa_t& ipa, ipp_t& ipp) {
  *  @return true on success, false on failure
  */
 bool Np4d::connect4d(int sock, ipa_t ipa, ipp_t ipp) {
-	sockaddr_in sa; initSockAdr(ipa,ipp,&sa);
+	sockaddr_in sa; initSockAdr(ipa,ipp,sa);
 	return (connect(sock,(struct sockaddr *) &sa,sizeof(sa)) == 0);
 }
 
@@ -220,7 +220,19 @@ bool Np4d::connect4d(int sock, ipa_t ipa, ipp_t ipp) {
  *  @return number of bytes sent, or -1 on failure
  */
 int Np4d::sendto4d(int sock, void* buf, int leng, ipa_t ipa, ipp_t ipp) {
-	sockaddr_in sa; initSockAdr(ipa,ipp,&sa);
+	sockaddr_in sa; initSockAdr(ipa,ipp,sa);
+	return sendto(sock,buf,leng,0,(struct sockaddr *) &sa, sizeof(sa));
+}
+
+/** Send a datagram to a remote host.
+ *  Uses sendto system call but hides the ugliness.
+ *  @param sock is socket number
+ *  @param buf is pointer to the buffer containing the packet payload
+ *  @param leng is the number of bytes to be sent
+ *  @param sa is the socket address (ip+port) for remote host
+ *  @return number of bytes sent, or -1 on failure
+ */
+int Np4d::sendto4d(int sock, void* buf, int leng, sockaddr_in& sa) {
 	return sendto(sock,buf,leng,0,(struct sockaddr *) &sa, sizeof(sa));
 }
 
@@ -247,10 +259,10 @@ int Np4d::recv4d(int sock, void* buf, int leng) {
  *  @return the number of bytes received, or -1 on failure
  */
 int Np4d::recvfrom4d(int sock, void* buf, int leng, ipa_t& ipa, ipp_t& ipp) {
-	sockaddr_in sa; initSockAdr(ipa,ipp,&sa);
+	sockaddr_in sa; initSockAdr(ipa,ipp,sa);
 	socklen_t socklen = sizeof(sa);
 	int nbytes = recvfrom(sock,buf,leng,0,(struct sockaddr *) &sa,&socklen);
-	extractSockAdr(&sa,ipa,ipp);
+	extractSockAdr(sa,ipa,ipp);
 	return nbytes;
 }
 

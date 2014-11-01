@@ -19,6 +19,7 @@ using std::thread;
 
 #include "Forest.h"
 #include "List.h"
+#include "Stack.h"
 #include "Packet.h"
 #include "NonblockingQ.h"
 
@@ -38,30 +39,42 @@ public:
                 PacketStore(int=17, int=16);
                 ~PacketStore();
 
-	// getters 
         Packet& getPacket(pktx) const;
 
-	// setters 
-        //void setPacket(pktx, const Packet&);
+	int	newCache();
 
 	// allocate/free packets 
         pktx  alloc();           
+        pktx  alloc(int);           
         void  free(pktx);     
+        void  free(pktx, int);     
         pktx  clone(pktx);   
+        pktx  clone(pktx, int);   
         pktx  fullCopy(pktx);   
+        pktx  fullCopy(pktx,int);   
 
 private:
+	static int const MAX_CACHE = 10;
+	static int const CACHE_SIZE = 128;
+
         int     N;                      ///< number of packets we have room for
         int     M;                      ///< number of buffers we have room for
         int     n;                      ///< number of packets in use
         int     m;                      ///< number of buffers in use
+	int	nextCache;		///< index of next available cache
 
         Packet	*pkt;             	///< pkt[i] = packet with index i
         buffer_t *buff;                 ///< array of packet buffers
         atomic<int> *ref;               ///< array of ref counts for buffers
 
-        NonblockingQ<int> *freePkts;   	///< list of free packets
-        NonblockingQ<int> *freeBufs;   	///< list of free buffers
+        Stack<int> *freePkts;   	///< stack of free packet indexes
+        Stack<int> *freeBufs;   	///< stack of free buffer indexes
+
+	int	**foo;
+	Stack<int> **pxCache;		///< array of pointers to packet caches
+	Stack<int> **bxCache;		///< array of pointers to buffer caches
+
+	mutex	mtx;
 };
 
 /** Get reference to packet header.

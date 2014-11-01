@@ -7,7 +7,7 @@ FLIB := ${FROOT}/lib/lib-forest.a
 LIBS := ${FLIB} ${AROOT}/lib/lib-ds.a ${ALGOLIBROOT}/lib/lib-util.a
 BIN := ~/bin
 WARN := -Wall
-CXXFLAGS := ${WARN} ${ARCH} ${INCLUDES} -pthread -O2 -std=c++0x
+CXXFLAGS := ${WARN} ${ARCH} -pthread -O2 -std=c++0x
 JAVAC := javac
 IDIR := ${FROOT}/include
 
@@ -22,7 +22,7 @@ OFILES = Forest.o RateSpec.o CtlPkt.o Packet.o PacketLog.o PacketStore.o \
 ${OFILES} : ${HFILES}
 
 .cpp.o:
-	${CXX} ${CXXFLAGS} -c $<
+	${CXX} ${CXXFLAGS} ${INCLUDES} -c $<
 
 all : ${FLIB}
 

@@ -34,7 +34,12 @@ void RouterOutProc::start(RouterOutProc *self) { self->run(); }
  *  @param finishTime is the number of microseconds to run before stopping;
  *  if it is zero, the router runs without stopping (until killed)
  */
+
 void RouterOutProc::run() {
+
+int i1=0, i2=0, i3=0, i4=0;
+high_resolution_clock::time_point t1, t2, t3, t4;
+nanoseconds d1(0), d2(0), d3(0), d4(0);
         unique_lock<mutex>  ltLock( rtr->ltMtx,defer_lock);
 
 	nanoseconds temp = high_resolution_clock::now() - rtr->tZero;
@@ -48,18 +53,23 @@ void RouterOutProc::run() {
 
 		bool didNothing = true;
 
-		pktx px;
+t1 = high_resolution_clock::now();
+		pktx px = rtr->xferQ.deq();
 		// process packet from transfer queue, if any
-		if (!rtr->xferQ.empty()) {
+		if (px != 0) {
+d1 += high_resolution_clock::now() - t1; i1++;
 			didNothing = false;
-			px = rtr->xferQ.deq();
+
 			Packet& p = ps->getPacket(px);
 			uint32_t* buf = (uint32_t*) p.buffer;
 			if (p.outQueue != 0) {
+t2 = high_resolution_clock::now();
 				qm->enq(px,p.outQueue,now);
+d2 += high_resolution_clock::now() - t2; i2++;
 			} else if (buf[1500] == 0) {
 				ps->free(px);
 			} else {
+t2 = high_resolution_clock::now();
 				int i = 1500;
 				while (buf[i+1] != 0) {
 					// not yet the last copy
@@ -69,23 +79,34 @@ void RouterOutProc::run() {
 				}
 				// and finally, enqueue p itself
 				qm->enq(px,buf[i],now);
+d2 += high_resolution_clock::now() - t2; i2++;
 			}
 		}
 
 		// output processing
 		int lnk;
-		ltLock.lock();
-		while ((px = qm->deq(lnk, now)) != 0) {
+		//ltLock.lock();
+t3 = high_resolution_clock::now();
+		if ((px = qm->deq(lnk, now)) != 0) {
+d3 += high_resolution_clock::now() - t3; i3++;
 			didNothing = false;
-			pktLog->log(px,lnk,true,now);
+			//pktLog->log(px,lnk,true,now);
+t4 = high_resolution_clock::now();
 			send(px,lnk);
+d4 += high_resolution_clock::now() - t4; i4++;
 		}
-		ltLock.unlock();
+		//ltLock.unlock();
 
 		// if did nothing on that pass, sleep for a millisecond.
-		if (didNothing) 
-			this_thread::sleep_for(chrono::milliseconds(1));
+		//if (didNothing) 
+		//	this_thread::sleep_for(chrono::milliseconds(1));
 	}
+
+this_thread::sleep_for(chrono::seconds(2));
+cerr << "from xferQ: " << i1 << " " << (d1.count()/i1) << endl;
+cerr << "       enq: " << i2 << " " << (d2.count()/i2) << endl;
+cerr << "       deq: " << i3 << " " << (d3.count()/i3) << endl;
+cerr << "      send: " << i4 << " " << (d4.count()/i4) << endl;
 
 	// write out recorded events
 	pktLog->write(cout);
@@ -106,24 +127,24 @@ void RouterOutProc::run() {
  *  @param lnk is its link number
  */
 void RouterOutProc::send(pktx px, int lnk) {
-	Packet p = ps->getPacket(px);
+	Packet& p = ps->getPacket(px);
 	LinkTable::Entry& lte = lt->getEntry(lnk);
 	if (lte.peerIp == 0 || lte.peerPort == 0) {
 		ps->free(px); return;
 	}
 	int rv, lim = 0;
-	unique_lock<mutex> iftLock(rtr->iftMtx);
+	//unique_lock<mutex> iftLock(rtr->iftMtx);
 	int sock = rtr->sock[lte.iface];
-	iftLock.unlock();
+	//iftLock.unlock();
 	do {
-		rv = Np4d::sendto4d(sock, (void *) p.buffer, p.length,
-				    lte.peerIp, lte.peerPort);
+		rv = Np4d::sendto4d(sock, (void *) p.buffer, p.length, lte.sa);
 	} while (rv == -1 && errno == EAGAIN && lim++ < 10);
+if (lim > 0) { cerr << "lim=" << lim << endl; exit(1); }
 	if (rv == -1) {
 		perror("RouterOutProc::send: failure in sendto");
 		exit(1);
 	}
-	lt->countOutgoing(lnk,Forest::truPktLeng(p.length));
+	//lt->countOutgoing(lnk,Forest::truPktLeng(p.length));
 	ps->free(px);
 }
 

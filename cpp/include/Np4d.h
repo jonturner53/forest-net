@@ -41,8 +41,8 @@ public:
 	static ipa_t myIpAddress();
 
 	// socket address structure utilities
-	static void initSockAdr(ipa_t, ipp_t, sockaddr_in*);
-	static void extractSockAdr(sockaddr_in*, ipa_t&, ipp_t&); 
+	static void initSockAdr(ipa_t, ipp_t, sockaddr_in&);
+	static void extractSockAdr(sockaddr_in&, ipa_t&, ipp_t&); 
 	static ipp_t getSockPort(int);
 	static ipa_t getSockIp(int);
 	static ipa_t getPeerIp(int);
@@ -59,6 +59,7 @@ public:
 
 	// sending and receiving datagrams
 	static int  sendto4d(int, void*, int, ipa_t, ipp_t);
+	static int  sendto4d(int, void*, int, sockaddr_in&);
 	static int  recv4d(int, void*, int);
 	static int  recvfrom4d(int, void*, int, ipa_t&, ipp_t&);
 
