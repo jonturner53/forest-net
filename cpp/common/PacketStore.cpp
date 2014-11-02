@@ -22,7 +22,6 @@ PacketStore::PacketStore(int numPkts, int numBufs) : N(numPkts), M(numBufs) {
 	freePkts = new Stack<int>(N);
 	freeBufs = new Stack<int>(M);
 
-	foo = new int*[10];
 	pxCache = new Stack<int>*[MAX_CACHE+1];
 	bxCache = new Stack<int>*[MAX_CACHE+1];
 	nextCache = 1;
@@ -36,10 +35,14 @@ PacketStore::PacketStore(int numPkts, int numBufs) : N(numPkts), M(numBufs) {
 PacketStore::~PacketStore() {
 	delete [] pkt; delete [] buff; delete [] ref;
 	delete freePkts; delete freeBufs;
+	for (int i = 1; i < nextCache; i++) {
+		delete pxCache[i]; delete bxCache[i];
+	}
+	delete [] pxCache; delete [] bxCache;
 }
 
 int PacketStore::newCache() {
-	if (nextCache == MAX_CACHE) return 0;
+	if (nextCache > MAX_CACHE) return 0;
 	pxCache[nextCache] = new Stack<int>(CACHE_SIZE);
 	bxCache[nextCache] = new Stack<int>(CACHE_SIZE);
 	pxCache[nextCache]->xferIn(*freePkts, MAX_CACHE/2);
@@ -61,7 +64,6 @@ pktx PacketStore::alloc() {
 	pkt[px].buffer = &buff[bx];
 	return px;
 }
-
 
 /** Allocate a new packet and buffer, using a cache.
  *  @param cx is the index of the cache assigned to the calling thread
@@ -86,7 +88,6 @@ pktx PacketStore::alloc(int cx) {
 	pkt[px].buffer = &buff[bx];
         return px;
 }
-
 
 /** Release the storage used by a packet.
  *  Also releases the associated buffer, if no clones are using it.
@@ -199,6 +200,22 @@ pktx PacketStore::fullCopy(pktx px, int cx) {
 	int len = (pkt[px].length+3)/4;
 	std::copy(pp, &pp[len], ppp);
 	return ppx;
+}
+
+/** Create a string representation of the PacketStore.
+ *  @return the string
+ */
+string PacketStore::toString() const {
+	string s;
+	s  = "packets: " + freePkts->toString(10) + "\n";
+	s += "buffers: " + freeBufs->toString(10) + "\n";
+	for (int i = 1; i < nextCache; i++) {
+		s += "pxCache[" + to_string(i) + "]: "
+		     + pxCache[i]->toString(10) + "\n";
+		s += "bxCache[" + to_string(i) + "]: "
+		     + bxCache[i]->toString(10) + "\n";
+	}
+	return s;
 }
 
 } // ends namespace
