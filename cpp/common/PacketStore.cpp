@@ -45,8 +45,8 @@ int PacketStore::newCache() {
 	if (nextCache > MAX_CACHE) return 0;
 	pxCache[nextCache] = new Stack<int>(CACHE_SIZE);
 	bxCache[nextCache] = new Stack<int>(CACHE_SIZE);
-	pxCache[nextCache]->xferIn(*freePkts, MAX_CACHE/2);
-	bxCache[nextCache]->xferIn(*freeBufs, MAX_CACHE/2);
+	pxCache[nextCache]->xferIn(*freePkts, CACHE_SIZE/2);
+	bxCache[nextCache]->xferIn(*freeBufs, CACHE_SIZE/2);
 	return nextCache++;
 }
 
@@ -75,11 +75,11 @@ pktx PacketStore::alloc(int cx) {
 	if (noPkts || noBufs) {
 		unique_lock<mutex> lck(mtx);
 		if (noPkts) {
-			if (pxCache[cx]->xferIn(*freePkts,MAX_CACHE/2) == 0)
+			if (pxCache[cx]->xferIn(*freePkts,CACHE_SIZE/2) == 0)
 				return 0;
 		}
 		if (noBufs) {
-			if (bxCache[cx]->xferIn(*freeBufs,MAX_CACHE/2) == 0)
+			if (bxCache[cx]->xferIn(*freeBufs,CACHE_SIZE/2) == 0)
 				return 0;
 		}
 	}
@@ -121,15 +121,14 @@ void PacketStore::free(pktx px, int cx) {
 		ref[bx]--;
 		return;
 	}
-	if (!pxCache[cx]->push(px)) {
+	if (pxCache[cx]->full() || bxCache[cx]->full()) {
 		unique_lock<mutex> lck(mtx);
-		freePkts->xferIn(*pxCache[cx],CACHE_SIZE/2);
-		pxCache[cx]->push(px);
-		if (!bxCache[cx]->push(bx)) {
+		if (pxCache[cx]->full())
+			freePkts->xferIn(*pxCache[cx],CACHE_SIZE/2);
+		if (bxCache[cx]->full())
 			freeBufs->xferIn(*bxCache[cx],CACHE_SIZE/2);
-			bxCache[cx]->push(bx);
-		}
 	}
+	pxCache[cx]->push(px); bxCache[cx]->push(bx);
 	return;
 }
 
