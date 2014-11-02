@@ -53,6 +53,8 @@ public:
         pktx  fullCopy(pktx);   
         pktx  fullCopy(pktx,int);   
 
+	string toString() const;
+
 private:
 	static int const MAX_CACHE = 10;
 	static int const CACHE_SIZE = 128;
@@ -70,7 +72,6 @@ private:
         Stack<int> *freePkts;   	///< stack of free packet indexes
         Stack<int> *freeBufs;   	///< stack of free buffer indexes
 
-	int	**foo;
 	Stack<int> **pxCache;		///< array of pointers to packet caches
 	Stack<int> **bxCache;		///< array of pointers to buffer caches
 
