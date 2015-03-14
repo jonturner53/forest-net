@@ -70,6 +70,7 @@ QuManager::~QuManager() {
  *  @return the qid of the assigned queue, or 0 no queues are available
  */
 int QuManager::allocQ(int lnk) {
+
 	unique_lock<mutex> lck(mtx);
 	if (free == 0) return 0;
 	int qid = free; free = quInfo[qid].lnk;

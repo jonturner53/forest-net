@@ -115,7 +115,7 @@ void PacketStore::free(pktx px, int cx) {
 	if (ref[bx].load() > 1) {
 		if (!pxCache[cx]->push(px)) {
 			unique_lock<mutex> lck(mtx);
-			freePkts->xferIn(*pxCache[cx],CACHE_SIZE/2);
+			freePkts->xferIn(*(pxCache[cx]),CACHE_SIZE/2);
 			pxCache[cx]->push(px);
 		}
 		ref[bx]--;
@@ -124,9 +124,9 @@ void PacketStore::free(pktx px, int cx) {
 	if (pxCache[cx]->full() || bxCache[cx]->full()) {
 		unique_lock<mutex> lck(mtx);
 		if (pxCache[cx]->full())
-			freePkts->xferIn(*pxCache[cx],CACHE_SIZE/2);
+			freePkts->xferIn(*(pxCache[cx]),CACHE_SIZE/2);
 		if (bxCache[cx]->full())
-			freeBufs->xferIn(*bxCache[cx],CACHE_SIZE/2);
+			freeBufs->xferIn(*(bxCache[cx]),CACHE_SIZE/2);
 	}
 	pxCache[cx]->push(px); bxCache[cx]->push(bx);
 	return;
